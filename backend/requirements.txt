@@ -1,0 +1,35 @@
+# ============================================================
+# BNA — Backend dependencies
+# Stack definido en Documents/01-stack-tecnologico.md
+# Actualizar con: pip freeze > requirements.txt (dentro del venv)
+# ============================================================
+
+# ── Framework y servidor ────────────────────────────────────
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# ── Base de datos ───────────────────────────────────────────
+sqlalchemy==2.0.35
+alembic==1.13.3
+pymysql==1.1.1          # Driver MySQL para SQLAlchemy
+cryptography==43.0.1    # Requerido por pymysql para auth
+
+# ── Validación ──────────────────────────────────────────────
+pydantic==2.9.2
+pydantic-settings==2.5.2  # Para cargar .env con BaseSettings
+
+# ── Cliente HTTP (comunicación entre módulos vía Bus) ───────
+httpx==0.27.2
+
+# ── Seguridad / Auth ────────────────────────────────────────
+python-jose[cryptography]==3.3.0  # JWT tokens
+passlib[bcrypt]==1.7.4             # Hashing de contraseñas
+python-multipart==0.0.12           # Form data (login)
+
+# ── Testing ─────────────────────────────────────────────────
+pytest==8.3.3
+pytest-asyncio==0.24.0
+httpx==0.27.2                      # También sirve como cliente de test con TestClient
+
+# ── Variables de entorno ────────────────────────────────────
+python-dotenv==1.0.1
