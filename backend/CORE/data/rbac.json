@@ -1,0 +1,131 @@
+{
+  "acciones": [
+    "VER_CLIENTE",
+    "CREAR_CLIENTE",
+    "MODIFICAR_CLIENTE",
+    "VER_CUENTA",
+    "CREAR_CUENTA",
+    "MODIFICAR_CUENTA",
+    "REGISTRAR_MOVIMIENTO",
+    "VER_TARJETA",
+    "CREAR_TARJETA",
+    "BLOQUEAR_TARJETA",
+    "CREAR_SOLICITUD_CREDITO",
+    "EVALUAR_CREDITO",
+    "APROBAR_CREDITO",
+    "VER_CREDITO",
+    "REGISTRAR_PAGO",
+    "CONSULTAR_DEUDA",
+    "CREAR_USUARIO",
+    "ASIGNAR_ROLES",
+    "GESTIONAR_PERMISOS",
+    "VER_AUDITORIA",
+    "GENERAR_REPORTES"
+  ],
+  "auditoria": [
+    {
+      "accion": "SEED_INICIAL",
+      "nota": "Permisos por defecto del catálogo CORE"
+    },
+    {
+      "accion": "ASIGNAR_ACCION",
+      "actor": "test",
+      "asignada": "CREAR_CLIENTE",
+      "rol": "AUDITOR"
+    },
+    {
+      "accion": "REVOCAR_ACCION",
+      "actor": "test",
+      "revocada": "CREAR_CLIENTE",
+      "rol": "AUDITOR"
+    },
+    {
+      "accion": "ASIGNAR_ACCION",
+      "actor": "test",
+      "asignada": "CREAR_CLIENTE",
+      "rol": "AUDITOR"
+    },
+    {
+      "accion": "REVOCAR_ACCION",
+      "actor": "test",
+      "revocada": "CREAR_CLIENTE",
+      "rol": "AUDITOR"
+    },
+    {
+      "accion": "ASIGNAR_ACCION",
+      "actor": "test",
+      "asignada": "CREAR_CLIENTE",
+      "rol": "AUDITOR"
+    },
+    {
+      "accion": "REVOCAR_ACCION",
+      "actor": "test",
+      "revocada": "CREAR_CLIENTE",
+      "rol": "AUDITOR"
+    }
+  ],
+  "permisos": {
+    "ADMINISTRADOR": [
+      "APROBAR_CREDITO",
+      "ASIGNAR_ROLES",
+      "BLOQUEAR_TARJETA",
+      "CONSULTAR_DEUDA",
+      "CREAR_CLIENTE",
+      "CREAR_CUENTA",
+      "CREAR_SOLICITUD_CREDITO",
+      "CREAR_TARJETA",
+      "CREAR_USUARIO",
+      "EVALUAR_CREDITO",
+      "GESTIONAR_PERMISOS",
+      "GENERAR_REPORTES",
+      "MODIFICAR_CLIENTE",
+      "MODIFICAR_CUENTA",
+      "REGISTRAR_MOVIMIENTO",
+      "REGISTRAR_PAGO",
+      "VER_AUDITORIA",
+      "VER_CLIENTE",
+      "VER_CREDITO",
+      "VER_CUENTA",
+      "VER_TARJETA"
+    ],
+    "ANALISTA": [
+      "APROBAR_CREDITO",
+      "CONSULTAR_DEUDA",
+      "EVALUAR_CREDITO",
+      "VER_CLIENTE",
+      "VER_CREDITO",
+      "VER_CUENTA"
+    ],
+    "ASESOR": [
+      "CONSULTAR_DEUDA",
+      "CREAR_CLIENTE",
+      "CREAR_SOLICITUD_CREDITO",
+      "MODIFICAR_CLIENTE",
+      "VER_CLIENTE",
+      "VER_CREDITO",
+      "VER_CUENTA"
+    ],
+    "AUDITOR": [
+      "CONSULTAR_DEUDA",
+      "GENERAR_REPORTES",
+      "VER_AUDITORIA",
+      "VER_CLIENTE",
+      "VER_CREDITO",
+      "VER_CUENTA",
+      "VER_TARJETA"
+    ],
+    "OPERADOR": [
+      "CONSULTAR_DEUDA",
+      "CREAR_CUENTA",
+      "CREAR_TARJETA",
+      "BLOQUEAR_TARJETA",
+      "MODIFICAR_CUENTA",
+      "REGISTRAR_MOVIMIENTO",
+      "REGISTRAR_PAGO",
+      "VER_CLIENTE",
+      "VER_CREDITO",
+      "VER_CUENTA",
+      "VER_TARJETA"
+    ]
+  }
+}

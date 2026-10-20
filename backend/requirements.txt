@@ -17,6 +17,7 @@ cryptography==43.0.1    # Requerido por pymysql para auth
 # ── Validación ──────────────────────────────────────────────
 pydantic==2.9.2
 pydantic-settings==2.5.2  # Para cargar .env con BaseSettings
+email-validator==2.2.0    # Para EmailStr en schemas CORE
 
 # ── Cliente HTTP (comunicación entre módulos vía Bus) ───────
 httpx==0.27.2
