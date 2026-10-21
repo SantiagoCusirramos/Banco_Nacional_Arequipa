@@ -145,6 +145,3 @@ Consulta [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md
 
 ---
 
-## Equipo
-
-Proyecto académico — Universidad Católica de Santa María (UCSM), 2026.
