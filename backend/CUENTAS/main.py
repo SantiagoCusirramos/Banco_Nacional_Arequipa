@@ -5,7 +5,7 @@ from CUENTAS.api import montar_en
 app = FastAPI(
     title="BNA - Modulo de Cuentas",
     description="Modulo de Cuentas (linea Ahorros). Persistencia a traves de CORE.",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 montar_en(app)

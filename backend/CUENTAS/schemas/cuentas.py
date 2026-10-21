@@ -1,17 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
-
-
-class Canal(str, Enum):
-    ATM = "ATM"
-    AGE = "AGE"
-    VEN = "VEN"
-    HB = "HB"
-    BD = "BD"
 
 
 class TitularIn(BaseModel):
@@ -28,14 +19,18 @@ class AbrirCuentaIn(BaseModel):
 
 
 class OperacionIn(BaseModel):
+    num_cuenta: str = Field(max_length=20)
     monto: Decimal = Field(gt=0, max_digits=15, decimal_places=2)
-    id_canal: Canal
     moneda: Literal["PEN", "USD"] | None = None
-    id_terminal: str | None = None
+    id_terminal: str | None = Field(default=None, max_length=15)
 
 
-class TransferenciaIn(OperacionIn):
-    num_cuenta_destino: str
+class TransferenciaIn(BaseModel):
+    num_cuenta_origen: str = Field(max_length=20)
+    num_cuenta_destino: str = Field(max_length=20)
+    monto: Decimal = Field(gt=0, max_digits=15, decimal_places=2)
+    moneda: Literal["PEN", "USD"] | None = None
+    id_terminal: str | None = Field(default=None, max_length=15)
 
 
 class TitularOut(BaseModel):

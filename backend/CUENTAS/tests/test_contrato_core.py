@@ -25,20 +25,19 @@ class Captura:
 
 def test_apertura_cumple_esquema_de_core():
     c = Captura()
-    datos = AbrirCuentaIn(id_cliente="c1", id_producto_ahorro="p1", id_agencia="a1")
-    svc.abrir_cuenta(c, datos, "corr")
+    svc.abrir_cuenta(c, AbrirCuentaIn(id_cliente="c1", id_producto_ahorro="p1", id_agencia="a1"), "corr")
     CuentaCrear(**c.payload)
 
 
 @pytest.mark.parametrize("tipo", ["DEPOSITO", "RETIRO"])
 def test_movimiento_cumple_esquema_de_core(tipo):
     c = Captura()
-    svc.operar(c, tipo, "111", OperacionIn(monto="10.50", id_canal="ATM"), "k1", "corr")
+    svc.operar(c, tipo, OperacionIn(num_cuenta="111", monto="10.50"), "ATM", "k1", "corr")
     MovimientoRegistrar(**c.payload)
 
 
 def test_transferencia_cumple_esquema_de_core():
     c = Captura()
-    datos = TransferenciaIn(monto="10", id_canal="HB", num_cuenta_destino="222")
-    svc.transferir(c, "111", datos, "k1", "corr")
+    datos = TransferenciaIn(num_cuenta_origen="111", num_cuenta_destino="222", monto="10")
+    svc.transferir(c, datos, "HB", "k1", "corr")
     TransferenciaRegistrar(**c.payload)

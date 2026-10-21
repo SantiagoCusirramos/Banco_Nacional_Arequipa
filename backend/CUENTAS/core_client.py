@@ -28,16 +28,16 @@ class CoreClient:
         try:
             resp = self._http.request(method, path, json=json, headers=headers)
         except httpx.ConnectError:
-            raise CuentasError("CORE_NO_DISPONIBLE", "No se pudo conectar con CORE", 503)
+            raise CuentasError("ERR-COR-NO-DISPONIBLE", "No se pudo conectar con CORE", 503)
         except httpx.HTTPError:
             # la peticion pudo llegar a CORE, no se sabe si se aplico
             if afecta_saldo:
                 raise CuentasError(
-                    "OPERACION_NO_CONFIRMADA",
+                    "ERR-CTA-OPERACION-NO-CONFIRMADA",
                     "CORE no respondio, la operacion no esta confirmada. Reintentar con la misma llave de idempotencia",
                     504,
                 )
-            raise CuentasError("CORE_TIMEOUT", "CORE no respondio a tiempo", 504)
+            raise CuentasError("ERR-CTA-TIMEOUT-CORE", "CORE no respondio a tiempo", 504)
         if resp.status_code >= 400:
             raise self._error_de_core(resp)
         return resp.json()
@@ -45,11 +45,17 @@ class CoreClient:
     @staticmethod
     def _error_de_core(resp: httpx.Response) -> CuentasError:
         try:
-            error = resp.json()["error"]
-            return CuentasError(error["code"], error["message"], resp.status_code,
-                                error.get("details"))
-        except (ValueError, KeyError, TypeError):
-            return CuentasError("CORE_ERROR", resp.text[:200], 502)
+            cuerpo = resp.json()
+        except ValueError:
+            return CuentasError("ERR-COR-RESPUESTA-INVALIDA", resp.text[:200], 502)
+        if isinstance(cuerpo, dict) and "error" in cuerpo:
+            error = cuerpo["error"]
+            return CuentasError(error.get("code", "DESCONOCIDO"), error.get("message", ""),
+                                resp.status_code, error.get("details"))
+        if resp.status_code == 422:
+            return CuentasError("ERR-COR-VALIDACION-ESQUEMA", "CORE rechazo el formato de la solicitud",
+                                400, {"detail": cuerpo.get("detail") if isinstance(cuerpo, dict) else None})
+        return CuentasError("ERR-COR-RESPUESTA-INVALIDA", "Respuesta inesperada de CORE", 502)
 
     def crear_cuenta(self, payload: dict, correlation_id: str | None = None):
         return self._request("POST", "/core/cuentas", json=payload,
