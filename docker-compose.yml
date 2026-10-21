@@ -1,0 +1,38 @@
+# Entorno de Testing local: backend (FastAPI) + MySQL 8 con la base `bna`.
+# Uso:  docker compose up --build
+# Luego: http://localhost:8000/health  y  http://localhost:8000/docs
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: bna_root
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      # El script crea la base `bna` y todas las tablas en el primer arranque.
+      - "./backend/Infraestructura - BD/Trabajo_hecho/BD/99_bna_unificado.sql:/docker-entrypoint-initdb.d/99_bna_unificado.sql:ro"
+      - mysql_data:/var/lib/mysql
+    # No publicamos 3306 al host (suele estar ocupado por un MySQL local).
+    # El backend llega a MySQL por la red interna de Docker.
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pbna_root"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: bna
+      DB_USER: root
+      DB_PASSWORD: bna_root
+      SECRET_KEY: clave_de_prueba_local_cambiar_en_produccion_32
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
