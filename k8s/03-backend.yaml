@@ -13,9 +13,7 @@ spec:
     spec:
       containers:
         - name: backend
-          # CAMBIAR por la imagen real una vez construida y publicada
-          # en un registro que el cluster pueda leer.
-          image: PLACEHOLDER_IMAGE
+          image: nexuss123/bna-backend:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: DB_HOST
