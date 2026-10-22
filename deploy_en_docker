@@ -1,0 +1,9 @@
+FRONTEND
+docker build -t frontend-bna-cuentas 
+docker run -d -p 3000:3000 --name front-cuentas frontend-bna
+
+BACKEND
+docker build -t backend-bna-cuentas .
+cp .env.example .env
+docker run -d -p 8000:8000 --env-file .env --name back-cuentas backend-bna
+http://localhost:8000/docs
