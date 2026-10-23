@@ -163,6 +163,20 @@ transacción:
 devuelve el resultado original con `"replay": true` sin repetir
 efectos.
 
+- El replay solo ocurre si la petición es **la misma**: se compara una
+  huella SHA-256 de `tipo_operacion`, `num_cuenta`,
+  `num_cuenta_contraparte`, `monto`, `moneda` (o la de la cuenta si no
+  se envía) e `id_canal`. La huella se guarda en
+  `auditoria_evento.detalle.hash_peticion`; en transacciones antiguas
+  sin huella se reconstruye desde la fila de `cta_transaccion`.
+- Si la llave ya fue usada con otros datos (otra cuenta, otro monto,
+  otro tipo de operación, otra contraparte...) se responde **409**
+  `IDEMPOTENCY_KEY_REUTILIZADA`, con `details.diferencias` indicando
+  cada campo `original` vs `solicitado`. Una llave usada en un depósito
+  no puede reutilizarse en un retiro ni en una transferencia (y viceversa).
+- La llave no puede terminar en `#C` (sufijo reservado):
+  **422** `IDEMPOTENCY_KEY_INVALIDA`.
+
 Respuesta: id de transacción, saldo posterior, id de asiento,
 `replay`.
 
@@ -174,6 +188,31 @@ Débito en origen + crédito destino en **un solo asiento** atómico.
 Idempotencia: la pierna origen guarda la llave tal cual; la
 contraparte la guarda con sufijo `#C`. Devuelve ambas piernas y el
 asiento único.
+
+- `idempotency_key` admite máximo **62** caracteres (62 + `#C` = 64,
+  tamaño de la columna) y no puede terminar en `#C`.
+- **Replay**: se valida la huella de la petición igual que en
+  `/core/movimientos` (409 si no coincide). La pata origen se identifica
+  por `tipo_movimiento='D'` y llave sin sufijo; la destino por
+  `tipo_movimiento='C'` y llave con `#C`. **No** se usa `fecha_hora`
+  (ambas patas tienen el mismo instante), por lo que el replay nunca
+  intercambia origen y destino.
+
+**Concurrencia y deadlocks**:
+- Las dos cuentas se bloquean con `SELECT ... FOR UPDATE` **siempre en
+  orden ascendente de `num_cuenta`**, sin importar cuál es origen o
+  destino. Dos transferencias cruzadas simultáneas (A→B y B→A) piden
+  primero el mismo candado: una espera a la otra y no se forma un
+  ciclo de espera.
+- Si InnoDB aún elige la transacción como víctima de un deadlock
+  (error MySQL 1213, p. ej. por gap locks al crear el primer registro
+  del día en `cta_control_tope_diario`), CORE hace rollback y
+  **reintenta la operación completa** hasta 3 veces con backoff
+  exponencial + jitter (~50 ms, ~100 ms). Aplica también a
+  `/core/movimientos`.
+- Si se agotan los reintentos se responde **503**
+  `CONCURRENCIA_REINTENTOS_AGOTADOS`. Es seguro reintentar con la misma
+  `idempotency_key`.
 
 ---
 

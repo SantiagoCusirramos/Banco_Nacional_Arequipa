@@ -32,6 +32,38 @@ class ConflictError(CoreError):
         super().__init__(code, message, status_code=409, details=details)
 
 
+class IdempotencyConflictError(ConflictError):
+    """RF-COR-11 / RGN-06: la `idempotency_key` ya fue usada por una
+    operación con parámetros distintos (cuenta, monto, tipo, destino...).
+    Se responde 409 en lugar de devolver el resultado de otra operación."""
+
+    def __init__(self, idempotency_key: str, diferencias: dict[str, Any]):
+        super().__init__(
+            "IDEMPOTENCY_KEY_REUTILIZADA",
+            "La idempotency_key ya fue usada por una operación con "
+            "parámetros distintos. Use una llave nueva para esta operación.",
+            details={
+                "idempotency_key": idempotency_key,
+                "diferencias": diferencias,
+            },
+        )
+
+
+class ConcurrencyError(CoreError):
+    """La operación no pudo completarse por contención de bloqueos
+    (deadlock) tras agotar los reintentos automáticos. Es seguro
+    reintentar con la misma `idempotency_key`."""
+
+    def __init__(self, operacion: str, intentos: int):
+        super().__init__(
+            "CONCURRENCIA_REINTENTOS_AGOTADOS",
+            f"No se pudo completar la {operacion} por alta concurrencia "
+            "sobre las cuentas involucradas. Reintente en unos segundos.",
+            status_code=503,
+            details={"operacion": operacion, "intentos": intentos},
+        )
+
+
 class ValidationError(CoreError):
     def __init__(self, code: str, message: str,
                  details: dict[str, Any] | None = None):
