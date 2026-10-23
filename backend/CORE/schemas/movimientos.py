@@ -31,7 +31,9 @@ class TransferenciaRegistrar(CoreModel):
     moneda: str | None = None
     id_canal: str
     id_terminal: str | None = None
-    idempotency_key: str | None = Field(default=None, max_length=64)
+    # 62 = 64 (VARCHAR de la columna) - 2 del sufijo "#C" que lleva la pata
+    # destino. El sufijo "#C" está reservado y se rechaza en el servicio.
+    idempotency_key: str | None = Field(default=None, max_length=62)
     actor: str = "sistema"
     correlation_id: str | None = None
 
