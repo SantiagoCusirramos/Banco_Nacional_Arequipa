@@ -11,7 +11,7 @@
 | Dato | Valor |
 |---|---|
 | Fecha de ejecución | 2026-10-23 |
-| Rama / commit base | `main` @ `HASH_AQUI` (obtener con `git rev-parse --short HEAD`) |
+| Rama / commit base | `main` @ `1ef490f` (obtener con `git rev-parse --short HEAD`) |
 | Versión de Python | 3.12.2 |
 | Versión de pytest | 8.3.3 (pytest-asyncio 0.24.0) |
 | Total de tests | 24 |
