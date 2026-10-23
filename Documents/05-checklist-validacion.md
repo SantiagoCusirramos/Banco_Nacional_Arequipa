@@ -57,11 +57,16 @@
 - [ ] Escritura atómica de `rbac.json`
 - [ ] Los tests no modifican el `rbac.json` real
 
-## 8. Arquitectura (revisión propia)
-- [ ] Acceso a BD solo a través de `CORE/database.py`
-- [ ] CORE no importa ni modifica otros módulos
-- [ ] Comunicación entre módulos vía Bus, no directa
-- [ ] Schemas Pydantic: montos > 0, UUID válidos, monedas válidas
+## 8. Arquitectura (revisión propia — ver `Documents/06-revision-arquitectura-schemas.md`)
+- [x] Acceso a BD solo a través de `CORE/database.py`
+- [x] Routers sin acceso directo a modelos ni consultas ORM
+- [x] Commits de transacción en la capa de servicios
+- [x] CORE no importa ni modifica otros módulos
+- [ ] Comunicación entre módulos vía Bus (CORE no implementa cliente del Bus; a confirmar con Santiago)
+- [!] El `actor` proviene del usuario autenticado — **falla**: 12 schemas lo reciben por body (H1)
+- [!] Schemas Pydantic: montos > 0 — parcial; `comision`, `itf` y `retencion` aceptan negativos (S1)
+- [!] Schemas Pydantic: UUID/ids con formato — **falla**: ids como `str` libre (S3)
+- [!] Schemas Pydantic: monedas válidas — **falla**: `moneda` es `str` libre (S2)
 
 ## 9. Pruebas
 - [ ] `python -m pytest` pasa completo en la rama integrada
@@ -87,4 +92,6 @@
 
 | # | Ítem | Descripción | Responsable | Estado |
 |---|---|---|---|---|
-| | | | | |
+| 1 | 8 | `actor` recibido por body en 12 schemas (H1) | Nicolas Ayerve | Abierto |
+| 2 | 8 | `comision`/`itf`/`retencion` sin `ge=0` (S1) | Renzo Montoya / Marcelo Moscoso | Abierto |
+| 3 | 8 | `moneda` e ids sin validación de formato (S2, S3) | Mathias Ostolaza | Abierto |

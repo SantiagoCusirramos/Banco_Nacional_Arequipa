@@ -130,6 +130,29 @@ Copia cada archivo como `.env` en la misma carpeta y completa los valores. **Nun
 
 ---
 
+## Autenticación
+
+> 🚧 **Pendiente de implementación.** Hoy el backend (módulo CORE) no
+> autentica peticiones: la función `autenticar()` existe en
+> `backend/CORE/services/usuariossvc.py`, pero no está expuesta por ningún
+> router, y el `actor` de la auditoría se recibe en el cuerpo de cada
+> petición. Esta sección se completará cuando se integre el sistema JWT.
+
+Contenido previsto:
+
+- Endpoint `POST /core/auth/login` (credenciales inválidas → `401` con mensaje genérico).
+- Formato del token JWT y expiración (`ACCESS_TOKEN_EXPIRE_MINUTES`, firma con `SECRET_KEY`).
+- Uso del header `Authorization: Bearer <token>`.
+- Dependencias `get_current_user` y `require_action(accion)` (validan contra el catálogo RBAC).
+- El `actor` de trazabilidad se obtiene del token, nunca del body.
+- Migración de hashes SHA256 a bcrypt en el primer login exitoso.
+
+Más detalle: [`backend/CORE/README.md`](backend/CORE/README.md),
+[`Documents/05-checklist-validacion.md`](Documents/05-checklist-validacion.md) y
+[`Documents/06-revision-arquitectura-schemas.md`](Documents/06-revision-arquitectura-schemas.md).
+
+---
+
 ## Stack tecnológico
 
 Consulta [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md) para el detalle completo del stack y las decisiones de arquitectura.
