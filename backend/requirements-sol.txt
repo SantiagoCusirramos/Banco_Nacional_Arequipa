@@ -1,0 +1,13 @@
+# Subconjunto independiente del CORE para ejecutar exclusivamente el MVP SOL.
+fastapi==0.115.0
+pydantic==2.9.2
+uvicorn==0.30.6
+sqlalchemy==2.0.35
+pymysql==1.1.1
+cryptography==43.0.1
+httpx==0.27.2
+python-dotenv==1.0.1
+pytest==8.3.3
+
+# ZoneInfo usa esta base IANA también en Windows.
+tzdata>=2025.1

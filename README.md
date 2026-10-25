@@ -1,3 +1,5 @@
+> **MVP de Solicitud de Crédito:** para ejecutar la entrega local con MySQL, empieza por [EMPEZAR_AQUI_SOL.md](EMPEZAR_AQUI_SOL.md). La interfaz del módulo está en `/solicitud-credito` y usa un backend propio en el puerto 8011.
+
 # Banco Nacional de Arequipa — ERP Monolítico Modular
 
 Sistema ERP bancario desarrollado como proyecto académico en la UCSM. Arquitectura modular con Bus de Servicios central, backend en FastAPI y frontend en Next.js.
