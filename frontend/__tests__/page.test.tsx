@@ -26,9 +26,9 @@ describe("Inicio y navegación", () => {
     expect(screen.getAllByText(/12,480\.75/).length).toBeGreaterThan(0);
   });
 
-  it("CP-02 El menú lateral tiene las 5 opciones esperadas", () => {
+  it("CP-02 El menú lateral tiene las 7 opciones esperadas", () => {
     render(<Home />);
-    for (const n of [/Resumen/, /Mis cuentas/, /Transferencias/, /Movimientos/, /Tarjetas/]) {
+    for (const n of [/Resumen/, /Mis cuentas/, /Crear cuenta/, /Modificar cuenta/, /Transferencias/, /Movimientos/, /Tarjetas/]) {
       expect(within(nav()).getByRole("button", { name: n })).toBeInTheDocument();
     }
   });
@@ -296,11 +296,12 @@ describe("Accesos rápidos, perfil y productos", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Sesión de demostración activa.");
   });
 
-  it("CP-33 'Consultar productos' avisa que la apertura de cuentas requiere backend", async () => {
+  it("CP-33 'Abrir una cuenta' lleva a la pestaña Crear cuenta", async () => {
     render(<Home />);
     await irA(/Mis cuentas/);
-    await userEvent.click(screen.getByRole("button", { name: "Consultar productos" }));
-    expect(screen.getByRole("status")).toHaveTextContent("La apertura de cuentas estará disponible");
+    await userEvent.click(screen.getByRole("button", { name: "Abrir una cuenta" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Crear cuenta" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Abrir cuenta de ahorros" })).toBeInTheDocument();
   });
 });
 
