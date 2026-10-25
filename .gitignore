@@ -89,3 +89,4 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+coverage
