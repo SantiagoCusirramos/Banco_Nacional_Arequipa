@@ -1,8 +1,11 @@
  "use client";
 
 import { useMemo, useState } from "react";
+import { CrearCuenta } from "./components/CrearCuenta";
+import { ModificarCuenta } from "./components/ModificarCuenta";
+import type { Cuenta } from "@/lib/cuentas";
 
-type Tab = "inicio" | "cuentas" | "transferencias" | "movimientos" | "tarjetas";
+type Tab = "inicio" | "cuentas" | "crear-cuenta" | "modificar-cuenta" | "transferencias" | "movimientos" | "tarjetas";
 
 const initialMovements = [
   { id: "OP-20481", title: "Compra en Plaza Vea", detail: "Hoy · 10:42 a. m.", amount: -128.5, category: "Compra" },
@@ -23,6 +26,7 @@ export default function Home() {
   const [amount, setAmount] = useState("");
   const [movements, setMovements] = useState(initialMovements);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [cuentaParaModificar, setCuentaParaModificar] = useState<Cuenta | null>(null);
 
   const balance = 12480.75;
   const filteredMovements = useMemo(
@@ -54,6 +58,8 @@ export default function Home() {
   const navItems: { id: Tab; label: string; icon: string }[] = [
     { id: "inicio", label: "Resumen", icon: "⌂" },
     { id: "cuentas", label: "Mis cuentas", icon: "▤" },
+    { id: "crear-cuenta", label: "Crear cuenta", icon: "＋" },
+    { id: "modificar-cuenta", label: "Modificar cuenta", icon: "✎" },
     { id: "transferencias", label: "Transferencias", icon: "⇄" },
     { id: "movimientos", label: "Movimientos", icon: "↕" },
     { id: "tarjetas", label: "Tarjetas", icon: "▰" },
@@ -69,7 +75,7 @@ export default function Home() {
         <div className="side-caption">BANCA PERSONAL</div>
         <nav className="navigation" aria-label="Navegación principal">
           {navItems.map((item) => (
-            <button key={item.id} className={`nav-item ${tab === item.id ? "active" : ""}`} onClick={() => { setTab(item.id); setNotice(""); setMobileMenu(false); }}>
+            <button key={item.id} className={`nav-item ${tab === item.id ? "active" : ""}`} onClick={() => { setTab(item.id); setNotice(""); setCuentaParaModificar(null); setMobileMenu(false); }}>
               <span className="nav-icon">{item.icon}</span>{item.label}
               {item.id === "movimientos" && <span className="nav-dot" />}
             </button>
@@ -111,7 +117,11 @@ export default function Home() {
             <MovementTable movements={movements.slice(0, 4)} />
           </>}
 
-          {tab === "cuentas" && <div className="product-grid"><article className="account-card"><div className="account-card-top"><span className="product-icon">▤</span><span className="status-pill"><i/> Activa</span></div><p className="mini-label">CUENTA DE AHORROS · PEN</p><h2>Cuenta principal</h2><p className="account-number">•••• •••• •••• 4821</p><div className="account-balance-label">Saldo disponible</div><div className="account-balance">{showBalance ? money(balance) : "S/ ••••••"}</div><div className="account-bottom"><span>Saldo contable <strong>{showBalance ? money(balance) : "••••••"}</strong></span><button onClick={() => setShowBalance(!showBalance)}>{showBalance ? "Ocultar" : "Mostrar"}</button></div></article><article className="add-account"><span className="add-circle">＋</span><h3>¿Necesitas otra cuenta?</h3><p>Solicita información sobre nuestros productos de ahorro.</p><button className="outline-button" onClick={() => setNotice("La apertura de cuentas estará disponible cuando se integre el backend.")}>Consultar productos</button></article></div>}
+          {tab === "cuentas" && <div className="product-grid"><article className="account-card"><div className="account-card-top"><span className="product-icon">▤</span><span className="status-pill"><i/> Activa</span></div><p className="mini-label">CUENTA DE AHORROS · PEN</p><h2>Cuenta principal</h2><p className="account-number">•••• •••• •••• 4821</p><div className="account-balance-label">Saldo disponible</div><div className="account-balance">{showBalance ? money(balance) : "S/ ••••••"}</div><div className="account-bottom"><span>Saldo contable <strong>{showBalance ? money(balance) : "••••••"}</strong></span><button onClick={() => setShowBalance(!showBalance)}>{showBalance ? "Ocultar" : "Mostrar"}</button></div></article><article className="add-account"><span className="add-circle">＋</span><h3>¿Necesitas otra cuenta?</h3><p>Abre una nueva cuenta de ahorros en pocos pasos.</p><button className="outline-button" onClick={() => { setTab("crear-cuenta"); setNotice(""); }}>Abrir una cuenta</button></article></div>}
+
+          {tab === "crear-cuenta" && <CrearCuenta onNotice={setNotice} onModificar={(cuenta) => { setCuentaParaModificar(cuenta); setTab("modificar-cuenta"); setNotice(""); }} />}
+
+          {tab === "modificar-cuenta" && <ModificarCuenta cuentaInicial={cuentaParaModificar} onNotice={setNotice} />}
 
           {tab === "transferencias" && <div className="form-card"><div className="form-intro"><span className="form-icon">⇄</span><div><h2>Nueva transferencia</h2><p>Completa los datos para simular una operación entre cuentas.</p></div></div><div className="demo-warning">Modo demostración: esta operación solo modifica la lista local de movimientos. No se conecta al banco ni transfiere dinero real.</div><form className="transfer-form" onSubmit={submitTransfer}><label>Cuenta de origen</label><div className="select-like"><span className="account-small-icon">▤</span><span><strong>Cuenta principal</strong><small>•••• 4821 · Saldo: {money(balance)}</small></span><span className="select-arrow">⌄</span></div><label htmlFor="destination">Cuenta de destino</label><input id="destination" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Ingresa el número de cuenta" minLength={4} required/><label htmlFor="amount">Monto a transferir (PEN)</label><div className="amount-input"><span>S/</span><input id="amount" type="number" min="0.01" max={balance} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required/></div><div className="transfer-summary"><span>Monto de la operación</span><strong>{money(Number(amount) || 0)}</strong><span>Comisión</span><strong>{money(0)}</strong></div><button className="primary-button" type="submit">Continuar transferencia <span>→</span></button></form></div>}
 
