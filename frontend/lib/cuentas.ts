@@ -1,4 +1,5 @@
 import axios from "axios";
+import { z } from "zod";
 import { api } from "@/lib/api";
 
 // Valores admitidos por el backend (CORE/services/cuentassvc.py)
@@ -35,6 +36,30 @@ export type NuevaCuenta = {
   titulares?: { id_cliente: string; rol_titular: RolTitular }[];
 };
 
+// Validación del formulario "nueva cuenta" (react-hook-form + zod)
+export const nuevaCuentaSchema = z
+  .object({
+    id_cliente: z.string().min(1, "Selecciona un cliente"),
+    id_producto_ahorro: z.string().min(1, "Selecciona un producto"),
+    id_agencia: z.string().min(1, "Selecciona una agencia"),
+    regimen: z.enum(REGIMENES),
+    titulares: z
+      .array(
+        z.object({
+          id_cliente: z.string().min(1, "Falta el cliente titular"),
+          rol_titular: z.enum(ROLES_TITULAR),
+        }),
+      )
+      .optional(),
+  })
+  .refine(
+    (d) => {
+      const titulares = d.titulares ?? [];
+      return !titulares.some((t) => t.rol_titular === "MANCOMUNADO") || titulares.length >= 2;
+    },
+    { message: "Una cuenta mancomunada necesita al menos 2 titulares", path: ["titulares"] },
+  );
+
 // Identifica al canal en la auditoría del backend (campo `actor`).
 const ACTOR = "portal-web";
 
@@ -51,6 +76,12 @@ function conTrazabilidad() {
 export async function crearCuenta(datos: NuevaCuenta): Promise<Cuenta> {
   const { correlation_id, config } = conTrazabilidad();
   const { data } = await api.post<Cuenta>("/core/cuentas", { ...datos, actor: ACTOR, correlation_id }, config);
+  return data;
+}
+
+/** GET /core/cuentas/cliente/{id_cliente} — Cuentas donde el cliente es titular */
+export async function listarCuentasDeCliente(idCliente: string): Promise<Cuenta[]> {
+  const { data } = await api.get<Cuenta[]>(`/core/cuentas/cliente/${encodeURIComponent(idCliente)}`);
   return data;
 }
 
