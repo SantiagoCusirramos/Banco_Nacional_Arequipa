@@ -28,6 +28,11 @@ const cuentaBase = {
   titulares: [{ id_cliente: "cli-1", rol_titular: "TITULAR" }],
 };
 
+const clientesDisponibles = [
+  { id_cliente: "cli-1", cod_tipo_documento: "DNI", numero_documento: "11111111", nombres: "Ana", apellido_paterno: "Pérez", apellido_materno: null, fecha_nacimiento: null, numero_celular: "999999999", correo_electronico: null, estado_cliente: "ACTIVO", fecha_registro: null },
+  { id_cliente: "cli-2", cod_tipo_documento: "DNI", numero_documento: "22222222", nombres: "Luis", apellido_paterno: "Rojas", apellido_materno: null, fecha_nacimiento: null, numero_celular: "988888888", correo_electronico: null, estado_cliente: "ACTIVO", fecha_registro: null },
+];
+
 const nav = () => screen.getByRole("navigation", { name: "Navegación principal" });
 const irA = (nombre: RegExp) => userEvent.click(within(nav()).getByRole("button", { name: nombre }));
 
@@ -41,6 +46,21 @@ beforeEach(() => {
   post.mockReset();
   get.mockReset();
   patch.mockReset();
+  get.mockImplementation((url, config) => {
+    const ruta = String(url);
+    if (ruta === "/core/catalogos/agencias") {
+      return Promise.resolve({ data: [{ id_agencia: "ag-1", nombre: "Agencia Central", direccion: "Arequipa" }] });
+    }
+    if (ruta === "/core/catalogos/productos-ahorro") {
+      return Promise.resolve({ data: [{ id_producto_ahorro: "prod-1", nombre: "Ahorro Clásico", moneda: "PEN", tasa_tea: 1.5 }] });
+    }
+    if (ruta === "/core/clientes") {
+      const params = (config as { params?: { documento?: string } } | undefined)?.params;
+      const documento = params?.documento ?? "";
+      return Promise.resolve({ data: clientesDisponibles.filter((cliente) => cliente.numero_documento.includes(documento)) });
+    }
+    return Promise.resolve({ data: cuentaBase });
+  });
 });
 
 // ======================================================
@@ -50,20 +70,29 @@ describe("Crear cuenta", () => {
   const abrir = async () => {
     render(<Home />);
     await irA(/Crear cuenta/);
+    await screen.findByRole("option", { name: /Ahorro Clásico/ });
+  };
+  const buscarYSeleccionarCliente = async (label: string, idCliente: string) => {
+    const documento = idCliente === "cli-1" ? "11111111" : "22222222";
+    const idSelector = label === "Buscar cliente titular" ? "id_cliente" : "titular_2";
+    const etiquetaSeleccion = label.replace("Buscar ", "") + " seleccionado";
+    await userEvent.type(screen.getByLabelText(label), documento);
+    await userEvent.click(screen.getByRole("button", { name: "Buscar " + idSelector }));
+    await userEvent.selectOptions(await screen.findByLabelText(etiquetaSeleccion), idCliente);
   };
   const llenar = async (cliente = "cli-1", producto = "prod-1", agencia = "ag-1") => {
-    await userEvent.type(screen.getByLabelText("ID del cliente"), cliente);
-    await userEvent.type(screen.getByLabelText("ID del producto de ahorro"), producto);
-    await userEvent.type(screen.getByLabelText("ID de la agencia"), agencia);
+    await buscarYSeleccionarCliente("Buscar cliente titular", cliente);
+    await userEvent.selectOptions(screen.getByLabelText("Producto de ahorro"), producto);
+    await userEvent.selectOptions(screen.getByLabelText("Agencia"), agencia);
   };
   const enviar = () => userEvent.click(screen.getByRole("button", { name: /^Crear cuenta/ }));
 
   it("CC-01 Muestra el formulario con sus campos y el régimen LIBRE por defecto", async () => {
     await abrir();
     expect(screen.getByRole("heading", { level: 1, name: "Crear cuenta" })).toBeInTheDocument();
-    expect(screen.getByLabelText("ID del cliente")).toBeInTheDocument();
-    expect(screen.getByLabelText("ID del producto de ahorro")).toBeInTheDocument();
-    expect(screen.getByLabelText("ID de la agencia")).toBeInTheDocument();
+    expect(screen.getByLabelText("Buscar cliente titular")).toBeInTheDocument();
+    expect(screen.getByLabelText("Producto de ahorro")).toBeInTheDocument();
+    expect(screen.getByLabelText("Agencia")).toBeInTheDocument();
     expect(screen.getByLabelText("Régimen")).toHaveValue("LIBRE");
     expect(screen.getByLabelText("Régimen")).toHaveTextContent(/PROGRAMADO.*INFANTIL.*CTS.*A_PLAZO/);
   });
@@ -71,17 +100,18 @@ describe("Crear cuenta", () => {
   it("CC-02 Con campos vacíos muestra errores y no llama al backend", async () => {
     await abrir();
     await enviar();
-    expect(await screen.findByText("Ingresa el ID del cliente.")).toBeInTheDocument();
-    expect(screen.getByText("Ingresa el ID del producto de ahorro.")).toBeInTheDocument();
-    expect(screen.getByText("Ingresa el ID de la agencia.")).toBeInTheDocument();
+    expect(await screen.findByText("Selecciona el cliente titular.")).toBeInTheDocument();
+    expect(screen.getByText("Selecciona un producto de ahorro.")).toBeInTheDocument();
+    expect(screen.getByText("Selecciona una agencia.")).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
   });
 
   it("CC-03 Rechaza campos con solo espacios", async () => {
     await abrir();
-    await llenar("   ", "prod-1", "ag-1");
+    await userEvent.type(screen.getByLabelText("Buscar cliente titular"), "   ");
+    await userEvent.click(screen.getByRole("button", { name: "Buscar id_cliente" }));
     await enviar();
-    expect(await screen.findByText("Ingresa el ID del cliente.")).toBeInTheDocument();
+    expect(await screen.findByText("Selecciona el cliente titular.")).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
   });
 
@@ -117,7 +147,7 @@ describe("Crear cuenta", () => {
     await llenar();
     await enviar();
     await userEvent.click(await screen.findByRole("button", { name: "Abrir otra cuenta" }));
-    expect(screen.getByLabelText("ID del cliente")).toHaveValue("");
+    expect(screen.getByLabelText("Buscar cliente titular")).toHaveValue("");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
@@ -128,7 +158,7 @@ describe("Crear cuenta", () => {
     await enviar();
     expect(await screen.findByRole("alert")).toHaveTextContent("Cliente cli-1 no existe. (CLIENTE_NO_ENCONTRADO)");
     // el formulario conserva lo escrito para corregirlo
-    expect(screen.getByLabelText("ID del cliente")).toHaveValue("cli-1");
+    expect(screen.getByLabelText("cliente titular seleccionado")).toHaveValue("cli-1");
   });
 
   it("CC-08 Muestra aviso de conexión si el backend no responde", async () => {
@@ -162,7 +192,7 @@ describe("Crear cuenta", () => {
     await llenar();
     await userEvent.selectOptions(screen.getByLabelText("Rol del cliente principal"), "MANCOMUNADO");
     await userEvent.click(screen.getByRole("button", { name: /Agregar titular/ }));
-    await userEvent.type(screen.getByLabelText("ID del titular 2"), "cli-2");
+    await buscarYSeleccionarCliente("Buscar titular 2", "cli-2");
     await userEvent.selectOptions(screen.getByLabelText("Rol del titular 2"), "MANCOMUNADO");
     await enviar();
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
@@ -176,7 +206,7 @@ describe("Crear cuenta", () => {
     await abrir();
     await llenar();
     await userEvent.click(screen.getByRole("button", { name: /Agregar titular/ }));
-    await userEvent.type(screen.getByLabelText("ID del titular 2"), "cli-1");
+    await buscarYSeleccionarCliente("Buscar titular 2", "cli-1");
     await enviar();
     expect(await screen.findByText("Este cliente ya figura como titular.")).toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
@@ -185,17 +215,17 @@ describe("Crear cuenta", () => {
   it("CC-13 Se puede quitar un titular adicional", async () => {
     await abrir();
     await userEvent.click(screen.getByRole("button", { name: /Agregar titular/ }));
-    expect(screen.getByLabelText("ID del titular 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("Buscar titular 2")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Quitar titular 2" }));
-    expect(screen.queryByLabelText("ID del titular 2")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Buscar titular 2")).not.toBeInTheDocument();
   });
 
   it("CC-14 Cambiar de pestaña y volver deja el formulario limpio", async () => {
     await abrir();
-    await userEvent.type(screen.getByLabelText("ID del cliente"), "cli-9");
+    await userEvent.type(screen.getByLabelText("Buscar cliente titular"), "cli-9");
     await irA(/Resumen/);
     await irA(/Crear cuenta/);
-    expect(screen.getByLabelText("ID del cliente")).toHaveValue("");
+    expect(screen.getByLabelText("Buscar cliente titular")).toHaveValue("");
   });
 });
 
@@ -223,7 +253,7 @@ describe("Modificar cuenta", () => {
     await abrir();
     await userEvent.click(screen.getByRole("button", { name: "Buscar cuenta" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Ingresa el número de cuenta.");
-    expect(get).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalledWith("/core/cuentas/20261025123456");
   });
 
   it("MC-03 Busca con GET /core/cuentas/{num} y muestra el detalle", async () => {
@@ -244,7 +274,7 @@ describe("Modificar cuenta", () => {
     expect(screen.queryByText("Nuevo estado de la cuenta")).not.toBeInTheDocument();
   });
 
-  it("MC-05 'Guardar cambios' está deshabilitado mientras no se elija otro estado", async () => {
+  it("MC-05 'Guardar cambios' estÃ¡ deshabilitado mientras no se elija otro estado", async () => {
     get.mockResolvedValue({ data: cuentaBase });
     await abrir();
     await buscar();
@@ -294,14 +324,17 @@ describe("Modificar cuenta", () => {
     post.mockResolvedValue({ data: cuentaBase });
     render(<Home />);
     await irA(/Crear cuenta/);
-    await userEvent.type(screen.getByLabelText("ID del cliente"), "cli-1");
-    await userEvent.type(screen.getByLabelText("ID del producto de ahorro"), "prod-1");
-    await userEvent.type(screen.getByLabelText("ID de la agencia"), "ag-1");
+    await screen.findByRole("option", { name: /Ahorro Clásico/ });
+    await userEvent.type(screen.getByLabelText("Buscar cliente titular"), "11111111");
+    await userEvent.click(screen.getByRole("button", { name: "Buscar id_cliente" }));
+    await userEvent.selectOptions(await screen.findByLabelText("cliente titular seleccionado"), "cli-1");
+    await userEvent.selectOptions(screen.getByLabelText("Producto de ahorro"), "prod-1");
+    await userEvent.selectOptions(screen.getByLabelText("Agencia"), "ag-1");
     await userEvent.click(screen.getByRole("button", { name: /^Crear cuenta/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Modificar estado de esta cuenta" }));
     expect(screen.getByRole("heading", { level: 1, name: "Modificar cuenta" })).toBeInTheDocument();
     expect(screen.getByLabelText("Número de cuenta")).toHaveValue("20261025123456");
     expect(screen.getByText("Nuevo estado de la cuenta")).toBeInTheDocument();
-    expect(get).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalledWith("/core/cuentas/20261025123456");
   });
 });
