@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from CORE.exceptions import CoreError
-from CORE.routers import admin, clientes, creditos, cuentas, movimientos, tarjetas
+from CORE.routers import admin, catalogos, clientes, creditos, cuentas, movimientos, tarjetas
 
 api_router = APIRouter(prefix="/core")
 
@@ -33,6 +33,7 @@ def montar_en(app) -> None:
     """Incluye el router de CORE en la aplicación FastAPI y registra el
     manejador de errores de negocio (RNF-29)."""
     api_router.include_router(clientes.router)
+    api_router.include_router(catalogos.router) 
     api_router.include_router(cuentas.router)
     api_router.include_router(movimientos.router)
     api_router.include_router(tarjetas.router)
