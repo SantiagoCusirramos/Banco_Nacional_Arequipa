@@ -1,0 +1,11 @@
+{
+  "fechaLima": "23/10/2026, 6:28:54 p. m.",
+  "ambiente": "MySQL local; CAP/EVA simuladas",
+  "status": "passed",
+  "workflow": "create/send/observe/revise/resend/approve/audit",
+  "version": 2,
+  "csrf": 403,
+  "httpOnly": true,
+  "pageErrors": [],
+  "mobileOverflow": false
+}
