@@ -88,6 +88,29 @@ Variables relevantes (`.env`): `DB_HOST`, `DB_PORT`, `DB_USER`,
 `bna`, mientras `.env.example` declara `bna_db` — alinear antes de
 conectar a MySQL real).
 
+## Autenticación
+
+> 🚧 **Pendiente de implementación.** Hoy CORE no autentica peticiones:
+> la función `autenticar()` existe en `services/usuariossvc.py` pero no
+> está expuesta por ningún router, y el `actor` de la auditoría se
+> recibe en el cuerpo de cada petición. Esta sección se completará
+> cuando se integre el sistema JWT (Nicolas Ayerve / Nino Flores).
+
+Contenido previsto:
+
+- Endpoint `POST /core/auth/login` (credenciales inválidas → `401` con
+  mensaje genérico).
+- Formato del token JWT y expiración (`ACCESS_TOKEN_EXPIRE_MINUTES`,
+  firma con `SECRET_KEY`).
+- Uso del header `Authorization: Bearer <token>`.
+- Dependencias `get_current_user` y `require_action(accion)` (valida
+  contra el catálogo RBAC).
+- El `actor` de trazabilidad se obtiene del token, nunca del body.
+- Migración de hashes SHA256 a bcrypt en el primer login exitoso.
+
+Ver `Documents/05-checklist-validacion.md` (secciones 1 y 2) y
+`Documents/06-revision-arquitectura-schemas.md` (hallazgo H1).
+
 ## Pruebas
 
 ```bash

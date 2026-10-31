@@ -37,11 +37,13 @@
 - [ ] Documentado: aprobar **no** genera `cob_credito`
 
 ## 5. Transferencias e idempotencia (Renzo Montoya)
-- [ ] Cuentas bloqueadas en orden consistente
-- [ ] Reintento ante deadlock implementado
-- [ ] Misma `idempotency_key` con otros datos → **409**
-- [ ] Replay de transferencia identifica bien pata origen/destino
-- [ ] Una key usada en depósito no se aplica a transferencia
+- [x] Cuentas bloqueadas en orden consistente *(validado con fakes; pendiente con MySQL real)*
+- [x] Reintento ante deadlock implementado *(validado con fakes; pendiente con MySQL real)*
+- [x] Misma `idempotency_key` con otros datos → **409**
+- [x] Replay de transferencia identifica bien pata origen/destino
+- [x] Una key usada en depósito no se aplica a transferencia
+- [ ] Prueba de integración con MySQL y dos conexiones concurrentes (pendiente: Miguel Andia)
+- [ ] Contrato: `idempotency_key` máx. 62 caracteres, sufijo `#C` reservado (avisar al frontend)
 
 ## 6. Topes y contabilidad (Marcelo Moscoso)
 - [ ] Regla RGN-04 documentada (a qué aplica el tope)
