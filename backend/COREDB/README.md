@@ -28,11 +28,18 @@ Documentación interactiva: `http://127.0.0.1:8012/docs`. Especificación public
 
 ## Reglas
 
-- **Conexión:** `bna_app_user`, con el rol `bna_api`: solo lee y ejecuta procedimientos.
+- **Conexión:** `bna_app_user`, con el rol `bna_api`: ejecuta procedimientos y lee solo las
+  tablas que usa; un endpoint que lea otra necesita su `GRANT` en la base. La tarjeta se lee
+  por `tarjetas.v_tarjeta_api`, sin `pan_token`. No lee credenciales ni datos biométricos.
   En UTC y modo estricto. El arranque falla si `core.verificar_configuracion()` no pasa.
 - **Desbloqueo de tarjetas:** no disponible, pendiente de un cliente de Seguridad. La API
   responde 403 `BNA-DESBLOQUEO`, porque solo el rol `bna_seguridad` puede desbloquear.
 - **Actor:** viene de `X-Actor`, es decir, del cliente, hasta que exista el JWT.
+- **Origen de un cambio de estado de tarjeta:** no lo envía el cliente. Viene de `Actor` y,
+  hasta que exista el JWT, es siempre `OPERADOR`; un cuerpo con `origen` se rechaza con 422.
+- **Canal:** lo envía el cliente hasta que exista el JWT, y debe tener fila en
+  `core.limite_canal` para debitar (ver `database/README.md`): por `AGE`, y por `HB` en USD,
+  un débito se rechaza con `BNA-CANAL`; por `BD` en USD, con `RN-BD-002`.
 - **Periodos:** sin un periodo contable para la fecha de negocio, todo movimiento se
   rechaza y esta API no puede crearlo. `docker-compose.coredb.dev.yml` carga el del mes
   en curso; en otro entorno lo carga `bna_admin`.

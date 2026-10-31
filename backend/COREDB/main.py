@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from COREDB.database import verificar_configuracion
 from COREDB.errores import registrar_manejadores
-from COREDB.routers import movimientos, salud, usuarios
+from COREDB.routers import catalogos, cuentas, movimientos, salud, tarjetas, usuarios
 
 
 @asynccontextmanager
@@ -30,3 +30,6 @@ registrar_manejadores(app)
 app.include_router(salud.router)
 app.include_router(usuarios.router)
 app.include_router(movimientos.router)
+app.include_router(cuentas.router)
+app.include_router(tarjetas.router)
+app.include_router(catalogos.router)
