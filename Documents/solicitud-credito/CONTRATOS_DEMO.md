@@ -1,4 +1,4 @@
-# Contratos de simulación (actualizado a v2)
+# Contratos de simulación
 
 Para el transporte HTTP, callbacks, cola y configuración consulta [CONTRATOS_HTTP_V2.md](CONTRATOS_HTTP_V2.md). Ese documento es el contrato técnico propuesto vigente.
 
@@ -18,7 +18,7 @@ El laboratorio guarda datos sintéticos en `bna_sol_mvp` porque la persistencia 
 
 El backend expone `/sol/*` como módulo interno y `/gateway/sol/*` como despacho SIMULADO al mismo módulo. No existe un Bus desplegado aparte ni se afirma que el gateway esté conectado a otros equipos.
 
-El Route Handler de Next.js usa `SOL_GATEWAY_URL`. Cambiar únicamente esa URL no completa una integración institucional: deben coincidir autenticación, rutas, esquemas, estados, semántica e idempotencia. El modo `REAL` ya usa adaptadores HTTP configurables; requiere homologar el contrato propuesto y probar contra los servicios institucionales.
+El Route Handler de Next.js usa `SOL_GATEWAY_URL`. Cambiar únicamente esa URL no completa una integración institucional: deben coincidir autenticación, rutas, esquemas, estados, semántica e idempotencia. El modo `REAL` usa adaptadores HTTP configurables; requiere homologar el contrato propuesto y probar contra los servicios institucionales.
 
 | Método y ruta relativa | Función | Perfil |
 |---|---|---|
@@ -76,11 +76,11 @@ POST `applications/{id}/demo-result`, cabecera `X-Idempotency-Key`, cuenta `eval
 
 La demo admite APROBADO, OBSERVADO y RECHAZADO. Internamente se traducen a APROBADA, OBSERVADA y RECHAZADA. Se valida versión pendiente y no se acepta el resultado de una versión antigua. Un resultado repetido con la misma operación y contenido no duplica eventos.
 
-El callback HTTP v2 ya exige `idEvaluacion` y `ronda` del acuse, junto con un token de servicio. Su homologación, la autenticación central, la aceptación del cliente y `condicionesResultantes` siguen pendientes. Los campos extra se rechazan; esta entrega no interpreta cambios de monto/plazo propuestos por EVA.
+El callback HTTP exige `idEvaluacion` y `ronda` del acuse, junto con un token de servicio. Su homologación, la autenticación central, la aceptación del cliente y `condicionesResultantes` siguen pendientes. Los campos extra se rechazan; esta entrega no interpreta cambios de monto/plazo propuestos por EVA.
 
 ## CR-INT-10
 
-Se registran localmente actor autenticado, solicitud, versión, evento, estado anterior/nuevo, fecha UTC y correlación. La v2 incluye outbox transaccional, worker de reenvío y adaptador HTTP hacia la ruta configurada de Seguridad. El acuse demo se etiqueta SIMULADO. No se ha demostrado conexión al servicio institucional ni se presenta el historial local como almacenamiento central inviolable.
+Se registran localmente actor autenticado, solicitud, versión, evento, estado anterior/nuevo, fecha UTC y correlación. SOL incluye outbox transaccional, worker de reenvío y adaptador HTTP hacia la ruta configurada de Seguridad. El acuse demo se etiqueta SIMULADO. No se ha demostrado conexión al servicio institucional ni se presenta el historial local como almacenamiento central inviolable.
 
 ## Integración real: acuerdos concretos
 

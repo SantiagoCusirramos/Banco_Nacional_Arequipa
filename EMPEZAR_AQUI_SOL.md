@@ -1,8 +1,8 @@
 # MVP funcional v2 — Solicitud de Crédito BNA
 
-Esta entrega se basa en el ZIP del repositorio compartido. Incluye una interfaz Next.js y un servicio FastAPI para el módulo SOL. Trabaja con tu MySQL local y datos sintéticos. No necesita acceso de escritura a GitHub para ejecutarse.
+El módulo SOL incluye una interfaz Next.js y un servicio FastAPI. Trabaja con tu MySQL local y datos sintéticos.
 
-La interfaz se encuentra en **http://localhost:3000/solicitud-credito**. La portada `/` del repositorio se conserva para no ocupar la pantalla de otro equipo.
+La interfaz se encuentra en **http://localhost:3000/solicitud-credito**.
 
 ## Si ya ejecutabas la v1: actualizar conservando tus datos
 
@@ -36,7 +36,7 @@ El asesor del banco completa los datos. El cliente es la persona solicitante y n
 
 ## Antes de empezar
 
-Necesitas Git solo si vas a clonar/publicar. Para ejecutar el ZIP son necesarios **Python 3.11+**, **Node.js compatible con Next.js 16 (20.9+; recomendado 22 LTS)** y **MySQL 8.0+ encendido**. Abre la carpeta de este proyecto en Visual Studio Code.
+Para ejecutar el módulo son necesarios **Python 3.11+**, **Node.js compatible con Next.js 16 (20.9+; recomendado 22 LTS)** y **MySQL 8.0+ encendido**. Abre la carpeta de este proyecto en Visual Studio Code.
 
 Esta entrega no usa la BD compartida `bna`. Crea `bna_sol_mvp` para probar sin competir con el CORE por sus datos. El cambio a persistencia compartida requiere ratificar propiedad y contratos. No ejecutes `99_bna_unificado.sql` para iniciar este laboratorio.
 
@@ -143,9 +143,9 @@ Cambiar límites, tasa y plazo está soportado. Habilitar una fórmula nueva, pa
 
 ## 6. Si todavía no tienes acceso de escritura a GitHub
 
-Puedes ejecutar y modificar este ZIP localmente. Para publicar después, envía al propietario tu usuario de GitHub y pídele que te invite desde Settings → Collaborators → Add people. Acepta la invitación. Que puedas descargar/clonar el repositorio no acredita permiso de escritura.
+Para publicar cambios, envía al propietario tu usuario de GitHub y pídele que te invite desde Settings → Collaborators → Add people. Acepta la invitación. Que puedas descargar/clonar el repositorio no acredita permiso de escritura.
 
-Cuando tengas acceso, clona el repositorio y selecciona la rama existente `solicitud_credito`. Revisa primero el estado de esa rama y contrasta el archivo `CAMBIOS_SOL.md`: copia únicamente esos cambios. Conserva `.git` del clon; no sustituyas toda la carpeta del proyecto compartido con el ZIP.
+Cuando tengas acceso, clona el repositorio y parte de la rama `main`, que ya contiene el módulo SOL.
 
 Si el equipo prefiere trabajar con forks, puedes publicar en un fork de tu cuenta y presentar un Pull Request al repositorio original. No necesitas crear un proyecto nuevo sin relación con el actual.
 
@@ -160,7 +160,7 @@ Desde `backend`:
 
 `check` verifica tu conexión MySQL y cuenta solicitudes. Las pruebas usan por defecto una BD SQLite temporal y no modifican tus expedientes. Para la suite sobre MySQL se debe preparar exclusivamente `bna_sol_mvp_test` y pasar `SOL_TEST_DATABASE_URL`; las pruebas borran y recrean solo sus tablas de laboratorio en esa BD. Nunca utilices una BD compartida para pruebas destructivas.
 
-Desde `frontend`, `npm run lint` y `npm run build` verifican la interfaz. La construcción del layout original usa Geist mediante Next/font y puede necesitar acceso a Google Fonts durante la primera compilación.
+Desde `frontend`, `npm run lint` y `npm run build` verifican la interfaz. La construcción del layout usa Geist mediante Next/font y puede necesitar acceso a Google Fonts durante la primera compilación.
 
 | Mensaje | Qué revisar |
 |---|---|

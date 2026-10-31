@@ -29,14 +29,14 @@ La aplicación tiene tres partes: Next.js presenta pantallas en el puerto 3000; 
 | `app/solicitud-credito/layout.tsx` | Título, descripción y ámbito visual del módulo. |
 | `app/api/solicitud-credito/[...path]/route.ts` | Puente del lado servidor entre navegador y gateway. Mantiene el token en cookie HttpOnly y no expone la URL interna en el navegador. |
 
-## Archivos añadidos en v2
+## Archivos de integración y operación
 
 | Archivo | Para explicarlo sin tecnicismos |
 |---|---|
 | `SOL/clock.py` | Todos los cálculos de fecha consultan el mismo reloj de Lima. Las evidencias conservan instantes UTC. |
 | `SOL/operations.py` | Guarda los envíos y eventos pendientes, consulta si EVA recibió un envío y recupera el trabajo tras una caída. |
 | `SOL/observability.py` | Registra identificadores y duración de cada operación sin claves ni datos de cliente. Calcula p95 con muestras reales del proceso. |
-| `SOL/migrations.py` | Añade las columnas/tablas de la actualización conservando los expedientes anteriores. |
+| `SOL/migrations.py` | Añade columnas/tablas conservando los expedientes existentes. |
 | `SOL/simulator.py` | Servidor HTTP de práctica, no conectado al banco. Permite verificar las rutas propuestas. |
 | `SOL/tests/test_integration_v2.py` | Pruebas del horario nocturno, adaptadores, callbacks, cola, sesiones, privacidad, monitoreo y migración. |
 
