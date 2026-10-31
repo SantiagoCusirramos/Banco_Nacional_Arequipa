@@ -7,14 +7,18 @@ información**.
 
 - Prefijo base: **`/core`** (montado desde `backend/main.py`).
 - Documentación interactiva (Swagger): `GET /docs` con la app levantada.
-- Todas las respuestas de error siguen el formato RNF-29:
+- Los errores de negocio siguen el formato RNF-29 (los 422 de validación
+  responden `{"detail": [{"loc", "type", "msg"}]}`, sin los valores recibidos):
   ```json
   {
     "error": { "code": "CODIGO_NEGOCIO", "message": "...", "details": {} },
     "correlation_id": "..."
   }
   ```
-- Casi todos los endpoints de escritura aceptan en el body
+- `/core/usuarios`, `/core/permisos`, `/core/auditoria` y `/core/reportes`
+  exigen `Authorization: Bearer <token>` y permiso (ver `AUTH_JWT.md`); el
+  actor sale del token.
+- Casi todos los demás endpoints de escritura aceptan en el body
   `actor` (quién ejecuta, para auditoría) y `correlation_id`
   (trazabilidad entre sistemas).
 
@@ -394,8 +398,8 @@ Tablas involucradas: `usuario_sistema`, `empleado`.
 
 | Método | Ruta | Acción CORE |
 |---|---|---|
-| GET | `/core/usuarios` | VER_USUARIO (listado) |
-| GET | `/core/usuarios/{id_usuario}` | VER_USUARIO (uno) |
+| GET | `/core/usuarios` | CREAR_USUARIO (listado) |
+| GET | `/core/usuarios/{id_usuario}` | CREAR_USUARIO (uno) |
 | POST | `/core/usuarios` | CREAR_USUARIO |
 | POST | `/core/usuarios/{id_usuario}/rol` | ASIGNAR_ROLES |
 
@@ -404,13 +408,12 @@ Filtros: `activo` (bool), `rol`, `limite`, `offset`.
 **Origen**: `usuario_sistema` (nunca expone `hash_password`).
 
 ### POST `/core/usuarios`
-Body: `username` (único), `nombre`, `password` (≥8 caracteres),
-`rol` (`ADMINISTRADOR`|`ASESOR`|`ANALISTA`|`OPERADOR`|`AUDITOR`),
+Body: `username` (único), `nombre`, `password` (≥8 caracteres, máximo
+72 bytes), `rol` (`ADMINISTRADOR`|`ASESOR`|`ANALISTA`|`OPERADOR`|`AUDITOR`),
 `id_empleado?`.
 
-**Escritura**: inserta en `usuario_sistema` con
-`hash_password` = SHA-256 hex (CHAR(64), compatible con los seeds
-MySQL `SHA2(pass,256)`) y `algoritmo_hash='SHA256'`.
+**Escritura**: inserta en `usuario_sistema` con `hash_password` = bcrypt,
+`algoritmo_hash='BCRYPT'` y `version_hash='v2'` (ver `AUTENTICACION.md`).
 Valida `id_empleado` contra `empleado` si se envía.
 
 ### POST `/core/usuarios/{id_usuario}/rol`
@@ -540,3 +543,14 @@ Histórico de productos del cliente.
 5. **Billetera**: las acciones de billetera/tarjeta-billetera de
    `Acciones CORE.md` están omitidas por decisión de alcance (no
    existen tablas en el modelo).
+
+---
+
+## 12. Autenticación y catálogos
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/core/auth/login` | Emite el token JWT (ver `AUTH_JWT.md`) |
+| GET | `/core/auth/me` | Perfil y acciones del rol del token |
+| GET | `/core/catalogos/agencias` | Agencias activas (`agencia`) |
+| GET | `/core/catalogos/productos-ahorro` | Productos de ahorro activos (`producto_ahorro`) |

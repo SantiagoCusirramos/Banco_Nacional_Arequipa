@@ -79,7 +79,7 @@ cp .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Pega el resultado en `SECRET_KEY` y completa `DB_PASSWORD` y `ADMIN_PASSWORD` con valores propios. Sin una `SECRET_KEY` propia de al menos 32 caracteres, el backend no arranca y el error indica qué hacer.
+Pega el resultado en `SECRET_KEY` y completa `DB_PASSWORD` con un valor propio. Sin una `SECRET_KEY` propia de al menos 32 caracteres, el backend no arranca y el error indica qué hacer.
 
 No reutilices ningún valor del antiguo `backend/.env` versionado: están comprometidos.
 
@@ -119,44 +119,36 @@ El frontend quedará disponible en `http://localhost:3000`.
 |------------|----------------------------|
 | Backend    | http://localhost:8000      |
 | API Docs   | http://localhost:8000/docs |
+| CUENTAS    | http://localhost:8001      |
+| SOL        | http://127.0.0.1:8011      |
+| COREDB     | http://127.0.0.1:8012      |
 | Frontend   | http://localhost:3000      |
 | MySQL      | localhost:3306             |
-| Bus de Servicios | http://localhost:9000 |
+| Bus de Servicios (previsto, aún no existe) | http://localhost:9000 |
 
 ---
 
 ## Variables de entorno
 
-Cada componente tiene su propio `.env.example`:
+Cada componente tiene su propio archivo de ejemplo:
 
-| Archivo                  | Descripción                        |
-|--------------------------|------------------------------------|
-| `backend/.env.example`   | Configuración de la API y base de datos |
+| Archivo                     | Copia                 | Descripción                             |
+|-----------------------------|-----------------------|-----------------------------------------|
+| `backend/.env.example`      | `backend/.env`        | Configuración de la API y base de datos |
+| `backend/.env.sol.example`  | `backend/.env.sol`    | Módulo SOL                              |
+| `backend/COREDB/.env.example` | `backend/COREDB/.env` | API COREDB                              |
+| `frontend/.env.sol.example` | `frontend/.env.local` | Puente del frontend hacia SOL           |
 
-Copia cada archivo como `.env` en la misma carpeta y completa los valores. **Nunca subas el `.env` al repositorio.**
+Copia cada archivo como se indica y completa los valores. **Nunca subas el `.env` al repositorio.**
 
 ---
 
 ## Autenticación
 
-> 🚧 **Pendiente de implementación.** Hoy el backend (módulo CORE) no
-> autentica peticiones: la función `autenticar()` existe en
-> `backend/CORE/services/usuariossvc.py`, pero no está expuesta por ningún
-> router, y el `actor` de la auditoría se recibe en el cuerpo de cada
-> petición. Esta sección se completará cuando se integre el sistema JWT.
+CORE emite tokens JWT con `POST /core/auth/login` y los valida con el header `Authorization: Bearer <token>`. `/core/usuarios`, `/core/permisos`, `/core/auditoria` y `/core/reportes` exigen token y permiso; las demás rutas de CORE todavía no.
 
-Contenido previsto:
-
-- Endpoint `POST /core/auth/login` (credenciales inválidas → `401` con mensaje genérico).
-- Formato del token JWT y expiración (`ACCESS_TOKEN_EXPIRE_MINUTES`, firma con `SECRET_KEY`).
-- Uso del header `Authorization: Bearer <token>`.
-- Dependencias `get_current_user` y `require_action(accion)` (validan contra el catálogo RBAC).
-- El `actor` de trazabilidad se obtiene del token, nunca del body.
-- Migración de hashes SHA256 a bcrypt en el primer login exitoso.
-
-Más detalle: [`backend/CORE/README.md`](backend/CORE/README.md),
-[`Documents/05-checklist-validacion.md`](Documents/05-checklist-validacion.md) y
-[`Documents/06-revision-arquitectura-schemas.md`](Documents/06-revision-arquitectura-schemas.md).
+Más detalle: [`backend/CORE/AUTH_JWT.md`](backend/CORE/AUTH_JWT.md) y
+[`backend/CORE/AUTENTICACION.md`](backend/CORE/AUTENTICACION.md).
 
 ---
 
@@ -175,9 +167,6 @@ Consulta [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md
 
 ---
 
-<<<<<<< HEAD
-=======
 ## Equipo
 
 Proyecto académico — Universidad Católica de Santa María (UCSM), 2026.
->>>>>>> origin/main

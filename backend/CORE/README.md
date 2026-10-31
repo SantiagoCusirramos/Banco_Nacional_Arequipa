@@ -29,7 +29,7 @@ la billetera se omitió por no existir tablas en el modelo).
 | VER_CREDITO | `GET /core/creditos/solicitudes/{id}` | `creditossvc` |
 | REGISTRAR_PAGO | `POST /core/creditos/pagos` | `creditossvc` (RGN-14: asiento por aplicación) |
 | CONSULTAR_DEUDA | `GET /core/creditos/deuda` | `creditossvc` |
-| CREAR_USUARIO | `POST /core/usuarios` | `usuariossvc` (SHA256) |
+| CREAR_USUARIO | `POST /core/usuarios` | `usuariossvc` (bcrypt) |
 | ASIGNAR_ROLES | `POST /core/usuarios/{id}/rol` | `usuariossvc` (ENUM de roles) |
 | GESTIONAR_PERMISOS | `GET/POST /core/permisos*` | `rbac` (`data/rbac.json`) |
 | VER_AUDITORIA | `GET /core/auditoria` | `reportessvc` (RF-COR-19, solo lectura) |
@@ -44,15 +44,15 @@ backend/CORE/
 ├── api.py            # montaje del router /core + handler de CoreError
 ├── config.py         # Settings (pydantic-settings, variables DB_*)
 ├── database.py       # engine, session factory, Base
-├── dependencies.py   # dependencia FastAPI de sesión SQLAlchemy
+├── dependencies.py   # dependencias FastAPI: sesión SQLAlchemy y JWT
 ├── exceptions.py     # CoreError y subclases con code + status_code
 ├── models/           # SQLAlchemy 2.0 mapeados al esquema unificado bna
 ├── schemas/          # Pydantic v2 de entrada/salida
 ├── routers/          # FastAPI routers por dominio
 ├── services/         # lógica de negocio (única que toca la BD)
-├── utils/            # ids (UUIDv7), money (Decimal), hashing (SHA256)
+├── utils/            # ids (UUIDv7), money (Decimal), hashing (bcrypt), tokens (JWT)
 ├── data/rbac.json    # catálogo de acciones y asignaciones rol→acciones
-└── tests/            # pytest (sin BD; lógica pura + smoke de API)
+└── tests/            # pytest (lógica, API, SQLite en memoria e integración con MySQL)
 ```
 
 ## Reglas de negocio aplicadas
@@ -90,26 +90,11 @@ de entorno" en el README de la raíz.
 
 ## Autenticación
 
-> 🚧 **Pendiente de implementación.** Hoy CORE no autentica peticiones:
-> la función `autenticar()` existe en `services/usuariossvc.py` pero no
-> está expuesta por ningún router, y el `actor` de la auditoría se
-> recibe en el cuerpo de cada petición. Esta sección se completará
-> cuando se integre el sistema JWT (Nicolas Ayerve / Nino Flores).
-
-Contenido previsto:
-
-- Endpoint `POST /core/auth/login` (credenciales inválidas → `401` con
-  mensaje genérico).
-- Formato del token JWT y expiración (`ACCESS_TOKEN_EXPIRE_MINUTES`,
-  firma con `SECRET_KEY`).
-- Uso del header `Authorization: Bearer <token>`.
-- Dependencias `get_current_user` y `require_action(accion)` (valida
-  contra el catálogo RBAC).
-- El `actor` de trazabilidad se obtiene del token, nunca del body.
-- Migración de hashes SHA256 a bcrypt en el primer login exitoso.
-
-Ver `Documents/05-checklist-validacion.md` (secciones 1 y 2) y
-`Documents/06-revision-arquitectura-schemas.md` (hallazgo H1).
+`POST /core/auth/login` emite un JWT, y `usuario_actual` y
+`requiere_permiso(accion)` (`dependencies.py`) lo validan contra el catálogo
+RBAC. Las rutas protegidas, la configuración y las rutas por migrar están en
+[`AUTH_JWT.md`](AUTH_JWT.md); el hash de contraseñas y la migración de SHA-256
+a bcrypt, en [`AUTENTICACION.md`](AUTENTICACION.md).
 
 ## Pruebas
 
@@ -118,11 +103,13 @@ cd backend
 python -m pytest CORE/tests -q
 ```
 
-Cobertura actual: lógica de calendario francés, motor de reglas,
-utilidades (UUIDv7, Decimal, SHA256), excepciones de negocio, catálogo
-RBAC y smoke de montaje de la app (28 rutas `/core/*`). Las pruebas
-end-to-end con MySQL quedan pendientes de un entorno con la BD `bna`
-creada desde `Trabajo_hecho/BD/`.
+Cobertura actual: lógica de calendario francés, motor de reglas y flujo
+de créditos, concurrencia de movimientos, autenticación y JWT,
+configuración, utilidades (UUIDv7, Decimal, hashing), excepciones de
+negocio, catálogo RBAC y smoke de montaje de la app.
+`CORE/tests/integracion/test_real_mysql.py` prueba la autenticación contra
+un MySQL real; se omite salvo que `BNA_INTEGRACION_MYSQL=1` (ver
+[`AUTENTICACION.md`](AUTENTICACION.md)).
 
 ## Pendientes conocidos
 
@@ -134,4 +121,6 @@ creada desde `Trabajo_hecho/BD/`.
    APROBADA pero no genera automáticamente `cob_credito` + asiento de
    desembolso (RGN-12 completo) — requiere decisión de dónde vive el
    canal de desembolso (CORE vs módulo Desembolso).
-3. Tests end-to-end con MySQL (Docker) sobre el esquema unificado.
+3. Tests end-to-end con MySQL (Docker) sobre el esquema unificado, fuera
+   de autenticación: `CORE/tests/integracion/test_real_mysql.py` solo cubre
+   ese flujo.

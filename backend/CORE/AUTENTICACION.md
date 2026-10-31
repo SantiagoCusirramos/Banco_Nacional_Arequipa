@@ -1,6 +1,6 @@
 # Autenticación en CORE
 
-Cómo verifica CORE las credenciales y qué debe hacer la capa HTTP con el
+Cómo verifica CORE las credenciales y qué hace la capa HTTP con el
 resultado. Cubre `CORE/utils/hashing.py` y `usuariossvc.autenticar()`.
 
 ## Almacenamiento de contraseñas
@@ -25,8 +25,8 @@ usuariossvc.autenticar(db, username=..., password=...) -> UsuarioSistema
 
 Retorna el objeto `UsuarioSistema`. `usuariossvc.vista_publica(usuario)` da los
 campos que se pueden exponer: `id_usuario`, `username`, `nombre`, `rol`,
-`id_empleado`, `activo`, `creado_en`. Los claims del token deben salir de ahí,
-nunca de `hash_password`.
+`id_empleado`, `activo`, `creado_en`. Los claims del token salen de ahí, nunca
+de `hash_password`.
 
 La función hace `commit` cuando migra un hash. Quien la llame no debe mezclarla
 con cambios propios pendientes en la misma sesión.
@@ -83,7 +83,6 @@ Ocurre dentro de `autenticar()`, después de verificar la clave y el estado:
   usuarios con `PASSWORD_NO_ADMITIDA`, en lugar de truncarlas.
 - Una contraseña SHA-256 existente que bcrypt no admite sigue funcionando y
   permanece en SHA-256.
-- Los seeds siguen en SHA-256 hasta que cada usuario inicie sesión.
 - El tiempo de respuesta se iguala en los fallos: el usuario inexistente, la
   clave incorrecta de un usuario SHA-256, la contraseña no admitida y el hash
   bcrypt nulo o malformado gastan una verificación bcrypt.
