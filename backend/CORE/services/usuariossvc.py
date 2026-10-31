@@ -21,6 +21,7 @@ from CORE.utils.hashing import (
     bcrypt_admite,
     es_utf8_valida,
     hash_bcrypt,
+    simular_verificacion,
     verify_password,
 )
 from CORE.utils.ids import new_uuid7
@@ -155,10 +156,21 @@ def asignar_rol(
 
 
 def autenticar(db: Session, *, username: str, password: str) -> UsuarioSistema:
-    """Valida credenciales (verificación de hash, sin exponer la clave)."""
+    """Valida credenciales (verificación de hash, sin exponer la clave).
+
+    Retorna el UsuarioSistema autenticado; `vista_publica` da sus campos
+    expuestos. Lanza CREDENCIALES_INVALIDAS (usuario inexistente o clave
+    incorrecta) o USUARIO_INACTIVO, que solo se alcanza con la clave
+    correcta. Toda respuesta gasta al menos una verificación bcrypt, para
+    no revelar por tiempo qué usuarios existen. Ver AUTENTICACION.md.
+    Una contraseña sin UTF-8 válido lanza PASSWORD_NO_ADMITIDA antes de
+    consultar la BD, de modo que tampoco revela nada del usuario.
+    """
     if not es_utf8_valida(password):
         raise ValidationError("PASSWORD_NO_ADMITIDA", "La contraseña contiene caracteres inválidos.")
     usuario = db.query(UsuarioSistema).filter(UsuarioSistema.username == username).first()
+    if usuario is None or usuario.algoritmo_hash != ALGORITMO_BCRYPT:
+        simular_verificacion()
     if usuario is None or not verify_password(
         password, usuario.hash_password, usuario.algoritmo_hash
     ):
