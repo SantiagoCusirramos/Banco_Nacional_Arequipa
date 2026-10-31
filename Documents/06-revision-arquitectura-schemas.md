@@ -83,3 +83,15 @@ Definida en `.env.example` pero ignorada por `config.py` (`extra="ignore"`). Doc
 | S1 `comision`/`itf`/`retencion` sin `ge=0` | **Sigue abierto** |
 | `montar_en()` con `api_router` global (#7) | **Sigue sin corregir**; además el router `catalogos` cambia el conteo de rutas (revisar el valor esperado del test de Mathias) |
 | `idempotency_key` | Cambio de contrato: máx. 62 caracteres (antes 64) |
+
+## 6. Ronda 2 — 2026-10-30 (patch de Leonardo Lonasco)
+
+| Verificación | Resultado |
+|---|---|
+| Archivos que toca el patch | `services/creditossvc.py` (modificado) y 3 archivos nuevos (2 tests y 1 documento). No modifica schemas, routers ni modelos |
+| Acceso a BD / capa de servicios | Sin cambios: la validación nueva vive en el servicio (`generar_calendario_frances`, `tasa_mensual_desde_tea`), no en el router |
+| Dependencias nuevas | Ninguna: `_sumar_meses()` usa `calendar` en vez de `python-dateutil` |
+| Compatibilidad con otros módulos | `SOL` usa la TEA también como fracción con tope 5 (`le=5`) y tiene su propio cálculo de calendario; no hay conflicto |
+| Uso de `float` | El fix no agrega `float`. H-A4 (uso de `float` en la ponderación del puntaje) sigue abierto |
+| S1 (importes negativos) y H1 (`actor` en body) | Sin cambios; siguen abiertos |
+| Schemas de créditos | `monto_solicitado` y `plazo_meses` ya tienen `gt=0`; `tasa_tea` solo aparece en respuestas. La validación de TEA vive solo en el servicio |

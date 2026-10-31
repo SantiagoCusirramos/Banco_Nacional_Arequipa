@@ -28,13 +28,17 @@
 - [ ] Proceso de rotación de secretos documentado
 
 ## 4. Créditos (Leonardo Lonasco)
-- [ ] TEA fraccionaria (ej. 18.5%) no se redondea antes de calcular
-- [ ] `numero_cuotas < 1` → `ValidationError`
-- [ ] `monto <= 0` → `ValidationError`
-- [ ] Vencimientos por mes calendario (31 ene → 28/29 feb)
-- [ ] Redondeo solo en importes monetarios
-- [ ] Flujo CREAR_SOLICITUD → EVALUAR → APROBAR documentado
-- [ ] Documentado: aprobar **no** genera `cob_credito`
+- [x] TEA fraccionaria (ej. 18.5%) no se redondea antes de calcular *(Ronda 2; confirmar con la corrida)*
+- [x] `numero_cuotas < 1` → `ValidationError` *(Ronda 2)*
+- [x] `monto <= 0` → `ValidationError` *(Ronda 2)*
+- [x] Vencimientos por mes calendario (31 ene → 28/29 feb) *(Ronda 2)*
+- [x] Redondeo solo en importes monetarios *(Ronda 2)*
+- [x] Flujo CREAR_SOLICITUD → EVALUAR → APROBAR documentado (`CORE/CREDITOS_MOTOR_Y_FLUJO.md`)
+- [x] Documentado: aprobar **no** genera `cob_credito`
+- [ ] Fix integrado en `main` (pendiente: Pull Request de Leonardo)
+- [!] Motor de reglas: hallazgos H-A1, H-A2, H-A3, H-A4, H-B1, H-B3 **abiertos**, pendientes de decisión del Comité de Créditos (5 tests `xfail`)
+- [!] EXCLUYE se comporta igual que ENTRE: pendiente decidir si se elimina o se redefine
+- [ ] Contrato: la TEA se envía como fracción (0.185), tope 5; avisar a quien consuma la API
 
 ## 5. Transferencias e idempotencia (Renzo Montoya)
 - [x] Cuentas bloqueadas en orden consistente *(validado con fakes; pendiente con MySQL real)*
@@ -97,3 +101,4 @@
 | 1 | 8 | `actor` recibido por body en 12 schemas (H1) | Nicolas Ayerve | Abierto |
 | 2 | 8 | `comision`/`itf`/`retencion` sin `ge=0` (S1) | Renzo Montoya / Marcelo Moscoso | Abierto |
 | 3 | 8 | `moneda` e ids sin validación de formato (S2, S3) | Mathias Ostolaza | Abierto |
+| 4 | 4 | Motor de reglas: reglas APROBAR restan puntos (H-A1), frontera 0.80 duplicada (H-A2), sin ingresos queda APROBADO (H-A3), se aprueba evaluación RECHAZADA (H-B1), monto sin tope (H-B3) | Leonardo Lonasco / Comité de Créditos | Abierto (documentado, sin corregir) |
