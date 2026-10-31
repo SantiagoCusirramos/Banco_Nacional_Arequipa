@@ -45,18 +45,17 @@ con cambios propios pendientes en la misma sesión.
 | Contraseña sin UTF-8 válido | `ValidationError` | `PASSWORD_NO_ADMITIDA` | 422 |
 
 Un hash corrupto se trata como clave incorrecta. La contraseña sin UTF-8 válido
-se rechaza antes de consultar la BD, así que no revela nada del usuario y el
-login puede responderla con 422.
+se rechaza antes de consultar la BD, así que no revela nada del usuario.
 
-## Lo que debe hacer el login
+## Lo que hace el login
 
-El router `POST /core/auth/login` no existe todavía. Cuando se implemente:
+`POST /core/auth/login` (`authsvc.iniciar_sesion`, ver `AUTH_JWT.md`):
 
-1. Llamar a `autenticar()`. No repetir la verificación del hash.
-2. Responder un único `401` genérico tanto para `CREDENCIALES_INVALIDAS` como
-   para `USUARIO_INACTIVO`, con el mismo cuerpo. Los estados 404 y 422 de la
-   tabla son los del servicio y no deben llegar al cliente en esta ruta.
-3. Emitir el token con los datos de `vista_publica()`.
+1. Llama a `autenticar()`. No repite la verificación del hash.
+2. Responde un único `401` genérico para `CREDENCIALES_INVALIDAS`,
+   `USUARIO_INACTIVO` y `PASSWORD_NO_ADMITIDA`, con el mismo cuerpo. Los estados
+   404 y 422 de la tabla son los del servicio y no llegan al cliente en esta ruta.
+3. Emite el token con los datos del usuario.
 
 ```text
 Cliente -> POST /core/auth/login -> usuariossvc.autenticar()

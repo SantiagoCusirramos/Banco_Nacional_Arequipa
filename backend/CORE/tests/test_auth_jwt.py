@@ -19,8 +19,9 @@ from sqlalchemy.pool import StaticPool
 from CORE.api import montar_en
 from CORE.config import get_settings
 from CORE.dependencies import db_session, requiere_permiso
+from CORE.exceptions import AuthenticationError
 from CORE.models import AuditoriaEvento, UsuarioSistema
-from CORE.services import usuariossvc
+from CORE.services import authsvc, usuariossvc
 from CORE.utils import tokens
 
 CLAVE = "k" * 40
@@ -155,12 +156,21 @@ def test_login_clave_incorrecta_y_usuario_inexistente_responden_igual(client):
     assert a.headers["www-authenticate"] == "Bearer"
 
 
-def test_login_usuario_inactivo_da_403(client, db):
+def test_login_usuario_inactivo_responde_igual_que_clave_incorrecta(client, db):
     u = db.query(UsuarioSistema).filter_by(username="oper.t").one()
     u.activo = False
     db.commit()
-    r = _login(client, "oper.t")
-    assert r.status_code == 403 and r.json()["error"]["code"] == "USUARIO_INACTIVO"
+    inactivo = _login(client, "oper.t")
+    incorrecta = _login(client, password="incorrecta")
+    assert inactivo.status_code == incorrecta.status_code == 401
+    assert inactivo.json() == incorrecta.json()
+    assert inactivo.headers["www-authenticate"] == "Bearer"
+
+
+def test_password_no_admitida_da_el_mismo_401(db):
+    with pytest.raises(AuthenticationError) as e:
+        authsvc.iniciar_sesion(db, username="admin.t", password="clave\ud800segura")
+    assert e.value.status_code == 401 and e.value.code == "CREDENCIALES_INVALIDAS"
 
 
 # ---------------------------------------------------------------- /me y permisos

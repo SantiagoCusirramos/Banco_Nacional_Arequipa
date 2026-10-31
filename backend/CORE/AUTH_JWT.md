@@ -30,5 +30,5 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 ## Decisiones
 - El token solo lleva identidad (`sub`, `username`, `rol`, `iss`, `iat`, `exp`, `jti`, `type`); los permisos se consultan en cada petición, y el usuario se relee de BD (desactivar o cambiar de rol surte efecto inmediato).
 - El algoritmo lo fija el servidor; `alg=none` y firmas ajenas se rechazan.
-- Usuario inexistente y clave incorrecta responden igual (401). Cada login exitoso queda en `auditoria_evento` (acción `LOGIN`).
-- Errores: 401 `TOKEN_REQUERIDO | TOKEN_INVALIDO | TOKEN_EXPIRADO | USUARIO_NO_VIGENTE | CREDENCIALES_INVALIDAS`; 403 `PERMISO_DENEGADO | USUARIO_INACTIVO`.
+- Todo fallo de login responde el mismo 401, también el usuario inactivo. Cada login exitoso queda en `auditoria_evento` (acción `LOGIN`).
+- Errores: 401 `TOKEN_REQUERIDO | TOKEN_INVALIDO | TOKEN_EXPIRADO | USUARIO_NO_VIGENTE | CREDENCIALES_INVALIDAS`; 403 `PERMISO_DENEGADO`.
