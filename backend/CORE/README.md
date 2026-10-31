@@ -84,9 +84,9 @@ uvicorn main:app --reload
 ```
 
 Variables relevantes (`.env`): `DB_HOST`, `DB_PORT`, `DB_USER`,
-`DB_PASSWORD`, `DB_NAME` (**ojo**: los scripts SQL crean la base
-`bna`, mientras `.env.example` declara `bna_db` — alinear antes de
-conectar a MySQL real).
+`DB_PASSWORD`, `DB_NAME` (`bna`, la base que crean los scripts SQL) y
+`SECRET_KEY`, sin la cual el backend no arranca. Ver "Configurar variables
+de entorno" en el README de la raíz.
 
 ## Autenticación
 
@@ -134,6 +134,4 @@ creada desde `Trabajo_hecho/BD/`.
    APROBADA pero no genera automáticamente `cob_credito` + asiento de
    desembolso (RGN-12 completo) — requiere decisión de dónde vive el
    canal de desembolso (CORE vs módulo Desembolso).
-3. **Discrepancia `DB_NAME`**: `.env.example` dice `bna_db`; los seeds
-   crean `bna`. Revisar con el equipo de infraestructura.
-4. Tests end-to-end con MySQL (Docker) sobre el esquema unificado.
+3. Tests end-to-end con MySQL (Docker) sobre el esquema unificado.
