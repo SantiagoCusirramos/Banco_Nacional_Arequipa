@@ -164,7 +164,7 @@ Opciones: bloquearlo, o permitirlo solo con justificación obligatoria y un nive
 
 ### 4.2 H-B2 — Aprobación sin aprobador identificado
 
-`id_analista` es opcional. Sumado a la falta de autenticación (hallazgo #1, a cargo de Nicolás Ayerve), no queda evidencia de quién aprobó. Cuando exista el JWT, `id_analista` debe salir del token y ser obligatorio.
+`id_analista` es opcional y `/core/creditos` todavía no exige token (ver `AUTH_JWT.md`), así que no queda evidencia de quién aprobó. Al migrar esa ruta al JWT, `id_analista` debe salir del token y ser obligatorio.
 
 ### 4.3 H-B3 — El monto aprobado no tiene tope
 
@@ -180,9 +180,9 @@ El enunciado (módulo 12, EVALUACIÓN) pide un *workflow de aprobación según m
 | hasta S/ Y | Supervisor de créditos |
 | más de S/ Y | Comité de Créditos |
 
-### 4.5 Hueco de desembolso (confirmado)
+### 4.5 Hueco de desembolso
 
-Coincide con el punto 2 de `CORE/README.md`. Después de APROBAR:
+Después de APROBAR (ver también el punto 2 de `CORE/README.md`):
 - no se crea `cob_credito` ni `cob_cuota`;
 - no hay abono en cuenta ni asiento contable de desembolso;
 - el calendario sigue en SIMULADO y nunca pasa a OFICIAL.

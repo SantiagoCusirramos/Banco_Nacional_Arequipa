@@ -33,12 +33,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
 Con una clave débil el backend no arranca (`CORE/config.py`), y `CORE/utils/tokens.py`
-vuelve a comprobarla al emitir y validar cada token. Nunca reutilice los valores del
-antiguo `backend/.env` versionado: están comprometidos.
+vuelve a comprobarla al emitir y validar cada token.
 
 ## Decisiones
 - El token solo lleva identidad (`sub`, `username`, `rol`, `iss`, `iat`, `exp`, `jti`, `type`); los permisos se consultan en cada petición, y el usuario se relee de BD (desactivar o cambiar de rol surte efecto inmediato).
 - El algoritmo lo fija el servidor; `alg=none` y firmas ajenas se rechazan.
 - Todo fallo de login responde el mismo 401, también el usuario inactivo. Cada login exitoso queda en `auditoria_evento` (acción `LOGIN`).
-- Con los datos sembrados, el primer administrador entra con su usuario de la carga inicial; ya no se pueden crear usuarios sin token.
+- Con los datos sembrados, el primer administrador entra con su usuario de la carga inicial; crear usuarios exige token.
 - Errores: 401 `TOKEN_REQUERIDO | TOKEN_INVALIDO | TOKEN_EXPIRADO | USUARIO_NO_VIGENTE | CREDENCIALES_INVALIDAS`; 403 `PERMISO_DENEGADO`.
