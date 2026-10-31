@@ -78,7 +78,7 @@ python -m pytest CUENTAS/tests -q
 
 ## Diferencias con ITIL-02 / pendientes
 
-- 409 por llave duplicada: CORE no lo hace, devuelve el resultado original con `replay: true`
+- 409 por llave duplicada: CORE devuelve el resultado original con `replay: true` si la peticion es la misma, y 409 (`ERR-COR-IDEMPOTENCY-KEY-REUTILIZADA`) si la llave se reutiliza con otros datos
 - Cuentas no usa MySQL directo: las tablas las escribe CORE
 - Extorno ATM (INT05), cierre mensual e intereses, eliminar cuenta: requieren cambios en CORE (RFC)
 - Validacion de token (Seguridad) y paso por el Bus: no existen aun
