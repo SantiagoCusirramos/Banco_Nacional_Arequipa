@@ -21,7 +21,7 @@ from CORE.config import get_settings
 from CORE.dependencies import db_session, requiere_permiso
 from CORE.exceptions import AuthenticationError
 from CORE.models import AuditoriaEvento, UsuarioSistema
-from CORE.services import authsvc, usuariossvc
+from CORE.services import authsvc, rbac, usuariossvc
 from CORE.utils import tokens
 
 CLAVE = "k" * 40
@@ -222,3 +222,64 @@ def test_login_422_no_repite_la_password(client):
     r = _login(client, password=secreta)
     assert r.status_code == 422
     assert "Clave-Filtrada" not in r.text
+
+
+# ------------------------------------------------- rutas de administración
+RUTAS_ADMIN = [
+    ("get", "/core/usuarios"),
+    ("get", "/core/usuarios/u-1"),
+    ("post", "/core/usuarios"),
+    ("post", "/core/usuarios/u-1/rol"),
+    ("get", "/core/permisos"),
+    ("get", "/core/permisos/rol/ASESOR"),
+    ("post", "/core/permisos/asignar"),
+    ("post", "/core/permisos/revocar"),
+    ("get", "/core/auditoria"),
+    ("get", "/core/reportes/cuadre-contable"),
+    ("get", "/core/reportes/asientos"),
+    ("get", "/core/reportes/movimientos"),
+    ("get", "/core/reportes/historial-cliente/c-1"),
+]
+
+
+@pytest.mark.parametrize("metodo,ruta", RUTAS_ADMIN)
+def test_ruta_admin_exige_token(client, metodo, ruta):
+    assert client.request(metodo, ruta, json={}).status_code == 401
+
+
+@pytest.mark.parametrize("metodo,ruta", RUTAS_ADMIN)
+def test_ruta_admin_exige_permiso(client, metodo, ruta):
+    token = _login(client, "oper.t").json()["access_token"]
+    assert client.request(metodo, ruta, json={}, headers=_auth(token)).status_code == 403
+
+
+ALTA = {"username": "nuevo.t", "nombre": "Nuevo", "password": PASSWORD, "rol": "ASESOR"}
+
+
+def test_el_actor_de_un_alta_sale_del_token(client, db):
+    token = _login(client).json()["access_token"]
+    r = client.post("/core/usuarios", json={**ALTA, "actor": "suplantado"}, headers=_auth(token))
+    assert r.status_code == 201
+    evento = db.query(AuditoriaEvento).filter_by(accion="CREAR_USUARIO", id_entidad=r.json()["id_usuario"]).one()
+    assert evento.actor == "admin.t"
+
+
+def test_el_actor_de_un_cambio_de_rol_sale_del_token(client, db):
+    token = _login(client).json()["access_token"]
+    u = db.query(UsuarioSistema).filter_by(username="oper.t").one()
+    r = client.post(f"/core/usuarios/{u.id_usuario}/rol",
+                    json={"rol": "AUDITOR", "actor": "suplantado"}, headers=_auth(token))
+    assert r.status_code == 200
+    assert db.query(AuditoriaEvento).filter_by(actor="suplantado").count() == 0
+
+
+def test_el_actor_de_un_permiso_sale_del_token(client, monkeypatch, tmp_path):
+    copia = tmp_path / "rbac.json"
+    copia.write_text(rbac.RBAC_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(rbac, "RBAC_FILE", copia)
+    token = _login(client).json()["access_token"]
+    cuerpo = {"rol": "OPERADOR", "accion": "VER_AUDITORIA", "actor": "suplantado"}
+    assert client.post("/core/permisos/asignar", json=cuerpo, headers=_auth(token)).status_code == 200
+    assert client.post("/core/permisos/revocar", json=cuerpo, headers=_auth(token)).status_code == 200
+    ultimos = json.loads(copia.read_text(encoding="utf-8"))["auditoria"][-2:]
+    assert [e["actor"] for e in ultimos] == ["admin.t", "admin.t"]

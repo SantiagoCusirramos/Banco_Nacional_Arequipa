@@ -1,11 +1,13 @@
 """El 422 de validación no devuelve los valores recibidos."""
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from CORE.api import montar_en
-from CORE.dependencies import db_session
+from CORE.dependencies import db_session, usuario_actual
 
 SECRETO = "clave-que-no-debe-volver"
 
@@ -15,6 +17,7 @@ def client():
     app = FastAPI()
     montar_en(app)
     app.dependency_overrides[db_session] = lambda: None
+    app.dependency_overrides[usuario_actual] = lambda: SimpleNamespace(rol="ADMINISTRADOR", username="admin")
     return TestClient(app, raise_server_exceptions=False)
 
 

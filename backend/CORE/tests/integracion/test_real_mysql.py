@@ -194,7 +194,13 @@ def test_logins_concurrentes():
 def http():
     app = FastAPI()
     montar_en(app)
-    return TestClient(app, raise_server_exceptions=False)
+    cliente = TestClient(app, raise_server_exceptions=False)
+    admin, _ = sembrar()
+    sql("update usuario_sistema set rol='ADMINISTRADOR' where username=%s", admin)
+    r = cliente.post("/core/auth/login", json={"username": admin, "password": CLAVE})
+    assert r.status_code == 200, r.text
+    cliente.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
+    return cliente
 
 
 def alta(http, username, password):
