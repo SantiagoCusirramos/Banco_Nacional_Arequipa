@@ -20,8 +20,8 @@ Solo **documentación y reportes de pruebas** de la Actividad #8 (pruebas, valid
 | `backend/pytest.ini` | Configuración de pytest (ya integrado) |
 
 ### Resultados
-- **Ronda 1 (`main`):** XX pasan / XX fallan de 43 tests. Incluye los 19 tests de Renzo (#10 deadlock y #11 idempotencia), validados con dobles de prueba, no con MySQL real.
-- **Ronda 2 (`main` + patch de Leonardo):** XX pasan / 5 `xfailed` esperados / XX fallan. Cubre #4 (TEA exacta), #5 (validación de entradas) y #6 (vencimientos por mes calendario).
+- **Ronda 1 (`main`):** 43 pasan / 0 fallan de 43 tests. Incluye los 19 tests de Renzo (#10 deadlock y #11 idempotencia), validados con dobles de prueba, no con MySQL real.
+- **Ronda 2 (`main` + patch de Leonardo):** 136 pasan / 5 `xfailed` esperados / 0 fallan. Cubre #4 (TEA exacta), #5 (validación de entradas) y #6 (vencimientos por mes calendario).
 
 ### Hallazgos abiertos detectados
 1. **H1 — `actor` viene del body** en 15 schemas: cualquiera puede falsificar la trazabilidad (depende del JWT, Nicolas).

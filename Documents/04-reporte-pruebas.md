@@ -49,29 +49,29 @@
 | `test_utilidades.py` | `test_uuid7_version` | ✅ | | |
 | `test_utilidades.py` | `test_convertir_aplica_tasa` | ✅ | | |
 | `test_utilidades.py` | `test_d_normaliza` | ✅ | | |
-| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_bloquea_en_orden_ascendente_sin_importar_origen` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_orden_antiguo_produce_espera_circular` | ⏳ | | Hallazgo #10 · demuestra el bug anterior con candados simulados (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_orden_nuevo_no_produce_espera_circular` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_detecta_deadlock_mysql` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_reintenta_y_luego_confirma` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_agota_reintentos_y_responde_503` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_error_que_no_es_deadlock_no_se_reintenta` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_transferir_reintenta_ante_deadlock` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_replay_transferencia_no_intercambia_patas` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_misma_llave_otro_monto_da_409` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_misma_llave_otro_destino_da_409` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_de_deposito_no_sirve_para_transferencia` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_de_transferencia_no_sirve_para_deposito` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_deposito_vs_retiro_misma_llave_da_409` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_replay_deposito_identico` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_usa_hash_guardado_en_auditoria` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_sufijo_reservado_rechazado` | ⏳ | | Hallazgo #11 · sufijo `#C` reservado (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_transferencia_demasiado_larga` | ⏳ | | Hallazgo #11 · `idempotency_key` máx. 62 (nuevo, Renzo Montoya) |
-| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_huella_normaliza_monto` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_bloquea_en_orden_ascendente_sin_importar_origen` | ✅ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_orden_antiguo_produce_espera_circular` | ✅ | | Hallazgo #10 · demuestra el bug anterior con candados simulados (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_orden_nuevo_no_produce_espera_circular` | ✅ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_detecta_deadlock_mysql` | ✅ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_reintenta_y_luego_confirma` | ✅ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_agota_reintentos_y_responde_503` | ✅ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_error_que_no_es_deadlock_no_se_reintenta` | ✅ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_transferir_reintenta_ante_deadlock` | ✅ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_replay_transferencia_no_intercambia_patas` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_misma_llave_otro_monto_da_409` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_misma_llave_otro_destino_da_409` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_de_deposito_no_sirve_para_transferencia` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_de_transferencia_no_sirve_para_deposito` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_deposito_vs_retiro_misma_llave_da_409` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_replay_deposito_identico` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_usa_hash_guardado_en_auditoria` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_sufijo_reservado_rechazado` | ✅ | | Hallazgo #11 · sufijo `#C` reservado (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_transferencia_demasiado_larga` | ✅ | | Hallazgo #11 · `idempotency_key` máx. 62 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_huella_normaliza_monto` | ✅ | | Hallazgo #11 (nuevo, Renzo Montoya) |
 
 **Resumen línea base:** 24 tests, 24 ✅, 0 ❌.
 
-**Resumen Ronda 1:** 43 tests (24 existentes + 19 nuevos de `test_movimientos_concurrencia.py`). Resultado: XX ✅, XX ❌. *(Reemplaza los ⏳ de los 19 tests nuevos por ✅/❌ según tu corrida.)*
+**Resumen Ronda 1:** 43 tests (24 existentes + 19 nuevos de `test_movimientos_concurrencia.py`). Resultado: 43 ✅, 0 ❌ (`43 passed, 1 warning in 3.30s`).
 
 > Los 24 tests existentes pasan en la línea base. Esto no significa que el código esté correcto: los hallazgos #1 al #14 del informe no están cubiertos por ningún test actual. Los tests que los detectan (`TestHashing`, `TestCalendario`, `TestApi`, `TestRbac::test_asignar_acepta_rol_inventado`) viven en `test_revision_bna.py` y están pendientes de recibirse.
 
@@ -81,32 +81,32 @@ Estos tests **no están en `main`**: vienen del patch `leonardo-creditos-tea-cal
 
 | Archivo | Test | Resultado | Observación |
 |---|---|---|---|
-| `test_calendario_correcciones.py` | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` | ⏳ | Hallazgo #4 |
-| `test_calendario_correcciones.py` | `TestCalendario::test_tea_con_mas_de_dos_decimales_se_respeta` | ⏳ | Hallazgo #4 · parametrizado (5 TEA) |
-| `test_calendario_correcciones.py` | `TestCalendario::test_cuota_hipotecario_tea_10_50` | ⏳ | Hallazgo #4 · cuota S/ 1 933.51 (con el error salía S/ 1 994.28) |
-| `test_calendario_correcciones.py` | `TestCalendario::test_tea_en_porcentaje_es_rechazada` | ⏳ | Hallazgo #4 · `TEA_FUERA_DE_RANGO` |
-| `test_calendario_correcciones.py` | `TestCalendario::test_tea_invalida_es_rechazada` | ⏳ | Hallazgo #4 · parametrizado (4 casos) |
-| `test_calendario_correcciones.py` | `TestCalendario::test_cuotas_cero_valida_entrada` | ⏳ | Hallazgo #5 · parametrizado (2) |
-| `test_calendario_correcciones.py` | `TestCalendario::test_cuotas_negativas_rechazadas` | ⏳ | Hallazgo #5 |
-| `test_calendario_correcciones.py` | `TestCalendario::test_monto_negativo_rechazado` | ⏳ | Hallazgo #5 · parametrizado (3) |
-| `test_calendario_correcciones.py` | `TestCalendario::test_numero_cuotas_no_entero_rechazado` | ⏳ | Hallazgo #5 |
-| `test_calendario_correcciones.py` | `TestCalendario::test_vencimientos_mensuales_calendario` | ⏳ | Hallazgo #6 · 31-ene → 28-feb, 31-mar… |
-| `test_calendario_correcciones.py` | `TestCalendario::test_vencimientos_anio_bisiesto` | ⏳ | Hallazgo #6 |
-| `test_calendario_correcciones.py` | `TestCalendario::test_ningun_mes_se_salta` | ⏳ | Hallazgo #6 · 60 cuotas |
-| `test_calendario_correcciones.py` | `TestCalendario::test_dia_de_pago_se_conserva` | ⏳ | Hallazgo #6 |
-| `test_calendario_correcciones.py` | `TestCalendario::test_calendario_cuadra` | ⏳ | Hallazgo #4/#5/#6 · parametrizado (6) |
-| `test_creditos_motor_flujo.py` | `test_excluye_se_comporta_igual_que_entre` | ⏳ | Act. 2 · parametrizado (60 combinaciones): EXCLUYE = ENTRE |
-| `test_creditos_motor_flujo.py` | `test_fronteras_de_los_operadores` | ⏳ | Act. 2 |
-| `test_creditos_motor_flujo.py` | `test_crear_solicitud_genera_calendario_simulado_con_meses_calendario` | ⏳ | #6 |
-| `test_creditos_motor_flujo.py` | `test_aprobar_no_genera_credito_ni_desembolso_hueco_conocido` | ⏳ | Act. 2 · fija el hueco conocido del desembolso |
-| `test_creditos_motor_flujo.py` | `test_estado_tras_evaluar_es_en_evaluacion_aunque_el_resultado_sea_rechazado` | ⏳ | Act. 2 |
-| `test_creditos_motor_flujo.py` | `test_solicitante_sano_no_pierde_puntos_por_cumplir_la_regla_saludable` | ⏳ (esperado: xfailed) | H-A1 · falla a propósito: pendiente de decisión del Comité |
-| `test_creditos_motor_flujo.py` | `test_ratio_exacto_en_la_frontera_activa_una_sola_regla` | ⏳ (esperado: xfailed) | H-A2 · falla a propósito: pendiente de decisión del Comité |
-| `test_creditos_motor_flujo.py` | `test_solicitante_sin_ingresos_no_es_aprobado` | ⏳ (esperado: xfailed) | H-A3 · falla a propósito: pendiente de decisión del Comité |
-| `test_creditos_motor_flujo.py` | `test_no_se_puede_aprobar_una_evaluacion_rechazada` | ⏳ (esperado: xfailed) | H-B1 · falla a propósito: pendiente de decisión del Comité |
-| `test_creditos_motor_flujo.py` | `test_no_se_aprueba_mas_de_lo_solicitado` | ⏳ (esperado: xfailed) | H-B3 · falla a propósito: pendiente de decisión del Comité |
+| `test_calendario_correcciones.py` | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` | ✅ | Hallazgo #4 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_tea_con_mas_de_dos_decimales_se_respeta` | ✅ | Hallazgo #4 · parametrizado (5 TEA) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_cuota_hipotecario_tea_10_50` | ✅ | Hallazgo #4 · cuota S/ 1 933.51 (con el error salía S/ 1 994.28) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_tea_en_porcentaje_es_rechazada` | ✅ | Hallazgo #4 · `TEA_FUERA_DE_RANGO` |
+| `test_calendario_correcciones.py` | `TestCalendario::test_tea_invalida_es_rechazada` | ✅ | Hallazgo #4 · parametrizado (4 casos) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_cuotas_cero_valida_entrada` | ✅ | Hallazgo #5 · parametrizado (2) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_cuotas_negativas_rechazadas` | ✅ | Hallazgo #5 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_monto_negativo_rechazado` | ✅ | Hallazgo #5 · parametrizado (3) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_numero_cuotas_no_entero_rechazado` | ✅ | Hallazgo #5 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_vencimientos_mensuales_calendario` | ✅ | Hallazgo #6 · 31-ene → 28-feb, 31-mar… |
+| `test_calendario_correcciones.py` | `TestCalendario::test_vencimientos_anio_bisiesto` | ✅ | Hallazgo #6 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_ningun_mes_se_salta` | ✅ | Hallazgo #6 · 60 cuotas |
+| `test_calendario_correcciones.py` | `TestCalendario::test_dia_de_pago_se_conserva` | ✅ | Hallazgo #6 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_calendario_cuadra` | ✅ | Hallazgo #4/#5/#6 · parametrizado (6) |
+| `test_creditos_motor_flujo.py` | `test_excluye_se_comporta_igual_que_entre` | ✅ | Act. 2 · parametrizado (60 combinaciones): EXCLUYE = ENTRE |
+| `test_creditos_motor_flujo.py` | `test_fronteras_de_los_operadores` | ✅ | Act. 2 |
+| `test_creditos_motor_flujo.py` | `test_crear_solicitud_genera_calendario_simulado_con_meses_calendario` | ✅ | #6 |
+| `test_creditos_motor_flujo.py` | `test_aprobar_no_genera_credito_ni_desembolso_hueco_conocido` | ✅ | Act. 2 · fija el hueco conocido del desembolso |
+| `test_creditos_motor_flujo.py` | `test_estado_tras_evaluar_es_en_evaluacion_aunque_el_resultado_sea_rechazado` | ✅ | Act. 2 |
+| `test_creditos_motor_flujo.py` | `test_solicitante_sano_no_pierde_puntos_por_cumplir_la_regla_saludable` | xfailed (esperado) | H-A1 · falla a propósito: pendiente de decisión del Comité |
+| `test_creditos_motor_flujo.py` | `test_ratio_exacto_en_la_frontera_activa_una_sola_regla` | xfailed (esperado) | H-A2 · falla a propósito: pendiente de decisión del Comité |
+| `test_creditos_motor_flujo.py` | `test_solicitante_sin_ingresos_no_es_aprobado` | xfailed (esperado) | H-A3 · falla a propósito: pendiente de decisión del Comité |
+| `test_creditos_motor_flujo.py` | `test_no_se_puede_aprobar_una_evaluacion_rechazada` | xfailed (esperado) | H-B1 · falla a propósito: pendiente de decisión del Comité |
+| `test_creditos_motor_flujo.py` | `test_no_se_aprueba_mas_de_lo_solicitado` | xfailed (esperado) | H-B3 · falla a propósito: pendiente de decisión del Comité |
 
-**Resumen Ronda 2:** XX pasan, 5 xfailed (esperado), XX fallan. *(Reemplaza los ⏳ por ✅/❌ con tu corrida. Los 5 `xfail` deben figurar como `xfailed`. Si alguno sale `XPASS`, ese hallazgo ya fue corregido y el test debe actualizarse.)*
+**Resumen Ronda 2:** 136 pasan, 5 xfailed (esperado), 0 fallan (`136 passed, 5 xfailed, 1 warning in 3.62s`). Los 136 incluyen los 43 de la Ronda 1 más 93 casos nuevos de Leonardo (varios tests están parametrizados).
 
 #### Hallazgos nuevos documentados por Leonardo (no corregidos)
 
@@ -141,13 +141,13 @@ Estado: **pendiente de recibir `test_revision_bna.py`** (o crearlos cuando cada 
 | #2 `.env` trackeado (crítica) | `git ls-files backend/.env` vacío | Sebastian Castro | | ❌ (confirmado) | ⏳ |
 | #3 Hashing SHA256 | `TestHashing::test_hash_con_sal` | Nino Flores | | ⏳ | ⏳ |
 | #9 `verify_sha256` con None | `TestHashing::test_verificar_con_hash_nulo_no_debe_explotar` | Nino Flores | | ⏳ | ⏳ |
-| #4 TEA redondeada | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` (+ 4 tests más) | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | ⏳ | ⏳ (confirmar con la Ronda 2) |
-| #5 Validación de entrada | `test_cuotas_cero_valida_entrada`, `test_monto_negativo_rechazado`, `test_cuotas_negativas_rechazadas`, `test_numero_cuotas_no_entero_rechazado` | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | ⏳ | ⏳ (confirmar con la Ronda 2) |
-| #6 Vencimientos | `test_vencimientos_mensuales_calendario`, `test_vencimientos_anio_bisiesto`, `test_ningun_mes_se_salta`, `test_dia_de_pago_se_conserva` | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | ⏳ | ⏳ (confirmar con la Ronda 2) |
+| #4 TEA redondeada | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` (+ 4 tests más) | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | sin test previo | ✅ (Ronda 2) |
+| #5 Validación de entrada | `test_cuotas_cero_valida_entrada`, `test_monto_negativo_rechazado`, `test_cuotas_negativas_rechazadas`, `test_numero_cuotas_no_entero_rechazado` | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | sin test previo | ✅ (Ronda 2) |
+| #6 Vencimientos | `test_vencimientos_mensuales_calendario`, `test_vencimientos_anio_bisiesto`, `test_ningun_mes_se_salta`, `test_dia_de_pago_se_conserva` | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | sin test previo | ✅ (Ronda 2) |
 | #7 `montar_en()` | `TestApi::test_montar_en_es_idempotente` (33 rutas, no 66) | Mathias Ostolaza | | ⏳ | ⏳ |
 | #8 / #14 RBAC | `TestRbac::test_asignar_acepta_rol_inventado` | Mathias Ostolaza | | ❌ (#14 confirmado) | ⏳ |
-| #10 Deadlock transferencias | `TestOrdenBloqueo`, `TestReintentosDeadlock` (8 tests, con fakes) | Renzo Montoya | `main` | ⏳ | ⏳ (confirmar con la corrida; falta prueba con MySQL real) |
-| #11 Idempotencia | `TestIdempotencia` (11 tests, con fakes): key reutilizada con otros datos → 409 | Renzo Montoya | `main` | ⏳ | ⏳ (confirmar con la corrida; falta prueba con MySQL real) |
+| #10 Deadlock transferencias | `TestOrdenBloqueo`, `TestReintentosDeadlock` (8 tests, con fakes) | Renzo Montoya | `main` | sin test previo | ✅ (Ronda 1, con fakes; falta prueba con MySQL real) |
+| #11 Idempotencia | `TestIdempotencia` (11 tests, con fakes): key reutilizada con otros datos → 409 | Renzo Montoya | `main` | sin test previo | ✅ (Ronda 1, con fakes; falta prueba con MySQL real) |
 | #12 Tope diario | (definir) | Marcelo Moscoso | | ⏳ | ⏳ |
 | #13 Login 404 vs 401 | login inválido → 401 | Nicolas Ayerve | | ⏳ | ⏳ |
 
@@ -159,6 +159,8 @@ Leyenda: ✅ pasa · ❌ falla · ⏳ pendiente
 |---|---|---|---|---|
 | | | | | |
 
+Sin regresiones detectadas en las Rondas 1 y 2: los 24 tests de la línea base siguen pasando en ambas.
+
 ## 5. Rondas de validación
 
 ### Ronda 0 — Línea base, 2026-10-23
@@ -168,8 +170,8 @@ Leyenda: ✅ pasa · ❌ falla · ⏳ pendiente
 
 ### Ronda 1 — 2026-10-30
 - Ramas integradas: `main` (incluye fixes de Renzo Montoya: #10 y #11)
-- Resultado: XX pasan / XX fallan (de 43 tests)
-- Regresiones: ninguna *(si falla alguno de los 24 originales, listarlo en la sección 4)*
+- Resultado: 43 pasan / 0 fallan (de 43 tests)
+- Regresiones: ninguna (los 24 tests originales siguen pasando)
 - Archivo de salida completa: `Documents/reporte_ronda1.txt`
 - Notas:
   - Los tests de #10 y #11 usan dobles de prueba (fakes), no MySQL real. El propio archivo indica que la verificación definitiva requiere una prueba de integración con dos conexiones concurrentes (pendiente con Miguel Andia).
@@ -179,8 +181,8 @@ Leyenda: ✅ pasa · ❌ falla · ⏳ pendiente
 ### Ronda 2 — 2026-10-30 (fixes de Leonardo Lonasco: #4, #5, #6)
 - Base: `main` + patch `leonardo-creditos-tea-calendario.patch` (rama local `validar/leonardo-creditos`, no se sube).
 - Archivos del patch: `services/creditossvc.py` (modificado), `tests/test_calendario_correcciones.py`, `tests/test_creditos_motor_flujo.py` y `CORE/CREDITOS_MOTOR_Y_FLUJO.md` (nuevos). Se verificó que el contenido del `.patch` y del `.zip` es idéntico.
-- Resultado: XX pasan / 5 xfailed / XX fallan
-- Regresiones: ninguna *(si falla alguno de los 43 anteriores, listarlo en la sección 4)*
+- Resultado: 136 pasan / 5 xfailed / 0 fallan
+- Regresiones: ninguna (los 43 tests anteriores siguen pasando)
 - Archivo de salida completa: `Documents/reporte_ronda2_leonardo.txt`
 - Notas:
   - Solo los hallazgos #4, #5 y #6 están corregidos. Las decisiones del motor de reglas (H-A1 a H-B4, EXCLUYE y desembolso) quedaron **documentadas, no corregidas**.
