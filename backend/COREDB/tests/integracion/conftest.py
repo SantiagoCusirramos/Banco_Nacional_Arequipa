@@ -19,7 +19,7 @@ def pytest_collection_modifyitems(items):
 
 
 @pytest.fixture(scope="session")
-def admin():
+def admin(request):
     conexion = pymysql.connect(
         host=os.environ.get("CORE_DB_HOST", "127.0.0.1"),
         port=int(os.environ["CORE_DB_PORT"]),
@@ -61,3 +61,39 @@ def fallar_una_vez(monkeypatch):
         return intentos
 
     return _fallar
+
+
+@pytest.fixture(scope="session")
+def datos_base(admin):
+    """Clientes de las pruebas; lo demás viene de sql/bna_datos_dev.sql."""
+    sentencias = [
+        "INSERT IGNORE INTO clientes.verificacion_captacion (id_verificacion_captacion, estado_habilitante) "
+        "VALUES ('VC-1', 'HABILITADO'), ('VC-2', 'HABILITADO')",
+        "INSERT IGNORE INTO clientes.cliente (cod_cliente, tipo_documento, numero_documento, nombres, "
+        "apellido_paterno, correo, celular, estado_cliente, id_verificacion_captacion, version_contrato) VALUES "
+        "('C001', 'DNI', '70000001', 'Juan', 'Perez', 'j@example.com', '959000001', 'ACTIVO', 'VC-1', 'v1'), "
+        "('C002', 'DNI', '70000002', 'Ana', 'Diaz', 'a@example.com', '959000002', 'ACTIVO', 'VC-2', 'v1')",
+    ]
+    with admin.cursor() as cursor:
+        for sentencia in sentencias:
+            cursor.execute(sentencia)
+
+
+@pytest.fixture
+def abrir_cuenta(datos_base):
+    from COREDB.database import get_session_factory, llamar
+
+    def _abrir(moneda="PEN"):
+        import uuid
+
+        sufijo = uuid.uuid4().int % 10**16
+        num_cuenta = f"CTA-{sufijo:016d}"
+        with get_session_factory()() as db:
+            llamar(
+                db, "cuentas.abrir_cuenta",
+                num_cuenta, f"{sufijo:020d}", moneda, "INDIVIDUAL", "AQP01", '["C001"]', "pruebas",
+            )
+            db.commit()
+        return num_cuenta
+
+    return _abrir

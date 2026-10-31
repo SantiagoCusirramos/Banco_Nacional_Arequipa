@@ -17,6 +17,7 @@ from COREDB.database import INIT_COMMAND, UuidBinario, get_engine, llamar
 from COREDB.errores import ErrorCoreDb, registrar_manejadores
 from COREDB.main import app
 from COREDB.models import Base
+from COREDB.services.movimientos import _uuid
 from COREDB.scripts.exporta_openapi import ARCHIVO, especificacion
 
 
@@ -170,3 +171,9 @@ def test_deadlock_fuera_de_reintentos_responde_503():
 
 def test_docs_disponibles():
     assert TestClient(app).get("/docs").status_code == 200
+
+
+def test_uuid_nulo_es_conflicto_de_idempotencia():
+    with pytest.raises(ErrorCoreDb) as exc:
+        _uuid(None)
+    assert (exc.value.code, exc.value.status_code) == ("BNA-IDEMPOTENCIA", 409)
