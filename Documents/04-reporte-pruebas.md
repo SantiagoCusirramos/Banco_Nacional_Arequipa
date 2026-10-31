@@ -49,8 +49,29 @@
 | `test_utilidades.py` | `test_uuid7_version` | ✅ | | |
 | `test_utilidades.py` | `test_convertir_aplica_tasa` | ✅ | | |
 | `test_utilidades.py` | `test_d_normaliza` | ✅ | | |
+| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_bloquea_en_orden_ascendente_sin_importar_origen` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_orden_antiguo_produce_espera_circular` | ⏳ | | Hallazgo #10 · demuestra el bug anterior con candados simulados (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestOrdenBloqueo::test_orden_nuevo_no_produce_espera_circular` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_detecta_deadlock_mysql` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_reintenta_y_luego_confirma` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_agota_reintentos_y_responde_503` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_error_que_no_es_deadlock_no_se_reintenta` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestReintentosDeadlock::test_transferir_reintenta_ante_deadlock` | ⏳ | | Hallazgo #10 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_replay_transferencia_no_intercambia_patas` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_misma_llave_otro_monto_da_409` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_misma_llave_otro_destino_da_409` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_de_deposito_no_sirve_para_transferencia` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_de_transferencia_no_sirve_para_deposito` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_deposito_vs_retiro_misma_llave_da_409` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_replay_deposito_identico` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_usa_hash_guardado_en_auditoria` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_sufijo_reservado_rechazado` | ⏳ | | Hallazgo #11 · sufijo `#C` reservado (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_llave_transferencia_demasiado_larga` | ⏳ | | Hallazgo #11 · `idempotency_key` máx. 62 (nuevo, Renzo Montoya) |
+| `test_movimientos_concurrencia.py` | `TestIdempotencia::test_huella_normaliza_monto` | ⏳ | | Hallazgo #11 (nuevo, Renzo Montoya) |
 
-**Resumen:** 24 tests, 24 ✅, 0 ❌.
+**Resumen línea base:** 24 tests, 24 ✅, 0 ❌.
+
+**Resumen Ronda 1:** 43 tests (24 existentes + 19 nuevos de `test_movimientos_concurrencia.py`). Resultado: XX ✅, XX ❌. *(Reemplaza los ⏳ de los 19 tests nuevos por ✅/❌ según tu corrida.)*
 
 > Los 24 tests existentes pasan en la línea base. Esto no significa que el código esté correcto: los hallazgos #1 al #14 del informe no están cubiertos por ningún test actual. Los tests que los detectan (`TestHashing`, `TestCalendario`, `TestApi`, `TestRbac::test_asignar_acepta_rol_inventado`) viven en `test_revision_bna.py` y están pendientes de recibirse.
 
@@ -77,8 +98,8 @@ Estado: **pendiente de recibir `test_revision_bna.py`** (o crearlos cuando cada 
 | #6 Vencimientos | `test_vencimientos_mensuales_calendario` | Leonardo Lonasco | | ⏳ | ⏳ |
 | #7 `montar_en()` | `TestApi::test_montar_en_es_idempotente` (33 rutas, no 66) | Mathias Ostolaza | | ⏳ | ⏳ |
 | #8 / #14 RBAC | `TestRbac::test_asignar_acepta_rol_inventado` | Mathias Ostolaza | | ❌ (#14 confirmado) | ⏳ |
-| #10 Deadlock transferencias | (definir) | Renzo Montoya | | ⏳ | ⏳ |
-| #11 Idempotencia | key reutilizada con otros datos → 409 | Renzo Montoya | | ⏳ | ⏳ |
+| #10 Deadlock transferencias | `TestOrdenBloqueo`, `TestReintentosDeadlock` (8 tests, con fakes) | Renzo Montoya | `main` | ⏳ | ⏳ (confirmar con la corrida; falta prueba con MySQL real) |
+| #11 Idempotencia | `TestIdempotencia` (11 tests, con fakes): key reutilizada con otros datos → 409 | Renzo Montoya | `main` | ⏳ | ⏳ (confirmar con la corrida; falta prueba con MySQL real) |
 | #12 Tope diario | (definir) | Marcelo Moscoso | | ⏳ | ⏳ |
 | #13 Login 404 vs 401 | login inválido → 401 | Nicolas Ayerve | | ⏳ | ⏳ |
 
@@ -97,10 +118,15 @@ Leyenda: ✅ pasa · ❌ falla · ⏳ pendiente
 - Resultado: 24 pasan / 0 fallan
 - Notas: ver "Hallazgos propios detectados durante la corrida".
 
-### Ronda 1 — AAAA-MM-DD
-- Ramas integradas:
-- Resultado: N pasan / N fallan
+### Ronda 1 — 2026-10-30
+- Ramas integradas: `main` (incluye fixes de Renzo Montoya: #10 y #11)
+- Resultado: XX pasan / XX fallan (de 43 tests)
+- Regresiones: ninguna *(si falla alguno de los 24 originales, listarlo en la sección 4)*
+- Archivo de salida completa: `Documents/reporte_ronda1.txt`
 - Notas:
+  - Los tests de #10 y #11 usan dobles de prueba (fakes), no MySQL real. El propio archivo indica que la verificación definitiva requiere una prueba de integración con dos conexiones concurrentes (pendiente con Miguel Andia).
+  - Cambio de contrato: `idempotency_key` bajó de 64 a 62 caracteres y el sufijo `#C` queda reservado.
+  - Siguen sin integrarse: #1/#13 (Nicolas), #3/#9 (Nino), #4/#5/#6 (Leonardo), #7/#8/#14 (Mathias), #2 (Sebastian Castro) y #12 (Marcelo, por confirmar).
 
 ## 6. Conclusión
 (Completar al final: estado general, riesgos pendientes, recomendación de merge.)
