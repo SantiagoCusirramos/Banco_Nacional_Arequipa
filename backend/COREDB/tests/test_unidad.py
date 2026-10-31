@@ -1,6 +1,8 @@
 """Pruebas sin base de datos."""
 
+import re
 import uuid
+from pathlib import Path
 
 import pytest
 from fastapi import Depends, FastAPI, HTTPException
@@ -14,6 +16,7 @@ from COREDB import transacciones
 from COREDB.database import INIT_COMMAND, UuidBinario, get_engine, llamar
 from COREDB.errores import ErrorCoreDb, registrar_manejadores
 from COREDB.main import app
+from COREDB.models import Base
 from COREDB.scripts.exporta_openapi import ARCHIVO, especificacion
 
 
@@ -85,6 +88,23 @@ def test_actor_en_blanco_se_rechaza():
 
 def test_spec_publicada_al_dia():
     assert ARCHIVO.read_text(encoding="utf-8") == especificacion()
+
+
+def test_escrituras_solo_por_procedimientos():
+    prohibido = re.compile(
+        r"\b(INSERT\s+INTO|UPDATE\s+\w|DELETE\s+FROM|REPLACE\s+INTO|TRUNCATE\s+TABLE)\b"
+        r"|\.(add|add_all|delete|merge|update|bulk_\w+)\("
+        r"|\b(insert|update|delete)\("
+    )
+    paquete = Path(ARCHIVO).parent
+    fuentes = [f for f in paquete.rglob("*.py") if "tests" not in f.parts]
+    assert fuentes
+    for fuente in fuentes:
+        assert not prohibido.search(fuente.read_text(encoding="utf-8")), fuente
+
+
+def test_modelos_declaran_su_base():
+    assert all(t.schema for t in Base.metadata.tables.values())
 
 
 def test_engine_oculta_parametros():
