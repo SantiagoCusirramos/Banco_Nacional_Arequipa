@@ -14,6 +14,94 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "MovimientoRegistrar": {
+        "properties": {
+          "correlation_id": {
+            "format": "uuid",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "glosa": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Glosa",
+            "type": "string"
+          },
+          "id_canal": {
+            "maxLength": 5,
+            "minLength": 1,
+            "title": "Id Canal",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "DEPOSITO",
+              "RETIRO"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "monto",
+          "glosa",
+          "id_canal",
+          "num_cuenta",
+          "tipo"
+        ],
+        "title": "MovimientoRegistrar",
+        "type": "object"
+      },
+      "MovimientoRespuesta": {
+        "properties": {
+          "repetido": {
+            "title": "Repetido",
+            "type": "boolean"
+          },
+          "uuid_transaccion": {
+            "format": "uuid",
+            "title": "Uuid Transaccion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_transaccion",
+          "repetido"
+        ],
+        "title": "MovimientoRespuesta",
+        "type": "object"
+      },
       "RolAsignar": {
         "properties": {
           "rol": {
@@ -32,6 +120,98 @@
           "rol"
         ],
         "title": "RolAsignar",
+        "type": "object"
+      },
+      "TransferenciaRegistrar": {
+        "properties": {
+          "correlation_id": {
+            "format": "uuid",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "destino": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Destino",
+            "type": "string"
+          },
+          "glosa": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Glosa",
+            "type": "string"
+          },
+          "id_canal": {
+            "maxLength": 5,
+            "minLength": 1,
+            "title": "Id Canal",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "origen": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Origen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "monto",
+          "glosa",
+          "id_canal",
+          "origen",
+          "destino"
+        ],
+        "title": "TransferenciaRegistrar",
+        "type": "object"
+      },
+      "TransferenciaRespuesta": {
+        "properties": {
+          "repetido": {
+            "title": "Repetido",
+            "type": "boolean"
+          },
+          "uuid_abono": {
+            "format": "uuid",
+            "title": "Uuid Abono",
+            "type": "string"
+          },
+          "uuid_debito": {
+            "format": "uuid",
+            "title": "Uuid Debito",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_debito",
+          "uuid_abono",
+          "repetido"
+        ],
+        "title": "TransferenciaRespuesta",
         "type": "object"
       },
       "UsuarioCrear": {
@@ -181,6 +361,118 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/coredb/movimientos": {
+      "post": {
+        "operationId": "registrar_coredb_movimientos_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MovimientoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovimientoRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Registrar",
+        "tags": [
+          "movimientos"
+        ]
+      }
+    },
+    "/coredb/movimientos/transferencias": {
+      "post": {
+        "operationId": "transferir_coredb_movimientos_transferencias_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferenciaRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferenciaRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Transferir",
+        "tags": [
+          "movimientos"
+        ]
+      }
+    },
     "/coredb/salud": {
       "get": {
         "operationId": "salud_coredb_salud_get",
