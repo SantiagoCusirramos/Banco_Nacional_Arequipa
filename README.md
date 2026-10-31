@@ -72,11 +72,16 @@ pip install -r requirements.txt
 
 #### 2.3 Configurar variables de entorno
 
+Cada persona crea su propio `backend/.env`. Ese archivo no se versiona.
+
 ```bash
 cp .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Edita el archivo `.env` y completa los valores reales (base de datos, claves secretas, etc.).
+Pega el resultado en `SECRET_KEY` y completa `DB_PASSWORD` y `ADMIN_PASSWORD` con valores propios. Sin una `SECRET_KEY` propia de al menos 32 caracteres, el backend no arranca y el error indica qué hacer.
+
+No reutilices ningún valor del antiguo `backend/.env` versionado: están comprometidos.
 
 #### 2.4 Ejecutar el servidor de desarrollo
 
