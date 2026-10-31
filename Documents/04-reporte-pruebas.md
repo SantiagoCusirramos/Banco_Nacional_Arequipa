@@ -75,6 +75,54 @@
 
 > Los 24 tests existentes pasan en la línea base. Esto no significa que el código esté correcto: los hallazgos #1 al #14 del informe no están cubiertos por ningún test actual. Los tests que los detectan (`TestHashing`, `TestCalendario`, `TestApi`, `TestRbac::test_asignar_acepta_rol_inventado`) viven en `test_revision_bna.py` y están pendientes de recibirse.
 
+### 2b. Tests nuevos de la Ronda 2 — fixes de Leonardo Lonasco (rama `validar/leonardo-creditos`)
+
+Estos tests **no están en `main`**: vienen del patch `leonardo-creditos-tea-calendario.patch` aplicado sobre `main` solo para validar. Los tests con `xfail(strict=True)` describen hallazgos que **no están corregidos** y requieren decisión del Comité de Créditos; fallan a propósito y pytest los reporta como `xfailed`, no como error.
+
+| Archivo | Test | Resultado | Observación |
+|---|---|---|---|
+| `test_calendario_correcciones.py` | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` | ⏳ | Hallazgo #4 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_tea_con_mas_de_dos_decimales_se_respeta` | ⏳ | Hallazgo #4 · parametrizado (5 TEA) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_cuota_hipotecario_tea_10_50` | ⏳ | Hallazgo #4 · cuota S/ 1 933.51 (con el error salía S/ 1 994.28) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_tea_en_porcentaje_es_rechazada` | ⏳ | Hallazgo #4 · `TEA_FUERA_DE_RANGO` |
+| `test_calendario_correcciones.py` | `TestCalendario::test_tea_invalida_es_rechazada` | ⏳ | Hallazgo #4 · parametrizado (4 casos) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_cuotas_cero_valida_entrada` | ⏳ | Hallazgo #5 · parametrizado (2) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_cuotas_negativas_rechazadas` | ⏳ | Hallazgo #5 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_monto_negativo_rechazado` | ⏳ | Hallazgo #5 · parametrizado (3) |
+| `test_calendario_correcciones.py` | `TestCalendario::test_numero_cuotas_no_entero_rechazado` | ⏳ | Hallazgo #5 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_vencimientos_mensuales_calendario` | ⏳ | Hallazgo #6 · 31-ene → 28-feb, 31-mar… |
+| `test_calendario_correcciones.py` | `TestCalendario::test_vencimientos_anio_bisiesto` | ⏳ | Hallazgo #6 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_ningun_mes_se_salta` | ⏳ | Hallazgo #6 · 60 cuotas |
+| `test_calendario_correcciones.py` | `TestCalendario::test_dia_de_pago_se_conserva` | ⏳ | Hallazgo #6 |
+| `test_calendario_correcciones.py` | `TestCalendario::test_calendario_cuadra` | ⏳ | Hallazgo #4/#5/#6 · parametrizado (6) |
+| `test_creditos_motor_flujo.py` | `test_excluye_se_comporta_igual_que_entre` | ⏳ | Act. 2 · parametrizado (60 combinaciones): EXCLUYE = ENTRE |
+| `test_creditos_motor_flujo.py` | `test_fronteras_de_los_operadores` | ⏳ | Act. 2 |
+| `test_creditos_motor_flujo.py` | `test_crear_solicitud_genera_calendario_simulado_con_meses_calendario` | ⏳ | #6 |
+| `test_creditos_motor_flujo.py` | `test_aprobar_no_genera_credito_ni_desembolso_hueco_conocido` | ⏳ | Act. 2 · fija el hueco conocido del desembolso |
+| `test_creditos_motor_flujo.py` | `test_estado_tras_evaluar_es_en_evaluacion_aunque_el_resultado_sea_rechazado` | ⏳ | Act. 2 |
+| `test_creditos_motor_flujo.py` | `test_solicitante_sano_no_pierde_puntos_por_cumplir_la_regla_saludable` | ⏳ (esperado: xfailed) | H-A1 · falla a propósito: pendiente de decisión del Comité |
+| `test_creditos_motor_flujo.py` | `test_ratio_exacto_en_la_frontera_activa_una_sola_regla` | ⏳ (esperado: xfailed) | H-A2 · falla a propósito: pendiente de decisión del Comité |
+| `test_creditos_motor_flujo.py` | `test_solicitante_sin_ingresos_no_es_aprobado` | ⏳ (esperado: xfailed) | H-A3 · falla a propósito: pendiente de decisión del Comité |
+| `test_creditos_motor_flujo.py` | `test_no_se_puede_aprobar_una_evaluacion_rechazada` | ⏳ (esperado: xfailed) | H-B1 · falla a propósito: pendiente de decisión del Comité |
+| `test_creditos_motor_flujo.py` | `test_no_se_aprueba_mas_de_lo_solicitado` | ⏳ (esperado: xfailed) | H-B3 · falla a propósito: pendiente de decisión del Comité |
+
+**Resumen Ronda 2:** XX pasan, 5 xfailed (esperado), XX fallan. *(Reemplaza los ⏳ por ✅/❌ con tu corrida. Los 5 `xfail` deben figurar como `xfailed`. Si alguno sale `XPASS`, ese hallazgo ya fue corregido y el test debe actualizarse.)*
+
+#### Hallazgos nuevos documentados por Leonardo (no corregidos)
+
+| Código | Hallazgo | Estado |
+|---|---|---|
+| H-A1 | Las reglas con resultado APROBAR restan puntaje: el riesgo BAJO es inalcanzable | Abierto — decisión del Comité |
+| H-A2 | Ratio exacto 0.80 activa dos reglas (RATIO_SALUDABLE y RATIO_LIMITE) | Abierto — propuesta: sembrar RATIO_LIMITE desde 0.8001 |
+| H-A3 | Solicitante sin ingresos tiene ratio 0 y queda APROBADO | Abierto — propuesta: `INGRESOS_INVALIDOS` |
+| H-A4 | `float`/`int` y truncamiento en la ponderación | Abierto |
+| H-B1 | Se puede aprobar una evaluación RECHAZADA | Abierto |
+| H-B2 | Aprobación sin aprobador identificado (`id_analista` opcional) | Abierto — depende del JWT (Nicolas) |
+| H-B3 | El monto aprobado no tiene tope | Abierto |
+| H-B4 | No existe workflow de aprobación por monto | Abierto — define el Comité |
+| EXCLUYE | Se comporta igual que ENTRE (dispara dentro de la banda) | Abierto — eliminarlo o redefinirlo |
+| Desembolso | Aprobar no genera `cob_credito` ni asiento (hueco conocido, README punto 2) | Abierto — definir dónde vive el desembolso |
+
 ### Hallazgos propios detectados durante la corrida
 
 | Hallazgo | Evidencia |
@@ -93,9 +141,9 @@ Estado: **pendiente de recibir `test_revision_bna.py`** (o crearlos cuando cada 
 | #2 `.env` trackeado (crítica) | `git ls-files backend/.env` vacío | Sebastian Castro | | ❌ (confirmado) | ⏳ |
 | #3 Hashing SHA256 | `TestHashing::test_hash_con_sal` | Nino Flores | | ⏳ | ⏳ |
 | #9 `verify_sha256` con None | `TestHashing::test_verificar_con_hash_nulo_no_debe_explotar` | Nino Flores | | ⏳ | ⏳ |
-| #4 TEA redondeada | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` | Leonardo Lonasco | | ⏳ | ⏳ |
-| #5 Validación de entrada | `test_cuotas_cero_valida_entrada`, `test_monto_negativo_rechazado`, `test_cuotas_negativas_rechazadas` | Leonardo Lonasco | | ⏳ | ⏳ |
-| #6 Vencimientos | `test_vencimientos_mensuales_calendario` | Leonardo Lonasco | | ⏳ | ⏳ |
+| #4 TEA redondeada | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` (+ 4 tests más) | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | ⏳ | ⏳ (confirmar con la Ronda 2) |
+| #5 Validación de entrada | `test_cuotas_cero_valida_entrada`, `test_monto_negativo_rechazado`, `test_cuotas_negativas_rechazadas`, `test_numero_cuotas_no_entero_rechazado` | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | ⏳ | ⏳ (confirmar con la Ronda 2) |
+| #6 Vencimientos | `test_vencimientos_mensuales_calendario`, `test_vencimientos_anio_bisiesto`, `test_ningun_mes_se_salta`, `test_dia_de_pago_se_conserva` | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | ⏳ | ⏳ (confirmar con la Ronda 2) |
 | #7 `montar_en()` | `TestApi::test_montar_en_es_idempotente` (33 rutas, no 66) | Mathias Ostolaza | | ⏳ | ⏳ |
 | #8 / #14 RBAC | `TestRbac::test_asignar_acepta_rol_inventado` | Mathias Ostolaza | | ❌ (#14 confirmado) | ⏳ |
 | #10 Deadlock transferencias | `TestOrdenBloqueo`, `TestReintentosDeadlock` (8 tests, con fakes) | Renzo Montoya | `main` | ⏳ | ⏳ (confirmar con la corrida; falta prueba con MySQL real) |
@@ -127,6 +175,18 @@ Leyenda: ✅ pasa · ❌ falla · ⏳ pendiente
   - Los tests de #10 y #11 usan dobles de prueba (fakes), no MySQL real. El propio archivo indica que la verificación definitiva requiere una prueba de integración con dos conexiones concurrentes (pendiente con Miguel Andia).
   - Cambio de contrato: `idempotency_key` bajó de 64 a 62 caracteres y el sufijo `#C` queda reservado.
   - Siguen sin integrarse: #1/#13 (Nicolas), #3/#9 (Nino), #4/#5/#6 (Leonardo), #7/#8/#14 (Mathias), #2 (Sebastian Castro) y #12 (Marcelo, por confirmar).
+
+### Ronda 2 — 2026-10-30 (fixes de Leonardo Lonasco: #4, #5, #6)
+- Base: `main` + patch `leonardo-creditos-tea-calendario.patch` (rama local `validar/leonardo-creditos`, no se sube).
+- Archivos del patch: `services/creditossvc.py` (modificado), `tests/test_calendario_correcciones.py`, `tests/test_creditos_motor_flujo.py` y `CORE/CREDITOS_MOTOR_Y_FLUJO.md` (nuevos). Se verificó que el contenido del `.patch` y del `.zip` es idéntico.
+- Resultado: XX pasan / 5 xfailed / XX fallan
+- Regresiones: ninguna *(si falla alguno de los 43 anteriores, listarlo en la sección 4)*
+- Archivo de salida completa: `Documents/reporte_ronda2_leonardo.txt`
+- Notas:
+  - Solo los hallazgos #4, #5 y #6 están corregidos. Las decisiones del motor de reglas (H-A1 a H-B4, EXCLUYE y desembolso) quedaron **documentadas, no corregidas**.
+  - Cambio de contrato: la TEA se expresa como fracción (0.185 = 18.5 %). Valores fuera de [0, 5] se rechazan con `TEA_FUERA_DE_RANGO`; 0 cuotas, cuotas negativas o monto ≤ 0 devuelven `ValidationError`.
+  - Los vencimientos usan meses calendario sin agregar `python-dateutil` a `requirements.txt`.
+  - Pendiente: que Leonardo abra su Pull Request a `main` para integrar el cambio.
 
 ## 6. Conclusión
 (Completar al final: estado general, riesgos pendientes, recomendación de merge.)
