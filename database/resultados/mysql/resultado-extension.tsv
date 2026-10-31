@@ -1,0 +1,134 @@
+X01	bna_app_user	hash_password admite 255 caracteres	pasa
+X02	bna_app_user	bna_app no escribe directamente usuarios	pasa
+X03	bna_app_user	username es único	pasa
+X04	bna_app_user	La migración de hash es condicional y deja un solo evento	pasa
+X05	bna_app_user	bna_app no escribe productos	pasa
+X06	bna_app_user	bna_app no escribe tipos de cambio	pasa
+X07	bna_app_user	No se registra un asiento en un periodo cerrado	pasa
+X08	bna_app_user	Un periodo abierto admite el asiento	pasa
+X09	bna_app_user	El depósito actualiza el saldo y guarda la llave	pasa
+X10	bna_app_user	Repetir la llave devuelve la operación sin aplicarla	pasa
+X11	bna_app_user	La misma llave con otros parámetros se rechaza	pasa
+X12	bna_app_user	El retiro sin saldo sigue rechazándose por el trigger	pasa
+X13	bna_app_user	La transferencia mueve el saldo con un asiento por tramo	pasa
+X14	bna_app_user	No se transfiere entre monedas distintas	pasa
+X15	bna_app_user	No se transfiere a la misma cuenta	pasa
+X16	bna_app_user	El movimiento deja su evento en la misma operación	pasa
+X17	bna_app_user	bna_app no modifica la bitácora	pasa
+X18	bna_app_user	Una mancomunada exige sus titulares	pasa
+X19	bna_app_user	La cuenta se abre con su titular	pasa
+X20	bna_app_user	La tarjeta se emite y cambia de estado por el historial	pasa
+X21	bna_app_user	Un valor de la API con equivalente exacto se traduce	pasa
+X40	bna_app_user	Un movimiento sin canal se rechaza (C2)	pasa
+X41	bna_app_user	Una transferencia sin canal se rechaza (C2)	pasa
+X42	bna_app_user	El tope diario se aplica a la transferencia (C2)	pasa
+X43	bna_app_user	Un débito por ATM exige autorización de tarjeta (I7)	pasa
+X44	bna_app_user	La tarjeta exige que el cliente sea titular de la cuenta (I3)	pasa
+X46	bna_app_user	Una cuenta individual tiene un solo titular (I4)	pasa
+X47	bna_app_user	El titular debe poder operar (I4)	pasa
+X48	bna_app_user	Los titulares son una lista JSON (I4)	pasa
+X49	bna_app_user	Los titulares no se repiten (I4)	pasa
+X50	bna_app_user	registrar_movimiento solo admite depósito y retiro (I6)	pasa
+X51	bna_app_user	Una transferencia de un solo tramo se rechaza (I6)	pasa
+X52	bna_app_user	crear_usuario deja su evento (I11)	pasa
+X53	bna_app_user	asignar_rol deja el rol anterior y el nuevo (I11, M11)	pasa
+X54	bna_app_user	bna_app no fabrica eventos de auditoría (I11)	pasa
+X55	bna_app_user	Una cuenta nula da un error de regla (M9)	pasa
+X57	bna_app_user	Repetir una transferencia devuelve la misma operación (I13)	pasa
+X58	bna_app_user	Una llave de depósito no sirve para una transferencia (I13)	pasa
+X59	bna_app_user	La fecha de negocio se corta a medianoche de Arequipa (I13)	pasa
+X60	bna_app_user	Un retiro por AGE, sin tope en las fuentes, se rechaza (C2)	pasa
+X61	bna_app_user	Una transferencia por AGE se rechaza (C2)	pasa
+X62	bna_app_user	Un retiro en USD por HB, sin tope en las fuentes, se rechaza (C2)	pasa
+X63	bna_app_user	Un retiro en USD por AGE se rechaza (C2)	pasa
+X149	bna_app_user	Un débito en USD por BD, con fila deshabilitada, se rechaza con RN-BD-002 (R5)	pasa
+X64	bna_app_user	Ventanilla no tiene tope automático: retiro de 2000 (C2)	pasa
+X65	bna_app_user	Ventanilla no tiene tope automático: transferencia de 15000 (C2)	pasa
+X66	bna_app_user	Ventanilla opera en USD sin tope automático (C2)	pasa
+X67	bna_app_user	Un crédito por AGE no depende del tope (C2)	pasa
+X68	bna_app_user	Una autorización por HB en USD se rechaza como en el movimiento (C2)	pasa
+X110	bna_api_user	bna_api no puede: SELECT tarjetas.credencial	pasa
+X111	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_token	pasa
+X112	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_coordenada	pasa
+X113	bna_api_user	bna_api no puede: SELECT tarjetas.token_pago	pasa
+X114	bna_api_user	bna_api no puede: SELECT clientes.biometria_cliente	pasa
+X115	bna_api_user	bna_api no puede: SELECT clientes.codigo_verificacion	pasa
+X116	bna_api_user	bna_api no puede: SELECT tarjetas.tarjeta, con pan_token	pasa
+X117	bna_api_user	bna_api no puede: SELECT clientes.cliente	pasa
+X118	bna_api_user	bna_api no puede: registrar_evento	pasa
+X119	bna_api_user	bna_api no puede: registrar_asiento	pasa
+X120	bna_api_user	bna_api no puede: reservar_llave	pasa
+X121	bna_api_user	bna_api no puede: aplicar_movimiento	pasa
+X122	bna_api_user	bna_api no puede: validar_canal	pasa
+X123	bna_api_user	bna_api no puede: bloquear_tarjeta	pasa
+X124	bna_api_user	bna_api no puede: desbloquear_tarjeta	pasa
+X125	bna_api_user	bna_api no puede: INSERT en historial_estado_tarjeta	pasa
+X126	bna_api_user	bna_api no puede: INSERT en cuenta_ahorro	pasa
+X127	bna_api_user	bna_api no puede: INSERT en titularidad	pasa
+X128	bna_api_user	bna_api no puede: INSERT en movimiento	pasa
+X129	bna_api_user	bna_api no puede: INSERT en tarjeta	pasa
+X130	bna_api_user	bna_api no puede: INSERT en tarjeta_cuenta	pasa
+X131	bna_api_user	bna_api no puede: UPDATE de saldos	pasa
+X132	bna_api_user	bna_api no puede: INSERT en usuario_sistema	pasa
+X133	bna_api_user	bna_api no puede: UPDATE de la bitácora	pasa
+X134	bna_api_user	bna_api lee la tarjeta por la vista, sin pan_token	pasa
+X135	bna_api_user	bna_api lee lo que usa la API	pasa
+X30	bna_admin_user	El empleado exige una agencia existente	pasa
+X31	bna_admin_user	La tasa debe ser positiva	pasa
+X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
+X33	bna_admin_user	La bitácora rechaza UPDATE aun con privilegios	pasa
+X34	bna_admin_user	La bitácora rechaza DELETE aun con privilegios	pasa
+X35	bna_admin_user	El identificador del empleado debe ser un UUID válido (M6)	pasa
+X45	bna_admin_user	No se emite tarjeta sobre una cuenta cancelada (I3)	pasa
+X69	bna_admin_user	Sin la fila explícita, ventanilla también se rechaza (C2)	pasa
+X56	bna_admin_user	Un canal inactivo se rechaza (I7)	pasa
+X70	bna_api_user	Una transferencia a una cuenta bloqueada no deja nada (C1)	pasa
+X71	bna_api_user	Repetir la llave tras un fallo no informa éxito (C1)	pasa
+X72	bna_api_user	Un retiro sin saldo no deja asiento ni llave (C1)	pasa
+X73	bna_api_user	Un titular inexistente no deja la cuenta (C1)	pasa
+X74	bna_api_user	crear_usuario no deja la fila si falla el evento (C1)	pasa
+X75	bna_api_user	asignar_rol no cambia el rol si falla el evento (C1)	pasa
+X76	bna_api_user	migrar_hash_usuario no cambia el hash si falla el evento (C1)	pasa
+X77	bna_api_user	registrar_movimiento no deja saldo, asiento ni llave si falla el evento (C1)	pasa
+X78	bna_api_user	registrar_transferencia no mueve saldos si falla el evento (C1)	pasa
+X79	bna_api_user	abrir_cuenta no deja la cuenta si falla el evento (C1)	pasa
+X80	bna_api_user	emitir_tarjeta no deja la tarjeta si falla el evento (C1)	pasa
+X81	bna_api_user	cambiar_estado_tarjeta no cambia el estado si falla el evento (C1)	pasa
+X82	bna_api_user	Una operación válida se confirma sola y deja su evento (C1)	pasa
+X83	bna_api_user	Un retiro sin saldo en una transacción no deshace el trabajo previo (C1)	pasa
+X94	bna_api_user	crear_usuario deshace solo lo suyo dentro de una transacción (N2)	pasa
+X95	bna_api_user	asignar_rol deshace solo lo suyo dentro de una transacción (N2)	pasa
+X96	bna_api_user	migrar_hash_usuario deshace solo lo suyo dentro de una transacción (N2)	pasa
+X97	bna_api_user	registrar_movimiento deshace saldo, asiento y llave tras el asiento (N2)	pasa
+X98	bna_api_user	registrar_transferencia deshace los dos tramos (N2)	pasa
+X99	bna_api_user	abrir_cuenta deshace solo lo suyo dentro de una transacción (N2)	pasa
+X100	bna_api_user	emitir_tarjeta deshace solo lo suyo dentro de una transacción (N2)	pasa
+X101	bna_api_user	cambiar_estado_tarjeta deshace solo lo suyo dentro de una transacción (N2)	pasa
+X104	bna_api_user	registrar_asiento deshace solo lo suyo dentro de una transacción (N2)	pasa
+X84	bna_api_user	Un bloqueo concurrente se aplica y avisa a SEGURIDAD (I1)	pasa
+X85	bna_api_user	cambiar_estado_tarjeta no desbloquea con origen OPERADOR (I2)	pasa
+X86	bna_api_user	cambiar_estado_tarjeta no desbloquea con origen SEGURIDAD (I2)	pasa
+X87	bna_api_user	cambiar_estado_tarjeta no reactiva una tarjeta RETENIDA (I2)	pasa
+X88	bna_api_user	bna_app no ejecuta desbloquear_tarjeta (I2)	pasa
+X89	bna_api_user	Sin actor no se desbloquea: la operación es atómica (I2)	pasa
+X90	bna_api_user	bna_seguridad desbloquea, con historial, aviso y auditoría (I2)	pasa
+X91	bna_api_user	bna_seguridad también libera una tarjeta RETENIDA (I2)	pasa
+X92	bna_api_user	desbloquear_tarjeta no activa una tarjeta que no está bloqueada (I2)	pasa
+X106	bna_api_user	cambiar_estado_tarjeta no acepta el origen SEGURIDAD de quien llama (I2)	pasa
+X102	bna_api_user	desbloquear_tarjeta deshace solo lo suyo dentro de una transacción (N2)	pasa
+X93	bna_api_user	bna_seguridad no ejecuta los otros procedimientos (I2)	pasa
+X107	bna_api_user	El deadlock en registrar_asiento llega al cliente en autocommit (N1)	pasa
+X108	bna_api_user	El deadlock en registrar_asiento llega al cliente en su transacción (N1)	pasa
+X140	bna_api_user	El deadlock de una transferencia llega al cliente en autocommit (R3)	pasa
+X141	bna_api_user	El deadlock de una transferencia llega al cliente en su transacción (R3)	pasa
+X142	bna_api_user	crear_usuario conserva 1213 en la transacción de quien llama (R3)	pasa
+X143	bna_api_user	asignar_rol conserva 1213 en la transacción de quien llama (R3)	pasa
+X144	bna_api_user	migrar_hash_usuario conserva 1213 en la transacción de quien llama (R3)	pasa
+X145	bna_api_user	abrir_cuenta conserva 1213 en la transacción de quien llama (R3)	pasa
+X146	bna_api_user	emitir_tarjeta conserva 1213 en la transacción de quien llama (R3)	pasa
+X147	bna_api_user	cambiar_estado_tarjeta conserva 1213 en la transacción de quien llama (R3)	pasa
+X148	bna_api_user	desbloquear_tarjeta conserva 1213 en la transacción de quien llama (R3)	pasa
+X136	bna_api_user	bna_api lee exactamente los objetos de lecturas_api.txt (R4)	pasa
+X137	root	bna_api no tiene SELECT global, por base, por columna ni roles heredados (R4)	pasa
+X138	bna_api_user	Un depósito rechaza una llave sin operación registrada	pasa
+X139	bna_api_user	Una transferencia rechaza una llave sin operación registrada	pasa
