@@ -283,3 +283,18 @@ def test_el_actor_de_un_permiso_sale_del_token(client, monkeypatch, tmp_path):
     assert client.post("/core/permisos/revocar", json=cuerpo, headers=_auth(token)).status_code == 200
     ultimos = json.loads(copia.read_text(encoding="utf-8"))["auditoria"][-2:]
     assert [e["actor"] for e in ultimos] == ["admin.t", "admin.t"]
+
+
+# ----------------------------------------------------------- correlation_id
+def test_correlation_id_valido_queda_en_la_auditoria(client, db):
+    cid = "0198b000-0000-7009-8000-000000000001"
+    client.post("/core/auth/login", json={"username": "admin.t", "password": PASSWORD},
+                headers={"x-correlation-id": cid})
+    assert db.query(AuditoriaEvento).filter_by(accion="LOGIN").one().correlation_id == cid
+
+
+def test_correlation_id_que_no_cabe_no_llega_a_la_auditoria(client, db):
+    r = client.post("/core/auth/login", json={"username": "admin.t", "password": PASSWORD},
+                    headers={"x-correlation-id": "c" * 37})
+    assert r.status_code == 200
+    assert db.query(AuditoriaEvento).filter_by(accion="LOGIN").one().correlation_id is None

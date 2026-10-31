@@ -234,6 +234,13 @@ def test_http_surrogate_json_crudo(http):
     assert r.status_code == 422, r.text
 
 
+def test_http_login_con_correlation_id_largo(http):
+    u, _ = sembrar()
+    r = http.post("/core/auth/login", json={"username": u, "password": CLAVE},
+                  headers={"x-correlation-id": "c" * 37})
+    assert r.status_code == 200, r.text
+
+
 def test_tiempos_uniformes(db):
     from CORE.utils import hashing
     if not hasattr(hashing, "simular_verificacion"):

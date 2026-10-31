@@ -7,6 +7,8 @@ from CORE.models import UsuarioSistema
 from CORE.services import auditoria, usuariossvc
 from CORE.utils import tokens
 
+LARGO_CORRELATION_ID = 36  # auditoria_evento.correlation_id
+
 
 def iniciar_sesion(
     db: Session,
@@ -39,7 +41,8 @@ def iniciar_sesion(
         accion="LOGIN",
         actor=usuario.username,
         detalle={"rol": usuario.rol},
-        correlation_id=correlation_id,
+        # Lo envía el cliente: uno que no cabe no debe impedir el login.
+        correlation_id=correlation_id if len(correlation_id or "") <= LARGO_CORRELATION_ID else None,
     )
     db.commit()
     return token, expires_in, usuario
