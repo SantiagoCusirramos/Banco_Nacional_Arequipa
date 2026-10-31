@@ -32,9 +32,9 @@ ALGORITHM=HS256                     # HS256 | HS384 | HS512
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-El `backend/.env` versionado no cumple esta regla y su clave ya es pública: quien
-la conozca puede firmar tokens. Hasta que se rote, el login y las rutas protegidas
-fallan con 500 en vez de emitir o aceptar tokens con esa clave.
+Con una clave débil el backend no arranca (`CORE/config.py`), y `CORE/utils/tokens.py`
+vuelve a comprobarla al emitir y validar cada token. Nunca reutilice los valores del
+antiguo `backend/.env` versionado: están comprometidos.
 
 ## Decisiones
 - El token solo lleva identidad (`sub`, `username`, `rol`, `iss`, `iat`, `exp`, `jti`, `type`); los permisos se consultan en cada petición, y el usuario se relee de BD (desactivar o cambiar de rol surte efecto inmediato).
