@@ -22,10 +22,14 @@ def ver_auditoria(...): ...
 
 ## Configuración (.env)
 ```
-SECRET_KEY=<openssl rand -hex 32>   # >= 32 caracteres fuera de desarrollo
+SECRET_KEY=<openssl rand -hex 32>   # >= 32 caracteres en todo entorno
 ALGORITHM=HS256                     # HS256 | HS384 | HS512
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
+
+El `backend/.env` versionado no cumple esta regla y su clave ya es pública: quien
+la conozca puede firmar tokens. Hasta que se rote, el login y las rutas protegidas
+fallan con 500 en vez de emitir o aceptar tokens con esa clave.
 
 ## Decisiones
 - El token solo lleva identidad (`sub`, `username`, `rol`, `iss`, `iat`, `exp`, `jti`, `type`); los permisos se consultan en cada petición, y el usuario se relee de BD (desactivar o cambiar de rol surte efecto inmediato).

@@ -8,7 +8,6 @@
   un cambio de rol o de permisos surte efecto de inmediato.
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
@@ -19,13 +18,11 @@ from jose.exceptions import ExpiredSignatureError
 from CORE.config import get_settings
 from CORE.exceptions import AuthenticationError
 
-log = logging.getLogger(__name__)
-
 ISSUER = "bna-core"
 TIPO_ACCESO = "access"
 ALGORITMOS_PERMITIDOS = ("HS256", "HS384", "HS512")
 LONGITUD_MINIMA_CLAVE = 32
-ENTORNOS_LAXOS = ("development", "dev", "test", "testing")
+MARCADOR_DE_EJEMPLO = "change_me"  # valor de .env.example
 
 
 def _configuracion():
@@ -34,15 +31,10 @@ def _configuracion():
         raise RuntimeError(
             f"ALGORITHM={s.algorithm!r} no admitido. Use uno de {ALGORITMOS_PERMITIDOS}."
         )
-    if len(s.secret_key) < LONGITUD_MINIMA_CLAVE:
-        if s.app_env.lower() not in ENTORNOS_LAXOS:
-            raise RuntimeError(
-                f"SECRET_KEY debe tener al menos {LONGITUD_MINIMA_CLAVE} caracteres "
-                "fuera de desarrollo. Genere una con: openssl rand -hex 32"
-            )
-        log.warning(
-            "SECRET_KEY tiene menos de %d caracteres: aceptable solo en desarrollo.",
-            LONGITUD_MINIMA_CLAVE,
+    if len(s.secret_key) < LONGITUD_MINIMA_CLAVE or s.secret_key.startswith(MARCADOR_DE_EJEMPLO):
+        raise RuntimeError(
+            f"SECRET_KEY debe ser propia y tener al menos {LONGITUD_MINIMA_CLAVE} "
+            "caracteres. Genere una con: openssl rand -hex 32"
         )
     return s
 

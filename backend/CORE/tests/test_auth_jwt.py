@@ -124,12 +124,15 @@ def test_emisor_incorrecto_o_tipo_incorrecto_se_rechaza():
         assert e.value.code == "TOKEN_INVALIDO"
 
 
-def test_clave_corta_fuera_de_desarrollo_falla(monkeypatch):
-    monkeypatch.setenv("SECRET_KEY", "corta")
-    monkeypatch.setenv("APP_ENV", "production")
+@pytest.mark.parametrize("entorno", ["development", "test", "production"])
+@pytest.mark.parametrize("clave", ["corta", "12345678", "change_me_super_secret_key_32_chars_minimum"])
+def test_clave_debil_se_rechaza_en_todo_entorno(monkeypatch, entorno, clave):
+    monkeypatch.setenv("SECRET_KEY", clave)
+    monkeypatch.setenv("APP_ENV", entorno)
     get_settings.cache_clear()
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError) as e:
         tokens.crear_token_acceso(id_usuario="u", username="a", rol="ASESOR")
+    assert clave not in str(e.value)
 
 
 # ------------------------------------------------------------------ login

@@ -110,7 +110,7 @@ docker exec bna-prueba mysql -uroot -praiz-local -e "
   GRANT SELECT, INSERT, UPDATE, DELETE ON bna.* TO 'bna_user'@'%';"
 
 BNA_INTEGRACION_MYSQL=1 DB_HOST=127.0.0.1 DB_PORT=3318 DB_NAME=bna \
-  DB_USER=bna_user DB_PASSWORD=app-local SECRET_KEY=prueba-local \
+  DB_USER=bna_user DB_PASSWORD=app-local SECRET_KEY=prueba-local-con-al-menos-32-caracteres \
   python -m pytest CORE/tests/integracion -q
 
 docker rm -f bna-prueba
