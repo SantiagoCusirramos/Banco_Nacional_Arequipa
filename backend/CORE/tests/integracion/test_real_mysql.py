@@ -194,7 +194,13 @@ def test_logins_concurrentes():
 def http():
     app = FastAPI()
     montar_en(app)
-    return TestClient(app, raise_server_exceptions=False)
+    cliente = TestClient(app, raise_server_exceptions=False)
+    admin, _ = sembrar()
+    sql("update usuario_sistema set rol='ADMINISTRADOR' where username=%s", admin)
+    r = cliente.post("/core/auth/login", json={"username": admin, "password": CLAVE})
+    assert r.status_code == 200, r.text
+    cliente.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
+    return cliente
 
 
 def alta(http, username, password):
@@ -221,12 +227,18 @@ def test_http_password_no_admitida(http, password):
     assert not sql("select 1 from usuario_sistema where username=%s", u)
 
 
-@pytest.mark.xfail(reason="Falla conocida: la corrige el PR fix/core-validacion-sin-eco.")
 def test_http_surrogate_json_crudo(http):
     u = "h" + uuid.uuid4().hex[:12]
     cuerpo = '{"username":"%s","nombre":"N","password":"clave\\ud800segura","rol":"OPERADOR"}' % u
     r = http.post("/core/usuarios", content=cuerpo, headers={"content-type": "application/json"})
     assert r.status_code == 422, r.text
+
+
+def test_http_login_con_correlation_id_largo(http):
+    u, _ = sembrar()
+    r = http.post("/core/auth/login", json={"username": u, "password": CLAVE},
+                  headers={"x-correlation-id": "c" * 37})
+    assert r.status_code == 200, r.text
 
 
 def test_tiempos_uniformes(db):
@@ -250,3 +262,27 @@ def test_tiempos_uniformes(db):
             m.append(time.perf_counter() - s)
         t[k] = statistics.median(m) * 1000
     assert max(t.values()) / min(t.values()) < 1.2
+
+
+def test_http_login_fallido_uniforme(http):
+    bc, _ = sembrar()
+    sql("update usuario_sistema set hash_password=%s, algoritmo_hash='BCRYPT' where username=%s", hash_bcrypt(CLAVE), bc)
+    sh, _ = sembrar()
+    inactivo, _ = sembrar(activo=0)
+    bc_inactivo, _ = sembrar(activo=0)
+    sql("update usuario_sistema set hash_password=%s, algoritmo_hash='BCRYPT' where username=%s", hash_bcrypt(CLAVE), bc_inactivo)
+    casos = {"inexistente": ("no.existe", CLAVE), "bcrypt": (bc, "otra-clave"), "sha256": (sh, "otra-clave"),
+             "inactivo_clave_correcta": (inactivo, CLAVE), "inactivo_clave_mala": (inactivo, "otra-clave"),
+             "bcrypt_inactivo": (bc_inactivo, CLAVE)}
+    t, cuerpos = {}, set()
+    for k, (u, p) in casos.items():
+        m = []
+        for _ in range(7):
+            s = time.perf_counter()
+            r = http.post("/core/auth/login", json={"username": u, "password": p})
+            m.append(time.perf_counter() - s)
+            assert r.status_code == 401, (k, r.text)
+            cuerpos.add(r.text)
+        t[k] = statistics.median(m) * 1000
+    assert len(cuerpos) == 1
+    assert max(t.values()) / min(t.values()) < 1.2, t

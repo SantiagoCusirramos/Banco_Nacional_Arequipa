@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from CORE.exceptions import CoreError
-from CORE.routers import admin, catalogos, clientes, creditos, cuentas, movimientos, tarjetas
+from CORE.routers import admin, auth, catalogos, clientes, creditos, cuentas, movimientos, tarjetas
 
 api_router = APIRouter(prefix="/core")
 
@@ -19,6 +19,7 @@ api_router = APIRouter(prefix="/core")
 def _montar_error(exc: CoreError, request: Request) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
+        headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
         content={
             "error": {
                 "code": exc.code,
@@ -62,6 +63,7 @@ def _montar_error_validacion(exc: RequestValidationError) -> JSONResponse:
 def montar_en(app) -> None:
     """Incluye el router de CORE en la aplicación FastAPI y registra los
     manejadores de errores de negocio (RNF-29) y de validación."""
+    api_router.include_router(auth.router)
     api_router.include_router(clientes.router)
     api_router.include_router(catalogos.router) 
     api_router.include_router(cuentas.router)

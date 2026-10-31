@@ -59,14 +59,19 @@ def hash_bcrypt(password: str) -> str:
     return _contexto.hash(password)
 
 
+def simular_verificacion() -> None:
+    """Gasta el tiempo de una verificación bcrypt sin comparar nada real."""
+    _contexto.dummy_verify()
+
+
 def verify_bcrypt(password: str, hash_almacenado: str | None) -> bool:
-    if not hash_almacenado or not isinstance(hash_almacenado, str):
-        return False
-    if not bcrypt_admite(password):
+    if not hash_almacenado or not isinstance(hash_almacenado, str) or not bcrypt_admite(password):
+        simular_verificacion()
         return False
     try:
         return _contexto.verify(password, hash_almacenado)
     except ValueError:  # hash malformado o de otro esquema
+        simular_verificacion()
         return False
 
 

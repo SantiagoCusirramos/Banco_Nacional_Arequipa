@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # La clave se saca del .env
     secret_key: str
     algorithm: str = "HS256"
+    # Vigencia del access token (variable ACCESS_TOKEN_EXPIRE_MINUTES del .env)
+    access_token_expire_minutes: int = 30
 
     @property
     def database_url(self) -> str:
