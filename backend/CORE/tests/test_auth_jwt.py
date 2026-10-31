@@ -201,3 +201,11 @@ def test_cambio_de_rol_aplica_de_inmediato(client, db):
     db.query(UsuarioSistema).filter_by(username="oper.t").one().rol = "AUDITOR"
     db.commit()
     assert client.get("/solo-auditores", headers=_auth(token)).status_code == 200
+
+
+# ------------------------------------------------------- validación sin eco (#10)
+def test_login_422_no_repite_la_password(client):
+    secreta = "Clave-Filtrada-" * 10  # supera el máximo de 128 caracteres
+    r = _login(client, password=secreta)
+    assert r.status_code == 422
+    assert "Clave-Filtrada" not in r.text

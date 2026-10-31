@@ -221,7 +221,6 @@ def test_http_password_no_admitida(http, password):
     assert not sql("select 1 from usuario_sistema where username=%s", u)
 
 
-@pytest.mark.xfail(reason="Falla conocida: la corrige el PR fix/core-validacion-sin-eco.")
 def test_http_surrogate_json_crudo(http):
     u = "h" + uuid.uuid4().hex[:12]
     cuerpo = '{"username":"%s","nombre":"N","password":"clave\\ud800segura","rol":"OPERADOR"}' % u

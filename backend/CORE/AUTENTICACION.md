@@ -116,6 +116,3 @@ BNA_INTEGRACION_MYSQL=1 DB_HOST=127.0.0.1 DB_PORT=3318 DB_NAME=bna \
 
 docker rm -f bna-prueba
 ```
-
-`test_http_surrogate_json_crudo` figura como `xfail` hasta que entre el PR
-`fix/core-validacion-sin-eco`, que corrige ese 500 fuera de este módulo.
