@@ -7,6 +7,7 @@ Servicios, RNF-22).
 """
 
 from fastapi import APIRouter, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from CORE.exceptions import CoreError
@@ -30,9 +31,38 @@ def _montar_error(exc: CoreError, request: Request) -> JSONResponse:
     )
 
 
+def _ubicacion_segura(parte: str | int) -> str | int:
+    """Una clave del JSON recibido puede traer texto que no se codifica en UTF-8."""
+    if isinstance(parte, int):
+        return parte
+    return parte.encode("utf-8", "backslashreplace").decode("utf-8")
+
+
+def _montar_error_validacion(exc: RequestValidationError) -> JSONResponse:
+    """422 con ubicación y tipo del error, sin los valores recibidos.
+
+    El manejador por defecto devuelve `input`, que puede incluir contraseñas,
+    y falla con 500 si contiene un surrogate aislado. `msg` repite el tipo
+    porque el frontend lee ese campo.
+    """
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {
+                    "loc": [_ubicacion_segura(parte) for parte in error["loc"]],
+                    "type": error["type"],
+                    "msg": error["type"],
+                }
+                for error in exc.errors()
+            ]
+        },
+    )
+
+
 def montar_en(app) -> None:
-    """Incluye el router de CORE en la aplicación FastAPI y registra el
-    manejador de errores de negocio (RNF-29)."""
+    """Incluye el router de CORE en la aplicación FastAPI y registra los
+    manejadores de errores de negocio (RNF-29) y de validación."""
     api_router.include_router(auth.router)
     api_router.include_router(clientes.router)
     api_router.include_router(catalogos.router) 
@@ -49,3 +79,7 @@ def montar_en(app) -> None:
     @app.exception_handler(CoreError)
     async def _core_error_handler(request: Request, exc: CoreError):
         return _montar_error(exc, request)
+
+    @app.exception_handler(RequestValidationError)
+    async def _validacion_handler(request: Request, exc: RequestValidationError):
+        return _montar_error_validacion(exc)

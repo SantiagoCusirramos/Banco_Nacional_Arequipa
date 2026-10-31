@@ -1,0 +1,11 @@
+core.agencia
+core.equivalencia_catalogo
+core.moneda
+core.periodo_contable
+core.producto_ahorro
+core.producto_credito
+core.tipo_cambio
+core.usuario_sistema
+cuentas.cuenta_ahorro
+cuentas.idempotencia_movimiento
+tarjetas.v_tarjeta_api
