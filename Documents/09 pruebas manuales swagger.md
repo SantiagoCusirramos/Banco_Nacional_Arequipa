@@ -1,7 +1,7 @@
 # Pruebas manuales con Swagger — CORE
 
 **Responsable:** Sebastian Alberto Monteagudo Miranda
-**Fecha:** AAAA-MM-DD
+**Fecha:** pendiente (completar al ejecutar)
 **Entorno:** `uvicorn main:app --reload` · `http://localhost:8000/docs` · BD `bna` cargada con `99_bna_unificado.sql`
 **Requisitos:** BD `bna` y credenciales de `bna_user` (Miguel Andia); `SECRET_KEY` propia de 32+ caracteres en `backend/.env`; usuario administrador de la carga inicial.
 
