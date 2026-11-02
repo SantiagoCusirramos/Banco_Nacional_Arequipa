@@ -13,7 +13,6 @@ from fastapi.responses import JSONResponse
 from CORE.exceptions import CoreError
 from CORE.routers import admin, auth, catalogos, clientes, creditos, cuentas, movimientos, tarjetas
 
-api_router = APIRouter(prefix="/core")
 
 
 def _montar_error(exc: CoreError, request: Request) -> JSONResponse:
@@ -60,12 +59,22 @@ def _montar_error_validacion(exc: RequestValidationError) -> JSONResponse:
     )
 
 
+
 def montar_en(app) -> None:
-    """Incluye el router de CORE en la aplicación FastAPI y registra los
-    manejadores de errores de negocio (RNF-29) y de validación."""
+    """Monta las rutas de CORE una sola vez en una aplicación FastAPI.
+
+    El router se crea localmente para evitar compartir estado mutable entre
+    distintas aplicaciones. El indicador en app.state hace que llamadas
+    repetidas sobre la misma aplicación sean idempotentes.
+    """
+    if getattr(app.state, "core_api_montada", False):
+        return
+
+    api_router = APIRouter(prefix="/core")
+
     api_router.include_router(auth.router)
     api_router.include_router(clientes.router)
-    api_router.include_router(catalogos.router) 
+    api_router.include_router(catalogos.router)
     api_router.include_router(cuentas.router)
     api_router.include_router(movimientos.router)
     api_router.include_router(tarjetas.router)
@@ -74,7 +83,9 @@ def montar_en(app) -> None:
     api_router.include_router(admin.permisos_router)
     api_router.include_router(admin.auditoria_router)
     api_router.include_router(admin.reportes_router)
+
     app.include_router(api_router)
+    app.state.core_api_montada = True
 
     @app.exception_handler(CoreError)
     async def _core_error_handler(request: Request, exc: CoreError):
