@@ -8,8 +8,9 @@ APROBADA genera cuenta de crédito y asiento de desembolso.
 RGN-14: cada pago —incluso fraccionado— genera su propio asiento.
 """
 
-from datetime import date, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+import calendar
+from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 
 from sqlalchemy.orm import Session
 
@@ -44,19 +45,96 @@ CERO = Decimal("0.00")
 # ----------------------------------------------------------------------
 # Calendario de pagos (sistema francés, cuota fija)
 # ----------------------------------------------------------------------
-def tasa_mensual_desde_tea(tasa_tea: Decimal) -> Decimal:
-    """Tasa mensual equivalente: (1 + TEA)^(1/12) − 1."""
-    factor = (Decimal("1") + D(tasa_tea)) ** (Decimal("1") / Decimal("12"))
-    return factor - Decimal("1")
+# La TEA se guarda como FRACCIÓN (producto_credito.tasa_tea DECIMAL(6,4)):
+# 0.1850 equivale a 18.50 %. El tope de 5 (500 %) no es un límite legal,
+# es una cota de cordura: su objetivo es atrapar el error típico de enviar
+# 18.5 (porcentaje) en lugar de 0.185 (fracción).
+TEA_MAXIMA = Decimal("5")
+# Dígitos significativos para operar con tasas. Las tasas NUNCA se
+# redondean a 2 decimales; solo los importes de dinero.
+PRECISION_TASAS = 34
+
+
+def _validar_tea(tasa_tea) -> Decimal:
+    """Devuelve la TEA como Decimal exacto (sin redondear) o lanza
+    ValidationError si no es numérica o está fuera de [0, TEA_MAXIMA]."""
+    try:
+        tea = tasa_tea if isinstance(tasa_tea, Decimal) else Decimal(str(tasa_tea))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValidationError("TEA_INVALIDA", f"TEA no numérica: {tasa_tea!r}.") from None
+    if not tea.is_finite():
+        raise ValidationError("TEA_INVALIDA", f"TEA no numérica: {tasa_tea!r}.")
+    if not (Decimal("0") <= tea <= TEA_MAXIMA):
+        raise ValidationError(
+            "TEA_FUERA_DE_RANGO",
+            "La TEA se expresa como fracción (0.185 equivale a 18.5 %) "
+            f"y debe estar entre 0 y {TEA_MAXIMA}.",
+            details={"tasa_tea": str(tea)},
+        )
+    return tea
+
+
+def tasa_mensual_desde_tea(tasa_tea) -> Decimal:
+    """Tasa mensual equivalente: (1 + TEA)^(1/12) − 1.
+
+    Hallazgo #4: antes la TEA pasaba por D(), que redondea a 2 decimales,
+    y 0.185 (18.5 %) se convertía en 0.19 (19 %). Ahora la TEA se usa
+    exacta y el cálculo se hace con PRECISION_TASAS dígitos.
+    """
+    tea = _validar_tea(tasa_tea)
+    with localcontext() as ctx:
+        ctx.prec = PRECISION_TASAS
+        mensual = (Decimal("1") + tea) ** (Decimal("1") / Decimal("12")) - Decimal("1")
+    return mensual
+
+
+def _sumar_meses(fecha: date, meses: int) -> date:
+    """fecha + n meses calendario, conservando el día de pago.
+
+    Hallazgo #6: antes se sumaban 30·n días y el calendario se desfasaba
+    (desde el 31-ene no había cuota en febrero). Si el día no existe en el
+    mes destino (31 en febrero), se usa el último día de ese mes. Se calcula
+    SIEMPRE desde la fecha original, no encadenado: así un 31 que cayó en
+    28 de febrero vuelve a 31 en marzo.
+
+    Equivale a `fecha + dateutil.relativedelta(months=meses)`, pero sin
+    agregar python-dateutil a requirements.txt.
+    """
+    indice = fecha.month - 1 + meses
+    anio, mes = fecha.year + indice // 12, indice % 12 + 1
+    ultimo_dia = calendar.monthrange(anio, mes)[1]
+    return date(anio, mes, min(fecha.day, ultimo_dia))
 
 
 def generar_calendario_frances(
     monto: Decimal, tasa_tea: Decimal, numero_cuotas: int,
     fecha_inicio: date,
 ) -> list[dict]:
-    """Devuelve las cuotas proyectadas del crédito."""
-    i = tasa_mensual_desde_tea(tasa_tea)
-    monto = D(monto)
+    """Devuelve las cuotas proyectadas del crédito.
+
+    Hallazgo #5: el servicio valida sus propias entradas y no depende de que
+    el schema o el router lo hayan hecho (antes, 0 cuotas producía
+    DivisionByZero, cuotas negativas un calendario vacío y un monto negativo
+    cuotas negativas). Solo se redondean a céntimos los importes de dinero.
+    """
+    if isinstance(numero_cuotas, bool) or not isinstance(numero_cuotas, int) or numero_cuotas < 1:
+        raise ValidationError(
+            "NUMERO_CUOTAS_INVALIDO",
+            "El número de cuotas debe ser un entero mayor o igual a 1.",
+            details={"numero_cuotas": str(numero_cuotas)},
+        )
+    try:
+        monto = D(monto)
+    except (ValueError, InvalidOperation):
+        raise ValidationError("MONTO_INVALIDO", f"Monto no numérico: {monto!r}.") from None
+    if not monto.is_finite() or monto <= CERO:
+        raise ValidationError(
+            "MONTO_INVALIDO",
+            "El monto del crédito debe ser mayor a cero.",
+            details={"monto": str(monto)},
+        )
+    i = tasa_mensual_desde_tea(tasa_tea)  # valida la TEA
+
     if i == CERO:
         cuota_fija = (monto / numero_cuotas).quantize(DOS, rounding=ROUND_HALF_UP)
     else:
@@ -77,7 +155,7 @@ def generar_calendario_frances(
         cuotas.append(
             {
                 "numero_cuota": n,
-                "fecha_vencimiento": fecha_inicio + timedelta(days=30 * n),
+                "fecha_vencimiento": _sumar_meses(fecha_inicio, n),
                 "saldo_inicial": saldo,
                 "amortizacion": amortizacion,
                 "interes": interes,

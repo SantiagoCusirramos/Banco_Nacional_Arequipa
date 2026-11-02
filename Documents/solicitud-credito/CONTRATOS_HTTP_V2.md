@@ -4,7 +4,7 @@ Fecha: 23/10/2026. `REAL` significa que SOL usa HTTP hacia las rutas configurada
 
 ## Qué deben entregar Bus, Captación, Evaluación y Seguridad
 
-- URL de Testing, rutas exactas y versión del contrato. No se inventa una URL institucional.
+- URL de Testing, rutas exactas y versión del contrato.
 - Dos credenciales distintas: SOL → Bus y Bus/EVA → callback SOL. Configuración solo en servidor. El receptor debe verificar TLS y restringir el origen; no se implementa SSO/MFA institucional.
 - CAP: forma de búsqueda, referencia, estado habilitante, verificación y vigencia. El adaptador usa actualmente `ACTIVO` + `HABILITADO`; homologar estos nombres antes de conectar.
 - EVA: POST de recepción, GET por `idOperacion`, acuse estable y callback reintentable. Un GET 404 significa **no recibido**. Si el GET falla, SOL no repite el POST a ciegas. Una entrega confirmada queda congelada.

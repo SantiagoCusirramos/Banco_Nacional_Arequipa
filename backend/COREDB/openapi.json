@@ -1,0 +1,1497 @@
+{
+  "components": {
+    "schemas": {
+      "AgenciaRespuesta": {
+        "properties": {
+          "id_agencia": {
+            "title": "Id Agencia",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_agencia",
+          "nombre"
+        ],
+        "title": "AgenciaRespuesta",
+        "type": "object"
+      },
+      "CuentaAbrir": {
+        "properties": {
+          "cci": {
+            "maxLength": 20,
+            "minLength": 20,
+            "title": "Cci",
+            "type": "string"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "moneda": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Moneda",
+            "type": "string"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "regimen": {
+            "maxLength": 25,
+            "title": "Regimen",
+            "type": "string"
+          },
+          "titulares": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Titulares",
+            "type": "array"
+          }
+        },
+        "required": [
+          "num_cuenta",
+          "cci",
+          "moneda",
+          "regimen",
+          "titulares"
+        ],
+        "title": "CuentaAbrir",
+        "type": "object"
+      },
+      "CuentaRespuesta": {
+        "properties": {
+          "cci": {
+            "title": "Cci",
+            "type": "string"
+          },
+          "estado_cuenta": {
+            "title": "Estado Cuenta",
+            "type": "string"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "num_cuenta": {
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "regimen": {
+            "title": "Regimen",
+            "type": "string"
+          },
+          "saldo_contable": {
+            "title": "Saldo Contable",
+            "type": "string"
+          },
+          "saldo_disponible": {
+            "title": "Saldo Disponible",
+            "type": "string"
+          }
+        },
+        "required": [
+          "num_cuenta",
+          "cci",
+          "moneda",
+          "regimen",
+          "saldo_contable",
+          "saldo_disponible",
+          "estado_cuenta",
+          "id_agencia"
+        ],
+        "title": "CuentaRespuesta",
+        "type": "object"
+      },
+      "EstadoCambiar": {
+        "additionalProperties": false,
+        "properties": {
+          "estado": {
+            "maxLength": 25,
+            "title": "Estado",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "required": [
+          "estado"
+        ],
+        "title": "EstadoCambiar",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MonedaRespuesta": {
+        "properties": {
+          "cod_moneda": {
+            "title": "Cod Moneda",
+            "type": "string"
+          },
+          "decimales": {
+            "title": "Decimales",
+            "type": "integer"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "simbolo": {
+            "title": "Simbolo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_moneda",
+          "nombre",
+          "simbolo",
+          "decimales"
+        ],
+        "title": "MonedaRespuesta",
+        "type": "object"
+      },
+      "MovimientoRegistrar": {
+        "properties": {
+          "correlation_id": {
+            "format": "uuid",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "glosa": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Glosa",
+            "type": "string"
+          },
+          "id_canal": {
+            "maxLength": 5,
+            "minLength": 1,
+            "title": "Id Canal",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "DEPOSITO",
+              "RETIRO"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "monto",
+          "glosa",
+          "id_canal",
+          "num_cuenta",
+          "tipo"
+        ],
+        "title": "MovimientoRegistrar",
+        "type": "object"
+      },
+      "MovimientoRespuesta": {
+        "properties": {
+          "repetido": {
+            "title": "Repetido",
+            "type": "boolean"
+          },
+          "uuid_transaccion": {
+            "format": "uuid",
+            "title": "Uuid Transaccion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_transaccion",
+          "repetido"
+        ],
+        "title": "MovimientoRespuesta",
+        "type": "object"
+      },
+      "ProductoAhorroRespuesta": {
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "id_producto_ahorro": {
+            "format": "uuid",
+            "title": "Id Producto Ahorro",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "tasa_tea": {
+            "title": "Tasa Tea",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_producto_ahorro",
+          "nombre",
+          "moneda",
+          "tasa_tea",
+          "activo"
+        ],
+        "title": "ProductoAhorroRespuesta",
+        "type": "object"
+      },
+      "ProductoCreditoRespuesta": {
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "id_producto_credito": {
+            "format": "uuid",
+            "title": "Id Producto Credito",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "plazo_max_meses": {
+            "title": "Plazo Max Meses",
+            "type": "integer"
+          },
+          "plazo_min_meses": {
+            "title": "Plazo Min Meses",
+            "type": "integer"
+          },
+          "tasa_tea": {
+            "title": "Tasa Tea",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_producto_credito",
+          "nombre",
+          "tasa_tea",
+          "plazo_min_meses",
+          "plazo_max_meses",
+          "activo"
+        ],
+        "title": "ProductoCreditoRespuesta",
+        "type": "object"
+      },
+      "RolAsignar": {
+        "properties": {
+          "rol": {
+            "enum": [
+              "ADMINISTRADOR",
+              "ASESOR",
+              "ANALISTA",
+              "OPERADOR",
+              "AUDITOR"
+            ],
+            "title": "Rol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rol"
+        ],
+        "title": "RolAsignar",
+        "type": "object"
+      },
+      "TarjetaEmitir": {
+        "properties": {
+          "bin": {
+            "pattern": "^[0-9]{6}$",
+            "title": "Bin",
+            "type": "string"
+          },
+          "cod_cliente": {
+            "maxLength": 12,
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "fecha_emision": {
+            "format": "date",
+            "title": "Fecha Emision",
+            "type": "string"
+          },
+          "fecha_vencimiento": {
+            "format": "date",
+            "title": "Fecha Vencimiento",
+            "type": "string"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "pan_token": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Pan Token",
+            "type": "string"
+          },
+          "ultimos4": {
+            "pattern": "^[0-9]{4}$",
+            "title": "Ultimos4",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pan_token",
+          "bin",
+          "ultimos4",
+          "fecha_emision",
+          "fecha_vencimiento",
+          "cod_cliente",
+          "num_cuenta"
+        ],
+        "title": "TarjetaEmitir",
+        "type": "object"
+      },
+      "TarjetaRespuesta": {
+        "properties": {
+          "bin": {
+            "title": "Bin",
+            "type": "string"
+          },
+          "cod_cliente": {
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "estado_tarjeta": {
+            "title": "Estado Tarjeta",
+            "type": "string"
+          },
+          "fecha_emision": {
+            "format": "date",
+            "title": "Fecha Emision",
+            "type": "string"
+          },
+          "fecha_vencimiento": {
+            "format": "date",
+            "title": "Fecha Vencimiento",
+            "type": "string"
+          },
+          "id_tarjeta": {
+            "format": "uuid",
+            "title": "Id Tarjeta",
+            "type": "string"
+          },
+          "ultimos4": {
+            "title": "Ultimos4",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_tarjeta",
+          "bin",
+          "ultimos4",
+          "fecha_emision",
+          "fecha_vencimiento",
+          "estado_tarjeta",
+          "cod_cliente"
+        ],
+        "title": "TarjetaRespuesta",
+        "type": "object"
+      },
+      "TipoCambioRespuesta": {
+        "properties": {
+          "cod_moneda_destino": {
+            "title": "Cod Moneda Destino",
+            "type": "string"
+          },
+          "cod_moneda_origen": {
+            "title": "Cod Moneda Origen",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "tasa": {
+            "title": "Tasa",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_moneda_origen",
+          "cod_moneda_destino",
+          "fecha",
+          "tasa"
+        ],
+        "title": "TipoCambioRespuesta",
+        "type": "object"
+      },
+      "TransferenciaRegistrar": {
+        "properties": {
+          "correlation_id": {
+            "format": "uuid",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "destino": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Destino",
+            "type": "string"
+          },
+          "glosa": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Glosa",
+            "type": "string"
+          },
+          "id_canal": {
+            "maxLength": 5,
+            "minLength": 1,
+            "title": "Id Canal",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "origen": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Origen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "monto",
+          "glosa",
+          "id_canal",
+          "origen",
+          "destino"
+        ],
+        "title": "TransferenciaRegistrar",
+        "type": "object"
+      },
+      "TransferenciaRespuesta": {
+        "properties": {
+          "repetido": {
+            "title": "Repetido",
+            "type": "boolean"
+          },
+          "uuid_abono": {
+            "format": "uuid",
+            "title": "Uuid Abono",
+            "type": "string"
+          },
+          "uuid_debito": {
+            "format": "uuid",
+            "title": "Uuid Debito",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_debito",
+          "uuid_abono",
+          "repetido"
+        ],
+        "title": "TransferenciaRespuesta",
+        "type": "object"
+      },
+      "UsuarioCrear": {
+        "properties": {
+          "id_empleado": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Empleado"
+          },
+          "nombre": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Nombre",
+            "type": "string"
+          },
+          "password": {
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "rol": {
+            "enum": [
+              "ADMINISTRADOR",
+              "ASESOR",
+              "ANALISTA",
+              "OPERADOR",
+              "AUDITOR"
+            ],
+            "title": "Rol",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 40,
+            "minLength": 3,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "nombre",
+          "password",
+          "rol"
+        ],
+        "title": "UsuarioCrear",
+        "type": "object"
+      },
+      "UsuarioRespuesta": {
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "id_empleado": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Empleado"
+          },
+          "id_usuario": {
+            "format": "uuid",
+            "title": "Id Usuario",
+            "type": "string"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "rol": {
+            "title": "Rol",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_usuario",
+          "username",
+          "nombre",
+          "rol",
+          "id_empleado",
+          "activo",
+          "creado_en"
+        ],
+        "title": "UsuarioRespuesta",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Escribe por los procedimientos de la base. Uso local: sin autenticación.",
+    "title": "BNA - API de la base integrada",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/coredb/catalogos/agencias": {
+      "get": {
+        "operationId": "agencias_coredb_catalogos_agencias_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgenciaRespuesta"
+                  },
+                  "title": "Response Agencias Coredb Catalogos Agencias Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Agencias",
+        "tags": [
+          "catálogos"
+        ]
+      }
+    },
+    "/coredb/catalogos/monedas": {
+      "get": {
+        "operationId": "monedas_coredb_catalogos_monedas_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MonedaRespuesta"
+                  },
+                  "title": "Response Monedas Coredb Catalogos Monedas Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Monedas",
+        "tags": [
+          "catálogos"
+        ]
+      }
+    },
+    "/coredb/catalogos/productos-ahorro": {
+      "get": {
+        "operationId": "productos_ahorro_coredb_catalogos_productos_ahorro_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProductoAhorroRespuesta"
+                  },
+                  "title": "Response Productos Ahorro Coredb Catalogos Productos Ahorro Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Productos Ahorro",
+        "tags": [
+          "catálogos"
+        ]
+      }
+    },
+    "/coredb/catalogos/productos-credito": {
+      "get": {
+        "operationId": "productos_credito_coredb_catalogos_productos_credito_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProductoCreditoRespuesta"
+                  },
+                  "title": "Response Productos Credito Coredb Catalogos Productos Credito Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Productos Credito",
+        "tags": [
+          "catálogos"
+        ]
+      }
+    },
+    "/coredb/catalogos/tipos-cambio": {
+      "get": {
+        "operationId": "tipos_cambio_coredb_catalogos_tipos_cambio_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TipoCambioRespuesta"
+                  },
+                  "title": "Response Tipos Cambio Coredb Catalogos Tipos Cambio Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Tipos Cambio",
+        "tags": [
+          "catálogos"
+        ]
+      }
+    },
+    "/coredb/cuentas": {
+      "post": {
+        "operationId": "abrir_coredb_cuentas_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CuentaAbrir"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Abrir",
+        "tags": [
+          "cuentas"
+        ]
+      }
+    },
+    "/coredb/cuentas/{num_cuenta}": {
+      "get": {
+        "operationId": "ver_coredb_cuentas__num_cuenta__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "num_cuenta",
+            "required": true,
+            "schema": {
+              "title": "Num Cuenta",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ver",
+        "tags": [
+          "cuentas"
+        ]
+      }
+    },
+    "/coredb/movimientos": {
+      "post": {
+        "operationId": "registrar_coredb_movimientos_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MovimientoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovimientoRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Registrar",
+        "tags": [
+          "movimientos"
+        ]
+      }
+    },
+    "/coredb/movimientos/transferencias": {
+      "post": {
+        "operationId": "transferir_coredb_movimientos_transferencias_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferenciaRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferenciaRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Transferir",
+        "tags": [
+          "movimientos"
+        ]
+      }
+    },
+    "/coredb/salud": {
+      "get": {
+        "operationId": "salud_coredb_salud_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Salud Coredb Salud Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Salud",
+        "tags": [
+          "salud"
+        ]
+      }
+    },
+    "/coredb/tarjetas": {
+      "post": {
+        "operationId": "emitir_coredb_tarjetas_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TarjetaEmitir"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TarjetaRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Emitir",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/tarjetas/{id_tarjeta}": {
+      "get": {
+        "operationId": "ver_coredb_tarjetas__id_tarjeta__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TarjetaRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ver",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/tarjetas/{id_tarjeta}/estado": {
+      "post": {
+        "description": "Cambia el estado de una tarjeta. El origen viene del actor, no de la petición. El\ndesbloqueo no está disponible: pendiente de un cliente de Seguridad (403 BNA-DESBLOQUEO).",
+        "operationId": "cambiar_estado_coredb_tarjetas__id_tarjeta__estado_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstadoCambiar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TarjetaRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cambiar Estado",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/usuarios": {
+      "get": {
+        "operationId": "listar_coredb_usuarios_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UsuarioRespuesta"
+                  },
+                  "title": "Response Listar Coredb Usuarios Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Listar",
+        "tags": [
+          "usuarios"
+        ]
+      },
+      "post": {
+        "operationId": "crear_coredb_usuarios_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioCrear"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Crear",
+        "tags": [
+          "usuarios"
+        ]
+      }
+    },
+    "/coredb/usuarios/{id_usuario}": {
+      "get": {
+        "operationId": "ver_coredb_usuarios__id_usuario__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_usuario",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Usuario",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ver",
+        "tags": [
+          "usuarios"
+        ]
+      }
+    },
+    "/coredb/usuarios/{id_usuario}/rol": {
+      "post": {
+        "operationId": "asignar_rol_coredb_usuarios__id_usuario__rol_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_usuario",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Usuario",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-actor",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "maxLength": 40,
+              "minLength": 1,
+              "pattern": "\\S",
+              "title": "X-Actor",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolAsignar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Asignar Rol",
+        "tags": [
+          "usuarios"
+        ]
+      }
+    }
+  }
+}
