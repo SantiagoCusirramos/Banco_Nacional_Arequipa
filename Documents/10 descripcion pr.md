@@ -1,4 +1,4 @@
-Validación, seguimiento de hallazgos y plan de pruebas manuales
+## Validación, seguimiento de hallazgos y plan de pruebas manuales
 
 ## Descripción (pegar en el Pull Request)
 
