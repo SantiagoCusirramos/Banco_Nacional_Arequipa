@@ -7,25 +7,25 @@
 ---
 
 ## 1. Autenticación y seguridad (Nicolas Ayerve, Nino Flores)
-- [ ] `POST /core/auth/login` devuelve token JWT con credenciales correctas
-- [ ] Credenciales incorrectas → **401** con mensaje genérico "Credenciales inválidas"
-- [ ] Usuario inexistente, inactivo o bloqueado → misma respuesta (sin fuga de información)
-- [ ] Token expirado o inválido → 401
-- [ ] `get_current_user` lee `Authorization: Bearer <token>`
-- [ ] `require_action(accion)` valida contra RBAC
-- [ ] El `actor` proviene del token, nunca del body
+- [x] `POST /core/auth/login` devuelve token JWT con credenciales correctas *(Ronda 3)*
+- [x] Credenciales incorrectas → **401** con mensaje genérico *(Ronda 3)*
+- [x] Usuario inexistente, inactivo o bloqueado → misma respuesta (sin fuga de información) *(Ronda 3)*
+- [x] Token expirado o inválido → 401 *(Ronda 3)*
+- [x] `usuario_actual` lee `Authorization: Bearer <token>` (en el código se llama `usuario_actual`, no `get_current_user`)
+- [x] `requiere_permiso(accion)` valida contra RBAC (en el código se llama `requiere_permiso`)
+- [!] El `actor` proviene del token — **parcial**: solo en `usuarios`, `permisos`, `auditoria` y `reportes`. Los otros 6 routers siguen con `actor=payload.actor`
 
 ## 2. Hashing de contraseñas (Nino Flores)
-- [ ] Contraseñas nuevas se guardan con bcrypt
-- [ ] Usuario con SHA256 inicia sesión y migra a bcrypt
-- [ ] `verify_sha256(None)` devuelve `False`, sin excepción
+- [x] Contraseñas nuevas se guardan con bcrypt *(Ronda 3)*
+- [x] Usuario con SHA256 inicia sesión y migra a bcrypt *(Ronda 3)*
+- [x] `verify_sha256(None)` devuelve `False`, sin excepción *(Ronda 3)*
 
 ## 3. Secretos y configuración (Sebastian Castro)
-- [ ] `git ls-files backend/.env` no devuelve nada
-- [ ] `.gitignore` cubre `.env` y mantiene `!.env.example`
-- [ ] `.env.example` usa `DB_NAME=bna`
-- [ ] Arranque sin `.env` o sin `SECRET_KEY` da error legible
-- [ ] Proceso de rotación de secretos documentado
+- [x] `git ls-files backend/.env` no devuelve nada *(el árbol de `main` ya no incluye `backend/.env`; confirmar con el comando)*
+- [x] `.gitignore` cubre `.env` y mantiene `!.env.example`
+- [x] `.env.example` usa `DB_NAME=bna`
+- [x] Arranque sin `.env` o sin `SECRET_KEY` da error legible *(`test_configuracion.py`)*
+- [!] Proceso de rotación de secretos documentado — **pendiente**: no existe el documento y el historial público conserva el `.env` anterior
 
 ## 4. Créditos (Leonardo Lonasco)
 - [x] TEA fraccionaria (ej. 18.5%) no se redondea antes de calcular *(Ronda 2; confirmar con la corrida)*
@@ -35,7 +35,7 @@
 - [x] Redondeo solo en importes monetarios *(Ronda 2)*
 - [x] Flujo CREAR_SOLICITUD → EVALUAR → APROBAR documentado (`CORE/CREDITOS_MOTOR_Y_FLUJO.md`)
 - [x] Documentado: aprobar **no** genera `cob_credito`
-- [ ] Fix integrado en `main` (pendiente: Pull Request de Leonardo)
+- [x] Fix integrado en `main`
 - [!] Motor de reglas: hallazgos H-A1, H-A2, H-A3, H-A4, H-B1, H-B3 **abiertos**, pendientes de decisión del Comité de Créditos (5 tests `xfail`)
 - [!] EXCLUYE se comporta igual que ENTRE: pendiente decidir si se elimina o se redefine
 - [ ] Contrato: la TEA se envía como fracción (0.185), tope 5; avisar a quien consuma la API
@@ -58,16 +58,16 @@
 - [ ] `importe_moneda_base` correcto
 
 ## 7. API y RBAC (Mathias Ostolaza)
-- [ ] `montar_en()` idempotente (33 rutas, no 66)
-- [ ] `asignar_accion()` rechaza roles inventados
-- [ ] Escritura atómica de `rbac.json`
-- [ ] Los tests no modifican el `rbac.json` real
+- [x] `montar_en()` idempotente (33 rutas, no 66) *(Ronda 3)*
+- [!] `asignar_accion()` rechaza roles inventados — **sin corregir** (`rbac.py` no cambió)
+- [!] Escritura atómica de `rbac.json` — **sin corregir**
+- [!] Los tests no modifican el `rbac.json` real — **sin corregir** (se sigue restaurando a mano)
 
 ## 8. Arquitectura (revisión propia — ver `Documents/06-revision-arquitectura-schemas.md`)
 - [x] Acceso a BD solo a través de `CORE/database.py`
 - [x] Routers sin acceso directo a modelos ni consultas ORM
 - [x] Commits de transacción en la capa de servicios
-- [x] CORE no importa ni modifica otros módulos
+- [x] CORE no importa ni modifica otros módulos *(código de producción; en tests, `test_configuracion.py` importa `CUENTAS.config`)*
 - [ ] Comunicación entre módulos vía Bus (CORE no implementa cliente del Bus; a confirmar con Santiago)
 - [!] El `actor` proviene del usuario autenticado — **falla**: 12 schemas lo reciben por body (H1)
 - [!] Schemas Pydantic: montos > 0 — parcial; `comision`, `itf` y `retencion` aceptan negativos (S1)
@@ -75,9 +75,9 @@
 - [!] Schemas Pydantic: monedas válidas — **falla**: `moneda` es `str` libre (S2)
 
 ## 9. Pruebas
-- [ ] `python -m pytest` pasa completo en la rama integrada
-- [ ] Ningún test que pasaba en la línea base falla ahora
-- [ ] Cada fix tiene su test
+- [x] `python -m pytest` pasa completo en la rama integrada *(Ronda 3: XX pasan, 0 fallan)*
+- [x] Ningún test que pasaba en la línea base falla ahora
+- [!] Cada fix tiene su test — falta test para #8, #12 y #14 (sin fix)
 
 ## 10. Prueba manual con Swagger (`/docs`)
 - [ ] Login y uso del token (Authorize)
@@ -88,9 +88,9 @@
 - [ ] Cuadre del día
 
 ## 11. Documentación
-- [ ] `CORE/README.md` con sección de Autenticación
-- [ ] `API_CORE.md` actualizado con `/core/auth/login`
-- [ ] Hallazgos resueltos registrados
+- [x] `CORE/README.md` con sección de Autenticación (contenido real; ver `AUTH_JWT.md` y `AUTENTICACION.md`)
+- [x] `API_CORE.md` actualizado con `/core/auth/login`
+- [x] Hallazgos resueltos registrados (`Documents/08-seguimiento-hallazgos.md`)
 
 ---
 
@@ -102,3 +102,7 @@
 | 2 | 8 | `comision`/`itf`/`retencion` sin `ge=0` (S1) | Renzo Montoya / Marcelo Moscoso | Abierto |
 | 3 | 8 | `moneda` e ids sin validación de formato (S2, S3) | Mathias Ostolaza | Abierto |
 | 4 | 4 | Motor de reglas: reglas APROBAR restan puntos (H-A1), frontera 0.80 duplicada (H-A2), sin ingresos queda APROBADO (H-A3), se aprueba evaluación RECHAZADA (H-B1), monto sin tope (H-B3) | Leonardo Lonasco / Comité de Créditos | Abierto (documentado, sin corregir) |
+| 5 | 1 | 6 routers sin autenticación y con `actor` del cuerpo: `clientes`, `cuentas`, `movimientos`, `tarjetas`, `creditos`, `catalogos` | Nicolas Ayerve | Abierto (documentado en `AUTH_JWT.md`) |
+| 6 | 7 | RBAC: roles inventados, escritura no atómica y tests que modifican `rbac.json` (#8, #14) | Mathias Ostolaza | Abierto |
+| 7 | 6 | Topes diarios y contabilidad (#12): sin cambios en el código | Marcelo Moscoso | Abierto |
+| 8 | 3 | Rotación de secretos sin documentar; el historial público conserva el `.env` anterior (#2) | Sebastian Castro / Santiago | Abierto |
