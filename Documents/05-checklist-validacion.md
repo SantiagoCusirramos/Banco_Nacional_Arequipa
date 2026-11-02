@@ -75,7 +75,7 @@
 - [!] Schemas Pydantic: monedas válidas — **falla**: `moneda` es `str` libre (S2)
 
 ## 9. Pruebas
-- [x] `python -m pytest` pasa completo en la rama integrada *(Ronda 3: XX pasan, 0 fallan)*
+- [x] `python -m pytest` pasa completo en la rama integrada *(Ronda 3: 251 pasan, 0 fallan, 26 saltados, 5 xfailed)*
 - [x] Ningún test que pasaba en la línea base falla ahora
 - [!] Cada fix tiene su test — falta test para #8, #12 y #14 (sin fix)
 
