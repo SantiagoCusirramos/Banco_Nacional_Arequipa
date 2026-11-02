@@ -65,7 +65,7 @@
 
 ## 8. Arquitectura (revisión propia — ver `Documents/06-revision-arquitectura-schemas.md`)
 - [x] Acceso a BD solo a través de `CORE/database.py`
-- [x] Routers sin acceso directo a modelos ni consultas ORM
+- [!] Routers sin acceso directo a modelos ni consultas ORM — **falla en `catalogos.py`** (usa `select(Agencia)` y `select(ProductoAhorro)`; hallazgo H3)
 - [x] Commits de transacción en la capa de servicios
 - [x] CORE no importa ni modifica otros módulos *(código de producción; en tests, `test_configuracion.py` importa `CUENTAS.config`)*
 - [ ] Comunicación entre módulos vía Bus (CORE no implementa cliente del Bus; a confirmar con Santiago)
