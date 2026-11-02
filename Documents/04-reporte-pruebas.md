@@ -123,6 +123,20 @@ Estos tests **no están en `main`**: vienen del patch `leonardo-creditos-tea-cal
 | EXCLUYE | Se comporta igual que ENTRE (dispara dentro de la banda) | Abierto — eliminarlo o redefinirlo |
 | Desembolso | Aprobar no genera `cob_credito` ni asiento (hueco conocido, README punto 2) | Abierto — definir dónde vive el desembolso |
 
+### 2c. Tests nuevos de la Ronda 3 (ya integrados en `main`)
+
+| Archivo | Tests (definiciones) | Hallazgo | Qué cubre | Resultado |
+|---|---|---|---|---|
+| `test_auth_jwt.py` | 25 | #1, #13, H1 parcial | Claims del token, token expirado, firma ajena, `alg=none`, login OK y 401 genérico (usuario inexistente, inactivo, clave incorrecta), `/me`, permisos por rol, usuario desactivado pierde acceso, el actor sale del token en las rutas de administración | ✅ |
+| `test_hashing.py` | 22 | #3, #9 | Hash con sal, bcrypt para usuarios nuevos, migración SHA256 → bcrypt, hash `None` o corrupto, límite de 72 bytes, surrogates | ✅ |
+| `test_autenticar.py` | 10 | #3, #13 | `autenticar()` devuelve el contrato; inexistente y clave incorrecta responden igual; inactivo no revela su estado; gasta una verificación para no filtrar por tiempo | ✅ |
+| `test_configuracion.py` | 8 | #2 | Error legible sin `SECRET_KEY`, clave débil o valor de ejemplo rechazados, `.env.example` usa `DB_NAME=bna` | ✅ |
+| `test_validacion_sin_eco.py` | 5 | Seguridad | Los errores 422 no devuelven el valor recibido (por ejemplo, la contraseña) | ✅ |
+| `test_api_smoke.py` | (incluye `TestApi::test_montar_en_es_idempotente`) | #7 | `montar_en()` idempotente, rutas montadas | ✅ |
+| `tests/integracion/test_real_mysql.py` | — | #3 | Hashing y autenticación contra MySQL real. **Solo corre con `BNA_INTEGRACION_MYSQL=1`**; sin eso aparece como *skipped* | ⏭️ Saltado (requiere BD) |
+
+> Antes de subir: si en tu corrida algún archivo falla, cambia ✅ por ❌ en su fila y anótalo en la sección 4.
+
 ### Hallazgos propios detectados durante la corrida
 
 | Hallazgo | Evidencia |
@@ -133,23 +147,23 @@ Estos tests **no están en `main`**: vienen del patch `leonardo-creditos-tea-cal
 
 ## 3. Tests de los hallazgos (esperados tras los fixes)
 
-Estado: **pendiente de recibir `test_revision_bna.py`** (o crearlos cuando cada integrante entregue su rama).
+Estado: **`test_revision_bna.py` sigue sin recibirse**; los tests de cada hallazgo son los que cada integrante incluyó en su rama. Estado actualizado en la Ronda 3 (2026-11-01).
 
 | Hallazgo | Test esperado | Responsable | Rama | Base | Tras fix |
 |---|---|---|---|---|---|
-| #1 Auth JWT (crítica) | login 200 con token / 401 genérico / token expirado | Nicolas Ayerve | | ⏳ | ⏳ |
-| #2 `.env` trackeado (crítica) | `git ls-files backend/.env` vacío | Sebastian Castro | | ❌ (confirmado) | ⏳ |
-| #3 Hashing SHA256 | `TestHashing::test_hash_con_sal` | Nino Flores | | ⏳ | ⏳ |
-| #9 `verify_sha256` con None | `TestHashing::test_verificar_con_hash_nulo_no_debe_explotar` | Nino Flores | | ⏳ | ⏳ |
-| #4 TEA redondeada | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` (+ 4 tests más) | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | sin test previo | ✅ (Ronda 2) |
-| #5 Validación de entrada | `test_cuotas_cero_valida_entrada`, `test_monto_negativo_rechazado`, `test_cuotas_negativas_rechazadas`, `test_numero_cuotas_no_entero_rechazado` | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | sin test previo | ✅ (Ronda 2) |
-| #6 Vencimientos | `test_vencimientos_mensuales_calendario`, `test_vencimientos_anio_bisiesto`, `test_ningun_mes_se_salta`, `test_dia_de_pago_se_conserva` | Leonardo Lonasco | `validar/leonardo-creditos` (patch) | sin test previo | ✅ (Ronda 2) |
-| #7 `montar_en()` | `TestApi::test_montar_en_es_idempotente` (33 rutas, no 66) | Mathias Ostolaza | | ⏳ | ⏳ |
-| #8 / #14 RBAC | `TestRbac::test_asignar_acepta_rol_inventado` | Mathias Ostolaza | | ❌ (#14 confirmado) | ⏳ |
+| #1 Auth JWT (crítica) | `test_auth_jwt.py` (25 tests): login 200 con token, 401 genérico, token expirado, `alg=none`, permisos por rol | Nicolas Ayerve | `main` | sin test previo | 🟡 ✅ login, `/me` y rutas de administración. ❌ 6 routers siguen sin token (`clientes`, `cuentas`, `movimientos`, `tarjetas`, `creditos`, `catalogos`) |
+| #2 `.env` trackeado (crítica) | `git ls-files backend/.env` vacío; `test_configuracion.py` | Sebastian Castro | `main` | ❌ (confirmado) | ✅ (el árbol ya no incluye `backend/.env`; confirmar con `git ls-files`). Pendiente: rotar claves y limpiar el historial |
+| #3 Hashing SHA256 | `test_hash_con_sal`, `test_usuario_nuevo_usa_bcrypt`, `test_sha256_migra_audita_y_confirma` | Nino Flores | `main` | sin test previo | ✅ |
+| #9 `verify_sha256` con None | `test_verificar_con_hash_nulo_no_debe_explotar` | Nino Flores | `main` | sin test previo | ✅ |
+| #4 TEA redondeada | `TestCalendario::test_tea_no_se_redondea_a_2_decimales` (+ 4 tests más) | Leonardo Lonasco | `main` | sin test previo | ✅ (Ronda 2 y 3; integrado en `main`) |
+| #5 Validación de entrada | `test_cuotas_cero_valida_entrada`, `test_monto_negativo_rechazado`, `test_cuotas_negativas_rechazadas`, `test_numero_cuotas_no_entero_rechazado` | Leonardo Lonasco | `main` | sin test previo | ✅ (Ronda 2 y 3; integrado en `main`) |
+| #6 Vencimientos | `test_vencimientos_mensuales_calendario`, `test_vencimientos_anio_bisiesto`, `test_ningun_mes_se_salta`, `test_dia_de_pago_se_conserva` | Leonardo Lonasco | `main` | sin test previo | ✅ (Ronda 2 y 3; integrado en `main`) |
+| #7 `montar_en()` | `TestApi::test_montar_en_es_idempotente` (33 rutas, no 66) | Mathias Ostolaza | `main` | sin test previo | ✅ |
+| #8 / #14 RBAC | `TestRbac::test_asignar_acepta_rol_inventado` | Mathias Ostolaza | — | ❌ (#14 confirmado) | ❌ Sin cambios: `rbac.py` no valida roles, no escribe de forma atómica y `test_rbac.py` sigue modificando `rbac.json` |
 | #10 Deadlock transferencias | `TestOrdenBloqueo`, `TestReintentosDeadlock` (8 tests, con fakes) | Renzo Montoya | `main` | sin test previo | ✅ (Ronda 1, con fakes; falta prueba con MySQL real) |
 | #11 Idempotencia | `TestIdempotencia` (11 tests, con fakes): key reutilizada con otros datos → 409 | Renzo Montoya | `main` | sin test previo | ✅ (Ronda 1, con fakes; falta prueba con MySQL real) |
-| #12 Tope diario | (definir) | Marcelo Moscoso | | ⏳ | ⏳ |
-| #13 Login 404 vs 401 | login inválido → 401 | Nicolas Ayerve | | ⏳ | ⏳ |
+| #12 Tope diario | (definir) | Marcelo Moscoso | — | ⏳ | ⏳ Sin cambios en `movimientos.py` ni `contabilidad.py` |
+| #13 Login 404 vs 401 | `test_login_clave_incorrecta_y_usuario_inexistente_responden_igual`, `test_login_usuario_inactivo_responde_igual_que_clave_incorrecta` | Nicolas Ayerve | `main` | sin test previo | ✅ |
 
 Leyenda: ✅ pasa · ❌ falla · ⏳ pendiente
 
@@ -190,5 +204,20 @@ Sin regresiones detectadas en las Rondas 1 y 2: los 24 tests de la línea base s
   - Los vencimientos usan meses calendario sin agregar `python-dateutil` a `requirements.txt`.
   - Pendiente: que Leonardo abra su Pull Request a `main` para integrar el cambio.
 
+### Ronda 3 — 2026-11-01 (`main` con los fixes de Nicolas, Nino, Mathias, Sebastian Castro y Leonardo)
+- Ramas integradas: `main` (autenticación JWT, bcrypt, `montar_en()` idempotente, configuración y `.env`, fixes de créditos).
+- Resultado: XX pasan / 0 fallan / XX saltados (tests de integración con MySQL)
+- Regresiones: ninguna *(los 136 tests de la Ronda 2 siguen pasando)*
+- Archivo de salida completa: `Documents/reporte_ronda3.txt`
+- Notas:
+  - Integrado: #1 (parcial), #2, #3, #4, #5, #6, #7, #9, #13.
+  - Sin integrar: #8 y #14 (RBAC) y #12 (topes y contabilidad).
+  - **#1 es parcial:** solo `usuarios`, `permisos`, `auditoria` y `reportes` exigen token. Los otros 6 routers siguen abiertos y con el `actor` del cuerpo, porque `CUENTAS` y el frontend los llaman sin token (documentado en `AUTH_JWT.md`).
+  - Código nuevo fuera de CORE: `COREDB/`, `database/`, docker-compose y `.github/CODEOWNERS`. `COREDB` es una API aparte, sin autenticación y de uso local.
+  - Pendiente: pruebas contra MySQL real y Swagger (Miguel Andia), `test_revision_bna.py` (Santiago).
+
 ## 6. Conclusión
-(Completar al final: estado general, riesgos pendientes, recomendación de merge.)
+**Borrador (a revisar con los resultados de la Ronda 3):**
+- **Estado general:** 11 de los 14 hallazgos del informe están corregidos en `main` (#2, #3, #4, #5, #6, #7, #9, #10, #11 y #13, más #1 de forma parcial). Siguen abiertos #8, #12 y #14.
+- **Riesgos pendientes:** (1) 6 routers sin autenticación y con el `actor` tomado del cuerpo; (2) importes negativos aceptados en `comision`, `itf` y `retencion`; (3) los secretos del `.env` anterior siguen en el historial público; (4) los fixes de #10 y #11 solo se validaron con dobles de prueba, no con MySQL real.
+- **Recomendación:** no considerar cerrado el módulo CORE hasta migrar los 6 routers al JWT y corregir el RBAC.
