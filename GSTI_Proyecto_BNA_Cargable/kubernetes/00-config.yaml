@@ -1,0 +1,28 @@
+# Configuración NO secreta compartida. Los secretos (claves y tokens) van en el Secret "bna-secretos".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bna-config
+  namespace: "2022251091"
+  labels: {app.kubernetes.io/part-of: bna-clientes}
+data:
+  MYSQL_DATABASE: "bna_core"
+  MYSQL_USER: "bna"
+  RENIEC_ADMIN_USER: "admin"
+  CLIENTES_PANEL_USER: "panel"
+  # Direcciones internas (nombres de Service del mismo namespace)
+  CLIENTES_URL: "http://clientes:8000"
+  CORE_URL: "http://core:8000"
+  BUS_URL: "http://bus:8000"
+  RENIEC_URL: "http://reniec:8000"
+  # Biometría: idéntica en RENIEC y Clientes
+  FACE_DETECTOR_BACKEND: "opencv"
+  FACE_COSINE_DISTANCE_THRESHOLD: "0.68"
+  FINGERPRINT_PPI: "500"
+  FINGERPRINT_MIN_QUALITY: "0.0"
+  FINGERPRINT_MIN_MINUTIAE: "15"
+  FINGERPRINT_MIN_NFIQ2: "35"
+  FINGERPRINT_MIN_RELIABILITY: "0.25"
+  FINGERPRINT_MATCH_THRESHOLD: "50"
+  MAX_IMAGE_MB: "5"
+  PRECARGAR_MODELO_FACIAL: "false"

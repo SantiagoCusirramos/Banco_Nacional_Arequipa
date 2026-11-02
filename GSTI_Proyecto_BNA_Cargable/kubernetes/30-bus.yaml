@@ -1,0 +1,41 @@
+# Mini-Bus de Servicios: servicio INTERNO. Para usar el Bus oficial, apunte BUS_URL (Clientes) hacia él.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bus
+  namespace: "2022251091"
+  labels: {app: bus, app.kubernetes.io/part-of: bna-clientes}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: bus}}
+  template:
+    metadata: {labels: {app: bus}}
+    spec:
+      containers:
+        - name: bus
+          image: edmaster1214/bna-bus:latest
+          imagePullPolicy: Always
+          ports: [{containerPort: 8000}]
+          env:
+            - {name: CLIENTES_URL, valueFrom: {configMapKeyRef: {name: bna-config, key: CLIENTES_URL}}}
+            - {name: CORE_URL, valueFrom: {configMapKeyRef: {name: bna-config, key: CORE_URL}}}
+            - {name: BUS_TOKEN, valueFrom: {secretKeyRef: {name: bna-secretos, key: BUS_TOKEN}}}
+            - {name: CLIENTES_TOKEN, valueFrom: {secretKeyRef: {name: bna-secretos, key: CLIENTES_TOKEN}}}
+            - {name: CORE_TOKEN, valueFrom: {secretKeyRef: {name: bna-secretos, key: CORE_TOKEN}}}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          readinessProbe: {httpGet: {path: /salud, port: 8000}, initialDelaySeconds: 5, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /salud, port: 8000}, initialDelaySeconds: 30, periodSeconds: 20, failureThreshold: 3}
+          securityContext: {runAsNonRoot: true, runAsUser: 10001, allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bus
+  namespace: "2022251091"
+  labels: {app: bus}
+spec:
+  type: ClusterIP
+  selector: {app: bus}
+  ports: [{port: 8000, targetPort: 8000}]
