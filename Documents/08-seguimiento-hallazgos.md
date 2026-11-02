@@ -65,4 +65,4 @@ Documentadas en `backend/CORE/CREDITOS_MOTOR_Y_FLUJO.md`; no son errores corregi
 | 0 | 2026-10-23 | Línea base | 24 pasan |
 | 1 | 2026-10-30 | `main` + fixes de Renzo (#10, #11) | 43 pasan |
 | 2 | 2026-10-30 | `main` + patch de Leonardo (#4, #5, #6) | 136 pasan, 5 xfailed |
-| 3 | 2026-11-01 | `main` con auth, bcrypt, `.env`, `montar_en()` y créditos | XX pasan, XX saltados |
+| 3 | 2026-11-01 | `main` con auth, bcrypt, `.env`, `montar_en()` y créditos | 251 pasan, 26 saltados, 5 xfailed (1 test desactualizado corregido: `montar_en()` = 37 rutas) |
