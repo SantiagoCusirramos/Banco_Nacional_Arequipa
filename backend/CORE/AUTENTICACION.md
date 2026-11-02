@@ -56,6 +56,8 @@ se rechaza antes de consultar la BD, así que no revela nada del usuario.
    `USUARIO_INACTIVO` y `PASSWORD_NO_ADMITIDA`, con el mismo cuerpo. Los estados
    404 y 422 de la tabla son los del servicio y no llegan al cliente en esta ruta.
 3. Emite el token con los datos del usuario.
+4. Registra `LOGIN` en `auditoria_evento`, sin contraseña ni hash, y hace `commit`.
+   Los intentos fallidos no se registran.
 
 ```text
 Cliente -> POST /core/auth/login -> usuariossvc.autenticar()
