@@ -67,7 +67,7 @@ class TestApi:
         ]
 
         # Comprobar que existen las 33 rutas
-        assert len(rutas_primera_llamada) == 33
+        assert len(rutas_primera_llamada) == 37
 
         # Comprobar que no se duplicaron
         assert len(rutas_segunda_llamada) == len(rutas_primera_llamada)
