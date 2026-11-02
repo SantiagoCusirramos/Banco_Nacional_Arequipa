@@ -3,7 +3,7 @@
 ## Descripción (pegar en el Pull Request)
 
 ### Qué es este PR
-Solo **documentación y reportes de pruebas** de la Actividad #8. **No modifica código** de CORE ni de otros módulos.
+**Documentación y reportes de pruebas** de la Actividad #8, más un ajuste de un test desactualizado. **No modifica código de producción** de CORE ni de otros módulos.
 
 ### Archivos
 | Archivo | Cambio |
@@ -13,10 +13,12 @@ Solo **documentación y reportes de pruebas** de la Actividad #8. **No modifica 
 | `Documents/06-revision-arquitectura-schemas.md` | Ronda 3: estado de H1 y S1 a S3, código nuevo fuera de CORE |
 | `Documents/08-seguimiento-hallazgos.md` | **Nuevo.** Tabla de los 14 hallazgos con estado, responsable y evidencia |
 | `Documents/09-pruebas-manuales-swagger.md` | **Nuevo.** Plan de pruebas manuales (pendiente de ejecutar con la BD) |
-| `Documents/reporte_ronda3.txt` | **Nuevo.** Salida completa de pytest sobre `main` |
+| `Documents/reporte_ronda3.txt` | Salida completa de pytest sobre `main` (reemplaza la anterior de 43 tests) |
+| `backend/CORE/tests/test_api_smoke.py` | Número de rutas esperado: 33 → 37 |
 
 ### Resultados
-- **Ronda 3 (`main`):** XX pasan / 0 fallan / XX saltados (tests de integración con MySQL).
+- **Ronda 3 (`main`):** 251 pasan / 0 fallan / 26 saltados (integración con MySQL) / 5 xfailed (decisiones del Comité de Créditos).
+- **Único cambio de código:** `backend/CORE/tests/test_api_smoke.py`, el test de `montar_en()` esperaba 33 rutas y CORE expone 37 desde que se integró la autenticación (la función sí es idempotente).
 
 ### Estado de los hallazgos
 - **Corregidos (10):** #2, #3, #4, #5, #6, #7, #9, #10, #11 y #13.
