@@ -36,8 +36,10 @@ Leyenda: ✅ corregido y validado · 🟡 parcial · ❌ sin corregir
 | S1 | `comision`, `itf` y `retencion` aceptan valores negativos | Renzo Montoya / Marcelo Moscoso | ❌ |
 | S2 | `moneda` es texto libre (sin lista cerrada PEN/USD) | Mathias Ostolaza | ❌ |
 | S3 | Identificadores sin validación de formato | Mathias Ostolaza | ❌ |
-| S7 | Transferencia con origen igual a destino: sin verificar en el servicio | Renzo Montoya | ⏳ |
+| S7 | Transferencia con origen igual a destino | Renzo Montoya | ✅ El servicio la rechaza (falta un test) |
 | H2 | `BUS_BASE_URL` definida y sin uso | Sebastian Castro | ❌ |
+| H3 | El router `catalogos` consulta la BD con `select()` y sin token | Autor de `catalogos` | ❌ |
+| H4 | `test_configuracion.py` de CORE importa `CUENTAS.config` | Autor del test | ⚠️ |
 
 ## 3. Decisiones pendientes del Comité de Créditos (Leonardo Lonasco)
 
