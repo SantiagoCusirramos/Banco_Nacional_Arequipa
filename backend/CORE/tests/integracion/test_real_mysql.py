@@ -241,6 +241,29 @@ def test_http_login_con_correlation_id_largo(http):
     assert r.status_code == 200, r.text
 
 
+def test_http_usuario_desactivado_pierde_acceso(http):
+    u, _ = sembrar()
+    r = http.post("/core/auth/login", json={"username": u, "password": CLAVE})
+    assert r.status_code == 200, r.text
+    cabecera = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert http.get("/core/auth/me", headers=cabecera).status_code == 200
+    sql("update usuario_sistema set activo=0 where username=%s", u)
+    r = http.get("/core/auth/me", headers=cabecera)
+    assert r.status_code == 401, r.text
+    assert r.json()["error"]["code"] == "USUARIO_NO_VIGENTE"
+
+
+def test_http_login_audita(http):
+    u, i = sembrar()
+    r = http.post("/core/auth/login", json={"username": u, "password": CLAVE},
+                  headers={"x-correlation-id": "corr-login-1"})
+    assert r.status_code == 200, r.text
+    a = sql("select actor, detalle, correlation_id c from auditoria_evento where accion='LOGIN' and id_entidad=%s", i)
+    assert len(a) == 1
+    assert (a[0]["actor"], a[0]["c"]) == (u, "corr-login-1")
+    assert CLAVE not in str(a[0]["detalle"]) and fila(u)["h"] not in str(a[0]["detalle"])
+
+
 def test_tiempos_uniformes(db):
     from CORE.utils import hashing
     if not hasattr(hashing, "simular_verificacion"):
