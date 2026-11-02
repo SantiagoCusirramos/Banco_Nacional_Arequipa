@@ -1,0 +1,41 @@
+# Módulo de Clientes: panel y API publicados por NodePort (puerto autorizado). Sin base de datos ni volúmenes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clientes
+  namespace: "2022251091"
+  labels: {app: clientes, app.kubernetes.io/part-of: bna-clientes}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: clientes}}
+  template:
+    metadata: {labels: {app: clientes}}
+    spec:
+      containers:
+        - name: clientes
+          image: edmaster1214/bna-clientes:latest
+          imagePullPolicy: Always
+          ports: [{containerPort: 8000}]
+          envFrom: [{configMapRef: {name: bna-config}}]
+          env:
+            - {name: BUS_TOKEN, valueFrom: {secretKeyRef: {name: bna-secretos, key: BUS_TOKEN}}}
+            - {name: CLIENTES_TOKEN, valueFrom: {secretKeyRef: {name: bna-secretos, key: CLIENTES_TOKEN}}}
+            - {name: RENIEC_SERVICE_TOKEN, valueFrom: {secretKeyRef: {name: bna-secretos, key: RENIEC_SERVICE_TOKEN}}}
+            - {name: CLIENTES_PANEL_PASSWORD, valueFrom: {secretKeyRef: {name: bna-secretos, key: CLIENTES_PANEL_PASSWORD}}}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1536Mi}   # el pico ocurre solo al convertir un rostro desde el laboratorio
+          readinessProbe: {httpGet: {path: /salud, port: 8000}, initialDelaySeconds: 15, periodSeconds: 10, failureThreshold: 12}
+          livenessProbe: {httpGet: {path: /salud, port: 8000}, initialDelaySeconds: 90, periodSeconds: 30, failureThreshold: 4}
+          securityContext: {runAsNonRoot: true, runAsUser: 10001, allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clientes
+  namespace: "2022251091"
+  labels: {app: clientes}
+spec:
+  type: NodePort
+  selector: {app: clientes}
+  ports: [{port: 8000, targetPort: 8000, nodePort: 31091}]

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RENIEC simulado · Administración</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%230b5d4b%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static-base/base.css">
+</head>
+<body>
+  <header class="top"><div class="inner">
+    <div><h1>RENIEC simulado</h1><div class="sub">Administración de ciudadanos de prueba</div></div>
+    <div class="spacer"></div>
+    <a class="estado" href="/docs" style="color:inherit;text-decoration:none">API (Swagger) ↗</a>
+  </div></header>
+
+  <main class="container">
+    <div class="aviso"><strong>Simulación académica.</strong> Registre solo personas ficticias e imágenes sintéticas o de prueba. Las imágenes se convierten en plantillas y <strong>no se guardan</strong>. La validación facial por imagen no incluye detección de vida.</div>
+
+    <section class="card">
+      <h2>Registrar ciudadano</h2>
+      <form id="form-ciudadano">
+        <div class="fields" style="grid-template-columns: repeat(5, minmax(0,1fr))">
+          <div><label for="dni">DNI</label><input id="dni" name="numero_documento" inputmode="numeric" maxlength="8" pattern="\d{8}" placeholder="8 dígitos" required></div>
+          <div><label for="nombres">Nombres</label><input id="nombres" name="nombres" maxlength="100" required></div>
+          <div><label for="apellidos">Apellidos</label><input id="apellidos" name="apellidos" maxlength="100" required></div>
+          <div><label for="fnac">Fecha de nacimiento</label><input id="fnac" name="fecha_nacimiento" type="date" required></div>
+          <div><label for="genero">Género</label><select id="genero" name="genero"><option value="M">M</option><option value="F">F</option></select></div>
+        </div>
+        <div class="actions"><button class="btn btn-primary" type="submit">Registrar ciudadano</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Ciudadanos registrados <span class="badge info" id="total">0</span></h2>
+      <div class="actions" style="margin:0 0 .8rem">
+        <input id="busqueda" placeholder="Buscar por DNI, nombres o apellidos…" style="max-width:360px" autocomplete="off">
+        <button class="btn btn-ghost" id="btn-recargar" type="button">Recargar</button>
+      </div>
+      <div class="tabla-wrap">
+        <table class="tabla">
+          <thead><tr><th>DNI</th><th>Nombres</th><th>Apellidos</th><th>Nacimiento</th><th>Género</th><th>Rostro</th><th>Huella</th><th>Acciones</th></tr></thead>
+          <tbody id="filas"><tr><td colspan="8" class="vacio">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+      <input type="file" id="archivo" accept="image/png,image/jpeg" hidden>
+    </section>
+  </main>
+  <div class="toasts" id="toasts"></div>
+  <script src="/static/admin.js"></script>
+</body>
+</html>

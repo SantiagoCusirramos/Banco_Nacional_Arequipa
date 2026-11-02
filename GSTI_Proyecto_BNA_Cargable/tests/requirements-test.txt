@@ -1,0 +1,7 @@
+pytest==9.2.0
+httpx==0.28.1
+pydantic==2.14.2
+fastapi==0.162.0
+numpy==2.4.6
+pillow==13.0.0
+nbis-py==0.1.3
