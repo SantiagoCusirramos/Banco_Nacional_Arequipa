@@ -206,8 +206,8 @@ Sin regresiones detectadas en las Rondas 1 y 2: los 24 tests de la línea base s
 
 ### Ronda 3 — 2026-11-01 (`main` con los fixes de Nicolas, Nino, Mathias, Sebastian Castro y Leonardo)
 - Ramas integradas: `main` (autenticación JWT, bcrypt, `montar_en()` idempotente, configuración y `.env`, fixes de créditos).
-- Resultado: XX pasan / 0 fallan / XX saltados (tests de integración con MySQL)
-- Regresiones: ninguna *(los 136 tests de la Ronda 2 siguen pasando)*
+- Resultado: 251 pasan / 0 fallan / 26 saltados (integración con MySQL) / 5 xfailed (decisiones del Comité de Créditos). Total: 282 tests. Ejecutado con Python 3.12 en Linux, sin MySQL.
+- Regresiones: **1, ya corregida.** `TestApi::test_montar_en_es_idempotente` fallaba (esperaba 33 rutas y CORE expone 37 tras integrar auth). La idempotencia de `montar_en()` está bien (la 2.ª llamada no duplica rutas); se actualizó el número esperado en el test. Los 136 tests de la Ronda 2 siguen pasando.
 - Archivo de salida completa: `Documents/reporte_ronda3.txt`
 - Notas:
   - Integrado: #1 (parcial), #2, #3, #4, #5, #6, #7, #9, #13.
@@ -217,7 +217,7 @@ Sin regresiones detectadas en las Rondas 1 y 2: los 24 tests de la línea base s
   - Pendiente: pruebas contra MySQL real y Swagger (Miguel Andia), `test_revision_bna.py` (Santiago).
 
 ## 6. Conclusión
-**Borrador (a revisar con los resultados de la Ronda 3):**
+**Resultado de la Ronda 3 (251 pasan, 0 fallan, 26 saltados, 5 xfailed):**
 - **Estado general:** 11 de los 14 hallazgos del informe están corregidos en `main` (#2, #3, #4, #5, #6, #7, #9, #10, #11 y #13, más #1 de forma parcial). Siguen abiertos #8, #12 y #14.
 - **Riesgos pendientes:** (1) 6 routers sin autenticación y con el `actor` tomado del cuerpo; (2) importes negativos aceptados en `comision`, `itf` y `retencion`; (3) los secretos del `.env` anterior siguen en el historial público; (4) los fixes de #10 y #11 solo se validaron con dobles de prueba, no con MySQL real.
 - **Recomendación:** no considerar cerrado el módulo CORE hasta migrar los 6 routers al JWT y corregir el RBAC.
