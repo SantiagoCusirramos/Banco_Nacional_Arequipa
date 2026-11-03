@@ -337,6 +337,22 @@ CALL prueba.rechaza('F12d', 'Tarjetas', 'trg_autorizacion_bi (RN-BD-002)', 'La B
   JSON_ARRAY("INSERT INTO tarjetas.autorizacion (tipo_operacion, monto, estado_autorizacion, id_canal, id_tarjeta, num_cuenta)
      VALUES ('FONDEO_BILLETERA', 100, 'AUTORIZADA', 'BD', UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'CTA-USD-1')"),
   'ERR-TAR-006', 'trigger');
+CALL prueba.rechaza('F12o', 'Tarjetas', 'sp_validar_reglas_autorizacion (fila ausente)', 'No se autoriza por un canal y moneda sin fila en limite_canal',
+  JSON_ARRAY("INSERT INTO tarjetas.autorizacion (tipo_operacion, monto, estado_autorizacion, id_canal, id_tarjeta, num_cuenta)
+     VALUES ('RETIRO', 10, 'AUTORIZADA', 'HB', UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'CTA-USD-1')"),
+  'ERR-TAR-006: el canal HB no opera en USD$', 'trigger');
+CALL prueba.rechaza('F32a', 'Cuentas', 'trg_movimiento_validar (fila ausente)', 'Un débito por AGE, sin fila en limite_canal, se rechaza',
+  JSON_ARRAY("CALL prueba.movimiento('CTA-PEN-1', 'RETIRO', 1, 'AGE', NULL, NULL, @m)"),
+  'BNA-CANAL: el canal AGE', 'trigger');
+CALL prueba.rechaza('F32b', 'Cuentas', 'trg_movimiento_validar (fila ausente)', 'Un débito en USD por HB, sin fila en limite_canal, se rechaza',
+  JSON_ARRAY("CALL prueba.movimiento('CTA-USD-1', 'RETIRO', 1, 'HB', NULL, NULL, @m)"),
+  'BNA-CANAL: el canal HB', 'trigger');
+CALL prueba.rechaza('F32c', 'Cuentas', 'trg_movimiento_validar (RN-BD-002)', 'Un débito en USD por BD, con la fila deshabilitada, se rechaza',
+  JSON_ARRAY("CALL prueba.movimiento('CTA-USD-1', 'RETIRO', 1, 'BD', NULL, NULL, @m)"),
+  'RN-BD-002: el canal BD', 'trigger');
+CALL prueba.verifica('F32d', 'Cuentas', 'trg_movimiento_validar (Tarjetas, tabla 4)', 'Ventanilla opera sin tope automático: su fila tiene monto nulo',
+  JSON_ARRAY("CALL prueba.movimiento('CTA-USD-1', 'RETIRO', 1, 'VEN', NULL, NULL, @m)"),
+  "SELECT TRUE", 'aceptado', "SELECT 'aceptado'", 'trigger');
 CALL prueba.rechaza('F12e', 'Tarjetas', 'trg_autorizacion_bi', 'No se autoriza en una terminal inactiva',
   JSON_ARRAY("INSERT INTO tarjetas.autorizacion (tipo_operacion, monto, estado_autorizacion, id_terminal, id_tarjeta, num_cuenta)
      VALUES ('RETIRO', 100, 'AUTORIZADA', 'ATM-AQP-OFF', UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'CTA-PEN-1')"),

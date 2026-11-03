@@ -40,3 +40,17 @@ CALL prueba.rechaza('X56', 'Extensión', 'Canal', 'Un canal inactivo se rechaza 
   JSON_ARRAY("UPDATE core.canal SET activo = FALSE WHERE id_canal = 'VEN'",
              "CALL cuentas.registrar_movimiento('CTA-PEN-2', 'DEPOSITO', 1, 'g', 'VEN', UUID_TO_BIN(UUID()), NULL, NULL, 'pruebas', @m, @r)"),
   'BNA-CANAL', 'procedimiento');
+
+CALL prueba.rechaza('X205', 'Extensión', 'Usuarios', 'Un usuario SERVICIO sin módulo se rechaza aun con privilegios',
+  JSON_ARRAY("INSERT INTO core.usuario_sistema (id_usuario, username, nombre, rol, hash_password, algoritmo_hash, version_hash) VALUES (UUID_TO_BIN(UUID()), 'svc-x205', 'S', 'SERVICIO', 'h', 'BCRYPT', 'v2')"),
+  'ck_usuario_servicio', 'declarativo');
+
+CALL prueba.rechaza('X206', 'Extensión', 'Usuarios', 'Una persona con módulo se rechaza aun con privilegios',
+  JSON_ARRAY("INSERT INTO core.usuario_sistema (id_usuario, username, nombre, rol, hash_password, algoritmo_hash, version_hash, modulo) VALUES (UUID_TO_BIN(UUID()), 'ana-x206', 'A', 'ASESOR', 'h', 'BCRYPT', 'v2', 'CLIENTES')"),
+  'ck_usuario_servicio', 'declarativo');
+
+CALL prueba.verifica('X207', 'Extensión', 'Clientes', 'bna_admin ejecuta los procedimientos de clientes por su privilegio sobre la base',
+  JSON_ARRAY("CALL clientes.catalogos_cliente(@k)",
+             "CALL clientes.registrar_cliente('DNI', '71000207', 'Prueba', 'Ficticio', NULL, 'c207@example.com', '961000207', 'v1', 'OBSERVADO', UUID_TO_BIN(UUID()), 'pruebas', @c)"),
+  "SELECT @k IS NOT NULL AND (SELECT COUNT(*) FROM clientes.cliente WHERE cod_cliente = @c) = 1",
+  'catálogos y cliente', "SELECT @c", 'privilegio');

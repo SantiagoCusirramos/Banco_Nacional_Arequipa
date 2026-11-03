@@ -128,9 +128,9 @@ registrar M20c bna_app_user MySQL 'Comprobación 20 (bug 7)' \
 # concurrente ID REF DESC SQL_A SQL_B PATRON COND ESPERADO OBTENIDO_SQL
 concurrente() {
   local id="$1" ref="$2" desc="$3" sql_a="$4" sql_b="$5" patron="$6" cond="$7" esperado="$8" obt_sql="$9"
-  printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\n' "$sql_a" | app_ > "$OUT/$id-a.log" 2>&1 &
+  printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\n' "$sql_a" | "${CLIENTE:-app_}" > "$OUT/$id-a.log" 2>&1 &
   sleep 1
-  printf 'START TRANSACTION;\n%s;\nCOMMIT;\n' "$sql_b" | app_ > "$OUT/$id-b.log" 2>&1 || true
+  printf 'START TRANSACTION;\n%s;\nCOMMIT;\n' "$sql_b" | "${CLIENTE:-app_}" > "$OUT/$id-b.log" 2>&1 || true
   wait
   local ok=0 estado b
   estado="$(root_ -N -e "$obt_sql")"
@@ -167,6 +167,16 @@ concurrente C03 'RN-TOP-001 (bug 5)' 'Dos autorizaciones simultáneas sin movimi
   "SELECT count(*) = 1 FROM tarjetas.autorizacion WHERE num_cuenta = 'CTA-USD-1' AND estado_autorizacion = 'AUTORIZADA'" \
   'autorizadas 1; segunda operación: ERR-TAR-007' \
   "SELECT CONCAT('autorizadas ', count(*)) FROM tarjetas.autorizacion WHERE num_cuenta = 'CTA-USD-1' AND estado_autorizacion = 'AUTORIZADA'"
+
+# X234 (v1.1): dos registros simultáneos con el mismo correo; el segundo espera en el
+# índice único y se rechaza cuando el primero confirma.
+CLIENTE=api_ concurrente X234 'Extensión v1.1' 'Dos registros simultáneos con el mismo correo dejan un solo cliente' \
+  "CALL clientes.registrar_cliente('DNI', '71000234', 'Prueba', 'Ficticio', NULL, 'c234@example.com', '961000234', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'pruebas', @c)" \
+  "CALL clientes.registrar_cliente('DNI', '71000235', 'Prueba', 'Ficticio', NULL, 'c234@example.com', '961000235', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'pruebas', @c)" \
+  'uk_cliente_2' \
+  "SELECT COUNT(*) = 1 FROM clientes.cliente WHERE correo = 'c234@example.com'" \
+  'clientes con ese correo: 1; segunda operación: uk_cliente_2' \
+  "SELECT CONCAT('clientes con ese correo: ', COUNT(*)) FROM clientes.cliente WHERE correo = 'c234@example.com'"
 
 # --- Brechas conocidas (solo MySQL). Cada una deja la base como estaba,
 # salvo G03, que va al final.

@@ -96,6 +96,12 @@ SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-DESPLIE
 SQL
 )"
 
+comprobar 'registro de un cliente con el rol de la API' '^CLI[0-9]\{9\}$' "$(app 2>&1 <<'SQL' || true
+CALL clientes.registrar_cliente('DNI', '71000001', 'Prueba', 'Despliegue', NULL, 'despliegue@example.com', '961000001', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'despliegue', @c);
+SELECT @c;
+SQL
+)"
+
 seguridad() { docker exec -i -e MYSQL_PWD="$PW_SEGURIDAD" "$C" mysql -ubna_seguridad_user -h127.0.0.1 --protocol=TCP -N "$@"; }
 comprobar 'rol de bna_seguridad_user' 'bna_seguridad' "$(seguridad -e 'SELECT CURRENT_ROLE()' 2>&1 || true)"
 comprobar 'bna_app_user no desbloquea' 'denied' \
