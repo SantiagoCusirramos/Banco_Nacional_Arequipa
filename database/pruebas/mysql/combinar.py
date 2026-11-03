@@ -104,8 +104,11 @@ for r in tabla:
 with open(os.path.join(out_dir, "resultados.md"), "w", encoding="utf-8") as f:
     f.write("\n".join(md) + "\n")
 
+with open(os.path.join(out_dir, "resultado-extension.tsv"), encoding="utf-8") as f:
+    extension = {line.split("\t")[0] for line in f if line.strip()}
+
 stats = dict(
-    pruebas=len(tabla), pruebascomunes=len(comunes),
+    pruebas=len(tabla), pruebascomunes=len(comunes), pruebasextension=len(extension),
     pruebassolomysql=len([r for r in tabla if r["id"] in ("L02", "M20c", "F32") or r["id"].startswith("G")]),
     pasan=sum(1 for r in tabla if r["categoria"].startswith("pasa")),
     pasadirecto=cuenta.get("pasa", 0), pasaprivilegio=cuenta.get("pasa vía privilegio", 0),

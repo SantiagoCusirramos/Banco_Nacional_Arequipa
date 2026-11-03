@@ -76,6 +76,7 @@ F12k & Una autorización solo se vincula al movimiento de su misma operación & 
 F12l & Una autorización de ayer contabilizada hoy cuenta para el tope de ayer, no para el de hoy & Pasa & Pasa & Pasa \\
 F12m & El extorno hoy del movimiento de una autorización de ayer libera el tope de ayer, no el de hoy & Pasa & Pasa & Pasa \\
 F12n & El extorno hoy de una autorización de ayer sin movimiento libera el tope de ayer y el saldo & Pasa & Pasa & Pasa \\
+F12o & No se autoriza por un canal y moneda sin fila en \nm{limite\_canal} & Pasa & Pasa & Pasa \\
 F13 & Una autorización no se borra; se extorna & Pasa & Pasa & Pasa (privilegio) \\
 F14a & Si Clientes bloquea al cliente, se bloquean sus tarjetas & Pasa & Pasa & Pasa \\
 F14b & Si Clientes da de baja al cliente, se cancelan sus tarjetas & Pasa & Pasa & Pasa \\
@@ -101,6 +102,10 @@ F29 & La vista lista las entregas que superan dos reintentos & Pasa & Pasa & Pas
 F30 & La vista cuadra lo ordenado con lo abonado por fecha y moneda & Pasa & Pasa & Pasa \\
 F31 & Existen los índices de consulta y ninguno repite a otro de clave foránea & Pasa & Pasa & Pasa \\
 F32\textsuperscript{*} & El identificador de una bitácora lo asigna la base & — & — & Pasa (privilegio) \\
+F32a & Un débito por AGE, sin fila en \nm{limite\_canal}, se rechaza & Pasa & Pasa & Pasa \\
+F32b & Un débito en USD por HB, sin fila en \nm{limite\_canal}, se rechaza & Pasa & Pasa & Pasa \\
+F32c & Un débito en USD por BD, con la fila deshabilitada, se rechaza & Pasa & Pasa & Pasa \\
+F32d & Ventanilla opera sin tope automático: su fila tiene monto nulo & Pasa & Pasa & Pasa \\
 \addlinespace
 \multicolumn{5}{@{}l}{\textit{Regresión}} \\
 R1 & Evento de auditoría sobre un registro no registrado como auditable & Pasa & Pasa & Pasa \\
