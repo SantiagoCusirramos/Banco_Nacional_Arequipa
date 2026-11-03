@@ -1,0 +1,8 @@
+# Dependencias biométricas COMUNES a RENIEC y Clientes (capa de imagen compartida)
+numpy==2.4.6
+pillow==13.0.0
+nbis-py==0.1.3
+deepface==0.0.103
+tensorflow==2.21.0
+tf-keras==2.21.0
+Werkzeug==3.1.9

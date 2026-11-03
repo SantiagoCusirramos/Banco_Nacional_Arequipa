@@ -1,0 +1,48 @@
+# MySQL del Core: servicio INTERNO (ClusterIP, sin NodePort). Datos en /mnt/data/2022251091/bna-clientes/mysql (hostPath).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: "2022251091"
+  labels: {app: mysql, app.kubernetes.io/part-of: bna-clientes}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # con hostPath nunca deben coexistir dos pods sobre la misma carpeta
+  selector: {matchLabels: {app: mysql}}
+  template:
+    metadata: {labels: {app: mysql}}
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          args: ["--performance-schema=OFF", "--innodb-buffer-pool-size=64M", "--max-connections=40", "--character-set-server=utf8mb4"]
+          ports: [{containerPort: 3306}]
+          env:
+            - {name: MYSQL_DATABASE, valueFrom: {configMapKeyRef: {name: bna-config, key: MYSQL_DATABASE}}}
+            - {name: MYSQL_USER, valueFrom: {configMapKeyRef: {name: bna-config, key: MYSQL_USER}}}
+            - {name: MYSQL_PASSWORD, valueFrom: {secretKeyRef: {name: bna-secretos, key: MYSQL_PASSWORD}}}
+            - {name: MYSQL_ROOT_PASSWORD, valueFrom: {secretKeyRef: {name: bna-secretos, key: MYSQL_ROOT_PASSWORD}}}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          readinessProbe:
+            exec: {command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$MYSQL_ROOT_PASSWORD\" --silent"]}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 12
+          volumeMounts:
+            - {name: datos, mountPath: /var/lib/mysql}
+      volumes:
+        - name: datos
+          hostPath: {path: "/mnt/data/2022251091/bna-clientes/mysql", type: DirectoryOrCreate}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: "2022251091"
+  labels: {app: mysql}
+spec:
+  type: ClusterIP
+  selector: {app: mysql}
+  ports: [{port: 3306, targetPort: 3306}]

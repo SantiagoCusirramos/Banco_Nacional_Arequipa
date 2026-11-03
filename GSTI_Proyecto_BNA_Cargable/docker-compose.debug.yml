@@ -1,0 +1,7 @@
+# SOLO para depuración: publica el Bus (8003) y el Core (8004) para abrir su Swagger desde el navegador.
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+services:
+  bus:
+    ports: ["127.0.0.1:8003:8000"]
+  core:
+    ports: ["127.0.0.1:8004:8000"]
