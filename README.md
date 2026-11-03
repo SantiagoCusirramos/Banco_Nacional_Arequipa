@@ -136,6 +136,31 @@ Un débito por un canal y una moneda sin fila en `core.limite_canal` se rechaza 
 | VEN | Sin tope (monto nulo) | Sin tope (monto nulo) | Tarjetas, tabla 4: «NULL significa sin límite automático (ventanilla)» |
 | AGE | Sin fila: se rechaza | Sin fila: se rechaza | Ninguna |
 
+### Usuarios de servicio y clientes (desde `bd-v1.1-mysql`)
+
+- **Usuarios de servicio:** un módulo se autentica en la API con un usuario de rol
+  `SERVICIO` y su `modulo` (FK a `core.modulo`). `core.crear_usuario` no puede crearlos,
+  porque `ck_usuario_servicio` exige el módulo. Se crean, renuevan y revocan con
+  `core.crear_usuario_servicio`, `core.renovar_credencial` (solo usuarios de servicio) y
+  `core.cambiar_estado_usuario`. `core.registrar_login` toma el actor de la fila del
+  usuario, así que quien llama no puede atribuir el login a otro nombre.
+- **Clientes:** `bna_api` no lee `clientes.*`. Todo pasa por estos procedimientos,
+  concedidos solo a `bna_api` (no a `bna_app`):
+
+| Procedimiento | Qué hace |
+|---|---|
+| `clientes.registrar_cliente` | Valida el documento con `clientes.tipo_documento` y genera `cod_cliente` (`CLI` y nueve dígitos). Crea la verificación de captación y el cliente: HABILITADO da ACTIVO y OBSERVADO da OBSERVADO |
+| `clientes.consultar_cliente` | El cliente por su código, en JSON y sin biometría |
+| `clientes.verificar_documento` | La consulta por documento. Sin identidad verificada responde lo mismo a un cliente y a quien no lo es; con identidad verificada aprueba solo a un cliente ACTIVO. Siempre deja la fila en `clientes.validacion_identidad` y el evento |
+| `clientes.registrar_validacion` | Los veredictos de huella, rostro, celular y correo de Clientes |
+| `clientes.cambiar_estado_cliente` | Exige un motivo, que queda en la bitácora. BAJA es final y el mismo estado no cambia nada. El trigger de tarjetas bloquea o cancela sus tarjetas; reactivar al cliente no las desbloquea |
+| `clientes.catalogos_cliente` | Tipos de documento y estados de cliente |
+
+Los mensajes de error de estos procedimientos no repiten documentos, correos ni
+celulares, porque la API puede devolverlos. Qué actor puede registrar un cliente
+HABILITADO o fijar cada estado lo decide la API. **Una base creada con
+`bd-v1.0-mysql` debe recrearse** (volumen nuevo): `core.usuario_sistema` cambió.
+
 `pruebas/mysql/run_tests.sh` ejecuta toda la suite con la extensión cargada. Sus
 pruebas (ID `X`) quedan en `resultados/mysql/resultado-extension.tsv`, fuera de la
 matriz. `pruebas_sin_transaccion.sh` prueba cada procedimiento en autocommit, porque
