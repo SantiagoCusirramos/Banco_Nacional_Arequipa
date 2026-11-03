@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from COREDB.auth import Actor, actor_actual
+from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session, llamar
 from COREDB.errores import ErrorCoreDb
 from COREDB.models import CuentaAhorro
@@ -43,7 +43,8 @@ def _obtener(db: Session, num_cuenta: str) -> CuentaAhorro:
     return cuenta
 
 
-@router.get("/{num_cuenta}", response_model=CuentaRespuesta)
+@router.get("/{num_cuenta}", response_model=CuentaRespuesta,
+            dependencies=[Depends(requiere_permiso("VER_CUENTA"))])
 def ver(num_cuenta: str, db: Session = Depends(db_session)):
     return _obtener(db, num_cuenta)
 
@@ -52,7 +53,7 @@ def ver(num_cuenta: str, db: Session = Depends(db_session)):
 def abrir(
     datos: CuentaAbrir,
     db: Session = Depends(db_session),
-    actor: Actor = Depends(actor_actual),
+    actor: Actor = Depends(requiere_permiso("CREAR_CUENTA")),
 ):
     con_reintentos(
         db,

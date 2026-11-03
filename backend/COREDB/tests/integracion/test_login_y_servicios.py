@@ -231,7 +231,7 @@ def test_el_arranque_no_crea_un_segundo_administrador(consulta, token_admin, cla
         cwd=Path(__file__).resolve().parents[3], env=entorno, capture_output=True, text=True,
     )
     assert resultado.returncode == 1
-    assert "ya existe" in resultado.stderr
+    assert "ya existe" in resultado.stderr.lower()
     assert clave_admin not in resultado.stderr + resultado.stdout
     despues = consulta("SELECT COUNT(*) n FROM core.usuario_sistema WHERE rol='ADMINISTRADOR'")[0]["n"]
     assert despues == antes

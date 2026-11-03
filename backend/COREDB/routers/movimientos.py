@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from COREDB.auth import Actor, actor_actual
+from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session
 from COREDB.services import movimientos
 
@@ -48,7 +48,7 @@ class TransferenciaRespuesta(BaseModel):
 def registrar(
     datos: MovimientoRegistrar,
     db: Session = Depends(db_session),
-    actor: Actor = Depends(actor_actual),
+    actor: Actor = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
 ):
     return movimientos.registrar(db, **datos.model_dump(), actor=actor.usuario)
 
@@ -61,6 +61,6 @@ def registrar(
 def transferir(
     datos: TransferenciaRegistrar,
     db: Session = Depends(db_session),
-    actor: Actor = Depends(actor_actual),
+    actor: Actor = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
 ):
     return movimientos.transferir(db, **datos.model_dump(), actor=actor.usuario)

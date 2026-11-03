@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     port: int = 3307
     app_user: str = "bna_app_user"
     app_password: str = ""
+    # JWT propio de COREDB: otra clave y otro emisor que la API CORE.
+    jwt_clave: str = ""
+    jwt_algoritmo: str = "HS256"
+    jwt_minutos: int = 30
 
     @property
     def database_url(self) -> URL:
