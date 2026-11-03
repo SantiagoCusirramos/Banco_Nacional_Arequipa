@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
-from COREDB.auth import Actor, actor_actual
 from COREDB.config import Settings
 from COREDB import transacciones
 from COREDB.database import INIT_COMMAND, UuidBinario, get_engine, llamar
@@ -56,35 +55,6 @@ def test_validacion_no_devuelve_valores():
     respuesta = TestClient(prueba).post("/x", json={"clave": "secreto"})
     assert respuesta.status_code == 422
     assert "secreto" not in respuesta.text
-
-
-def test_autenticacion_es_reemplazable():
-    prueba = FastAPI()
-
-    @prueba.get("/quien")
-    def quien(actor: Actor = Depends(actor_actual)) -> str:
-        return actor.usuario
-
-    cliente = TestClient(prueba)
-    assert cliente.get("/quien", headers={"X-Actor": "ana"}).json() == "ana"
-
-    def jwt_de_prueba() -> Actor:
-        raise HTTPException(status_code=401)
-
-    prueba.dependency_overrides[actor_actual] = jwt_de_prueba
-    assert cliente.get("/quien").status_code == 401
-
-
-def test_actor_en_blanco_se_rechaza():
-    prueba = FastAPI()
-
-    @prueba.get("/quien")
-    def quien(actor: Actor = Depends(actor_actual)) -> str:
-        return actor.usuario
-
-    cliente = TestClient(prueba)
-    assert cliente.get("/quien", headers={"X-Actor": "   "}).status_code == 422
-    assert cliente.get("/quien", headers={"X-Actor": " ana "}).json() == "ana"
 
 
 def test_spec_publicada_al_dia():

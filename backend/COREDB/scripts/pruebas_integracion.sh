@@ -26,6 +26,7 @@ CORE_DB_ROOT_PASSWORD=$(openssl rand -hex 16)
 CORE_DB_APP_PASSWORD=$(openssl rand -hex 16)
 CORE_DB_ADMIN_PASSWORD=$(openssl rand -hex 16)
 CORE_DB_SEGURIDAD_PASSWORD=$(openssl rand -hex 16)
+CORE_DB_JWT_CLAVE=$(openssl rand -hex 32)
 CORE_DB_PORT=$PUERTO
 VARS
 

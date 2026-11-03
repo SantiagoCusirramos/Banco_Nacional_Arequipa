@@ -1,9 +1,12 @@
 """Usuarios, portado de CORE/services/usuariossvc.py sobre los procedimientos.
 
-`autenticar` aún no tiene ruta: el login llega con el JWT.
+`autenticar` la usa POST /coredb/auth/login. Los usuarios de servicio (un módulo que
+se autentica en la API) reciben un secreto generado aquí, que se entrega una sola vez
+y se guarda solo como hash bcrypt.
 """
 
 import logging
+import secrets
 import uuid
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -26,6 +29,7 @@ from COREDB.transacciones import con_reintentos
 logger = logging.getLogger(__name__)
 
 VERSION_HASH_BCRYPT = "v2"
+BYTES_SECRETO = 32  # token_urlsafe(32): 43 caracteres ASCII, dentro del límite de bcrypt
 
 
 def obtener(db: Session, id_usuario: uuid.UUID) -> Usuario:
@@ -113,3 +117,64 @@ def _migrar_a_bcrypt(db: Session, usuario: Usuario, password: str) -> None:
         # El error no se registra porque incluiría el hash nuevo.
         db.rollback()
         logger.warning("No se pudo migrar el hash del usuario %s.", id_usuario)
+
+
+def _secreto() -> tuple[str, str]:
+    secreto = secrets.token_urlsafe(BYTES_SECRETO)
+    return secreto, hash_bcrypt(secreto)
+
+
+def crear_servicio(
+    db: Session, *, modulo: str, username: str, nombre: str, actor: str
+) -> tuple[Usuario, str]:
+    """Crea el usuario de servicio de un módulo. Devuelve (usuario, secreto)."""
+    id_usuario = uuid.uuid4()
+    secreto, hash_password = _secreto()
+    con_reintentos(
+        db,
+        lambda: llamar(
+            db, "core.crear_usuario_servicio",
+            id_usuario, username, nombre, modulo, hash_password,
+            ALGORITMO_BCRYPT, VERSION_HASH_BCRYPT, actor,
+        ),
+        nombre="crear_usuario_servicio",
+    )
+    return obtener(db, id_usuario), secreto
+
+
+def renovar_credencial(db: Session, id_usuario: uuid.UUID, *, actor: str) -> tuple[Usuario, str]:
+    """Reemplaza el secreto de un usuario de servicio; el anterior deja de servir."""
+    usuario = obtener(db, id_usuario)
+    secreto, hash_password = _secreto()
+    con_reintentos(
+        db,
+        lambda: llamar(
+            db, "core.renovar_credencial",
+            id_usuario, hash_password, ALGORITMO_BCRYPT, VERSION_HASH_BCRYPT, actor,
+            salidas=1,
+        ),
+        nombre="renovar_credencial",
+    )
+    db.refresh(usuario)
+    return usuario, secreto
+
+
+def cambiar_estado(db: Session, id_usuario: uuid.UUID, *, activo: bool, actor: str) -> Usuario:
+    """Revoca o restituye el acceso; pedir el estado que ya tiene no cambia nada."""
+    usuario = obtener(db, id_usuario)
+    con_reintentos(
+        db,
+        lambda: llamar(db, "core.cambiar_estado_usuario", id_usuario, activo, actor, salidas=1),
+        nombre="cambiar_estado_usuario",
+    )
+    db.refresh(usuario)
+    return usuario
+
+
+def registrar_login(db: Session, usuario: Usuario, correlation_id: uuid.UUID | None) -> None:
+    """El evento LOGIN; el actor lo toma la base de la fila del usuario."""
+    con_reintentos(
+        db,
+        lambda: llamar(db, "core.registrar_login", usuario.id_usuario, correlation_id),
+        nombre="registrar_login",
+    )
