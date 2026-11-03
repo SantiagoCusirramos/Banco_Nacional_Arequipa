@@ -16,8 +16,8 @@ from COREDB.services import movimientos
 
 
 @pytest.fixture
-def cliente():
-    return TestClient(app, raise_server_exceptions=False)
+def cliente(autorizacion):
+    return TestClient(app, raise_server_exceptions=False, headers=autorizacion)
 
 
 def deposito(cliente, cuenta, monto="100.00", **extra):

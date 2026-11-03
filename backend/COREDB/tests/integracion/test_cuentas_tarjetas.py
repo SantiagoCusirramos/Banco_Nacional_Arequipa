@@ -10,8 +10,8 @@ from COREDB.main import app
 
 
 @pytest.fixture
-def cliente():
-    return TestClient(app, raise_server_exceptions=False)
+def cliente(autorizacion):
+    return TestClient(app, raise_server_exceptions=False, headers=autorizacion)
 
 
 def emitir(cliente, cuenta, cod_cliente="C001"):

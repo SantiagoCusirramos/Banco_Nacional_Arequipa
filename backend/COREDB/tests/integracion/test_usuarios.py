@@ -15,8 +15,8 @@ CLAVE = "clave-segura-1"
 
 
 @pytest.fixture
-def cliente():
-    return TestClient(app)
+def cliente(autorizacion):
+    return TestClient(app, headers=autorizacion)
 
 
 def nombre():
@@ -27,7 +27,6 @@ def alta(cliente, username, password=CLAVE, rol="OPERADOR"):
     return cliente.post(
         "/coredb/usuarios",
         json={"username": username, "nombre": "N", "password": password, "rol": rol},
-        headers={"X-Actor": "pruebas"},
     )
 
 
@@ -139,13 +138,19 @@ def test_fechas_se_publican_en_utc(cliente):
     assert alta(cliente, nombre()).json()["creado_en"].endswith("Z")
 
 
-def test_actor_vacio_422(cliente):
+def test_x_actor_no_cambia_el_actor(cliente, consulta):
+    """El actor sale del token: una cabecera X-Actor se ignora."""
     respuesta = cliente.post(
         "/coredb/usuarios",
         json={"username": nombre(), "nombre": "N", "password": CLAVE, "rol": "ASESOR"},
-        headers={"X-Actor": ""},
+        headers={"X-Actor": "intruso"},
     )
-    assert respuesta.status_code == 422
+    assert respuesta.status_code == 201
+    evento = consulta(
+        "SELECT actor FROM core.evento_auditoria WHERE accion='CREAR_USUARIO' AND id_entidad=%s",
+        respuesta.json()["id_usuario"],
+    )
+    assert evento == [{"actor": "pruebas"}]
 
 
 @pytest.mark.parametrize("codigo", [1213, 1205])
