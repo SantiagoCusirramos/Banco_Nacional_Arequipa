@@ -250,7 +250,7 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
             <select id="id_producto_ahorro" disabled={cargandoCatalogos || productos.length === 0} aria-invalid={!!errors.id_producto_ahorro} {...register("id_producto_ahorro")}>
               <option value="">Selecciona un producto...</option>
               {productos.map((producto) => (
-                <option key={producto.id_producto_ahorro} value={producto.id_producto_ahorro}>
+                <option key={producto.id_producto} value={producto.id_producto}>
                   {producto.nombre} · {producto.moneda} · TEA {producto.tasa_tea}%
                 </option>
               ))}

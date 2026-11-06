@@ -1,7 +1,15 @@
 import axios from "axios";
 
-export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+// Instancia para el CORE (Puerto 8000)
+export const apiCore = axios.create({
+  baseURL: "http://localhost:8000",
+  headers: { "Content-Type": "application/json" },
+  timeout: 10000,
+});
+
+// Instancia para CUENTAS (Puerto 8001)
+export const apiCuentas = axios.create({
+  baseURL: "http://localhost:8001",
   headers: { "Content-Type": "application/json" },
   timeout: 10000,
 });

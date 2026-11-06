@@ -1,0 +1,72 @@
+services:
+  # DB
+  db:
+    image: mysql:8.4
+    container_name: bna_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: bna
+      MYSQL_USER: bna_user
+      MYSQL_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - "./backend/Infraestructura - BD/Trabajo_hecho/BD/99_bna_unificado.sql:/docker-entrypoint-initdb.d/01_init.sql"
+    networks:
+      - bna-net
+  
+  #Backend CORE
+  core:
+    build:
+      context: ./backend
+      dockerfile: CORE/Dockerfile
+    container_name: bna_core
+    restart: always
+    env_file:
+      - ./backend/.env  
+    environment:
+      - DB_HOST=bna_mysql
+      - DB_NAME=bna
+      - DB_USER=bna_user
+      - DB_PASSWORD=root
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    networks:
+      - bna-net
+  
+  #Backend de cuentas
+  cuentas:
+    build:
+      context: ./backend  # El contexto es backend/ porque tu Dockerfile busca la subcarpeta CUENTAS
+      dockerfile: CUENTAS/Dockerfile 
+    container_name: bna_cuentas
+    restart: always
+    environment:
+      - CORE_BASE_URL=http://bna_core:8000
+    ports:
+      - "8001:8001" 
+    depends_on:
+      - db #no levanta el backend hasta que levante la db
+    networks:
+      - bna-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bna_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - cuentas
+      - core
+    networks:
+      - bna-net
+
+networks:
+  bna-net:
+    driver: bridge

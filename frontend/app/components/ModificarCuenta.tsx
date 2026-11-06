@@ -16,6 +16,7 @@ const DESCRIPCION_ESTADO: Record<EstadoCuenta, string> = {
   INACTIVA: "No origina débitos (RGN-09).",
   BLOQUEADA: "No origina débitos (RGN-09).",
   EMBARGO: "Cuenta con embargo registrado.",
+  CERRADA: "Cuenta no operativa."
 };
 
 type Props = {

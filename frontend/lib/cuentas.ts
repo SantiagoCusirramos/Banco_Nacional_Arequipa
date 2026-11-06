@@ -1,144 +1,77 @@
-import axios from "axios";
-import { z } from "zod";
-import { api } from "@/lib/api";
+import { apiCuentas as api, mensajeError } from "@/lib/api";
 
-// Valores admitidos por el backend (CORE/services/cuentassvc.py)
-export const REGIMENES = ["LIBRE", "PROGRAMADO", "INFANTIL", "CTS", "A_PLAZO"] as const;
-export const ROLES_TITULAR = ["TITULAR", "MANCOMUNADO", "APODERADO", "TUTOR", "BENEFICIARIO"] as const;
-export const ESTADOS_CUENTA = ["ACTIVA", "INACTIVA", "BLOQUEADA", "EMBARGO"] as const;
+// Agregamos "INACTIVA" para satisfacer a ModificarCuenta.tsx
+export type EstadoCuenta = "ACTIVA" | "BLOQUEADA" | "CERRADA" | "INACTIVA" | "EMBARGO";
 
-export type Regimen = (typeof REGIMENES)[number];
-export type RolTitular = (typeof ROLES_TITULAR)[number];
-export type EstadoCuenta = (typeof ESTADOS_CUENTA)[number];
+export interface Titular {
+  id_cliente: string;
+  rol_titular: string;
+}
 
-export type Titular = { id_cliente: string; rol_titular: string };
-
-// Respuesta del backend (CuentaRespuesta). Los Decimal llegan como string.
-export type Cuenta = {
+export interface Cuenta {
+  id_cuenta?: string; // opcional por si acaso
   num_cuenta: string;
+  saldo_disponible: number;
+  saldo_contable: number;
+  saldo_retenido: number;
+  estado_cuenta: EstadoCuenta;
   moneda: string;
   regimen: string;
-  estado_cuenta: string;
-  saldo_contable: string | number;
-  saldo_disponible: string | number;
-  saldo_retenido: string | number;
   fecha_apertura: string;
   id_agencia: string;
   id_producto_ahorro: string;
   titulares: Titular[];
-};
-
-export type NuevaCuenta = {
-  id_cliente: string;
-  id_producto_ahorro: string;
-  id_agencia: string;
-  regimen: Regimen;
-  titulares?: { id_cliente: string; rol_titular: RolTitular }[];
-};
-
-// Validación del formulario "nueva cuenta" (react-hook-form + zod)
-export const nuevaCuentaSchema = z
-  .object({
-    id_cliente: z.string().min(1, "Selecciona un cliente"),
-    id_producto_ahorro: z.string().min(1, "Selecciona un producto"),
-    id_agencia: z.string().min(1, "Selecciona una agencia"),
-    regimen: z.enum(REGIMENES),
-    titulares: z
-      .array(
-        z.object({
-          id_cliente: z.string().min(1, "Falta el cliente titular"),
-          rol_titular: z.enum(ROLES_TITULAR),
-        }),
-      )
-      .optional(),
-  })
-  .refine(
-    (d) => {
-      const titulares = d.titulares ?? [];
-      return !titulares.some((t) => t.rol_titular === "MANCOMUNADO") || titulares.length >= 2;
-    },
-    { message: "Una cuenta mancomunada necesita al menos 2 titulares", path: ["titulares"] },
-  );
-
-// Identifica al canal en la auditoría del backend (campo `actor`).
-const ACTOR = "portal-web";
-
-function nuevoCorrelationId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `web-${Date.now()}`;
 }
 
-function conTrazabilidad() {
-  const correlation_id = nuevoCorrelationId();
-  return { correlation_id, config: { headers: { "x-correlation-id": correlation_id } } };
-}
+export const REGIMENES = ["LIBRE", "PROGRAMADO", "INFANTIL", "CTS", "A_PLAZO", "MANCOMUNADO"];
+export const ROLES_TITULAR = ["TITULAR", "MANCOMUNADO", "APODERADO", "TUTOR", "BENEFICIARIO", "CO-TITULAR"];
+export const ESTADOS_CUENTA = ["ACTIVA", "BLOQUEADA", "CERRADA", "INACTIVA"];
 
-/** POST /core/cuentas — Crear cuenta */
-export async function crearCuenta(datos: NuevaCuenta): Promise<Cuenta> {
-  const { correlation_id, config } = conTrazabilidad();
-  const { data } = await api.post<Cuenta>("/core/cuentas", { ...datos, actor: ACTOR, correlation_id }, config);
+// Ajustados para soportar un segundo argumento (ej. la moneda) que le estabas pasando en los componentes
+export const formatoFecha = (fecha: string, extraInfo?: any) => new Date(fecha).toLocaleDateString("es-PE");
+export const formatoMoneda = (monto: number, moneda?: string) => `${moneda === 'USD' ? '$' : 'S/'} ${Number(monto).toFixed(2)}`;
+
+export const mensajeDeError = mensajeError; 
+
+export async function abrirCuenta(payload: any) {
+  const { data } = await api.post("/api/v1/cuentas/apertura", payload);
   return data;
 }
 
-/** GET /core/cuentas/cliente/{id_cliente} — Cuentas donde el cliente es titular */
-export async function listarCuentasDeCliente(idCliente: string): Promise<Cuenta[]> {
-  const { data } = await api.get<Cuenta[]>(`/core/cuentas/cliente/${encodeURIComponent(idCliente)}`);
+export async function crearCuenta(payload: any) {
+  return abrirCuenta(payload);
+}
+
+export async function obtenerCuenta(numCuenta: string) {
+  const { data } = await api.get(`/api/v1/cuentas/${numCuenta}`);
   return data;
 }
 
-/** GET /core/cuentas/{num_cuenta} — Ver cuenta */
-export async function verCuenta(numCuenta: string): Promise<Cuenta> {
-  const { data } = await api.get<Cuenta>(`/core/cuentas/${encodeURIComponent(numCuenta)}`);
+export async function verCuenta(numCuenta: string) {
+  return obtenerCuenta(numCuenta);
+}
+
+export async function modificarCuenta(numCuenta: string, payload: any) {
+  const { data } = await api.put(`/api/v1/cuentas/${numCuenta}`, payload);
   return data;
 }
 
-/** PATCH /core/cuentas/{num_cuenta} — Modificar cuenta (estado) */
-export async function modificarCuenta(numCuenta: string, estado: EstadoCuenta): Promise<Cuenta> {
-  const { correlation_id, config } = conTrazabilidad();
-  const { data } = await api.patch<Cuenta>(
-    `/core/cuentas/${encodeURIComponent(numCuenta)}`,
-    { estado_cuenta: estado, actor: ACTOR, correlation_id },
-    config,
-  );
+export async function obtenerCuentasCliente(idCliente: string) {
+  const { data } = await api.get(`/api/v1/cuentas/consolidada/${idCliente}`);
   return data;
 }
 
-/**
- * Convierte cualquier error de las llamadas anteriores en un texto para el usuario.
- * El backend responde { error: { code, message } } para errores de negocio
- * y { detail: [...] } (FastAPI) para errores de validación (422).
- */
-export function mensajeDeError(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    if (!err.response) {
-      return `No se pudo conectar con el servidor (${api.defaults.baseURL ?? "URL no configurada"}). Verifica que el backend esté en ejecución.`;
-    }
-    const data = err.response.data as
-      | { error?: { code?: string; message?: string }; detail?: unknown }
-      | undefined;
-    if (data?.error?.message) {
-      return data.error.code ? `${data.error.message} (${data.error.code})` : data.error.message;
-    }
-    if (Array.isArray(data?.detail) && data.detail.length > 0) {
-      const primero = data.detail[0] as { loc?: unknown[]; msg?: string };
-      const campo = Array.isArray(primero.loc) ? primero.loc.filter((p) => p !== "body").join(".") : "";
-      return `Datos inválidos${campo ? ` en «${campo}»` : ""}: ${primero.msg ?? "revisa el formulario"}.`;
-    }
-    return `El servidor respondió con un error (${err.response.status}). Inténtalo nuevamente.`;
-  }
-  return "Ocurrió un error inesperado. Inténtalo nuevamente.";
+export async function realizarDeposito(payload: { num_cuenta: string; monto: number; moneda?: string; id_terminal?: string }) {
+  const { data } = await api.post("/api/v1/cuentas/deposito", payload);
+  return data;
 }
 
-export function formatoMoneda(valor: string | number, moneda: string): string {
-  const numero = Number(valor);
-  try {
-    return new Intl.NumberFormat("es-PE", { style: "currency", currency: moneda }).format(numero);
-  } catch {
-    return `${moneda} ${numero.toFixed(2)}`;
-  }
+export async function realizarRetiro(payload: { num_cuenta: string; monto: number; moneda?: string; id_terminal?: string }) {
+  const { data } = await api.post("/api/v1/cuentas/retiro", payload);
+  return data;
 }
 
-export function formatoFecha(iso: string): string {
-  const fecha = new Date(iso);
-  if (Number.isNaN(fecha.getTime())) return iso;
-  return new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeStyle: "short" }).format(fecha);
+export async function realizarTransferencia(payload: { num_cuenta_origen: string; num_cuenta_destino: string; monto: number; moneda?: string; id_terminal?: string }) {
+  const { data } = await api.post("/api/v1/cuentas/transferencia", payload);
+  return data;
 }

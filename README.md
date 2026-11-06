@@ -46,6 +46,11 @@ cd Banco_Nacional_Arequipa
 ```
 
 ---
+## DEPLOY EN DOCKER
+1. Entrar a la carpeta del proyecto
+2. docker compose up -d --buid
+# Si hiciste cambios y ya pusiste el comando anterior:
+3. docker compose up -d
 
 ### 2. Backend (FastAPI)
 

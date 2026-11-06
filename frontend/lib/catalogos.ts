@@ -1,24 +1,24 @@
-import { api } from "./api";
+import { apiCore as api } from "@/lib/api";
 
-export type Agencia = {
+export interface Agencia {
   id_agencia: string;
   nombre: string;
   direccion: string;
-};
+}
 
-export type ProductoAhorro = {
-  id_producto_ahorro: string;
+export interface ProductoAhorro {
+  id_producto: string;
   nombre: string;
   moneda: string;
-  tasa_tea: string | number;
-};
+  tasa_tea: number;
+}
 
-export async function listarAgencias(): Promise<Agencia[]> {
-  const { data } = await api.get<Agencia[]>("/core/catalogos/agencias");
+export async function listarAgencias() {
+  const { data } = await api.get("/core/agencias");
   return data;
 }
 
-export async function listarProductosAhorro(): Promise<ProductoAhorro[]> {
-  const { data } = await api.get<ProductoAhorro[]>("/core/catalogos/productos-ahorro");
+export async function listarProductosAhorro() {
+  const { data } = await api.get("/cuentas/productos");
   return data;
 }
