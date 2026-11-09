@@ -1,0 +1,16 @@
+# Configuración del servidor MySQL 8.4 de la base integrada del CORE.
+# La usan las pruebas (pruebas/mysql/run_tests.sh, montada en
+# /etc/mysql/conf.d/) y es la que debe tener el servidor de producción.
+# core.verificar_configuracion() rechaza si falta alguna de estas opciones.
+[mysqld]
+# Modo estricto en todas las tablas: un valor inválido es un error, no un
+# valor ajustado con advertencia. Una sesión puede cambiarlo sin privilegios
+# (brecha G01); los triggers y procedimientos usan el modo con que se crearon.
+sql_mode = STRICT_ALL_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+# Las marcas de tiempo (DATETIME) se guardan en UTC.
+default_time_zone = +00:00
+character_set_server = utf8mb4
+collation_server = utf8mb4_0900_as_cs
+# El evento diario tarjetas.ev_marcar_tarjetas_vencidas.
+event_scheduler = ON
+transaction_isolation = REPEATABLE-READ

@@ -1,0 +1,10 @@
+# Lo que nunca debe entrar en la imagen. Las claves se pasan al contenedor al ejecutarlo.
+**/.env
+**/.env.*
+!**/.env.example
+
+**/__pycache__
+**/.pytest_cache
+**/venv
+**/.venv
+**/.git

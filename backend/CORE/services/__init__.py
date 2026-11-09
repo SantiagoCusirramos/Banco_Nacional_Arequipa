@@ -1,5 +1,6 @@
 from CORE.services import (
     auditoria,
+    authsvc,
     clientessvc,
     contabilidad,
     cuentassvc,
@@ -13,6 +14,7 @@ from CORE.services import (
 
 __all__ = [
     "auditoria",
+    "authsvc",
     "clientessvc",
     "contabilidad",
     "cuentassvc",

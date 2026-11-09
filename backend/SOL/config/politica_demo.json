@@ -1,0 +1,20 @@
+{
+  "version": "SOL-DEMO-2026-01",
+  "estado_aprobacion": "PROPUESTO_PENDIENTE_COMITE",
+  "producto_id": "0198b000-0000-7005-8000-000000000001",
+  "producto_nombre": "Crédito Personal",
+  "monedas": ["PEN"],
+  "monto_minimo": "1000.00",
+  "monto_maximo": "50000.00",
+  "plazo_minimo_meses": 6,
+  "plazo_maximo_meses": 60,
+  "tea": "0.2200",
+  "amortizacion": "FRANCES",
+  "dias_por_periodo": 30,
+  "redondeo": "ROUND_HALF_UP",
+  "pago_doble_habilitado": false,
+  "cargos_adicionales": "0.00",
+  "origen_tasa_plazo": "10_seed_catalogos.sql: Crédito Personal. Pendiente de ratificación.",
+  "origen_montos": "Propuesta académica de alcance para la demo; no es una política de riesgo aprobada.",
+  "nota": "Calendario preliminar, sin comisiones ni seguros. Pago doble pendiente de definición."
+}

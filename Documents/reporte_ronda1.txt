@@ -1,0 +1,61 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.2, pytest-8.3.3, pluggy-1.7.0 -- C:\Users\Sam\Banco_Nacional_Arequipa\backend\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Sam\Banco_Nacional_Arequipa\backend
+configfile: pytest.ini
+testpaths: CORE/tests
+plugins: anyio-4.15.1, asyncio-0.24.0
+asyncio: mode=Mode.STRICT, default_loop_scope=function
+collecting ... collected 43 items
+
+CORE/tests/test_api_smoke.py::test_rutas_core_montadas PASSED            [  2%]
+CORE/tests/test_api_smoke.py::test_error_core_devuelve_json_catalogado PASSED [  4%]
+CORE/tests/test_creditos_logica.py::test_tasa_mensual_desde_tea PASSED   [  6%]
+CORE/tests/test_creditos_logica.py::test_calendario_frances_cuadra PASSED [  9%]
+CORE/tests/test_creditos_logica.py::test_calendario_tasa_cero PASSED     [ 11%]
+CORE/tests/test_excepciones.py::test_core_error_codes PASSED             [ 13%]
+CORE/tests/test_excepciones.py::test_not_found_es_404 PASSED             [ 16%]
+CORE/tests/test_excepciones.py::test_saldo_insuficiente PASSED           [ 18%]
+CORE/tests/test_excepciones.py::test_cuenta_bloqueada PASSED             [ 20%]
+CORE/tests/test_motor_reglas.py::test_mayor PASSED                       [ 23%]
+CORE/tests/test_motor_reglas.py::test_entre PASSED                       [ 25%]
+CORE/tests/test_motor_reglas.py::test_excluye PASSED                     [ 27%]
+CORE/tests/test_motor_reglas.py::test_regla_inactiva_no_aplica PASSED    [ 30%]
+CORE/tests/test_motor_reglas.py::test_variable_ausente PASSED            [ 32%]
+CORE/tests/test_motor_reglas.py::test_riesgo_desde_puntaje PASSED        [ 34%]
+CORE/tests/test_movimientos_concurrencia.py::TestOrdenBloqueo::test_bloquea_en_orden_ascendente_sin_importar_origen PASSED [ 37%]
+CORE/tests/test_movimientos_concurrencia.py::TestOrdenBloqueo::test_orden_antiguo_produce_espera_circular PASSED [ 39%]
+CORE/tests/test_movimientos_concurrencia.py::TestOrdenBloqueo::test_orden_nuevo_no_produce_espera_circular PASSED [ 41%]
+CORE/tests/test_movimientos_concurrencia.py::TestReintentosDeadlock::test_detecta_deadlock_mysql PASSED [ 44%]
+CORE/tests/test_movimientos_concurrencia.py::TestReintentosDeadlock::test_reintenta_y_luego_confirma PASSED [ 46%]
+CORE/tests/test_movimientos_concurrencia.py::TestReintentosDeadlock::test_agota_reintentos_y_responde_503 PASSED [ 48%]
+CORE/tests/test_movimientos_concurrencia.py::TestReintentosDeadlock::test_error_que_no_es_deadlock_no_se_reintenta PASSED [ 51%]
+CORE/tests/test_movimientos_concurrencia.py::TestReintentosDeadlock::test_transferir_reintenta_ante_deadlock PASSED [ 53%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_replay_transferencia_no_intercambia_patas PASSED [ 55%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_misma_llave_otro_monto_da_409 PASSED [ 58%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_misma_llave_otro_destino_da_409 PASSED [ 60%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_llave_de_deposito_no_sirve_para_transferencia PASSED [ 62%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_llave_de_transferencia_no_sirve_para_deposito PASSED [ 65%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_deposito_vs_retiro_misma_llave_da_409 PASSED [ 67%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_replay_deposito_identico PASSED [ 69%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_usa_hash_guardado_en_auditoria PASSED [ 72%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_sufijo_reservado_rechazado PASSED [ 74%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_llave_transferencia_demasiado_larga PASSED [ 76%]
+CORE/tests/test_movimientos_concurrencia.py::TestIdempotencia::test_huella_normaliza_monto PASSED [ 79%]
+CORE/tests/test_rbac.py::test_catalogo_completo PASSED                   [ 81%]
+CORE/tests/test_rbac.py::test_admin_tiene_todo PASSED                    [ 83%]
+CORE/tests/test_rbac.py::test_rol_puede PASSED                           [ 86%]
+CORE/tests/test_rbac.py::test_asignar_y_revocar PASSED                   [ 88%]
+CORE/tests/test_utilidades.py::test_hash_sha256_es_hex_de_64 PASSED      [ 90%]
+CORE/tests/test_utilidades.py::test_verify_sha256 PASSED                 [ 93%]
+CORE/tests/test_utilidades.py::test_uuid7_version PASSED                 [ 95%]
+CORE/tests/test_utilidades.py::test_convertir_aplica_tasa PASSED         [ 97%]
+CORE/tests/test_utilidades.py::test_d_normaliza PASSED                   [100%]
+
+============================== warnings summary ===============================
+venv\Lib\site-packages\starlette\testclient.py:40
+  C:\Users\Sam\Banco_Nacional_Arequipa\backend\venv\Lib\site-packages\starlette\testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 43 passed, 1 warning in 3.30s ========================

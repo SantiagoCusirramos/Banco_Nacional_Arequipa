@@ -123,3 +123,19 @@ class ExchangeRateNotFoundError(CoreError):
                 "fecha": fecha,
             },
         )
+
+
+class AuthenticationError(CoreError):
+    """401: credenciales o token ausentes, inválidos o vencidos."""
+
+    def __init__(self, code: str, message: str,
+                 details: dict[str, Any] | None = None):
+        super().__init__(code, message, status_code=401, details=details)
+
+
+class PermissionDeniedError(CoreError):
+    """403: el usuario está autenticado pero no tiene permiso."""
+
+    def __init__(self, code: str, message: str,
+                 details: dict[str, Any] | None = None):
+        super().__init__(code, message, status_code=403, details=details)

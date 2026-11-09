@@ -1,0 +1,72 @@
+{
+  "fechaLima": "2026-10-23T18:29:00.189355-05:00",
+  "alcance": "Procesos HTTP locales separados; CAP/EVA/Seguridad simuladas; MySQL real",
+  "resultado": "APROBADO",
+  "CR-INT-01": "Habilitado aceptado; observado/vencido rechazados 422",
+  "CR-INT-02": "202 local; confirmación por worker y acuse HTTP",
+  "CR-INT-03": "OBSERVADO; v2; resultado antiguo 409; APROBADO",
+  "CR-INT-10": {
+    "envios": [],
+    "auditoria": [
+      {
+        "estado": "CONFIRMADO",
+        "cantidad": 8
+      }
+    ]
+  },
+  "X-Correlation-ID": "15baada9-aa40-4c95-b067-6ac6589ed30f",
+  "p95": {
+    "alcance": "Ventana en memoria por proceso; se reinicia con el servicio.",
+    "unidad": "milisegundos",
+    "operaciones": [
+      {
+        "operacion": "GET /ready",
+        "muestras": 1,
+        "p95_ms": 5.169,
+        "errores_5xx_acumulados": 0
+      },
+      {
+        "operacion": "GET /sol/applications/{identifier}",
+        "muestras": 7,
+        "p95_ms": 23.913,
+        "errores_5xx_acumulados": 0
+      },
+      {
+        "operacion": "GET /sol/ops/pending",
+        "muestras": 3,
+        "p95_ms": 13.152,
+        "errores_5xx_acumulados": 0
+      },
+      {
+        "operacion": "POST /sol/applications",
+        "muestras": 3,
+        "p95_ms": 79.091,
+        "errores_5xx_acumulados": 0
+      },
+      {
+        "operacion": "POST /sol/applications/{identifier}/revise",
+        "muestras": 1,
+        "p95_ms": 30.614,
+        "errores_5xx_acumulados": 0
+      },
+      {
+        "operacion": "POST /sol/applications/{identifier}/send",
+        "muestras": 2,
+        "p95_ms": 48.795,
+        "errores_5xx_acumulados": 0
+      },
+      {
+        "operacion": "POST /sol/auth/login",
+        "muestras": 2,
+        "p95_ms": 81.624,
+        "errores_5xx_acumulados": 0
+      },
+      {
+        "operacion": "POST /sol/integrations/evaluation-results",
+        "muestras": 3,
+        "p95_ms": 21.677,
+        "errores_5xx_acumulados": 0
+      }
+    ]
+  }
+}

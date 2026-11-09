@@ -1,0 +1,30 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> frontend@0.1.0 build
+> next build
+
+▲ Next.js 16.3.8 (Turbopack)
+✓ Running next.config.ts took 47ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 1075ms
+  Running TypeScript ...
+  Finished TypeScript in 5.0s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/5) ...
+  Generating static pages using 7 workers (1/5) 
+  Generating static pages using 7 workers (2/5) 
+  Generating static pages using 7 workers (3/5) 
+✓ Generating static pages using 7 workers (5/5) in 1108ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/solicitud-credito/[...path]
+└ ○ /solicitud-credito
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

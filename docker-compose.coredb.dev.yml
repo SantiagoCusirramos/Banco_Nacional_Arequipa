@@ -1,0 +1,6 @@
+# Solo para desarrollo: agrega datos de referencia a una base nueva, para poder
+# hacer un depósito. No usar en producción. Ver database/README-UPSTREAM.md.
+services:
+  bna-core-db:
+    volumes:
+      - ./database/sql/bna_datos_dev.sql:/docker-entrypoint-initdb.d/04_bna_datos_dev.sql:ro

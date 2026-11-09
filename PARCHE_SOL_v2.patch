@@ -1,0 +1,2586 @@
+--- a/CAMBIOS_SOL.md
++++ b/CAMBIOS_SOL.md
+@@ -1,10 +1,18 @@
+-# Archivos de esta entrega
++# Archivos de esta entrega — MVP v2
+ 
+ Base: ZIP Banco_Nacional_Arequipa-main(1). No se descargó ni modificó la rama remota.
+ 
+ El ZIP completo sirve para ejecutar localmente. Cuando se use un clon actualizado, revisar y llevar únicamente los cambios listados; no sobrescribir otros módulos. Los archivos de CORE y los scripts SQL comunes conservan el contenido de la base revisada.
+ 
+-## Archivos existentes modificados
++## Actualización v2 respecto al MVP anterior
++
++Ver `Documents/solicitud-credito/CORRECCIONES_V2.md` para la correspondencia con los 14 pedidos y `CONTRATOS_HTTP_V2.md` para coordinar con los demás equipos. `EMPEZAR_AQUI_SOL.md` contiene la actualización sin borrar la base.
++
++Se modifican archivos SOL del backend (API, persistencia, ajustes, servicio, integración, seed, gestión y pruebas), requirements-sol.txt, .env.sol.example, los dos archivos TypeScript de SOL y las guías del módulo. Se añaden clock.py, operations.py, observability.py, migrations.py, simulator.py y test_integration_v2.py. Las evidencias nuevas están en `Documents/solicitud-credito/evidencias-v2/`.
++
++La política, las fórmulas financieras y los archivos de los demás módulos conservan el contenido de v1. El ZIP incluye `PARCHE_SOL_v2.patch` para revisar diferencias respecto a la entrega anterior; no debe aplicarse a ciegas sobre cambios posteriores del equipo.
++
++## Archivos existentes modificados (base v1)
+ 
+ - `.gitignore`
+ - `README.md`
+--- a/Documents/solicitud-credito/CONTRATOS_DEMO.md
++++ b/Documents/solicitud-credito/CONTRATOS_DEMO.md
+@@ -1,6 +1,6 @@
+-# Contratos de demostración y ruta de integración
++# Contratos de simulación (actualizado a v2)
+ 
+-Estado: borrador técnico del MVP. Los nombres, rutas y mensajes de esta entrega no se presentan como contratos institucionales aprobados. OpenAPI ejecutable: http://127.0.0.1:8011/docs.
++Para el transporte HTTP, callbacks, cola y configuración consulta [CONTRATOS_HTTP_V2.md](CONTRATOS_HTTP_V2.md). Ese documento es el contrato técnico propuesto vigente.
+ 
+ ## Separación de responsabilidades
+ 
+@@ -18,7 +18,7 @@
+ 
+ El backend expone `/sol/*` como módulo interno y `/gateway/sol/*` como despacho SIMULADO al mismo módulo. No existe un Bus desplegado aparte ni se afirma que el gateway esté conectado a otros equipos.
+ 
+-El Route Handler de Next.js usa `SOL_GATEWAY_URL`. Cambiar únicamente esa URL no completa una integración institucional: deben coincidir autenticación, rutas, esquemas, estados, semántica e idempotencia. El modo `REAL` del backend está bloqueado hasta realizar esas adaptaciones y pruebas.
++El Route Handler de Next.js usa `SOL_GATEWAY_URL`. Cambiar únicamente esa URL no completa una integración institucional: deben coincidir autenticación, rutas, esquemas, estados, semántica e idempotencia. El modo `REAL` ya usa adaptadores HTTP configurables; requiere homologar el contrato propuesto y probar contra los servicios institucionales.
+ 
+ | Método y ruta relativa | Función | Perfil |
+ |---|---|---|
+@@ -76,11 +76,11 @@
+ 
+ La demo admite APROBADO, OBSERVADO y RECHAZADO. Internamente se traducen a APROBADA, OBSERVADA y RECHAZADA. Se valida versión pendiente y no se acepta el resultado de una versión antigua. Un resultado repetido con la misma operación y contenido no duplica eventos.
+ 
+-Todavía deben acordarse `idEvaluacion`, rondas, firma/autenticación de servicio, transporte callback o consulta, aceptación del cliente y `condicionesResultantes`. Los campos extra se rechazan; esta entrega no interpreta cambios de monto/plazo propuestos por EVA.
++El callback HTTP v2 ya exige `idEvaluacion` y `ronda` del acuse, junto con un token de servicio. Su homologación, la autenticación central, la aceptación del cliente y `condicionesResultantes` siguen pendientes. Los campos extra se rechazan; esta entrega no interpreta cambios de monto/plazo propuestos por EVA.
+ 
+ ## CR-INT-10
+ 
+-Se registran localmente actor autenticado, solicitud, versión, evento, estado anterior/nuevo, fecha UTC y correlación. No existe envío real al servicio central de Seguridad. El siguiente paso es agregar una cola/outbox transaccional y consumidor al contrato homologado; el historial local no se presenta como almacenamiento central inviolable.
++Se registran localmente actor autenticado, solicitud, versión, evento, estado anterior/nuevo, fecha UTC y correlación. La v2 incluye outbox transaccional, worker de reenvío y adaptador HTTP hacia la ruta configurada de Seguridad. El acuse demo se etiqueta SIMULADO. No se ha demostrado conexión al servicio institucional ni se presenta el historial local como almacenamiento central inviolable.
+ 
+ ## Integración real: acuerdos concretos
+ 
+--- /dev/null
++++ b/Documents/solicitud-credito/CONTRATOS_HTTP_V2.md
+@@ -0,0 +1,84 @@
++# Transporte HTTP v2 — propuesta para homologación
++
++Fecha: 23/10/2026. `REAL` significa que SOL usa HTTP hacia las rutas configuradas del Bus. No significa que los contratos, reglas financieras o integración institucional estén aprobados. La validación entregada utiliza un simulador, con datos sintéticos.
++
++## Qué deben entregar Bus, Captación, Evaluación y Seguridad
++
++- URL de Testing, rutas exactas y versión del contrato. No se inventa una URL institucional.
++- Dos credenciales distintas: SOL → Bus y Bus/EVA → callback SOL. Configuración solo en servidor. El receptor debe verificar TLS y restringir el origen; no se implementa SSO/MFA institucional.
++- CAP: forma de búsqueda, referencia, estado habilitante, verificación y vigencia. El adaptador usa actualmente `ACTIVO` + `HABILITADO`; homologar estos nombres antes de conectar.
++- EVA: POST de recepción, GET por `idOperacion`, acuse estable y callback reintentable. Un GET 404 significa **no recibido**. Si el GET falla, SOL no repite el POST a ciegas. Una entrega confirmada queda congelada.
++- Seguridad: acuse central positivo y deduplicación por `idEvento`. La cola garantiza persistencia y entrega al menos una vez; que el receptor reconozca el identificador es indispensable para evitar duplicación tras una respuesta perdida.
++- Calidad: criterios de aceptación, pruebas conjuntas y evidencia con versión, fecha y ambiente.
++
++## Configuración
++
++Ver `backend/.env.sol.example`. En `REAL` se exigen todas las rutas y dos tokens distintos de 32+ caracteres; una configuración incompleta impide arrancar con un mensaje explícito. No hay retorno silencioso a datos locales.
++
++Las siguientes rutas son **solo del simulador local**, reemplazables por las acordadas:
++
++```dotenv
++SOL_INTEGRATION_MODE=REAL
++SOL_BUS_BASE_URL=http://127.0.0.1:8020
++SOL_CAP_SEARCH_PATH=/cap/references
++SOL_CAP_REFERENCE_PATH=/cap/references/{idCliente}
++SOL_EVA_SEND_PATH=/eva/applications
++SOL_EVA_STATUS_PATH=/eva/operations/{idOperacion}
++SOL_AUDIT_PATH=/security/events
++```
++
++Definir también `SOL_BUS_TOKEN` y `SOL_EVA_CALLBACK_TOKEN` con valores privados diferentes. No copiarlos en capturas. En otra terminal, definir `SOL_SIMULATOR_TOKEN` con el mismo valor de `SOL_BUS_TOKEN` y ejecutar `python -m uvicorn SOL.simulator:app --host 127.0.0.1 --port 8020`. Este servidor es un simulador en memoria, no el Bus del proyecto.
++
++El frontend usa `SOL_GATEWAY_URL=http://127.0.0.1:8011/sol` al practicar HTTP local. Con Bus institucional debe apuntar a la ruta de entrada que ese equipo publique. `/gateway/sol` solo se expone en modo SIMULADO.
++
++## CR-INT-01
++
++GET de búsqueda con `search` y `limit=50`; devuelve una lista acotada. GET de referencia con `{idCliente}`; devuelve:
++
++```json
++{"id_cliente":"0198b000-0000-7009-8000-000000000001","cod_tipo_documento":"DNI","numero_documento":"70000001","nombres":"Cliente sintético","apellido_paterno":"Prueba","apellido_materno":"Laboratorio","estado_cliente":"ACTIVO","id_caso":"CASO-DEMO-1","id_verificacion":"VER-DEMO-1","fecha_verificacion":"2026-10-23","vigente_hasta":"2026-11-22","estado_habilitante":"HABILITADO","version_contrato":"CR-INT-01-PROPUESTA-v2","simulado":true}
++```
++
++Se validan coincidencia de cliente y vigencia según Lima. Ausente, bloqueado o vencido: rechazo funcional 422. Fallo de transporte/contrato: 503. SOL conserva una referencia mínima en su propia base; no escribe en tablas de Clientes. No solicita ni expone celular, correo o nacimiento, tampoco en versiones históricas leídas por la API. Los fiadores reales necesitan un contrato específico de identidad: no se incorpora una dependencia directa nueva a Clientes ni se presenta una referencia sintética como validación institucional.
++
++## CR-INT-02
++
++POST envío conserva `idSolicitud`, `versionSolicitud`, `idOperacion`, `idCorrelacion`, `expediente`, `actorEnvio`, `versionContrato=CR-INT-02-PROPUESTA-v2` y `simulado`. `actorEnvio` se obtiene de la sesión, nunca de un campo editable del navegador. El expediente conserva las condiciones, respaldos, política y calendario de esa versión.
++
++Acuse esperado (POST y GET de consulta deben devolver el mismo objeto):
++
++```json
++{"idSolicitud":"UUID-solicitud","versionSolicitud":1,"idOperacion":"UUID-operacion","idEvaluacion":"EVA-ID","ronda":8,"acuse":"ACK-ID"}
++```
++
++La ronda es de EVA: no se deduce de la versión. SOL valida solicitud, versión, operación, evaluación, ronda positiva y acuse. La restricción única solicitud/versión y la reserva temporal impiden iniciar dos entregas locales de la misma versión.
++
++`POST /sol/applications/{id}/send` recibe la revisión y `X-Idempotency-Key`. En REAL confirma primero una reserva durable y responde **202 pendiente**; el worker realiza HTTP fuera de la petición digital. Un 202 no significa recepción de EVA. Durante la reserva se bloquean ediciones. La interfaz conserva/reutiliza la operación pendiente, incluso al recargar el detalle, y permite actualizar su estado. Con acuse válido se aplica el estado existente EN_EVALUACION y se registra el evento. Repetir la misma clave devuelve el acuse; otra clave para esa versión se rechaza.
++
++Timeout de fase HTTP configurable (0,6 s por defecto); como máximo dos reintentos adicionales por ciclo (tres intentos). Antes de cada POST se consulta recepción. El presupuesto de inicio de llamadas del ciclo es 2,4 s; HTTPX mide fases de conexión/lectura, no un plazo absoluto de reloj de toda la operación. El puente del navegador aborta a los 3 s. La cola reprograma ciclos fallidos con espera creciente de 10 a 300 s; no genera claves nuevas. Una reserva abandonada se recupera tras 30 s. No se envían adjuntos ni se admite streaming.
++
++## CR-INT-03
++
++EVA/Bus llama **POST `/sol/integrations/evaluation-results`**, directamente al servidor, fuera del puente del navegador. Cabeceras: `Authorization: Bearer <SOL_EVA_CALLBACK_TOKEN>`, `X-Idempotency-Key` y `X-Correlation-ID`. Los dos identificadores deben coincidir con el cuerpo:
++
++```json
++{"idSolicitud":"UUID-solicitud","versionSolicitud":1,"idEvaluacion":"EVA-ID","ronda":8,"idOperacion":"UUID-resultado","idCorrelacion":"UUID-correlacion","decision":"OBSERVADO","observaciones":"Precisar el destino declarado."}
++```
++
++Se valida evaluación/ronda del acuse y versión vigente pendiente. Se rechaza un resultado de otra versión/ronda, una operación reutilizada con otro contenido o una sesión de usuario usada como credencial de servicio. Un mensaje idéntico repetido solo se reconoce, sin añadir un resultado/evento. EVA debe reintentar si el callback llega antes de que SOL concilie el acuse. En REAL se deshabilita `demo-result` y el ingreso de la cuenta evaluador.demo.
++
++Se conservan únicamente las decisiones de la demo (APROBADO/OBSERVADO/RECHAZADO) y su traducción existente. No se inventan estados oficiales, rondas adicionales sobre la misma versión, condiciones financieras resultantes ni aceptación del cliente: requieren acuerdo de negocio.
++
++## CR-INT-10 y operación
++
++Cada evento de expediente y acceso crea su outbox en la misma transacción. Mensaje: `idEvento`, `idOperacion`, `idCorrelacion`, `tipo`, `actor`, `sujeto` afectado cuando corresponda, `fecha` UTC y, cuando corresponda, solicitud/versión/estados. Sin cuerpo de solicitud, contraseña, token o datos de contacto.
++
++Acuse: `{"idEvento":"UUID-evento","confirmado":true,"acuse":"ACK-ID"}`. Solo entonces se marca CONFIRMADO. En modo SIMULADO se marca SIMULADO con acuse AUD-DEMO; no se presenta como confirmación central. Los pendientes de un modo no se exportan automáticamente al cambiar al otro.
++
++El worker vive en el proceso FastAPI, con intervalo de 5 s; tras reiniciar recupera pendientes y respeta las reservas. Para un ciclo manual: `python -m SOL.manage maintain`. Se pueden ejecutar varios procesos: la reserva usa bloqueo en MySQL y vence tras una caída. Un error de contrato queda ERROR_CONTRATO para revisión, sin reintentos automáticos. Tras corregirlo, un operador puede ejecutar `python -m SOL.manage retry-errors` para reencolar conservando los identificadores.
++
++`GET /sol/ops/pending` (supervisor/auditor) permite ver operaciones pendientes y conteos de auditoría. `GET /sol/ops/metrics` devuelve muestras y p95 medido por operación; ventana máxima de 10 000 por proceso, reiniciada al arrancar. No equivale a una plataforma central ni fija metas de I-05.
++
++`/health` comprueba proceso. `/ready` ejecuta SELECT 1 y devuelve 503 si la base no responde; no acredita disponibilidad de los vecinos ni migraciones aplicadas. Los logs JSON se escriben a stdout: Infraestructura debe conservarlos y definir retención. Incluyen ruta normalizada, estado, duración, `idOperacion` y `idCorrelacion`, sin cuerpos, cabeceras secretas ni query. `X-Correlation-ID` se devuelve al navegador.
++
++La baja local es `POST /sol/admin/users/{username}/disable`, supervisor autenticado, cuerpo `{"motivo":"Baja autorizada de laboratorio"}`. Deshabilita y revoca todas las sesiones; no permite autobaja. La facultad del supervisor es del laboratorio, pendiente de homologación con Seguridad. No reemplaza SSO/MFA. Se limpian sesiones vencidas al ingresar y en mantenimiento. Se registran ingresos, fallos, bloqueo temporal, cierre y baja en eventos/outbox. No se registra la contraseña ni el texto libre del motivo en los logs.
+--- /dev/null
++++ b/Documents/solicitud-credito/CORRECCIONES_V2.md
+@@ -0,0 +1,49 @@
++# Correcciones del MVP v2
++
++Fecha de entrega: 23/10/2026. Código basado en el MVP v1 local proporcionado. No se modificó ninguna rama remota ni otro módulo del banco.
++
++| Pedido | Cambio realizado | Prueba principal |
++|---|---|---|
++| 1. Fecha nocturna | `clock.business_today()` usa America/Lima en guardado, envío, Captación y seed. El formulario también calcula Lima. Los instantes del historial siguen en UTC. `tzdata` permite ejecutar ZoneInfo en Windows. | `test_lima_night_creation_and_send_no_false_stale`; `test_lima_midnight_really_expires_old_base`. |
++| 2. Adaptadores HTTP | Modo REAL configurable vía Bus, sin fallback a referencias locales. Validación de configuración; timeout y máximo dos reintentos por ciclo. CR-INT-03 entra como callback autenticado. | Casos `test_cr01_*`, `test_cr02_*`, `test_real_requires_*`; recorrido HTTP local. |
++| 3. Resultado real | Callback con token de servicio, idEvaluacion y ronda ligados al acuse. Valida correlación y operación; rechaza versión antigua y mensaje repetido diferente. Demo bloqueada en REAL. | `test_cr03_callback_auth_round_version_and_full_v2_cycle`. |
++| 4. Consulta antes de repetir | Reserva persistente, versión congelada, consulta por idOperacion antes de cada POST; sin consulta disponible no hay reenvío ciego. | Timeout tras aceptación: GET/POST/GET y un solo expediente remoto. Recuperación de pendiente desde otra conexión a la base. |
++| 5. Auditoría | Outbox transaccional con identificador de evento estable, reserva temporal, acuse y reprogramación. Worker interno y comando manual. SIMULADO se distingue de CONFIRMADO. | `test_cr10_outbox_survives_failure_recovers_and_deduplicates`; rollback conjunto. |
++| 6. Logs/correlación | JSON a stdout con ruta normalizada, duración, estado, idOperacion/idCorrelacion. Cabecera devuelta por API y puente. Sin cuerpos, query, claves o tokens en logs. | `test_correlation_logs_and_measured_p95`; control de secretos en log de accesos. |
++| 7. Readiness | `/health` sigue verificando el proceso; `/ready` ejecuta SELECT 1 y devuelve 503 si falla la base. | `test_readiness_when_db_fails_but_liveness_remains`. |
++| 8. p95 | Medición real por operación, ventana máxima 10 000 muestras por proceso; endpoint restringido de métricas. | Mismo caso de correlación/p95. No se fija un SLA ni se inventa una meta. |
++| 9. Baja/sesiones | Supervisor local puede deshabilitar otra cuenta y revocar todas sus sesiones. Se rechaza el ingreso y uso de la sesión retirada. Limpieza de sesiones e intentos vencidos. | `test_session_revocation_and_cleanup`. El rol institucional debe homologarse. |
++| 10. Accesos de seguridad | Eventos de ingreso exitoso, fallo, bloqueo, cierre y baja con outbox. El contador usa identidad normalizada; variar mayúsculas no evita el bloqueo. | `test_access_events_lockout_and_no_secrets_in_logs`. |
++| 11. Datos de cliente | Lista mínima para todos los roles, sin celular/correo/nacimiento. También se filtran versiones históricas y referencias al consultar/exportar detalles. | `test_client_and_legacy_detail_minimization_all_roles`. Se reducen datos expuestos; no se declara cumplimiento legal integral. |
++| 12. Bandeja | Paginación 1–100, página de 50 en UI, total/conteos por estado; join de versión vigente en consulta única de filas. Búsqueda visual rotulada por página. | `test_paginated_listing_has_constant_query_count_and_detail_no_lock`. |
++| 13. Lectura | GET de detalle no pide bloqueo de fila. Los cambios mantienen bloqueo/revisión. | Caso anterior; ejecutado también con MySQL. |
++| 14. Canal digital | Puente Next.js aborta a 3 s. En REAL el envío se reserva con 202 y el worker gestiona HTTP. La UI no anuncia recepción ante un 202. | Compilación, revisión del puente y recorrido HTTP local. |
++| Adicional de MySQL | Historial ordenado por versión y revisión, sin depender de UUID cuando varios eventos comparten hora al segundo. | `test_event_order_follows_revision_when_mysql_timestamps_tie`. |
++
++## Qué conserva la actualización
++
++El archivo `politica_demo.json` y el cálculo `finance.py` conservan exactamente el contenido de v1. No se programan pago doble, estados oficiales ni obligatoriedad de garantías. Se mantienen las decisiones y estados de demostración existentes, pendientes de aprobación. Los fiadores institucionales se rechazan explícitamente en REAL mientras su contrato no esté homologado; no se sustituye esa validación por una referencia sintética.
++
++La autenticación de trabajadores sigue siendo local. El callback tiene credencial de servicio separada; ello no equivale a integración con Seguridad central, MFA, roles institucionales o cumplimiento regulatorio certificado.
++
++## Actualizar una instalación v1
++
++Con backend detenido y una copia de seguridad de tu base, desde `backend`:
++
++```powershell
++.\.venv-sol\Scripts\python.exe -m pip install -r requirements-sol.txt
++.\.venv-sol\Scripts\python.exe -m SOL.manage migrate
++.\.venv-sol\Scripts\python.exe -m pytest SOL/tests -q
++```
++
++Conserva `.env.sol` y `.env.local`; no los reemplaces por los ejemplos. No borres tu base ni tu entorno virtual. `migrate` añade columnas/tablas y no cambia contraseñas. Los envíos antiguos se identifican como SIMULADO; no se reenvían al pasar a REAL. En MySQL el DDL se confirma por columnas y puede reanudarse: respalda antes de actualizar. Las filas históricas que no tenían revisión conservan ese dato como 0; no se inventa su orden temporal anterior.
++
++Arranca backend y frontend como antes. Para integración consulta `CONTRATOS_HTTP_V2.md`; para resultados y capturas consulta `VALIDACION.md` y `evidencias-v2/indice.html`.
++
++## Referencias técnicas para mantenimiento
++
++- Python ZoneInfo: https://docs.python.org/3/library/zoneinfo.html
++- HTTPX, timeouts: https://www.python-httpx.org/advanced/timeouts/
++- HTTPX, transportes y simulación: https://www.python-httpx.org/advanced/transports/
++
++Estas referencias explican herramientas; las reglas financieras y contratos del proyecto deben ratificarlos sus responsables.
+--- a/Documents/solicitud-credito/LECTURA_DEL_CODIGO.md
++++ b/Documents/solicitud-credito/LECTURA_DEL_CODIGO.md
+@@ -14,7 +14,7 @@
+ | `SOL/models.py` | Tablas del laboratorio y restricciones únicas. | Un expediente tiene varias versiones; cada una guarda condiciones, política y calendario. |
+ | `SOL/database.py` | Motor SQLAlchemy y sesiones de BD. | Los cambios de estado y su historial se confirman en una transacción. |
+ | `SOL/service.py` | Validaciones, snapshots, revisión y serialización. | Se vuelve a calcular en el backend; no se confía en una cuota enviada desde la interfaz. |
+-| `SOL/integrations.py` | Contratos y adaptadores simulados. | Cambiar este borde permite incorporar las APIs del Bus sin reescribir las pantallas. Todavía deben ratificarse los contratos reales. |
++| `SOL/integrations.py` | Adaptadores simulados y HTTP vía Bus. | Cambiar este borde permite incorporar las APIs del Bus sin reescribir las pantallas. Todavía deben ratificarse los contratos reales. |
+ | `SOL/security.py` | Hash de contraseñas y tokens. | No se guarda la clave en texto y el rol se obtiene de la sesión del servidor. |
+ | `SOL/seed.py` | Cuentas y referencias sintéticas para probar. | Un cliente activo no equivale automáticamente a Captación habilitada. |
+ | `SOL/manage.py` | Creación explícita y comprobación de la BD local. | No se ejecuta automáticamente el SQL de todo el banco. |
+@@ -29,13 +29,24 @@
+ | `app/solicitud-credito/layout.tsx` | Título, descripción y ámbito visual del módulo. |
+ | `app/api/solicitud-credito/[...path]/route.ts` | Puente del lado servidor entre navegador y gateway. Mantiene el token en cookie HttpOnly y no expone la URL interna en el navegador. |
+ 
++## Archivos añadidos en v2
++
++| Archivo | Para explicarlo sin tecnicismos |
++|---|---|
++| `SOL/clock.py` | Todos los cálculos de fecha consultan el mismo reloj de Lima. Las evidencias conservan instantes UTC. |
++| `SOL/operations.py` | Guarda los envíos y eventos pendientes, consulta si EVA recibió un envío y recupera el trabajo tras una caída. |
++| `SOL/observability.py` | Registra identificadores y duración de cada operación sin claves ni datos de cliente. Calcula p95 con muestras reales del proceso. |
++| `SOL/migrations.py` | Añade las columnas/tablas de la actualización conservando los expedientes anteriores. |
++| `SOL/simulator.py` | Servidor HTTP de práctica, no conectado al banco. Permite verificar las rutas propuestas. |
++| `SOL/tests/test_integration_v2.py` | Pruebas del horario nocturno, adaptadores, callbacks, cola, sesiones, privacidad, monitoreo y migración. |
++
+ ## Ejemplo de envío
+ 
+ 1. El asesor revisa el expediente y pulsa enviar.
+ 2. Next.js recibe la petición y adjunta el token de la sesión.
+ 3. El gateway SIMULADO despacha al módulo SOL del mismo proceso; no es el Bus del proyecto.
+ 4. SOL valida rol, revisión vigente, estado, política y verificación de Captación.
+-5. SOL congela el snapshot, guarda el mensaje y un acuse EVA simulado, cambia a EN_EVALUACION y registra el evento en la misma transacción.
++5. SOL reserva y congela la versión antes de contactar a EVA. En SIMULADO confirma el acuse local; en REAL responde 202 pendiente y el worker consulta/envía por HTTP. Solo con acuse válido pasa a EN_EVALUACION. El historial y su evento pendiente de auditoría se confirman juntos.
+ 6. El navegador muestra el resultado confirmado. Si la base de datos falla, no informa éxito.
+ 
+ ## Qué significa versionar
+--- a/Documents/solicitud-credito/VALIDACION.md
++++ b/Documents/solicitud-credito/VALIDACION.md
+@@ -1,33 +1,45 @@
+-# Validación del MVP SOL
++# Validación del MVP SOL v2
+ 
+-Fecha: 21 de octubre de 2026.
++Fecha: 23 de octubre de 2026. Esta validación reemplaza el registro de v1 del 21 de octubre para describir el código actualizado. Los resultados proceden de ejecuciones locales; no acreditan integración con los servicios institucionales.
+ 
+-## Verificaciones realizadas
++## Resultado
+ 
+-- Backend: 29 pruebas de aceptación aprobadas en SQLite temporal. Se comprobó también compatibilidad con Pydantic 2.9.2 y Cryptography 43.0.1, versiones alineadas con el repositorio.
+-- Backend: las mismas 29 pruebas aprobadas con **MySQL 8.0.46 real**, usando PyMySQL y SQLAlchemy.
+-- Se verificó creación de la BD del laboratorio desde cero mediante `python -m SOL.manage init`.
+-- Frontend: compilación Next.js 16.3.8 con TypeScript y revisión ESLint.
+-- Navegador Chromium: recorrido completo contra FastAPI y MySQL reales — crear, enviar, observar, subsanar, reenviar, aprobar y consultar como auditor.
+-- Navegador: sesión HttpOnly, rechazo de origen externo (403), ausencia de errores JavaScript y vista móvil de 390 px sin desbordamiento horizontal.
+-- Se inspeccionaron visualmente acceso, revisión de expediente, bandeja y vista móvil. Las capturas se usaron solo para control de calidad y no forman parte de la entrega.
++- **52 pruebas aprobadas en SQLite**, incluyendo las 29 verificaciones anteriores y 23 casos nuevos/parametrizados de v2. Regresiones adicionales aprobadas para la normalización del ingreso, la identificación de actor/sujeto en bajas y la recuperación de auditoría.
++- **52 pruebas aprobadas en la ejecución con MySQL 8.0.46**, con la base exclusiva bna_sol_mvp_test. Los casos unitarios del calendario/configuración no necesitan base; los ensayos explícitos de migración y reinicio usan archivos SQLite para aislarse. Los casos de API, adaptadores y outbox de esta ejecución sí usan MySQL.
++- **Frontend:** build de Next.js 16.3.8/TypeScript y ESLint aprobados.
++- **Navegador Chromium + MySQL local:** crear, calcular, enviar, observar, subsanar en v2, reenviar, aprobar y consultar como auditor. Sesión HttpOnly, origen externo rechazado con 403, ausencia de errores JavaScript y vista móvil sin desbordamiento.
++- **Procesos HTTP locales separados + MySQL:** FastAPI SOL en modo REAL apuntando al servidor SOL.simulator; CAP habilitado aceptado y observado/vencido rechazados; 202 local y confirmación del worker; callback OBSERVADO, v2, rechazo de resultado viejo y APROBADO. El consumidor confirmó ocho eventos del recorrido en el servicio de auditoría simulado.
+ 
+-Las pruebas cubren límites de importe y plazo, cliente/captación no habilitados, permisos en servidor, revocación de sesión, prevención de suplantación de actor, duplicados de envíos/resultados, versiones congeladas, subsanación, revisión concurrente, cambios de política, fiadores, moneda y pago doble no permitido. También verifican persistencia al reiniciar y coherencia del calendario (capital amortizado, saldo final y redondeos).
++Los fallos de timeout después de aceptación, consulta remota caída, agotamiento de reintentos y recuperación de auditoría se inyectan de forma reproducible con `httpx.MockTransport` en los tests. El ensayo de procesos separados comprueba transporte TCP y callback, con simuladores locales. Ninguno se presenta como una prueba con CAP/EVA/Bus/Seguridad del banco.
+ 
+-El ensayo de persistencia por reinicio automatizado usa un archivo SQLite temporal; el recorrido de API contra MySQL usa tablas reales en una BD de pruebas separada. No se comprobó el MySQL instalado en la computadora del usuario.
++La corrección de fecha incluye un reloj controlado a las 20:00 en Lima, cuando UTC ya está en el día siguiente. También se prueba el cambio real de fecha de negocio a medianoche de Lima. No se cambió la hora del equipo del usuario.
+ 
+-## Qué sigue pendiente de demostrar con los otros equipos
++## Evidencia entregada
+ 
+-Bus corporativo, APIs reales de CAP/EVA, Seguridad central, auditoría central, persistencia acordada con CORE y ejecución en el ambiente compartido de Testing. La entrega no declara esas integraciones como realizadas.
++Abrir **`evidencias-v2/indice.html`** en el navegador después de extraer el ZIP.
+ 
+-## Comandos reproducibles
++- `pytest-mysql.xml` / `.txt` y `pytest-sqlite.xml` / `.txt`: salida efectiva de las suites.
++- `caso-01.html/png` a `caso-52.html/png`: qué se probó, resultado, duración, fecha y ambiente por caso. Las imágenes son **capturas del reporte generado desde el XML**, no fotografías de terminal ni evidencias institucionales. El código contiene las aserciones comprobadas.
++- `ui-01-acceso.png`, `ui-02-revision.png`, `ui-03-bandeja-aprobada-v2.png` y `ui-04-movil.png`: capturas reales del navegador con fecha de Lima y rótulo de datos sintéticos.
++- `navegador.json`: resultado del recorrido, sesión y controles de interfaz.
++- `http-local.json`: resultado del intercambio TCP, confirmación de auditoría y muestras p95 del proceso. Son mediciones locales, sin carga representativa ni meta de servicio aprobada.
++- `frontend-build.txt`, `frontend-lint.txt` y `entorno-mysql.json`: compilación y ambiente utilizado.
+ 
+-Desde backend: `python -m pytest SOL/tests -q`.
++Los archivos y capturas no incluyen credenciales de servicio, contraseñas ni datos personales reales. Se observó una advertencia de obsolescencia de la dependencia de pruebas de Starlette/AnyIO; no representa un fallo de los casos. Las tablas y las fórmulas de crédito conservan la política de laboratorio, sin nuevas aprobaciones de negocio.
+ 
+-Para MySQL: crear exclusivamente bna_sol_mvp_test y definir SOL_TEST_DATABASE_URL con una URL SQLAlchemy que use PyMySQL. El usuario MySQL de esa prueba necesita permisos sobre esa BD; los tests recrean y eliminan sus tablas mvp_sol_*. El nombre está restringido para evitar usar la BD compartida.
++## Reproducir
+ 
+-Desde frontend: `npm run lint` y `npm run build`.
++Desde backend: `python -m pytest SOL/tests -q`. Usa SQLite por defecto.
+ 
+-Las credenciales locales se configuran en archivos excluidos de Git y no están incluidas en el ZIP. Los binarios de MySQL, herramientas de navegador y bases utilizados para validar no forman parte del producto entregado.
++Para MySQL, crear **solo** `bna_sol_mvp_test` y definir `SOL_TEST_DATABASE_URL` con su URL SQLAlchemy/PyMySQL. Los tests borran/recrean tablas de laboratorio en esa base; el nombre se verifica antes de ejecutar. No usar la base que contiene tus solicitudes de demostración ni la compartida del proyecto.
+ 
+-La compilación pasó con Turbopack y con webpack. La prueba final de navegador utilizó una compilación limpia con webpack para evitar reutilizar cachés previas del entorno de validación.
++Desde frontend: `npm run lint` y `npm run build`. Para iniciar la app consultar `EMPEZAR_AQUI_SOL.md`. Para HTTP local y configuración del callback consultar `CONTRATOS_HTTP_V2.md`.
++
++## Pendiente en Testing institucional
++
++1. Rutas/esquemas/versiones y autenticación definitivas con Bus y los propietarios de las cuatro interfaces.
++2. Ejecuciones reales de CR-INT-01, 02, 03 y 10, con fecha, versiones, responsables y acuses del ambiente compartido.
++3. Dedupe persistente de idOperacion en EVA y de idEvento en Seguridad. La cola local entrega al menos una vez; no puede imponer unicidad en una base ajena.
++4. Roles/SSO/MFA centrales, TLS y restricciones de red, retención de logs/eventos y responsable operativo del worker.
++5. Validación de migración sobre una copia de la base concreta del equipo. La migración automática probada es incremental y no borra datos, pero no se accedió al MySQL de la computadora del usuario.
++6. Reglas financieras, estados oficiales, pago doble, fiadores y obligatoriedad de garantías según aprobación del Comité. No se han inventado esos acuerdos.
+--- a/EMPEZAR_AQUI_SOL.md
++++ b/EMPEZAR_AQUI_SOL.md
+@@ -1,8 +1,25 @@
+-# MVP funcional — Solicitud de Crédito BNA
++# MVP funcional v2 — Solicitud de Crédito BNA
+ 
+ Esta entrega se basa en el ZIP del repositorio compartido. Incluye una interfaz Next.js y un servicio FastAPI para el módulo SOL. Trabaja con tu MySQL local y datos sintéticos. No necesita acceso de escritura a GitHub para ejecutarse.
+ 
+ La interfaz se encuentra en **http://localhost:3000/solicitud-credito**. La portada `/` del repositorio se conserva para no ocupar la pantalla de otro equipo.
++
++## Si ya ejecutabas la v1: actualizar conservando tus datos
++
++1. Respalda tu base `bna_sol_mvp` y conserva tus `.env.sol` y `.env.local` privados. No copies archivos sobre un backend que siga ejecutándose.
++2. Lleva los archivos SOL de esta actualización a tu carpeta del proyecto; consulta `CAMBIOS_SOL.md`. No reemplaces cambios de otros equipos.
++3. Desde **backend**, ejecuta:
++
++```powershell
++.\.venv-sol\Scripts\python.exe -m pip install -r requirements-sol.txt
++.\.venv-sol\Scripts\python.exe -m SOL.manage migrate
++.\.venv-sol\Scripts\python.exe -m pytest SOL/tests -q
++.\.venv-sol\Scripts\python.exe -m uvicorn SOL.app:app --host 127.0.0.1 --port 8011
++```
++
++`migrate` añade tablas/columnas sin borrar solicitudes, versiones o claves. No necesitas crear otro entorno virtual ni repetir `init`. Mantén `SOL_INTEGRATION_MODE=SIMULADO` para seguir con la demo; las nuevas variables HTTP pueden quedar vacías. Reinicia `npm run dev` en la terminal del frontend. `/ready` comprueba acceso a MySQL.
++
++**Para practicar el modo HTTP o coordinar la integración:** sigue `Documents/solicitud-credito/CONTRATOS_HTTP_V2.md`. Activar REAL requiere las rutas y tokens; no basta cambiar una URL. Las reglas de negocio y contratos siguen pendientes de homologación.
+ 
+ ## Qué hace esta versión
+ 
+@@ -157,6 +174,6 @@
+ 
+ ## Límites que deben declararse en la sustentación
+ 
+-Persistencia local en MySQL y lógica de SOL funcionales. Captación y Evaluación se simulan; el Bus corporativo y Seguridad central no están conectados. La auditoría es local, no un repositorio central certificado como inmutable. Pago doble, documentos adjuntos, cambios de condiciones propuestos por EVA, traspaso final de calendario, desembolso y cobranza no se implementan en esta entrega. La identidad visual y las políticas siguen siendo propuestas para revisión.
++Persistencia local en MySQL y lógica de SOL funcionales. Captación y Evaluación se simulan; el Bus corporativo y Seguridad central no están conectados. La auditoría tiene historial local y cola persistente. Incluye adaptador HTTP con acuse central, pendiente de validación contra Seguridad institucional. No es un repositorio certificado como inmutable. Pago doble, documentos adjuntos, cambios de condiciones propuestos por EVA, traspaso final de calendario, desembolso y cobranza no se implementan en esta entrega. La identidad visual y las políticas siguen siendo propuestas para revisión.
+ 
+ Consulta `Documents/solicitud-credito/LECTURA_DEL_CODIGO.md`, `CONTRATOS_DEMO.md`, `PROPUESTAS_Y_DECISIONES.md` y `VALIDACION.md` para explicar y coordinar la siguiente integración.
+--- a/backend/.env.sol.example
++++ b/backend/.env.sol.example
+@@ -7,3 +7,21 @@
+ SOL_INTEGRATION_MODE=SIMULADO
+ # La clave inicial se solicita por consola durante python -m SOL.manage init.
+ # Para automatización local, se puede definir SOL_INITIAL_PASSWORD temporalmente.
++
++# v2. REAL significa transporte HTTP configurado; no acredita integración aprobada.
++# Mantener SIMULADO hasta contar con las rutas y credenciales del ambiente Testing.
++# Las rutas de ejemplo están documentadas en CONTRATOS_HTTP_V2.md, no son oficiales.
++SOL_BUS_BASE_URL=
++SOL_BUS_TOKEN=
++SOL_EVA_CALLBACK_TOKEN=
++SOL_CAP_SEARCH_PATH=
++SOL_CAP_REFERENCE_PATH=
++SOL_EVA_SEND_PATH=
++SOL_EVA_STATUS_PATH=
++SOL_AUDIT_PATH=
++# Timeout de cada fase HTTP, máximo dos reintentos adicionales (tres intentos).
++SOL_HTTP_TIMEOUT_SECONDS=0.6
++SOL_HTTP_MAX_RETRIES=2
++SOL_REQUEST_BUDGET_SECONDS=2.4
++# Intervalo entre ciclos del worker interno; 0 lo desactiva (pruebas/worker CLI).
++SOL_WORKER_SECONDS=5
+--- a/backend/SOL/app.py
++++ b/backend/SOL/app.py
+@@ -6,10 +6,18 @@
+ """
+ 
+ import secrets
++import asyncio
++import hashlib
++from time import perf_counter
++from sqlalchemy import delete, func, text
++from .clock import business_today
++from .integrations import Integrations, CLIENT_FIELDS
++from .operations import maintenance, process_delivery, security_event
++from .observability import Metrics, log, valid_id
+ from contextlib import asynccontextmanager
+ from datetime import timedelta
+ from uuid import uuid4
+-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
++from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Query
+ from fastapi.responses import JSONResponse
+ from sqlalchemy import select
+ from sqlalchemy.exc import IntegrityError, OperationalError
+@@ -25,9 +33,10 @@
+     User,
+     Version,
+     now,
++    AuditOutbox,
+ )
+ from .policy import load_policy
+-from .schemas import ApplicationInput, Login, ResultInput, RevisionInput
++from .schemas import ApplicationInput, Login, ResultInput, RevisionInput, EvaluationResult, DisableUser
+ from .security import token_hash, verify_password, hash_password
+ from .service import (
+     check_revision,
+@@ -38,31 +47,73 @@
+     locked_application,
+     prepare,
+     summary,
++    projected_detail,
++    read_application,
+ )
+ from .settings import Settings
+ 
+ 
+-def create_app(settings=None):
++def create_app(settings=None, transport=None):
+     settings = settings or Settings.from_env()
++    settings.validate()
+     engine, factory = make_database(settings)
++    integrations = Integrations(settings, transport)
++    metrics = Metrics()
+ 
+     @asynccontextmanager
+     async def lifespan(_):
+-        if settings.mode != "SIMULADO":
+-            raise RuntimeError(
+-                "Modo real bloqueado hasta homologar contratos y persistencia."
+-            )
+         load_policy(settings.policy_path)
++        stopped = asyncio.Event()
++
++        async def worker():
++            while not stopped.is_set():
++                try:
++                    await asyncio.to_thread(maintenance, factory, integrations)
++                except Exception:
++                    log("MANTENIMIENTO_NO_DISPONIBLE", str(uuid4()))
++                try:
++                    await asyncio.wait_for(stopped.wait(), timeout=settings.worker_seconds)
++                except asyncio.TimeoutError:
++                    pass
++        task = asyncio.create_task(worker()) if settings.worker_seconds > 0 else None
+         yield
++        stopped.set()
++        if task:
++            await task
++        integrations.close()
+         engine.dispose()
+ 
+     app = FastAPI(
+-        title="BNA · Solicitud de Crédito MVP", version="1.0.0", lifespan=lifespan
++        title="BNA · Solicitud de Crédito MVP", version="2.0.0", lifespan=lifespan
+     )
+     app.state.engine, app.state.factory, app.state.settings = engine, factory, settings
+ 
+-    def db_session():
++    app.state.integrations, app.state.metrics = integrations, metrics
++
++    @app.middleware("http")
++    async def request_trace(request: Request, call_next):
++        supplied = request.headers.get("X-Correlation-ID")
++        request.state.correlation = supplied if valid_id(supplied) else str(uuid4())
++        key = request.headers.get("X-Idempotency-Key")
++        operation = key if valid_id(key) else None
++        start = perf_counter()
++        status = 500
++        try:
++            response = await call_next(request)
++            status = response.status_code
++            response.headers["X-Correlation-ID"] = request.state.correlation
++            return response
++        finally:
++            route = getattr(request.scope.get("route"), "path", "NO_ENCONTRADA")
++            elapsed = (perf_counter() - start) * 1000
++            metrics.observe(request.method + " " + route, elapsed, status)
++            log("PETICION", request.state.correlation, operation, ruta=route,
++                metodo=request.method, estado=status, duracion_ms=round(elapsed, 3))
++
++    def db_session(request: Request):
+         with factory() as db:
++            db.info.update(integrations=integrations, integration_mode=settings.mode,
++                           correlation=request.state.correlation, operation=request.headers.get("X-Idempotency-Key"))
+             try:
+                 yield db
+                 db.commit()
+@@ -76,7 +127,10 @@
+         session = db.get(LoginSession, token_hash(authorization[7:]))
+         if not session or session.expires < now():
+             raise HTTPException(401, "La sesión venció. Vuelve a ingresar.")
+-        return db.get(User, session.user_id)
++        user = db.get(User, session.user_id)
++        if not user or not user.active:
++            raise HTTPException(401, "La cuenta fue deshabilitada.")
++        return user
+ 
+     def role(*allowed):
+         def check(user=Depends(authenticated)):
+@@ -96,8 +150,7 @@
+             )
+ 
+     def correlation(request: Request):
+-        supplied = request.headers.get("X-Correlation-ID")
+-        return supplied if supplied and len(supplied) <= 100 else str(uuid4())
++        return request.state.correlation
+ 
+     @app.exception_handler(OperationalError)
+     async def database_error(request, error):
+@@ -121,40 +174,50 @@
+     def health():
+         return {"status": "ok", "modulo": "SOL", "integracion": settings.mode}
+ 
++    @app.get("/ready")
++    def ready():
++        try:
++            with engine.connect() as connection:
++                connection.execute(text("SELECT 1"))
++            return {"status": "ready", "base": "disponible"}
++        except Exception:
++            return JSONResponse(status_code=503, content={"status": "not_ready", "base": "no disponible"})
++
+     router = APIRouter()
+ 
+     @router.post("/auth/login")
+-    def login(payload: Login, db=Depends(db_session)):
+-        user = db.scalar(select(User).where(User.username == payload.username))
+-        attempt = db.get(LoginAttempt, payload.username) if user else None
++    def login(payload: Login, request: Request, db=Depends(db_session)):
++        db.execute(delete(LoginSession).where(LoginSession.expires <= now()))
++        user = db.scalar(select(User).where(User.username == payload.username).with_for_update())
++        # Hash de la cuenta también para intentos de usuarios inexistentes.
++        subject = hashlib.sha256((user.username if user else payload.username.casefold()).encode()).hexdigest()[:60]
++        attempt = db.get(LoginAttempt, subject)
++        trace = correlation(request)
+         if attempt and attempt.failures >= 5 and attempt.until > now():
++            security_event(db, "cuenta:" + subject, "INTENTO_BLOQUEADO", trace)
++            db.commit()
+             raise HTTPException(429, "Demasiados intentos. Espera 5 minutos.")
+-        # Hash ficticio: mantiene trabajo criptográfico cuando la cuenta no existe.
+         encoded = user.password_hash if user else dummy_hash
+         valid = verify_password(payload.password, encoded)
+-        if not user or not valid:
+-            if user:
+-                if not attempt:
+-                    attempt = LoginAttempt(
+-                        username=user.username, failures=0, until=now()
+-                    )
+-                    db.add(attempt)
+-                if attempt.until < now():
+-                    attempt.failures = 0
+-                attempt.failures += 1
+-                attempt.until = now() + timedelta(minutes=5)
+-                db.commit()  # El contador debe sobrevivir al rechazo de autenticación.
++        if not user or not user.active or not valid or (settings.mode == "REAL" and user.role == "EVALUADOR"):
++            if not attempt:
++                attempt = LoginAttempt(username=subject, failures=0, until=now())
++                db.add(attempt)
++            if attempt.until <= now():
++                attempt.failures = 0
++            attempt.failures += 1
++            attempt.until = now() + timedelta(minutes=5)
++            security_event(db, "cuenta:" + subject, "INGRESO_FALLIDO", trace)
++            if attempt.failures == 5:
++                security_event(db, "cuenta:" + subject, "BLOQUEO_TEMPORAL", trace)
++            db.commit()  # El rechazo HTTP no debe revertir los eventos ni el bloqueo.
+             raise HTTPException(401, "Usuario o contraseña incorrectos.")
+         if attempt:
+             db.delete(attempt)
+         token = secrets.token_urlsafe(32)
+-        db.add(
+-            LoginSession(
+-                token_hash=token_hash(token),
+-                user_id=user.id,
+-                expires=now() + timedelta(hours=settings.session_hours),
+-            )
+-        )
++        db.add(LoginSession(token_hash=token_hash(token), user_id=user.id,
++                            expires=now() + timedelta(hours=settings.session_hours)))
++        security_event(db, user.username, "INGRESO_EXITOSO", trace)
+         return {"token": token, "usuario": user_data(user)}
+ 
+     @router.get("/auth/me")
+@@ -163,11 +226,13 @@
+ 
+     @router.post("/auth/logout")
+     def logout(
++        request: Request,
+         authorization: str = Header(),
+         user=Depends(authenticated),
+         db=Depends(db_session),
+     ):
+         db.delete(db.get(LoginSession, token_hash(authorization[7:])))
++        security_event(db, user.username, "CIERRE_SESION", correlation(request))
+         return {"ok": True}
+ 
+     @router.get("/policy")
+@@ -175,25 +240,55 @@
+         return {**policy().model_dump(mode="json"), "integracion": settings.mode}
+ 
+     @router.get("/clients")
+-    def clients(search: str = "", user=Depends(authenticated), db=Depends(db_session)):
+-        records = [row.snapshot for row in db.scalars(select(ClientReference))]
+-        return [
+-            r
+-            for r in records
+-            if search.lower()
+-            in (
+-                r["numero_documento"] + " " + r["nombres"] + " " + r["apellido_paterno"]
+-            ).lower()
+-        ]
++    def clients(request: Request, search: str = Query("", max_length=80),
++                user=Depends(authenticated), db=Depends(db_session)):
++        if settings.mode == "REAL":
++            records = integrations.clients(search, correlation(request))
++        else:
++            records = list(db.scalars(select(ClientReference).where(
++                ClientReference.document.contains(search, autoescape=True)
++                | ClientReference.snapshot["nombres"].as_string().contains(search, autoescape=True)
++                | ClientReference.snapshot["apellido_paterno"].as_string().contains(search, autoescape=True)
++            ).limit(50)))
++            records = [row.snapshot for row in records]
++        # Todos los roles reciben solo identidad y habilitación, nunca contacto/DOB.
++        return [{k: r[k] for k in CLIENT_FIELDS if k in r} for r in records]
+ 
+     @router.get("/applications")
+-    def applications(user=Depends(authenticated), db=Depends(db_session)):
+-        return [
+-            summary(db, a)
+-            for a in db.scalars(
+-                select(Application).order_by(Application.updated.desc())
+-            )
+-        ]
++    def applications(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
++                     user=Depends(authenticated), db=Depends(db_session)):
++        total = db.scalar(select(func.count()).select_from(Application))
++        counts = dict(db.execute(select(Application.state, func.count()).group_by(Application.state)).all())
++        rows = db.execute(select(Application, Version).join(Version,
++            (Version.application_id == Application.id) & (Version.number == Application.current_version)
++        ).order_by(Application.updated.desc(), Application.id).offset(offset).limit(limit)).all()
++        return {"items": [summary(db, a, v) for a, v in rows], "total": total,
++                "limit": limit, "offset": offset, "estados": counts}
++
++    @router.post("/admin/users/{username}/disable")
++    def disable_user(username: str, payload: DisableUser, request: Request,
++                     user=Depends(role("SUPERVISOR")), db=Depends(db_session)):
++        target = db.scalar(select(User).where(User.username == username).with_for_update())
++        if not target:
++            raise HTTPException(404, "Usuario no encontrado.")
++        if target.id == user.id:
++            raise HTTPException(409, "No puedes deshabilitar tu propia cuenta.")
++        target.active = False
++        removed = db.execute(delete(LoginSession).where(LoginSession.user_id == target.id)).rowcount
++        security_event(db, user.username, "BAJA_USUARIO", correlation(request), target.username)
++        # Identificar el afectado en el evento, sin almacenar el motivo libre en logs.
++        security_event(db, user.username, "SESIONES_REVOCADAS", correlation(request), target.username)
++        return {"usuario": target.username, "activo": False, "sesiones_revocadas": removed}
++
++    @router.get("/ops/metrics")
++    def get_metrics(user=Depends(role("SUPERVISOR", "AUDITOR"))):
++        return metrics.snapshot()
++
++    @router.get("/ops/pending")
++    def pending(user=Depends(role("SUPERVISOR", "AUDITOR")), db=Depends(db_session)):
++        return {"envios": list(db.scalars(select(Delivery.operation).where(Delivery.status != "CONFIRMADO").limit(100))),
++                "auditoria": [{"estado": status, "cantidad": count} for status, count in db.execute(
++                    select(AuditOutbox.status, func.count()).group_by(AuditOutbox.status))]}
+ 
+     @router.post("/preview")
+     def preview(
+@@ -230,13 +325,13 @@
+             )
+         )
+         event(db, a, user, "CREAR_BORRADOR", None, correlation(request))
+-        return detail(db, a)
++        return projected_detail(db, a, user)
+ 
+     @router.get("/applications/{identifier}")
+     def get_application(
+         identifier: str, user=Depends(authenticated), db=Depends(db_session)
+     ):
+-        return detail(db, locked_application(db, identifier))
++        return projected_detail(db, read_application(db, identifier), user)
+ 
+     @router.put("/applications/{identifier}")
+     def edit(
+@@ -261,7 +356,7 @@
+         v.snapshot = prepare(db, payload, policy())
+         a.revision += 1
+         event(db, a, user, "EDITAR_BORRADOR", a.state, correlation(request))
+-        return detail(db, a)
++        return projected_detail(db, a, user)
+ 
+     @router.post("/applications/{identifier}/send")
+     def send(
+@@ -274,47 +369,46 @@
+         user=Depends(role("ASESOR")),
+         db=Depends(db_session),
+     ):
++        if not valid_id(operation):
++            raise HTTPException(422, "Identificador de operación inválido.")
+         a = locked_application(db, identifier)
+         stamp = fingerprint({"id": identifier, "revision": payload.revision})
+         previous = db.get(Delivery, operation)
+         if previous:
++            if getattr(previous, "mode", settings.mode) != settings.mode:
++                raise HTTPException(409, "La operación pertenece a otro modo de integración.")
+             if previous.fingerprint != stamp:
+-                raise HTTPException(
+-                    409, "La clave de operación ya fue utilizada para otro envío."
+-                )
+-            return {**detail(db, a), "reintento_reconocido": True}
+-        check_revision(a, payload.revision)
+-        v = current_version(db, a)
+-        if a.state != "BORRADOR" or v.frozen:
+-            raise HTTPException(409, "Esta versión ya fue enviada o no admite envío.")
+-        captacion_reference(db, a.client_id)
+-        # Si cambia la política, exige recalcular el borrador antes de enviarlo.
+-        if v.snapshot["politica"] != policy().model_dump(mode="json"):
+-            raise HTTPException(
+-                409,
+-                "La política cambió. Guarda el borrador para recalcular antes de enviar.",
+-            )
+-        if v.snapshot["condiciones"]["fecha_base"] < now().date().isoformat():
+-            raise HTTPException(
+-                409, "Actualiza la fecha base y recalcula antes de enviar."
+-            )
+-        trace = correlation(request)
+-        envelope = evaluation_envelope(a, v, operation, trace)
+-        db.add(
+-            Delivery(
+-                operation=operation,
+-                application_id=a.id,
+-                version=v.number,
+-                fingerprint=stamp,
+-                receipt="EVA-DEMO-" + str(uuid4())[:12],
+-                payload=envelope,
+-            )
+-        )
+-        before, a.state = a.state, "EN_EVALUACION"
+-        v.frozen = True
+-        a.revision += 1
+-        event(db, a, user, "ENVIAR_CR_INT_02_SIMULADO", before, trace)
+-        return detail(db, a)
++                raise HTTPException(409, "La clave de operación ya fue utilizada para otro envío.")
++            if previous.status == "CONFIRMADO":
++                return {**projected_detail(db, a, user), "reintento_reconocido": True}
++        else:
++            check_revision(a, payload.revision)
++            v = current_version(db, a)
++            existing = db.scalar(select(Delivery).where(Delivery.application_id == a.id, Delivery.version == v.number))
++            if existing:
++                raise HTTPException(409, {"mensaje": "Reintenta con la operación pendiente.", "idOperacion": existing.operation})
++            if a.state != "BORRADOR" or v.frozen:
++                raise HTTPException(409, "Esta versión ya fue enviada o no admite envío.")
++            captacion_reference(db, a.client_id)
++            if v.snapshot["politica"] != policy().model_dump(mode="json"):
++                raise HTTPException(409, "La política cambió. Guarda el borrador para recalcular antes de enviar.")
++            if v.snapshot["condiciones"]["fecha_base"] < business_today().isoformat():
++                raise HTTPException(409, "Actualiza la fecha base y recalcula antes de enviar.")
++            envelope = evaluation_envelope(a, v, operation, correlation(request), settings.mode)
++            envelope["actorEnvio"] = user.username
++            db.add(Delivery(operation=operation, application_id=a.id, version=v.number,
++                            fingerprint=stamp, receipt="", payload=envelope, mode=settings.mode,
++                            status="PENDIENTE"))
++            v.frozen = True
++        db.commit()  # Reserva durable antes del HTTP: no perderla por timeout/reinicio.
++        confirmed = process_delivery(factory, integrations, operation) if settings.mode == "SIMULADO" else False
++        db.expire_all()
++        a = read_application(db, identifier)
++        if not confirmed:
++            # 202 expresa aceptación local pendiente, NO confirmación de Evaluación.
++            return JSONResponse(status_code=202, content={**projected_detail(db, a, user),
++                                "pendiente_envio": True, "idOperacion": operation})
++        return projected_detail(db, a, user)
+ 
+     @router.post("/applications/{identifier}/revise")
+     def revise(
+@@ -347,7 +441,7 @@
+         event(
+             db, a, user, "CREAR_VERSION_SUBSANACION", "OBSERVADA", correlation(request)
+         )
+-        return detail(db, a)
++        return projected_detail(db, a, user)
+ 
+     @router.post("/applications/{identifier}/demo-result")
+     def result(
+@@ -360,15 +454,19 @@
+         user=Depends(role("EVALUADOR")),
+         db=Depends(db_session),
+     ):
++        if settings.mode != "SIMULADO":
++            raise HTTPException(403, "El retorno demo está deshabilitado en modo REAL.")
+         a = locked_application(db, identifier)
+         stamp = fingerprint({"id": identifier, **payload.model_dump(mode="json")})
+         previous = db.get(Outcome, operation)
+         if previous:
++            if getattr(previous, "mode", settings.mode) != settings.mode:
++                raise HTTPException(409, "La operación pertenece a otro modo de integración.")
+             if previous.fingerprint != stamp:
+                 raise HTTPException(
+                     409, "La clave del resultado corresponde a otro mensaje."
+                 )
+-            return {**detail(db, a), "reintento_reconocido": True}
++            return {**projected_detail(db, a, user), "reintento_reconocido": True}
+         if a.state != "EN_EVALUACION" or payload.version != a.current_version:
+             raise HTTPException(
+                 409,
+@@ -398,12 +496,48 @@
+             "EN_EVALUACION",
+             correlation(request),
+         )
+-        return detail(db, a)
++        return projected_detail(db, a, user)
++
++    @app.post("/sol/integrations/evaluation-results")
++    def evaluation_result(payload: EvaluationResult, request: Request,
++                          authorization: str | None = Header(None),
++                          operation: str = Header(..., alias="X-Idempotency-Key"),
++                          db=Depends(db_session)):
++        if settings.mode != "REAL" or not settings.callback_token or not secrets.compare_digest(
++                authorization or "", "Bearer " + settings.callback_token):
++            raise HTTPException(401, "Servicio no autorizado.")
++        if operation != payload.idOperacion or payload.idCorrelacion != correlation(request):
++            raise HTTPException(422, "Identificadores de cuerpo y cabecera diferentes.")
++        a = locked_application(db, payload.idSolicitud)
++        stamp = fingerprint(payload.model_dump(mode="json"))
++        previous = db.get(Outcome, operation)
++        if previous:
++            if getattr(previous, "mode", settings.mode) != settings.mode:
++                raise HTTPException(409, "La operación pertenece a otro modo de integración.")
++            if previous.fingerprint != stamp:
++                raise HTTPException(409, "La clave del resultado corresponde a otro mensaje.")
++            return {"recibido": True, "reintento_reconocido": True, "idOperacion": operation}
++        delivery = db.scalar(select(Delivery).where(Delivery.application_id == a.id,
++                                                   Delivery.version == payload.versionSolicitud))
++        if (a.state != "EN_EVALUACION" or a.current_version != payload.versionSolicitud
++                or not delivery or delivery.status != "CONFIRMADO" or delivery.mode != "REAL"
++                or (delivery.evaluation_id, delivery.round) != (payload.idEvaluacion, payload.ronda)):
++            raise HTTPException(409, "Resultado incompatible con evaluación, ronda o versión pendiente.")
++        db.add(Outcome(operation=operation, application_id=a.id, version=payload.versionSolicitud,
++                       decision=payload.decision, observations=payload.observaciones, fingerprint=stamp,
++                       evaluation_id=payload.idEvaluacion, round=payload.ronda))
++        a.state = {"APROBADO": "APROBADA", "OBSERVADO": "OBSERVADA", "RECHAZADO": "RECHAZADA"}[payload.decision]
++        a.revision += 1
++        from types import SimpleNamespace
++        event(db, a, SimpleNamespace(username="servicio:EVA"), "RECIBIR_CR_INT_03",
++              "EN_EVALUACION", correlation(request))
++        return {"recibido": True, "idOperacion": operation, "estado": a.state}
+ 
+     # Las dos rutas ejecutan el mismo módulo. La segunda es un despachador
+     # local de pruebas, explícitamente rotulado, no un gateway institucional.
+     app.include_router(router, prefix="/sol", tags=["SOL interno"])
+-    app.include_router(router, prefix="/gateway/sol", tags=["Bus SIMULADO"])
++    if settings.mode == "SIMULADO":
++        app.include_router(router, prefix="/gateway/sol", tags=["Bus SIMULADO"])
+     return app
+ 
+ 
+--- /dev/null
++++ b/backend/SOL/clock.py
+@@ -0,0 +1,14 @@
++"""Fecha de negocio en Lima; los instantes de auditoría siguen guardándose UTC."""
++from datetime import datetime, timezone
++from zoneinfo import ZoneInfo
++
++LIMA = ZoneInfo("America/Lima")
++
++
++def utc_now():
++    return datetime.now(timezone.utc)
++
++
++def business_today():
++    # Depende del instante, nunca de la zona configurada en Windows o Linux.
++    return utc_now().astimezone(LIMA).date()
+--- a/backend/SOL/database.py
++++ b/backend/SOL/database.py
+@@ -5,7 +5,7 @@
+ from sqlalchemy.pool import StaticPool
+ 
+ 
+-def make_database(settings):
++def make_database(settings, for_maintenance=False):
+     options = {"pool_pre_ping": True}
+     # Exclusivo de las pruebas automatizadas, que inyectan Settings explícito.
+     if settings.database_url.startswith("sqlite"):
+@@ -14,5 +14,8 @@
+         # Los bloqueos de expediente y las lecturas posteriores ven la misma
+         # revisión vigente, incluso cuando otro envío acaba de confirmarse.
+         options["isolation_level"] = "READ COMMITTED"
++        # El DDL puede tardar más que una consulta del canal digital.
++        wait = 30 if for_maintenance else 2
++        options["connect_args"] = {"connect_timeout": 2, "read_timeout": wait, "write_timeout": wait}
+     engine = create_engine(settings.database_url, **options)
+     return engine, sessionmaker(engine, expire_on_commit=False)
+--- a/backend/SOL/integrations.py
++++ b/backend/SOL/integrations.py
+@@ -1,43 +1,208 @@
+-"""Frontera de integración simulada: contratos explícitos y reemplazables.
+-
+-No hace llamadas al CORE ni evalúa riesgo real. Los clientes son snapshots
+-del laboratorio. El acuse EVA simulado se persiste en la transacción de envío.
+-El modo REAL está bloqueado hasta publicar contratos y decidir la propiedad
+-de persistencia con Tecnología, CORE, CAP y EVA.
++"""Adaptadores HTTP vía Bus. Los esquemas v2 son propuesta para homologación.
++
++Las rutas y secretos se configuran fuera del código. Nunca se usa el simulador
++como respaldo ante una falla real. Las escrituras usan identificadores estables.
+ """
+-
+ from datetime import date
++from time import monotonic
++from urllib.parse import quote
++from uuid import uuid4
++import httpx
+ from fastapi import HTTPException
++from .clock import business_today
+ from .models import ClientReference
+ 
+-
+-def captacion_reference(db, identifier: str) -> dict:
+-    reference = db.get(ClientReference, identifier)
+-    if not reference:
+-        raise HTTPException(
+-            422, "No se encontró la referencia del cliente en Captación simulada."
++CLIENT_FIELDS = {
++    "id_cliente", "cod_tipo_documento", "numero_documento", "nombres",
++    "apellido_paterno", "apellido_materno", "estado_cliente", "id_caso",
++    "id_verificacion", "fecha_verificacion", "vigente_hasta",
++    "estado_habilitante", "version_contrato", "simulado",
++}
++
++
++class IntegrationError(Exception):
++    def __init__(self, code="DEPENDENCIA_NO_DISPONIBLE", permanent=False):
++        self.code, self.permanent = code, permanent
++        super().__init__(code)
++
++
++class Integrations:
++    def __init__(self, settings, transport=None):
++        self.settings = settings
++        # Sin reintentos ocultos del transporte: los controlamos explícitamente.
++        self.client = httpx.Client(
++            base_url=settings.bus_base_url or "http://simulador.invalid",
++            headers={"Authorization": "Bearer " + settings.bus_token},
++            transport=transport, follow_redirects=False, trust_env=False,
+         )
+-    data = reference.snapshot
+-    if data["estado_cliente"] != "ACTIVO":
+-        raise HTTPException(422, "El cliente no está activo en el catálogo de prueba.")
+-    if (
+-        data["estado_habilitante"] != "HABILITADO"
+-        or date.fromisoformat(data["vigente_hasta"]) < date.today()
+-    ):
+-        raise HTTPException(
+-            422, "Captación no habilita esta solicitud o su verificación ha vencido."
+-        )
+-    return data.copy()
+-
+-
+-def evaluation_envelope(application, version, operation: str, correlation: str) -> dict:
+-    """Mensaje CR-INT-02 de demo. Cada envío referencia una versión congelada."""
+-    return {
+-        "versionContrato": "CR-INT-02-DEMO-v1",
+-        "idSolicitud": application.id,
+-        "versionSolicitud": version.number,
+-        "idOperacion": operation,
+-        "idCorrelacion": correlation,
+-        "expediente": version.snapshot,
+-        "simulado": True,
+-    }
++
++    def close(self):
++        self.client.close()
++
++    def request(self, method, path, correlation, operation=None, payload=None,
++                params=None, deadline=None, allow_missing=False):
++        remaining = (deadline or monotonic() + self.settings.request_budget) - monotonic()
++        if remaining <= 0:
++            raise IntegrationError("PRESUPUESTO_AGOTADO")
++        headers = {"X-Correlation-ID": correlation}
++        if operation:
++            headers["X-Idempotency-Key"] = operation
++        try:
++            response = self.client.request(
++                method, path, headers=headers, json=payload, params=params,
++                timeout=min(self.settings.http_timeout, remaining),
++            )
++        except httpx.TransportError:
++            raise IntegrationError() from None
++        if response.status_code == 404 and allow_missing:
++            return None
++        if response.status_code in {408, 429, 500, 502, 503, 504}:
++            raise IntegrationError()
++        if not response.is_success:
++            # No devolver URLs, cuerpo remoto o secretos en errores/logs.
++            raise IntegrationError("RECHAZO_CONTRATO_BUS", permanent=True)
++        try:
++            return response.json()
++        except ValueError:
++            raise IntegrationError("RESPUESTA_BUS_INVALIDA", permanent=True) from None
++
++    def read(self, path, correlation, params=None, deadline=None, allow_missing=False):
++        deadline = deadline or monotonic() + self.settings.request_budget
++        for attempt in range(self.settings.max_retries + 1):
++            try:
++                return self.request("GET", path, correlation, params=params,
++                                    deadline=deadline, allow_missing=allow_missing)
++            except IntegrationError as exc:
++                if exc.permanent or attempt == self.settings.max_retries:
++                    raise
++
++    def reference(self, identifier, correlation):
++        path = self.settings.cap_reference_path.replace("{idCliente}", quote(identifier, safe=""))
++        try:
++            data = self.read(path, correlation, allow_missing=True)
++        except IntegrationError:
++            raise HTTPException(503, "Captación no disponible o contrato incompatible.") from None
++        if data is None:
++            raise HTTPException(422, "Referencia de Captación no encontrada.")
++        return validate_reference(data, identifier)
++
++    def clients(self, search, correlation):
++        # Una búsqueda acotada; no se descarga todo el maestro de Clientes.
++        try:
++            data = self.read(self.settings.cap_search_path, correlation,
++                             params={"search": search, "limit": 50})
++            if not isinstance(data, list) or len(data) > 50:
++                raise IntegrationError("RESPUESTA_BUS_INVALIDA", True)
++            return [normalize_reference(r) for r in data]
++        except (IntegrationError, KeyError, TypeError, ValueError):
++            raise HTTPException(503, "Búsqueda de Captación no disponible o contrato incompatible.") from None
++
++    def deliver(self, envelope):
++        """Consultar por idOperacion ANTES de cada POST, incluso tras un timeout.
++
++        Un 404 significa 'no recibido' según el contrato propuesto. Si consultar
++        falla, no se repite el POST a ciegas. El receptor debe deduplicar la clave.
++        """
++        if self.settings.mode == "SIMULADO":
++            return {"idSolicitud": envelope["idSolicitud"],
++                    "versionSolicitud": envelope["versionSolicitud"],
++                    "idOperacion": envelope["idOperacion"],
++                    "idEvaluacion": "EVA-DEMO-" + str(uuid4())[:12],
++                    "ronda": envelope["versionSolicitud"],
++                    "acuse": "EVA-DEMO-" + str(uuid4())[:12]}
++        deadline = monotonic() + self.settings.request_budget
++        key, trace = envelope["idOperacion"], envelope["idCorrelacion"]
++        path = self.settings.eva_status_path.replace("{idOperacion}", quote(key, safe=""))
++        last = IntegrationError()
++        for attempt in range(self.settings.max_retries + 1):
++            try:
++                received = self.request("GET", path, trace, deadline=deadline, allow_missing=True)
++                if received is not None:
++                    return validate_receipt(received, envelope)
++                receipt = self.request("POST", self.settings.eva_send_path, trace,
++                                       operation=key, payload=envelope, deadline=deadline)
++                return validate_receipt(receipt, envelope)
++            except IntegrationError as exc:
++                last = exc
++                if exc.permanent:
++                    raise
++        raise last
++
++    def audit(self, payload):
++        if self.settings.mode == "SIMULADO":
++            return "AUD-DEMO-" + payload["idEvento"]
++        deadline = monotonic() + self.settings.request_budget
++        for attempt in range(self.settings.max_retries + 1):
++            try:
++                data = self.request("POST", self.settings.audit_path,
++                                    payload["idCorrelacion"], payload["idEvento"],
++                                    payload, deadline=deadline)
++                if (not isinstance(data, dict) or data.get("idEvento") != payload["idEvento"]
++                        or data.get("confirmado") is not True
++                        or not isinstance(data.get("acuse"), str) or not 1 <= len(data["acuse"]) <= 80):
++                    raise IntegrationError("ACUSE_AUDITORIA_INVALIDO", True)
++                return data["acuse"]
++            except IntegrationError as exc:
++                if exc.permanent or attempt == self.settings.max_retries:
++                    raise
++
++
++def normalize_reference(data):
++    if not isinstance(data, dict):
++        raise ValueError("Referencia inválida")
++    required = CLIENT_FIELDS - {"simulado", "cod_tipo_documento"}
++    if any(not isinstance(data.get(k), str) or not data[k] for k in required):
++        raise ValueError("Campos de Captación incompletos")
++    if len(data["id_cliente"]) > 36 or len(data["numero_documento"]) > 20:
++        raise ValueError("Identificador de Captación inválido")
++    verified, expires = date.fromisoformat(data["fecha_verificacion"]), date.fromisoformat(data["vigente_hasta"])
++    # Nunca almacenar campos adicionales del maestro que SOL no necesita.
++    return {key: data[key] for key in CLIENT_FIELDS if key in data}
++
++
++def validate_reference(data, identifier):
++    try:
++        data = normalize_reference(data)
++    except (ValueError, TypeError):
++        raise HTTPException(503, "El contrato de referencia de Captación es inválido.") from None
++    if data["id_cliente"] != identifier:
++        raise HTTPException(503, "Captación devolvió una referencia diferente.")
++    if (data["estado_cliente"] != "ACTIVO" or data["estado_habilitante"] != "HABILITADO"
++            or not date.fromisoformat(data["fecha_verificacion"]) <= business_today() <= date.fromisoformat(data["vigente_hasta"])):
++        raise HTTPException(422, "Captación no habilita esta solicitud o su verificación ha vencido.")
++    return data
++
++
++def captacion_reference(db, identifier):
++    integration = db.info.get("integrations")
++    trace = db.info.get("correlation", str(uuid4()))
++    if integration and integration.settings.mode == "REAL":
++        data = integration.reference(identifier, trace)
++        ref = db.get(ClientReference, identifier)
++        if ref:
++            ref.snapshot, ref.document = data, data["numero_documento"]
++        else:
++            db.add(ClientReference(id=identifier, document=data["numero_documento"], snapshot=data))
++            db.flush()
++        return data
++    ref = db.get(ClientReference, identifier)
++    if not ref:
++        raise HTTPException(422, "No se encontró la referencia del cliente en Captación simulada.")
++    return validate_reference(ref.snapshot, identifier)
++
++
++def validate_receipt(data, envelope):
++    if (not isinstance(data, dict)
++            or any(data.get(k) != envelope[k] for k in ["idSolicitud", "versionSolicitud", "idOperacion"])
++            or not isinstance(data.get("idEvaluacion"), str) or not 1 <= len(data["idEvaluacion"]) <= 80
++            or type(data.get("ronda")) is not int or data["ronda"] < 1
++            or not isinstance(data.get("acuse"), str) or not 1 <= len(data["acuse"]) <= 60):
++        raise IntegrationError("ACUSE_EVALUACION_INVALIDO", True)
++    return data
++
++
++def evaluation_envelope(application, version, operation, correlation, mode="SIMULADO"):
++    return {"versionContrato": "CR-INT-02-PROPUESTA-v2",
++            "idSolicitud": application.id, "versionSolicitud": version.number,
++            "idOperacion": operation, "idCorrelacion": correlation,
++            "expediente": version.snapshot, "simulado": mode == "SIMULADO"}
+--- a/backend/SOL/manage.py
++++ b/backend/SOL/manage.py
+@@ -4,10 +4,13 @@
+ import getpass
+ import os
+ import re
+-from sqlalchemy import create_engine, text
++from sqlalchemy import create_engine, text, update
+ from sqlalchemy.engine import make_url
+ from .database import make_database
+-from .models import Base
++from .models import Base, Delivery, AuditOutbox, now
++from .migrations import migrate
++from .integrations import Integrations
++from .operations import maintenance
+ from .policy import load_policy
+ from .seed import DEMO_USERS, seed
+ from .settings import Settings
+@@ -15,7 +18,7 @@
+ 
+ def main():
+     parser = argparse.ArgumentParser(description="Preparar el laboratorio SOL en MySQL")
+-    parser.add_argument("command", choices=["init", "check"])
++    parser.add_argument("command", choices=["init", "check", "migrate", "maintain", "retry-errors"])
+     args = parser.parse_args()
+     settings = Settings.from_env()
+     policy = load_policy(settings.policy_path)
+@@ -38,17 +41,33 @@
+                 )
+             )
+         admin.dispose()
+-    engine, factory = make_database(settings)
++    engine, factory = make_database(settings, for_maintenance=True)
+     if args.command == "init":
+         password = os.getenv("SOL_INITIAL_PASSWORD") or getpass.getpass(
+             "Clave inicial para las 4 cuentas DEMO (mínimo 12 caracteres): "
+         )
+         if len(password) < 12:
+             raise SystemExit("La clave debe contener al menos 12 caracteres.")
+-        Base.metadata.create_all(engine)
++        migrate(engine)
+         seed(factory, password)
+         print("Laboratorio creado. Usuarios:", ", ".join(u[0] for u in DEMO_USERS))
+         print("Las cuentas existentes conservan su clave; init no elimina datos.")
++    if args.command == "migrate":
++        migrate(engine)
++        print("Migración SOL v2 aplicada; datos y claves conservados.")
++    if args.command == "retry-errors":
++        settings.validate()
++        with factory.begin() as db:
++            for model in [Delivery, AuditOutbox]:
++                count = db.execute(update(model).where(model.mode == settings.mode, model.status == "ERROR_CONTRATO").values(status="PENDIENTE", next_attempt=now(), last_error=None, lease_until=None)).rowcount
++                print(model.__tablename__, "reencolados:", count)
++    if args.command == "maintain":
++        settings.validate()
++        integrations = Integrations(settings)
++        try:
++            print(maintenance(factory, integrations))
++        finally:
++            integrations.close()
+     with engine.connect() as connection:
+         print("MySQL:", connection.execute(text("SELECT VERSION()")).scalar())
+         print(
+--- /dev/null
++++ b/backend/SOL/migrations.py
+@@ -0,0 +1,31 @@
++"""Migración incremental v1 -> v2, exclusiva de las tablas mvp_sol_*.
++
++No borra datos. MySQL hace commit implícito del DDL; cada columna se verifica
++antes de crearla para poder reanudar un corte. Respaldar antes de ejecutar.
++"""
++from sqlalchemy import inspect, text
++from .models import Base
++
++ADDITIONS = {
++    "mvp_sol_evento": {"revision": "INTEGER NOT NULL DEFAULT 0"},
++    "mvp_sol_usuario": {"active": "BOOLEAN NOT NULL DEFAULT 1"},
++    "mvp_sol_envio": {
++        "status": "VARCHAR(24) NOT NULL DEFAULT 'CONFIRMADO'",
++        "mode": "VARCHAR(12) NOT NULL DEFAULT 'SIMULADO'",
++        "evaluation_id": "VARCHAR(80) NULL", "round": "INTEGER NULL",
++        "lease_until": "DATETIME NULL",
++        "next_attempt": "DATETIME NOT NULL DEFAULT '2000-01-01 00:00:00'",
++        "attempts": "INTEGER NOT NULL DEFAULT 0", "last_error": "VARCHAR(80) NULL",
++    },
++    "mvp_sol_resultado": {"evaluation_id": "VARCHAR(80) NULL", "round": "INTEGER NULL"},
++}
++
++
++def migrate(engine):
++    Base.metadata.create_all(engine)  # Solo crea tablas SOL que todavía no existan.
++    for table, definitions in ADDITIONS.items():
++        columns = {c["name"] for c in inspect(engine).get_columns(table)}
++        for column, definition in definitions.items():
++            if column not in columns:
++                with engine.begin() as connection:
++                    connection.execute(text(f'ALTER TABLE `{table}` ADD COLUMN `{column}` {definition}'))
+--- a/backend/SOL/models.py
++++ b/backend/SOL/models.py
+@@ -35,6 +35,7 @@
+     name: Mapped[str] = mapped_column(String(100))
+     role: Mapped[str] = mapped_column(String(20))
+     password_hash: Mapped[str] = mapped_column(String(250))
++    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+ 
+ 
+ class LoginSession(Base):
+@@ -89,6 +90,7 @@
+     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+     application_id: Mapped[str] = mapped_column(ForeignKey(Application.id))
+     version: Mapped[int] = mapped_column(Integer)
++    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+     actor: Mapped[str] = mapped_column(String(100))
+     action: Mapped[str] = mapped_column(String(50))
+     before: Mapped[str | None] = mapped_column(String(24), nullable=True)
+@@ -109,6 +111,15 @@
+     receipt: Mapped[str] = mapped_column(String(60))
+     payload: Mapped[dict] = mapped_column(JSON)
+     date: Mapped[datetime] = mapped_column(DateTime, default=now)
++    # Estados técnicos del transporte; no son nuevos estados de crédito.
++    status: Mapped[str] = mapped_column(String(24), default="PENDIENTE", server_default="CONFIRMADO")
++    mode: Mapped[str] = mapped_column(String(12), default="SIMULADO", server_default="SIMULADO")
++    evaluation_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
++    round: Mapped[int | None] = mapped_column(Integer, nullable=True)
++    lease_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
++    next_attempt: Mapped[datetime] = mapped_column(DateTime, default=now, server_default="2000-01-01 00:00:00")
++    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
++    last_error: Mapped[str | None] = mapped_column(String(80), nullable=True)
+ 
+ 
+ class Outcome(Base):
+@@ -120,3 +131,30 @@
+     observations: Mapped[str] = mapped_column(Text)
+     fingerprint: Mapped[str] = mapped_column(String(64))
+     date: Mapped[datetime] = mapped_column(DateTime, default=now)
++    evaluation_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
++    round: Mapped[int | None] = mapped_column(Integer, nullable=True)
++
++
++class SecurityEvent(Base):
++    """Eventos de acceso separados del historial de expedientes."""
++    __tablename__ = "mvp_sol_seguridad_evento"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True)
++    actor: Mapped[str] = mapped_column(String(100))
++    action: Mapped[str] = mapped_column(String(50))
++    correlation: Mapped[str] = mapped_column(String(100))
++    date: Mapped[datetime] = mapped_column(DateTime, default=now)
++
++
++class AuditOutbox(Base):
++    """Se confirma junto al hecho de negocio; un reinicio no pierde pendientes."""
++    __tablename__ = "mvp_sol_auditoria_pendiente"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True)
++    mode: Mapped[str] = mapped_column(String(12))
++    payload: Mapped[dict] = mapped_column(JSON)
++    status: Mapped[str] = mapped_column(String(24), default="PENDIENTE")
++    receipt: Mapped[str | None] = mapped_column(String(80), nullable=True)
++    attempts: Mapped[int] = mapped_column(Integer, default=0)
++    lease_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
++    next_attempt: Mapped[datetime] = mapped_column(DateTime, default=now)
++    last_error: Mapped[str | None] = mapped_column(String(80), nullable=True)
++    date: Mapped[datetime] = mapped_column(DateTime, default=now)
+--- /dev/null
++++ b/backend/SOL/observability.py
+@@ -0,0 +1,48 @@
++"""Logs estructurados sin cuerpos, claves, tokens ni datos del cliente."""
++import json
++import logging
++import math
++import re
++from collections import defaultdict, deque
++from threading import Lock
++from .clock import utc_now
++
++LOG = logging.getLogger("sol")
++if not LOG.handlers:
++    handler = logging.StreamHandler()
++    handler.setFormatter(logging.Formatter("%(message)s"))
++    LOG.addHandler(handler)
++LOG.setLevel(logging.INFO)
++SAFE_ID = re.compile(r"[A-Za-z0-9._:-]{1,100}\Z")
++
++
++def valid_id(value):
++    return bool(value and SAFE_ID.fullmatch(value))
++
++
++def log(action, correlation, operation=None, **fields):
++    LOG.info(json.dumps({"fecha": utc_now().isoformat(), "accion": action,
++                         "idCorrelacion": correlation, "idOperacion": operation,
++                         **fields}, ensure_ascii=False))
++
++
++class Metrics:
++    """Ventana de 10 000 muestras por operación/proceso. No fija un SLA."""
++    def __init__(self):
++        self.lock = Lock()
++        self.samples = defaultdict(lambda: deque(maxlen=10000))
++        self.errors = defaultdict(int)
++
++    def observe(self, route, duration, status):
++        with self.lock:
++            self.samples[route].append(duration)
++            self.errors[route] += int(status >= 500)
++
++    def snapshot(self):
++        with self.lock:
++            return {"alcance": "Ventana en memoria por proceso; se reinicia con el servicio.",
++                    "unidad": "milisegundos", "operaciones": [
++                        {"operacion": key, "muestras": len(values),
++                         "p95_ms": round(sorted(values)[math.ceil(.95 * len(values))-1], 3),
++                         "errores_5xx_acumulados": self.errors[key]}
++                        for key, values in sorted(self.samples.items()) if values]}
+--- /dev/null
++++ b/backend/SOL/operations.py
+@@ -0,0 +1,121 @@
++"""Entregas y outbox persistentes con reserva temporal y confirmación explícita.
++
++La transacción local termina antes del HTTP. Si el proceso cae, vence la reserva
++(30 s) y se consulta la operación remota antes de volver a enviar. CR-INT-10 es
++entrega al menos una vez: Seguridad DEBE deduplicar por idEvento.
++"""
++from datetime import timedelta
++from types import SimpleNamespace
++from uuid import uuid4
++from sqlalchemy import delete, or_, select
++from .integrations import IntegrationError
++from .models import Application, AuditOutbox, Delivery, LoginAttempt, LoginSession, SecurityEvent, Version, now
++from .observability import log
++
++
++def enqueue(db, identifier, payload):
++    mode = db.info.get("integration_mode", "SIMULADO")
++    db.add(AuditOutbox(id=identifier, mode=mode, payload={**payload, "simulado": mode == "SIMULADO"}))
++
++
++def security_event(db, actor, action, correlation, subject=None):
++    identifier, instant = str(uuid4()), now()
++    db.add(SecurityEvent(id=identifier, actor=actor, action=action, correlation=correlation, date=instant))
++    enqueue(db, identifier, {"idEvento": identifier, "idOperacion": identifier,
++                            "idCorrelacion": correlation, "tipo": action,
++                            "actor": actor, "sujeto": subject,
++                            "fecha": instant.isoformat() + "Z"})
++
++
++def process_delivery(factory, integrations, operation):
++    with factory.begin() as db:
++        row = db.scalar(select(Delivery).where(Delivery.operation == operation).with_for_update())
++        if not row or row.mode != integrations.settings.mode:
++            return False
++        if row.status == "CONFIRMADO":
++            return True
++        if row.status == "ERROR_CONTRATO" or row.lease_until and row.lease_until > now():
++            return False
++        row.lease_until = now() + timedelta(seconds=30)
++        row.attempts += 1
++        envelope = row.payload
++    try:
++        receipt = integrations.deliver(envelope)
++    except IntegrationError as exc:
++        with factory.begin() as db:
++            row = db.get(Delivery, operation)
++            row.status = "ERROR_CONTRATO" if exc.permanent else "PENDIENTE"
++            row.last_error, row.lease_until = exc.code, None
++            row.next_attempt = now() + timedelta(seconds=min(300, 5 * 2**min(row.attempts, 6)))
++        log("ENVIO_PENDIENTE", envelope["idCorrelacion"], operation, causa=exc.code)
++        return False
++    with factory.begin() as db:
++        row = db.scalar(select(Delivery).where(Delivery.operation == operation).with_for_update())
++        if row.status == "CONFIRMADO":
++            return True
++        application = db.scalar(select(Application).where(Application.id == row.application_id).with_for_update())
++        # Reserva congelada; otras operaciones no pueden modificarla durante HTTP.
++        if application.current_version != row.version or application.state != "BORRADOR":
++            row.status, row.last_error, row.lease_until = "ERROR_CONTRATO", "VERSION_INCOMPATIBLE", None
++            return False
++        row.receipt, row.evaluation_id, row.round = receipt["acuse"], receipt["idEvaluacion"], receipt["ronda"]
++        row.status, row.last_error, row.lease_until = "CONFIRMADO", None, None
++        application.state = "EN_EVALUACION"
++        application.revision += 1
++        from .service import event
++        db.info["integration_mode"] = row.mode
++        db.info["operation"] = operation
++        event(db, application, SimpleNamespace(username=envelope["actorEnvio"]),
++              "ENVIAR_CR_INT_02_SIMULADO" if row.mode == "SIMULADO" else "ENVIAR_CR_INT_02",
++              "BORRADOR", envelope["idCorrelacion"])
++    log("ENVIO_CONFIRMADO", envelope["idCorrelacion"], operation, simulado=row.mode == "SIMULADO")
++    return True
++
++
++def process_audit(factory, integrations, identifier):
++    with factory.begin() as db:
++        row = db.scalar(select(AuditOutbox).where(AuditOutbox.id == identifier).with_for_update())
++        if not row or row.mode != integrations.settings.mode or row.status != "PENDIENTE":
++            return False
++        if row.lease_until and row.lease_until > now():
++            return False
++        row.lease_until = now() + timedelta(seconds=30)
++        row.attempts += 1
++        payload = row.payload
++    try:
++        receipt = integrations.audit(payload)
++    except IntegrationError as exc:
++        with factory.begin() as db:
++            row = db.get(AuditOutbox, identifier)
++            row.last_error, row.lease_until = exc.code, None
++            row.next_attempt = now() + timedelta(seconds=min(300, 5 * 2**min(row.attempts, 6)))
++            if exc.permanent:
++                row.status = "ERROR_CONTRATO"
++        log("AUDITORIA_PENDIENTE", payload["idCorrelacion"], payload["idEvento"], causa=exc.code)
++        return False
++    with factory.begin() as db:
++        row = db.get(AuditOutbox, identifier)
++        row.status = "SIMULADO" if integrations.settings.mode == "SIMULADO" else "CONFIRMADO"
++        row.receipt, row.lease_until, row.last_error = receipt, None, None
++    log("AUDITORIA_CONFIRMADA", payload["idCorrelacion"], payload["idEvento"], simulado=integrations.settings.mode == "SIMULADO")
++    return True
++
++
++def maintenance(factory, integrations):
++    """Un lote acotado por ciclo; un error no elimina pendientes."""
++    with factory.begin() as db:
++        db.execute(delete(LoginAttempt).where(LoginAttempt.until <= now()))
++        removed = db.execute(delete(LoginSession).where(LoginSession.expires <= now())).rowcount
++        deliveries = list(db.scalars(select(Delivery.operation).where(
++            Delivery.mode == integrations.settings.mode, Delivery.status == "PENDIENTE",
++            Delivery.next_attempt <= now(), or_(Delivery.lease_until.is_(None), Delivery.lease_until <= now())
++        ).order_by(Delivery.date).limit(10)))
++        audits = list(db.scalars(select(AuditOutbox.id).where(
++            AuditOutbox.mode == integrations.settings.mode, AuditOutbox.status == "PENDIENTE",
++            AuditOutbox.next_attempt <= now(), or_(AuditOutbox.lease_until.is_(None), AuditOutbox.lease_until <= now())
++        ).order_by(AuditOutbox.date).limit(20)))
++    for key in deliveries:
++        process_delivery(factory, integrations, key)
++    for key in audits:
++        process_audit(factory, integrations, key)
++    return {"sesiones_eliminadas": removed, "envios_revisados": len(deliveries), "eventos_revisados": len(audits)}
+--- a/backend/SOL/schemas.py
++++ b/backend/SOL/schemas.py
+@@ -44,3 +44,19 @@
+     version: int = Field(ge=1)
+     decision: Literal["APROBADO", "OBSERVADO", "RECHAZADO"]
+     observaciones: str = Field(min_length=5, max_length=1000)
++
++
++class EvaluationResult(StrictModel):
++    """CR-INT-03 propuesto: la ronda pertenece a EVA, no al número de versión."""
++    idSolicitud: str = Field(min_length=1, max_length=36)
++    versionSolicitud: int = Field(ge=1, strict=True)
++    idEvaluacion: str = Field(min_length=1, max_length=80)
++    ronda: int = Field(ge=1, strict=True)
++    idOperacion: str = Field(pattern=r"^[A-Za-z0-9._:-]{8,80}$")
++    idCorrelacion: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,100}$")
++    decision: Literal["APROBADO", "OBSERVADO", "RECHAZADO"]
++    observaciones: str = Field(min_length=5, max_length=1000)
++
++
++class DisableUser(StrictModel):
++    motivo: str = Field(min_length=5, max_length=200)
+--- a/backend/SOL/seed.py
++++ b/backend/SOL/seed.py
+@@ -1,6 +1,7 @@
+ """Datos sintéticos repetibles. No importa ni modifica el maestro del banco."""
+ 
+ from datetime import date, timedelta
++from .clock import business_today
+ from uuid import uuid4
+ from sqlalchemy import select
+ from .models import ClientReference, User
+@@ -54,8 +55,8 @@
+                 "estado_cliente": state,
+                 "id_caso": f"0198b000-0000-7012-8000-{index:012d}",
+                 "id_verificacion": f"0198b000-0000-7013-8000-{index:012d}",
+-                "fecha_verificacion": date.today().isoformat(),
+-                "vigente_hasta": (date.today() + timedelta(days=days)).isoformat(),
++                "fecha_verificacion": business_today().isoformat(),
++                "vigente_hasta": (business_today() + timedelta(days=days)).isoformat(),
+                 "estado_habilitante": cap,
+                 "version_contrato": "CR-INT-01-DEMO-v1",
+                 "simulado": True,
+--- a/backend/SOL/service.py
++++ b/backend/SOL/service.py
+@@ -3,6 +3,9 @@
+ import hashlib
+ import json
+ from datetime import date
++from copy import deepcopy
++from .clock import business_today
++from .operations import enqueue
+ from decimal import Decimal
+ from uuid import uuid4
+ from fastapi import HTTPException
+@@ -38,7 +41,7 @@
+         raise HTTPException(
+             422, "Pago doble pendiente de definición; no hay una fórmula aprobada."
+         )
+-    if payload.fecha_base < date.today():
++    if payload.fecha_base < business_today():
+         raise HTTPException(
+             422, "La fecha base no puede ser anterior a hoy en un nuevo cálculo."
+         )
+@@ -50,6 +53,8 @@
+             422,
+             "Las referencias de fiadores no pueden repetirse ni ser la del solicitante.",
+         )
++    if payload.fiadores and db.info.get("integration_mode") == "REAL":
++        raise HTTPException(422, "La referencia institucional de fiadores requiere homologar su contrato; no se usan datos simulados en REAL.")
+     fiadores = []
+     for identifier in payload.fiadores:
+         ref = db.get(ClientReference, identifier)
+@@ -60,7 +65,7 @@
+         fiadores.append(
+             {
+                 "id_cliente": identifier,
+-                "identidad": ref.snapshot,
++                "identidad": {k: v for k, v in ref.snapshot.items() if k not in {"correo_electronico", "numero_celular", "fecha_nacimiento"}},
+                 "validacion": "SIMULADA",
+             }
+         )
+@@ -110,11 +115,14 @@
+ def event(db, application, user, action: str, before, correlation: str):
+     """Historial append-only desde la API; no existe endpoint de edición/borrado."""
+     application.updated = now()
++    identifier, instant = str(uuid4()), now()
+     db.add(
+         Event(
+-            id=str(uuid4()),
++            id=identifier,
++            date=instant,
+             application_id=application.id,
+             version=application.current_version,
++            revision=application.revision,
+             actor=user.username,
+             action=action,
+             before=before,
+@@ -123,13 +131,20 @@
+         )
+     )
+ 
++    enqueue(db, identifier, {"idEvento": identifier, "idOperacion": db.info.get("operation") or identifier,
++                            "idCorrelacion": correlation, "tipo": action,
++                            "actor": user.username, "idSolicitud": application.id,
++                            "versionSolicitud": application.current_version,
++                            "estadoAnterior": before, "estadoNuevo": application.state,
++                            "fecha": instant.isoformat() + "Z"})
++
+ 
+ def iso(value):
+     return value.isoformat(timespec="seconds") + "Z"
+ 
+ 
+-def summary(db, application):
+-    version = current_version(db, application)
++def summary(db, application, version=None):
++    version = version or current_version(db, application)
+     data = version.snapshot
+     client = data["cliente"]
+     return {
+@@ -174,7 +189,8 @@
+         for e in db.scalars(
+             select(Event)
+             .where(Event.application_id == application.id)
+-            .order_by(Event.date, Event.id)
++            # MySQL DATETIME de v1 conserva segundos; el UUID no ordena hechos.
++            .order_by(Event.version, Event.revision, Event.date, Event.id)
+         )
+     ]
+     data["resultados"] = [
+@@ -195,6 +211,9 @@
+             "version": d.version,
+             "id_operacion": d.operation,
+             "acuse": d.receipt,
++            "estado_transporte": d.status,
++            "id_evaluacion": d.evaluation_id,
++            "ronda": d.round,
+             "fecha": iso(d.date),
+         }
+         for d in db.scalars(
+@@ -204,3 +223,22 @@
+         )
+     ]
+     return data
++
++
++def projected_detail(db, application, user):
++    """Minimiza también versiones históricas, fiadores y exportaciones."""
++    result = detail(db, application)
++    for version in result["versiones"]:
++        snapshot = deepcopy(version["expediente"])
++        for identity in [snapshot["cliente"], *[f.get("identidad", {}) for f in snapshot.get("fiadores", [])]]:
++            for key in ["correo_electronico", "numero_celular", "fecha_nacimiento"]:
++                identity.pop(key, None)
++        version["expediente"] = snapshot
++    return result
++
++
++def read_application(db, identifier):
++    row = db.get(Application, identifier)
++    if row is None:
++        raise HTTPException(404, "Solicitud no encontrada.")
++    return row
+--- a/backend/SOL/settings.py
++++ b/backend/SOL/settings.py
+@@ -21,6 +21,38 @@
+     policy_path: Path = ROOT / "config" / "politica_demo.json"
+     mode: str = "SIMULADO"
+     session_hours: int = 8
++    bus_base_url: str = ""
++    bus_token: str = ""
++    callback_token: str = ""
++    cap_search_path: str = ""
++    cap_reference_path: str = ""
++    eva_send_path: str = ""
++    eva_status_path: str = ""
++    audit_path: str = ""
++    http_timeout: float = 0.6
++    max_retries: int = 2
++    request_budget: float = 2.4
++    worker_seconds: float = 5
++
++    def validate(self):
++        from urllib.parse import urlparse
++        if self.mode not in {"SIMULADO", "REAL"}:
++            raise ValueError("SOL_INTEGRATION_MODE debe ser SIMULADO o REAL.")
++        if not 0 < self.http_timeout <= 3 or not 0 < self.request_budget < 3:
++            raise ValueError("El timeout debe ser <= 3 s y el presupuesto total < 3 s.")
++        if not 0 <= self.max_retries <= 2 or self.worker_seconds < 0:
++            raise ValueError("Se permiten como máximo dos reintentos.")
++        if self.mode == "REAL":
++            parsed = urlparse(self.bus_base_url)
++            if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
++                raise ValueError("Configura una URL del Bus válida, sin credenciales ni query.")
++            if min(len(self.bus_token), len(self.callback_token)) < 32 or self.bus_token == self.callback_token:
++                raise ValueError("REAL requiere dos tokens distintos de al menos 32 caracteres.")
++            for path in [self.cap_search_path, self.cap_reference_path, self.eva_send_path, self.eva_status_path, self.audit_path]:
++                if not path.startswith("/") or path.startswith("//") or ".." in path or "://" in path or "?" in path:
++                    raise ValueError("Configura todas las rutas relativas homologadas del Bus.")
++            if "{idCliente}" not in self.cap_reference_path or "{idOperacion}" not in self.eva_status_path:
++                raise ValueError("Faltan {idCliente} o {idOperacion} en las rutas de consulta.")
+ 
+     @classmethod
+     def from_env(cls):
+@@ -46,4 +78,16 @@
+                 )
+             ),
+             mode=os.getenv("SOL_INTEGRATION_MODE", "SIMULADO"),
++            bus_base_url=os.getenv("SOL_BUS_BASE_URL", ""),
++            bus_token=os.getenv("SOL_BUS_TOKEN", ""),
++            callback_token=os.getenv("SOL_EVA_CALLBACK_TOKEN", ""),
++            cap_search_path=os.getenv("SOL_CAP_SEARCH_PATH", ""),
++            cap_reference_path=os.getenv("SOL_CAP_REFERENCE_PATH", ""),
++            eva_send_path=os.getenv("SOL_EVA_SEND_PATH", ""),
++            eva_status_path=os.getenv("SOL_EVA_STATUS_PATH", ""),
++            audit_path=os.getenv("SOL_AUDIT_PATH", ""),
++            http_timeout=float(os.getenv("SOL_HTTP_TIMEOUT_SECONDS", "0.6")),
++            max_retries=int(os.getenv("SOL_HTTP_MAX_RETRIES", "2")),
++            request_budget=float(os.getenv("SOL_REQUEST_BUDGET_SECONDS", "2.4")),
++            worker_seconds=float(os.getenv("SOL_WORKER_SECONDS", "5")),
+         )
+--- /dev/null
++++ b/backend/SOL/simulator.py
+@@ -0,0 +1,77 @@
++"""Bus + CAP/EVA/Seguridad SINTÉTICOS, solo para practicar el transporte HTTP.
++
++No es un Bus institucional. Sus datos están en memoria y desaparecen al parar.
++Arranque: definir SOL_SIMULATOR_TOKEN (32+ caracteres) y usar uvicorn
++SOL.simulator:app --host 127.0.0.1 --port 8020. No publicar en Internet.
++"""
++import os
++import secrets
++from datetime import timedelta
++from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
++from .clock import business_today
++
++
++def create_simulator(token):
++    if len(token) < 32:
++        raise ValueError("Define SOL_SIMULATOR_TOKEN con al menos 32 caracteres.")
++    def authorized(authorization: str = Header()):
++        if not secrets.compare_digest(authorization, "Bearer " + token):
++            raise HTTPException(401, "Servicio no autorizado.")
++    app = FastAPI(title="SIMULADOR HTTP CAP/EVA/AUD — no institucional", dependencies=[Depends(authorized)])
++    app.state.deliveries, app.state.events = {}, {}
++
++    def reference(index):
++        today = business_today()
++        return {"id_cliente": f"0198b000-0000-7009-8000-{index:012d}",
++                "cod_tipo_documento": "DNI", "numero_documento": f"7000000{index}",
++                "nombres": "Cliente sintético", "apellido_paterno": f"Prueba {index}", "apellido_materno": "Laboratorio",
++                "estado_cliente": "ACTIVO", "id_caso": f"CASO-DEMO-{index}",
++                "id_verificacion": f"VER-DEMO-{index}", "fecha_verificacion": (today-timedelta(days=5)).isoformat(),
++                "vigente_hasta": (today+timedelta(days=-1 if index == 3 else 30)).isoformat(),
++                "estado_habilitante": "OBSERVADO" if index == 2 else "HABILITADO",
++                "version_contrato": "CR-INT-01-PROPUESTA-v2", "simulado": True}
++
++    @app.get("/cap/references")
++    def search(search: str = "", limit: int = Query(50, ge=1, le=50)):
++        return [r for r in [reference(i) for i in range(1, 4)] if search.lower() in (r["numero_documento"] + " " + r["nombres"]).lower()][:limit]
++
++    @app.get("/cap/references/{identifier}")
++    def client(identifier: str):
++        for i in range(1, 4):
++            if reference(i)["id_cliente"] == identifier:
++                return reference(i)
++        raise HTTPException(404, "Referencia sintética no encontrada.")
++
++    @app.get("/eva/operations/{operation}")
++    def status(operation: str):
++        if operation not in app.state.deliveries:
++            raise HTTPException(404, "Operación no recibida.")
++        return app.state.deliveries[operation]["receipt"]
++
++    @app.post("/eva/applications")
++    def deliver(payload: dict, operation: str = Header(alias="X-Idempotency-Key")):
++        if operation != payload.get("idOperacion"):
++            raise HTTPException(422, "Clave diferente.")
++        if operation in app.state.deliveries:
++            if app.state.deliveries[operation]["payload"] != payload:
++                raise HTTPException(409, "Operación con contenido diferente.")
++            return app.state.deliveries[operation]["receipt"]
++        receipt = {key: payload[key] for key in ["idSolicitud", "versionSolicitud", "idOperacion"]}
++        receipt.update(idEvaluacion="EVA-SIM-" + payload["idSolicitud"], ronda=payload["versionSolicitud"],
++                       acuse="ACK-SIM-" + operation[:20])
++        app.state.deliveries[operation] = {"payload": payload, "receipt": receipt}
++        return receipt
++
++    @app.post("/security/events")
++    def audit(payload: dict, operation: str = Header(alias="X-Idempotency-Key")):
++        if operation != payload.get("idEvento"):
++            raise HTTPException(422, "Clave diferente.")
++        if operation in app.state.events and app.state.events[operation] != payload:
++            raise HTTPException(409, "Evento con contenido diferente.")
++        app.state.events[operation] = payload
++        return {"idEvento": operation, "confirmado": True, "acuse": "AUD-SIM-" + operation}
++
++    return app
++
++
++app = create_simulator(os.getenv("SOL_SIMULATOR_TOKEN", ""))
+--- a/backend/SOL/tests/conftest.py
++++ b/backend/SOL/tests/conftest.py
+@@ -9,6 +9,7 @@
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+ from SOL.app import create_app
++from SOL.database import make_database
+ from SOL.models import Base
+ from SOL.seed import seed
+ from SOL.settings import Settings, ROOT
+@@ -30,13 +31,15 @@
+         pytest.fail(
+             "La BD MySQL de pruebas debe llamarse exactamente bna_sol_mvp_test."
+         )
+-    app = create_app(Settings(database, policy_path))
+-    Base.metadata.drop_all(app.state.engine)
+-    Base.metadata.create_all(app.state.engine)
++    app = create_app(Settings(database, policy_path, worker_seconds=0))
++    ddl_engine = app.state.engine if database.startswith("sqlite") else make_database(app.state.settings, for_maintenance=True)[0]
++    Base.metadata.drop_all(ddl_engine)
++    Base.metadata.create_all(ddl_engine)
+     seed(app.state.factory, PASSWORD)
+     with TestClient(app) as client:
+         yield client, app
+-    Base.metadata.drop_all(app.state.engine)
++    Base.metadata.drop_all(ddl_engine)
++    ddl_engine.dispose()
+     app.state.engine.dispose()
+ 
+ 
+--- /dev/null
++++ b/backend/SOL/tests/test_integration_v2.py
+@@ -0,0 +1,417 @@
++"""Pruebas HTTP con simulador de Bus; no acreditan integración institucional."""
++import copy
++import os
++import json
++from dataclasses import replace
++from datetime import datetime, timedelta, timezone
++from uuid import uuid4
++import httpx
++import pytest
++from fastapi.testclient import TestClient
++from sqlalchemy import func, select, text
++from SOL import clock
++from SOL.app import create_app
++from SOL.integrations import IntegrationError, Integrations
++from SOL.migrations import migrate
++from SOL.models import (Application, AuditOutbox, Base, ClientReference, Delivery,
++                        Event, LoginSession, Outcome, SecurityEvent, User, now)
++from SOL.operations import maintenance, process_audit, process_delivery
++from SOL.seed import seed
++from SOL.settings import Settings
++from conftest import PASSWORD, auth
++from test_workflow import CLIENT, create, form, send
++
++
++class BusSimulator:
++    """Contrato propuesto; almacena un solo acuse por idOperacion/idEvento."""
++    def __init__(self):
++        self.references = {}
++        self.received = {}
++        self.audit_events = {}
++        self.calls = []
++        self.audit_down = False
++        self.timeout_after_receipt = False
++        self.status_down = False
++        self.send_down = False
++        self.bad_receipt = False
++
++    def __call__(self, request):
++        self.calls.append((request.method, request.url.path))
++        assert request.headers["Authorization"] == "Bearer " + "b"*32
++        assert request.headers.get("X-Correlation-ID")
++        path = request.url.path
++        if path == "/cap/references":
++            return httpx.Response(200, json=list(self.references.values()))
++        if path.startswith("/cap/references/"):
++            data = self.references.get(path.rsplit("/", 1)[1])
++            return httpx.Response(200 if data else 404, json=data or {})
++        if path.startswith("/eva/operations/"):
++            if self.status_down:
++                raise httpx.ReadTimeout("Simulador no disponible", request=request)
++            data = self.received.get(path.rsplit("/", 1)[1])
++            return httpx.Response(200 if data else 404, json=data or {})
++        data = json.loads(request.content)
++        if path == "/eva/applications":
++            assert request.headers["X-Idempotency-Key"] == data["idOperacion"]
++            if self.send_down:
++                raise httpx.ConnectTimeout("Simulador no disponible", request=request)
++            receipt = {k: data[k] for k in ("idSolicitud", "versionSolicitud", "idOperacion")}
++            receipt.update(idEvaluacion="EVA-" + data["idSolicitud"], ronda=7 + data["versionSolicitud"], acuse="ACK-" + data["idOperacion"][:12])
++            if self.bad_receipt:
++                receipt["idSolicitud"] = "ajena"
++            self.received.setdefault(data["idOperacion"], receipt)
++            if self.timeout_after_receipt:
++                self.timeout_after_receipt = False
++                raise httpx.ReadTimeout("Aceptado; respuesta perdida", request=request)
++            return httpx.Response(200, json=receipt)
++        if path == "/security/events":
++            assert request.headers["X-Idempotency-Key"] == data["idEvento"]
++            if self.audit_down:
++                raise httpx.ReadTimeout("Simulador no disponible", request=request)
++            self.audit_events.setdefault(data["idEvento"], data)
++            return httpx.Response(200, json={"idEvento": data["idEvento"], "confirmado": True, "acuse": "ACK-AUD-" + data["idEvento"]})
++        return httpx.Response(404, json={})
++
++
++@pytest.fixture
++def real_lab(tmp_path):
++    database = os.getenv("SOL_TEST_DATABASE_URL", "sqlite:///" + str(tmp_path / "real.db"))
++    if not database.startswith("sqlite"):
++        from sqlalchemy.engine import make_url
++        assert make_url(database).database == "bna_sol_mvp_test"
++    settings = Settings(database, mode="REAL",
++                        bus_base_url="http://bus.simulador.test", bus_token="b"*32,
++                        callback_token="c"*32, cap_search_path="/cap/references",
++                        cap_reference_path="/cap/references/{idCliente}", eva_send_path="/eva/applications",
++                        eva_status_path="/eva/operations/{idOperacion}", audit_path="/security/events",
++                        worker_seconds=0)
++    bus = BusSimulator()
++    app = create_app(settings, httpx.MockTransport(bus))
++    from SOL.database import make_database
++    ddl_engine = app.state.engine if database.startswith("sqlite") else make_database(settings, for_maintenance=True)[0]
++    Base.metadata.drop_all(ddl_engine)
++    Base.metadata.create_all(ddl_engine)
++    seed(app.state.factory, PASSWORD)
++    with app.state.factory() as db:
++        bus.references = {r.id: {**r.snapshot, "simulado": False} for r in db.scalars(select(ClientReference))}
++    with TestClient(app) as client:
++        yield client, app, bus
++    Base.metadata.drop_all(ddl_engine)
++    ddl_engine.dispose()
++
++
++def real_create(c, h, **changes):
++    r = c.post("/sol/applications", headers=h, json=form(**changes))
++    assert r.status_code == 201, r.text
++    return r.json()
++
++
++def real_auth(c, username="asesor.bna"):
++    r = c.post("/sol/auth/login", json={"username": username, "password": PASSWORD})
++    assert r.status_code == 200, r.text
++    return {"Authorization": "Bearer " + r.json()["token"]}
++
++
++def real_send(c, app, h, d, key=None):
++    key = key or str(uuid4())
++    r = c.post(f"/sol/applications/{d['id']}/send", headers={**h, "X-Idempotency-Key": key}, json={"revision": d["revision"]})
++    assert r.status_code == 202, r.text
++    assert r.json()["pendiente_envio"]
++    return key
++
++
++def callback(c, app, d, operation=None, **changes):
++    with app.state.factory() as db:
++        delivery = db.scalar(select(Delivery).where(Delivery.application_id == d["id"], Delivery.version == d["version"]))
++        data = {"idSolicitud": d["id"], "versionSolicitud": d["version"], "idEvaluacion": delivery.evaluation_id,
++                "ronda": delivery.round, "idOperacion": operation or str(uuid4()), "idCorrelacion": str(uuid4()),
++                "decision": "OBSERVADO", "observaciones": "Precisar el destino de prueba.", **changes}
++    headers = {"Authorization": "Bearer " + app.state.settings.callback_token,
++               "X-Idempotency-Key": data["idOperacion"], "X-Correlation-ID": data["idCorrelacion"]}
++    return c.post("/sol/integrations/evaluation-results", headers=headers, json=data), data, headers
++
++
++def test_lima_night_creation_and_send_no_false_stale(lab, monkeypatch):
++    c, _ = lab
++    today = clock.business_today()
++    # 01:00 UTC del siguiente día = 20:00 del día de negocio actual en Lima.
++    instant = datetime.combine(today + timedelta(days=1), datetime.min.time(), timezone.utc) + timedelta(hours=1)
++    monkeypatch.setattr(clock, "utc_now", lambda: instant)
++    h = auth(c)
++    d = create(c, h, fecha_base=today.isoformat())
++    assert send(c, h, d).status_code == 200
++    assert clock.business_today() == today
++
++
++def test_lima_midnight_really_expires_old_base(lab, monkeypatch):
++    c, _ = lab
++    h = auth(c)
++    today = clock.business_today()
++    d = create(c, h)
++    instant = datetime.combine(today + timedelta(days=1), datetime.min.time(), timezone.utc) + timedelta(hours=5)
++    monkeypatch.setattr(clock, "utc_now", lambda: instant)
++    assert send(c, h, d).status_code == 409
++
++
++@pytest.mark.parametrize("index,expected", [(1, 201), (3, 422), (4, 422), (5, 422)])
++def test_cr01_real_adapter_gate_with_http_simulator(real_lab, index, expected):
++    c, _, bus = real_lab
++    r = c.post("/sol/applications", headers=real_auth(c), json=form(id_cliente=f"0198b000-0000-7009-8000-{index:012d}"))
++    assert r.status_code == expected
++    assert any(path.startswith("/cap/references/") for _, path in bus.calls)
++
++
++def test_real_never_falls_back_to_local_reference(real_lab):
++    c, _, bus = real_lab
++    del bus.references[CLIENT]
++    assert c.post("/sol/applications", headers=real_auth(c), json=form()).status_code == 422
++
++
++def test_cr02_timeout_after_acceptance_is_reconciled_without_second_post(real_lab):
++    c, app, bus = real_lab
++    h = real_auth(c)
++    d = real_create(c, h)
++    bus.timeout_after_receipt = True
++    key = real_send(c, app, h, d)
++    assert process_delivery(app.state.factory, app.state.integrations, key)
++    assert [m for m, p in bus.calls if p.startswith("/eva/")] == ["GET", "POST", "GET"]
++    assert len(bus.received) == 1
++    r = c.post(f"/sol/applications/{d['id']}/send", headers={**h, "X-Idempotency-Key": key}, json={"revision": d["revision"]})
++    assert r.status_code == 200 and r.json()["reintento_reconocido"]
++    assert r.json()["estado"] == "EN_EVALUACION"
++    with app.state.factory() as db:
++        assert db.scalar(select(func.count()).select_from(Delivery)) == 1
++
++
++def test_cr02_failed_status_consult_never_reposts_and_survives_restart(real_lab):
++    c, app, bus = real_lab
++    h = real_auth(c)
++    d = real_create(c, h)
++    key = real_send(c, app, h, d)
++    bus.status_down = True
++    assert not process_delivery(app.state.factory, app.state.integrations, key)
++    assert not any(m == "POST" and p.startswith("/eva/") for m, p in bus.calls)
++    assert len([p for _, p in bus.calls if p.startswith("/eva/")]) == 3
++    # Reabrir el motor acredita que el pendiente está en disco, no en una lista.
++    from SOL.database import make_database
++    engine, factory = make_database(app.state.settings)
++    with factory() as db:
++        row = db.get(Delivery, key)
++        assert row.status == "PENDIENTE" and row.receipt == ""
++    bus.status_down = False
++    assert process_delivery(factory, app.state.integrations, key)
++    engine.dispose()
++    assert len(bus.received) == 1
++
++
++def test_cr02_max_two_retries_and_no_edit_of_reserved_version(real_lab):
++    c, app, bus = real_lab
++    h = real_auth(c)
++    d = real_create(c, h)
++    key = real_send(c, app, h, d)
++    bus.send_down = True
++    assert not process_delivery(app.state.factory, app.state.integrations, key)
++    assert sum(m == "POST" and p == "/eva/applications" for m, p in bus.calls) == 3
++    assert c.put(f"/sol/applications/{d['id']}", headers=h, json=form(revision=d["revision"])).status_code == 409
++    assert c.post(f"/sol/applications/{d['id']}/send", headers={**h, "X-Idempotency-Key": str(uuid4())}, json={"revision": d["revision"]}).status_code == 409
++
++
++def test_cr02_rejects_mismatched_receipt_without_changing_business_state(real_lab):
++    c, app, bus = real_lab
++    h = real_auth(c)
++    d = real_create(c, h)
++    key = real_send(c, app, h, d)
++    bus.bad_receipt = True
++    assert not process_delivery(app.state.factory, app.state.integrations, key)
++    with app.state.factory() as db:
++        assert db.get(Delivery, key).status == "ERROR_CONTRATO"
++        assert db.get(Application, d["id"]).state == "BORRADOR"
++
++
++def test_cr03_callback_auth_round_version_and_full_v2_cycle(real_lab):
++    c, app, bus = real_lab
++    h = real_auth(c)
++    d = real_create(c, h)
++    key = real_send(c, app, h, d)
++    assert process_delivery(app.state.factory, app.state.integrations, key)
++    assert callback(c, app, d, ronda=999)[0].status_code == 409
++    assert callback(c, app, d, idEvaluacion="OTRA")[0].status_code == 409
++    observed, data, headers = callback(c, app, d)
++    assert observed.status_code == 200 and observed.json()["estado"] == "OBSERVADA"
++    assert c.post("/sol/integrations/evaluation-results", headers=headers, json=data).json()["reintento_reconocido"]
++    assert c.post("/sol/integrations/evaluation-results", headers={**headers, "Authorization": h["Authorization"]}, json=data).status_code == 401
++    assert c.post("/sol/integrations/evaluation-results", headers={**headers, "X-Idempotency-Key": "diferente"}, json=data).status_code == 422
++    current = c.get(f"/sol/applications/{d['id']}", headers=h).json()
++    revised = c.post(f"/sol/applications/{d['id']}/revise", headers=h, json={"revision": current["revision"]}).json()
++    assert revised["version"] == 2
++    key2 = real_send(c, app, h, revised)
++    assert process_delivery(app.state.factory, app.state.integrations, key2)
++    assert callback(c, app, d)[0].status_code == 409
++    approved, _, _ = callback(c, app, revised, decision="APROBADO")
++    assert approved.status_code == 200 and approved.json()["estado"] == "APROBADA"
++    with app.state.factory() as db:
++        assert db.scalar(select(func.count()).select_from(Outcome)) == 2
++    assert c.post(f"/sol/applications/{d['id']}/demo-result", headers=h, json={"version": 2, "decision": "APROBADO", "observaciones": "Prueba local."}).status_code == 403
++
++
++def test_cr10_outbox_survives_failure_recovers_and_deduplicates(real_lab):
++    c, app, bus = real_lab
++    h = real_auth(c)
++    real_create(c, h)
++    with app.state.factory() as db:
++        ids = list(db.scalars(select(AuditOutbox.id)))
++        assert len(ids) == 2  # ingreso y creación
++    bus.audit_down = True
++    assert not process_audit(app.state.factory, app.state.integrations, ids[0])
++    with app.state.factory() as db:
++        assert db.get(AuditOutbox, ids[0]).status == "PENDIENTE"
++    bus.audit_down = False
++    for key in ids:
++        assert process_audit(app.state.factory, app.state.integrations, key)
++        assert not process_audit(app.state.factory, app.state.integrations, key)
++    assert len(bus.audit_events) == 2
++    with app.state.factory() as db:
++        assert all(db.get(AuditOutbox, key).status == "CONFIRMADO" for key in ids)
++    # Respuesta perdida tras aceptación: el mismo idEvento no crea otro registro.
++    assert app.state.integrations.audit(bus.audit_events[ids[0]])
++    assert len(bus.audit_events) == 2
++
++
++def test_event_and_outbox_rollback_together(real_lab):
++    _, app, _ = real_lab
++    from SOL.operations import security_event
++    with app.state.factory() as db:
++        security_event(db, "cuenta:prueba", "PRUEBA_ROLLBACK", str(uuid4()))
++        db.flush()
++        db.rollback()
++    with app.state.factory() as db:
++        assert db.scalar(select(func.count()).select_from(SecurityEvent)) == 0
++        assert db.scalar(select(func.count()).select_from(AuditOutbox)) == 0
++
++
++def test_session_revocation_and_cleanup(lab):
++    c, app = lab
++    h, supervisor = auth(c), auth(c, "supervisor.bna")
++    assert c.post("/sol/admin/users/asesor.bna/disable", headers=h, json={"motivo": "Baja de prueba"}).status_code == 403
++    r = c.post("/sol/admin/users/asesor.bna/disable", headers=supervisor, json={"motivo": "Baja de prueba"})
++    assert r.status_code == 200 and r.json()["sesiones_revocadas"] == 1
++    with app.state.factory() as db:
++        revoked = next(row.payload for row in db.scalars(select(AuditOutbox)) if row.payload["tipo"] == "SESIONES_REVOCADAS")
++        assert revoked["actor"] == "supervisor.bna" and revoked["sujeto"] == "asesor.bna"
++    assert c.get("/sol/auth/me", headers=h).status_code == 401
++    assert c.post("/sol/auth/login", json={"username": "asesor.bna", "password": PASSWORD}).status_code == 401
++    with app.state.factory.begin() as db:
++        user = db.scalar(select(User).where(User.username == "auditor.bna"))
++        db.add(LoginSession(token_hash="f"*64, user_id=user.id, expires=now()-timedelta(days=1)))
++    assert maintenance(app.state.factory, app.state.integrations)["sesiones_eliminadas"] == 1
++
++
++def test_access_events_lockout_and_no_secrets_in_logs(lab, caplog):
++    c, app = lab
++    for attempt in range(5):
++        assert c.post("/sol/auth/login", json={"username": "asesor.bna" if attempt % 2 else "ASESOR.BNA", "password": "clave-incorrecta"}).status_code == 401
++    assert c.post("/sol/auth/login", json={"username": "asesor.bna", "password": PASSWORD}).status_code == 429
++    with app.state.factory() as db:
++        actions = list(db.scalars(select(SecurityEvent.action)))
++        assert actions.count("INGRESO_FALLIDO") == 5
++        assert "BLOQUEO_TEMPORAL" in actions and "INTENTO_BLOQUEADO" in actions
++    assert PASSWORD not in caplog.text and "clave-incorrecta" not in caplog.text
++
++
++def test_client_and_legacy_detail_minimization_all_roles(lab):
++    c, app = lab
++    h = auth(c)
++    d = create(c, h)
++    # Incluso datos sensibles guardados en una versión v1 se proyectan al leer.
++    from SOL.models import Version
++    with app.state.factory.begin() as db:
++        v = db.scalar(select(Version).where(Version.application_id == d["id"]))
++        v.snapshot = {**v.snapshot, "cliente": {**v.snapshot["cliente"], "correo_electronico": "privado@example.com", "fecha_nacimiento": "1990-05-10", "numero_celular": "999999999"}}
++    for name in ["asesor.bna", "supervisor.bna", "auditor.bna", "evaluador.demo"]:
++        headers = auth(c, name)
++        for route in ["/sol/clients", f"/sol/applications/{d['id']}"]:
++            data = c.get(route, headers=headers).json()
++            assert all(key not in json.dumps(data) for key in ["correo_electronico", "numero_celular", "fecha_nacimiento"])
++
++
++def test_readiness_when_db_fails_but_liveness_remains(lab, monkeypatch):
++    c, app = lab
++    def fail():
++        raise RuntimeError("No mostrar secretos")
++    monkeypatch.setattr(app.state.engine, "connect", fail)
++    assert c.get("/health").status_code == 200
++    assert c.get("/ready").status_code == 503
++    assert "secretos" not in c.get("/ready").text
++
++
++def test_correlation_logs_and_measured_p95(lab, caplog):
++    c, _ = lab
++    h = auth(c, "supervisor.bna")
++    trace = str(uuid4())
++    r = c.get("/sol/applications", headers={**h, "X-Correlation-ID": trace})
++    assert r.headers["X-Correlation-ID"] == trace and trace in caplog.text
++    data = c.get("/sol/ops/metrics", headers=h).json()
++    entry = next(v for v in data["operaciones"] if v["operacion"] == "GET /sol/applications")
++    assert entry["muestras"] == 1 and entry["p95_ms"] > 0
++    assert c.get("/sol/ops/metrics", headers=auth(c)).status_code == 403
++    forged = c.get("/health", headers={"X-Correlation-ID": "malicioso con espacios"})
++    assert forged.headers["X-Correlation-ID"] != "malicioso con espacios"
++
++
++def test_paginated_listing_has_constant_query_count_and_detail_no_lock(lab):
++    c, app = lab
++    from sqlalchemy import event
++    h = auth(c)
++    for _ in range(4):
++        create(c, h)
++    statements = []
++    def record(conn, cursor, statement, params, context, many):
++        statements.append(statement)
++    event.listen(app.state.engine, "before_cursor_execute", record)
++    one = c.get("/sol/applications?limit=1&offset=0", headers=h).json()
++    first_count = len(statements)
++    statements.clear()
++    four = c.get("/sol/applications?limit=4&offset=0", headers=h).json()
++    assert len(statements) == first_count
++    assert one["total"] == four["total"] == 4
++    assert len(one["items"]) == 1 and len(four["items"]) == 4
++    statements.clear()
++    assert c.get("/sol/applications/" + one["items"][0]["id"], headers=h).status_code == 200
++    assert not any("FOR UPDATE" in q.upper() for q in statements)
++    event.remove(app.state.engine, "before_cursor_execute", record)
++    assert c.get("/sol/applications?limit=1000", headers=h).status_code == 422
++
++
++def test_incremental_migration_preserves_v1_records(tmp_path):
++    from sqlalchemy import create_engine, inspect
++    engine = create_engine("sqlite:///" + str(tmp_path/"v1.db"))
++    with engine.begin() as conn:
++        conn.execute(text("CREATE TABLE mvp_sol_usuario (id VARCHAR(36) PRIMARY KEY, username VARCHAR(60), name VARCHAR(100), role VARCHAR(20), password_hash VARCHAR(250))"))
++        conn.execute(text("INSERT INTO mvp_sol_usuario VALUES ('original', 'asesor', 'Prueba', 'ASESOR', 'hash-conservado')"))
++    migrate(engine)
++    migrate(engine)
++    with engine.connect() as conn:
++        assert conn.execute(text("SELECT password_hash, active FROM mvp_sol_usuario")).first() == ("hash-conservado", 1)
++    assert "mvp_sol_auditoria_pendiente" in inspect(engine).get_table_names()
++    engine.dispose()
++
++
++def test_real_requires_explicit_configuration_and_retry_limit():
++    with pytest.raises(ValueError):
++        create_app(Settings("sqlite://", mode="REAL"))
++    with pytest.raises(ValueError):
++        create_app(Settings("sqlite://", max_retries=3))
++
++
++def test_event_order_follows_revision_when_mysql_timestamps_tie(lab):
++    c, app = lab
++    from sqlalchemy import update
++    from test_workflow import result
++    h, evaluator = auth(c), auth(c, "evaluador.demo")
++    d = create(c, h)
++    d = send(c, h, d).json()
++    assert result(c, evaluator, d, decision="APROBADO").status_code == 200
++    with app.state.factory.begin() as db:
++        db.execute(update(Event).values(date=datetime(2026, 10, 23, 12)))
++    events = c.get("/sol/applications/" + d["id"], headers=h).json()["eventos"]
++    assert [e["accion"] for e in events] == ["CREAR_BORRADOR", "ENVIAR_CR_INT_02_SIMULADO", "RECIBIR_CR_INT_03_SIMULADO"]
+--- a/backend/SOL/tests/test_workflow.py
++++ b/backend/SOL/tests/test_workflow.py
+@@ -3,6 +3,7 @@
+ import copy
+ import json
+ from datetime import date
++from SOL.clock import business_today
+ from decimal import Decimal
+ from uuid import uuid4
+ import pytest
+@@ -25,7 +26,7 @@
+         "moneda": "PEN",
+         "plazo_meses": 12,
+         "destino_credito": "Mejoras en la vivienda",
+-        "fecha_base": date.today().isoformat(),
++        "fecha_base": business_today().isoformat(),
+         **changes,
+     }
+ 
+@@ -261,7 +262,7 @@
+ 
+ def test_persistence_after_restart(tmp_path):
+     # No depender de memoria demuestra persistencia real de expedientes/sesiones.
+-    settings = Settings("sqlite:///" + str(tmp_path / "persistencia.db"))
++    settings = Settings("sqlite:///" + str(tmp_path / "persistencia.db"), worker_seconds=0)
+     first = create_app(settings)
+     Base.metadata.create_all(first.state.engine)
+     seed(first.state.factory, "PruebaBNA2026!")
+--- a/backend/requirements-sol.txt
++++ b/backend/requirements-sol.txt
+@@ -8,3 +8,6 @@
+ httpx==0.27.2
+ python-dotenv==1.0.1
+ pytest==8.3.3
++
++# ZoneInfo usa esta base IANA también en Windows.
++tzdata>=2025.1
+--- a/frontend/app/api/solicitud-credito/[...path]/route.ts
++++ b/frontend/app/api/solicitud-credito/[...path]/route.ts
+@@ -16,6 +16,10 @@
+   const { path } = await context.params;
+   // Codificar segmentos evita que una URL suministrada por el cliente cambie el host destino.
+   const route = path.map(encodeURIComponent).join("/");
++  // Los callbacks EVA requieren credencial de servicio y no pasan por el navegador.
++  if (path[0] === "integrations")
++    return NextResponse.json({ detail: "Ruta no disponible en este canal." }, { status: 404 });
++  const trace = crypto.randomUUID();
+   if (request.method !== "GET") {
+     const origin = request.headers.get("origin");
+     if (origin && new URL(origin).host !== request.headers.get("host")) {
+@@ -40,7 +44,7 @@
+   }
+   const headers = new Headers({
+     "Content-Type": "application/json",
+-    "X-Correlation-ID": crypto.randomUUID(),
++    "X-Correlation-ID": trace,
+   });
+   if (token) headers.set("Authorization", `Bearer ${token}`);
+   const operation = request.headers.get("X-Idempotency-Key");
+@@ -54,12 +58,13 @@
+         cache: "no-store",
+         redirect: "error",
+         body: request.method === "GET" ? undefined : await request.text(),
+-        signal: AbortSignal.timeout(10000),
++        signal: AbortSignal.timeout(3000),
+       },
+     );
+     const data = await upstream.json();
+     if (route === "auth/login" && upstream.ok) {
+       const response = NextResponse.json({ usuario: data.usuario });
++      response.headers.set("X-Correlation-ID", upstream.headers.get("X-Correlation-ID") || trace);
+       response.cookies.set(COOKIE, data.token, {
+         httpOnly: true,
+         sameSite: "lax",
+@@ -70,6 +75,7 @@
+       return response;
+     }
+     const response = NextResponse.json(data, { status: upstream.status });
++    response.headers.set("X-Correlation-ID", upstream.headers.get("X-Correlation-ID") || trace);
+     if (route === "auth/logout" || upstream.status === 401) {
+       response.cookies.set(COOKIE, "", {
+         maxAge: 0,
+@@ -84,7 +90,7 @@
+         detail:
+           "No se pudo contactar al servicio SOL. Comprueba que el backend esté iniciado en el puerto 8011.",
+       },
+-      { status: 503 },
++      { status: 503, headers: { "X-Correlation-ID": trace } },
+     );
+   }
+ }
+--- a/frontend/app/solicitud-credito/page.tsx
++++ b/frontend/app/solicitud-credito/page.tsx
+@@ -40,8 +40,6 @@
+   nombres: string;
+   apellido_paterno: string;
+   apellido_materno: string;
+-  correo_electronico: string;
+-  numero_celular: string;
+   estado_cliente: string;
+   estado_habilitante: string;
+   vigente_hasta: string;
+@@ -100,7 +98,9 @@
+   plazo: number;
+   actualizado: string;
+ };
++type ApplicationPage = { items: Summary[]; total: number; offset: number; limit: number; estados: Record<string, number> };
+ type Detail = Summary & {
++  pendiente_envio?: boolean;
+   versiones: { numero: number; congelada: boolean; expediente: Snapshot }[];
+   resultados: {
+     version: number;
+@@ -121,6 +121,7 @@
+     version: number;
+     id_operacion: string;
+     acuse: string;
++    estado_transporte: string;
+     fecha: string;
+   }[];
+ };
+@@ -169,8 +170,11 @@
+ }
+ 
+ function today() {
+-  const d = new Date();
+-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
++  const parts = new Intl.DateTimeFormat("en-US", {
++    timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit",
++  }).formatToParts(new Date());
++  const part = (type: string) => parts.find((p) => p.type === type)!.value;
++  return `${part("year")}-${part("month")}-${part("day")}`;
+ }
+ function freshForm(): FormData {
+   return {
+@@ -418,6 +422,9 @@
+     null,
+   );
+   const [policy, setPolicy] = useState<Policy | null>(null);
++  const [pageOffset, setPageOffset] = useState(0);
++  const [totalApplications, setTotalApplications] = useState(0);
++  const [stateCounts, setStateCounts] = useState<Record<string, number>>({});
+   const [clients, setClients] = useState<Client[]>([]);
+   const [apps, setApps] = useState<Summary[]>([]);
+   const [view, setView] = useState<View>("bandeja");
+@@ -437,6 +444,8 @@
+   // pudo confirmarse aunque el navegador no recibiera la primera respuesta.
+   const sendKeys = useRef(new Map<string, string>());
+   function sendKey(d: Detail) {
++    const pending = d.envios.find((e) => e.version === d.version && e.estado_transporte !== "CONFIRMADO");
++    if (pending) return pending.id_operacion;
+     const id = `${d.id}:${d.revision}`;
+     if (!sendKeys.current.has(id))
+       sendKeys.current.set(id, crypto.randomUUID());
+@@ -455,12 +464,14 @@
+     const [p, c, a] = await Promise.all([
+       api<Policy>("policy"),
+       api<Client[]>("clients"),
+-      api<Summary[]>("applications"),
++      api<ApplicationPage>(`applications?limit=50&offset=${pageOffset}`),
+     ]);
+     setPolicy(p);
+     setClients(c);
+-    setApps(a);
+-  }, []);
++    setApps(a.items);
++    setTotalApplications(a.total);
++    setStateCounts(a.estados);
++  }, [pageOffset]);
+ 
+   useEffect(() => {
+     let active = true;
+@@ -564,6 +575,7 @@
+       setView("detalle");
+       setTab("Resumen");
+       await refresh();
++      let pending = false;
+       if (send) {
+         const sent = await api<Detail>(
+           `applications/${d.id}/send`,
+@@ -571,12 +583,15 @@
+           { revision: d.revision },
+           sendKey(d),
+         );
++        pending = !!sent.pendiente_envio;
+         setSelected(sent);
+         await refresh();
+       }
+       setNotice({
+-        text: send
+-          ? "Expediente enviado a Evaluación simulada. La versión quedó congelada."
++        text: pending
++          ? "Envío pendiente de confirmación. La versión está reservada; actualiza para consultar el acuse."
++          : send
++          ? (policy?.integracion === "REAL" ? "Evaluación confirmó la recepción del expediente." : "Expediente enviado a Evaluación simulada. La versión quedó congelada.")
+           : "Borrador guardado en la base de datos.",
+         error: false,
+       });
+@@ -594,7 +609,7 @@
+         setSelected(d);
+         await refresh();
+         setNotice({
+-          text: "Envío recibido por EVA simulada. Consulta el acuse en el historial.",
++          text: d.pendiente_envio ? "Envío pendiente de confirmación. Actualiza para consultar el acuse." : (policy?.integracion === "REAL" ? "Envío confirmado por Evaluación. Consulta el acuse." : "Envío recibido por EVA simulada. Consulta el acuse en el historial."),
+           error: false,
+         });
+       });
+@@ -796,7 +811,7 @@
+             <Icon name="shield" />
+             <div>
+               <strong>Laboratorio BNA</strong>
+-              <small>Integración simulada</small>
++              <small>{policy?.integracion === "REAL" ? "HTTP vía Bus configurado" : "Integración simulada"}</small>
+             </div>
+             <i />
+           </div>
+@@ -834,6 +849,7 @@
+             <span className="sol-demo-pill">DEMO ACADÉMICA</span>
+             <span className="sol-date">
+               {new Date().toLocaleDateString("es-PE", {
++                timeZone: "America/Lima",
+                 day: "numeric",
+                 month: "long",
+                 year: "numeric",
+@@ -882,26 +898,25 @@
+                 {[
+                   {
+                     label: "Solicitudes registradas",
+-                    value: apps.length,
++                    value: totalApplications,
+                     icon: "doc",
+                     cls: "blue",
+                   },
+                   {
+                     label: "En evaluación",
+-                    value: apps.filter((a) => a.estado === "EN_EVALUACION")
+-                      .length,
++                    value: stateCounts.EN_EVALUACION || 0,
+                     icon: "clock",
+                     cls: "gold",
+                   },
+                   {
+                     label: "Por subsanar",
+-                    value: apps.filter((a) => a.estado === "OBSERVADA").length,
++                    value: stateCounts.OBSERVADA || 0,
+                     icon: "alert",
+                     cls: "red",
+                   },
+                   {
+                     label: "Aprobadas",
+-                    value: apps.filter((a) => a.estado === "APROBADA").length,
++                    value: stateCounts.APROBADA || 0,
+                     icon: "check",
+                     cls: "green",
+                   },
+@@ -921,7 +936,7 @@
+                 <div className="sol-card-title">
+                   <div>
+                     <h2>
+-                      Bandeja de solicitudes <span>{apps.length}</span>
++                      Bandeja de solicitudes <span>{totalApplications}</span>
+                     </h2>
+                     <p>
+                       Consulta el estado y la última versión de cada expediente.
+@@ -940,7 +955,7 @@
+                     <Icon name="search" />
+                     <input
+                       aria-label="Buscar solicitudes"
+-                      placeholder="Buscar por cliente, DNI o código…"
++                      placeholder="Buscar en esta página por cliente, DNI o código…"
+                       value={search}
+                       onChange={(e) => setSearch(e.target.value)}
+                     />
+@@ -1044,8 +1059,12 @@
+                   </div>
+                 )}
+                 <div className="sol-tablefoot">
+-                  {filtered.length} de {apps.length} solicitudes
+-                  <span>Datos guardados en el laboratorio local</span>
++                  {filtered.length} visibles · {totalApplications} solicitudes en total
++                  <span>Página {Math.floor(pageOffset / 50) + 1}</span>
++                  <button className="sol-link" disabled={busy || pageOffset === 0}
++                    onClick={() => setPageOffset((n) => Math.max(0, n - 50))}>Anterior</button>
++                  <button className="sol-link" disabled={busy || pageOffset + 50 >= totalApplications}
++                    onClick={() => setPageOffset((n) => n + 50)}>Siguiente</button>
+                 </div>
+               </section>
+               <div className="sol-bottom-note">
+@@ -1152,7 +1171,7 @@
+                                 <strong>{person(c)}</strong>
+                                 <small>
+                                   DNI {c.numero_documento} ·{" "}
+-                                  {c.correo_electronico}
++                                  {c.numero_documento}
+                                 </small>
+                               </span>
+                               <span
+@@ -1616,11 +1635,12 @@
+                   </select>
+                 </div>
+                 <div className="sol-action-group">
++                  <button className="sol-link" disabled={busy} onClick={() => open(selected.id)}>Actualizar estado</button>
+                   {writable && selected.estado === "BORRADOR" && (
+                     <>
+                       <button
+                         className="sol-button secondary"
+-                        disabled={busy}
++                        disabled={busy || selected.versiones.some((v) => v.numero === selected.version && v.congelada)}
+                         onClick={() => edit(selected)}
+                       >
+                         Editar borrador
+@@ -1785,10 +1805,10 @@
+                       {selected.envios.map((e) => (
+                         <p className="sol-mutedbox" key={e.id_operacion}>
+                           <strong>
+-                            Acuse de recepción EVA simulada · v{e.version}
++                            {e.estado_transporte === "CONFIRMADO" ? (policy?.integracion === "REAL" ? "Acuse de Evaluación" : "Acuse de recepción EVA simulada") : "Envío pendiente de confirmación"} · v{e.version}
+                           </strong>
+                           <br />
+-                          {e.acuse}
++                          {e.acuse || e.estado_transporte}
+                           <br />
+                           Operación: {e.id_operacion}
+                         </p>
+@@ -1977,7 +1997,7 @@
+                     integración.
+                   </p>
+                 </div>
+-                <span className="sol-demo-pill">SERVICIOS SIMULADOS</span>
++                <span className="sol-demo-pill">{policy?.integracion === "REAL" ? "HTTP VÍA BUS · VALIDACIÓN PENDIENTE" : "SERVICIOS SIMULADOS"}</span>
+               </div>
+               <div className="sol-integration-grid">
+                 {[
+@@ -1991,26 +2011,26 @@
+                     id: "CR-INT-02",
+                     name: "Solicitud → Evaluación",
+                     description:
+-                      "Expediente completo e inmutable, versión, correlación y operación. El simulador persiste un acuse sin evaluar riesgo.",
++                      "Expediente congelado, versión, correlación y operación. Se consulta la recepción antes de repetir un envío.",
+                   },
+                   {
+                     id: "CR-INT-03",
+                     name: "Evaluación → Solicitud",
+                     description:
+-                      "Dictamen y observaciones sobre la versión enviada. Se prueba con la cuenta evaluador.demo.",
++                      "Dictamen y observaciones sobre la versión enviada. En HTTP se valida la evaluación y su ronda; la cuenta demo solo funciona en modo SIMULADO.",
+                   },
+                   {
+                     id: "CR-INT-10",
+                     name: "Eventos y auditoría",
+                     description:
+-                      "Registro local de actor, versión, cambio de estado y correlación. La entrega a Seguridad central está pendiente.",
++                      "Eventos persistidos con identificador estable. La cola espera confirmación y recupera pendientes; el acuse demo se distingue de la confirmación central.",
+                   },
+                 ].map((c) => (
+                   <section className="sol-card sol-integration" key={c.id}>
+                     <span>{c.id}</span>
+                     <h2>{c.name}</h2>
+                     <p>{c.description}</p>
+-                    <Badge state="SIMULADO" />
++                    <Badge state={policy?.integracion === "REAL" ? "HTTP CONFIGURADO" : "SIMULADO"} />
+                   </section>
+                 ))}
+               </div>

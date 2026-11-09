@@ -1,0 +1,2 @@
+# Los scripts corren dentro del contenedor Linux aunque el clon sea de Windows.
+*.sh text eol=lf

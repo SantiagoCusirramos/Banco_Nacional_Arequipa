@@ -3,7 +3,16 @@
 
 from functools import lru_cache
 
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LONGITUD_MINIMA_SECRET_KEY = 32
+MARCADOR_DE_EJEMPLO = "change_me"  # valor de .env.example
+AYUDA_SECRET_KEY = (
+    "Copie backend/.env.example a backend/.env y defina SECRET_KEY con al menos "
+    f"{LONGITUD_MINIMA_SECRET_KEY} caracteres propios. Genérela con: "
+    'python -c "import secrets; print(secrets.token_urlsafe(48))"'
+)
 
 
 class Settings(BaseSettings):
@@ -26,6 +35,8 @@ class Settings(BaseSettings):
     # La clave se saca del .env
     secret_key: str
     algorithm: str = "HS256"
+    # Vigencia del access token (variable ACCESS_TOKEN_EXPIRE_MINUTES del .env)
+    access_token_expire_minutes: int = 30
 
     @property
     def database_url(self) -> str:
@@ -39,4 +50,15 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def verificar_configuracion() -> None:
+    """Detiene el arranque si falta configuración. El error nunca repite los valores."""
+    try:
+        clave = get_settings().secret_key
+    except ValidationError as exc:
+        campos = ", ".join(str(error["loc"][0]).upper() for error in exc.errors())
+        raise RuntimeError(f"Configuración inválida o incompleta: {campos}. {AYUDA_SECRET_KEY}") from None
+    if len(clave) < LONGITUD_MINIMA_SECRET_KEY or clave.startswith(MARCADOR_DE_EJEMPLO):
+        raise RuntimeError(f"SECRET_KEY no es válida. {AYUDA_SECRET_KEY}")
 

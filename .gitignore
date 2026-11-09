@@ -74,6 +74,10 @@ next-env.d.ts
 # Excepción: el template sí se versiona
 !.env.example
 
+# Laboratorio SOL: las plantillas se versionan; claves y venv no.
+backend/.env.sol
+backend/.venv-sol/
+
 # ── Docker ──────────────────────────────────────────────────
 # Volúmenes y datos locales de contenedores
 docker-data/
