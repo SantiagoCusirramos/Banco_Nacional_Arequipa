@@ -1,7 +1,7 @@
 # database/
 
 Esta carpeta es una copia de [bna-core-db](https://github.com/miguelpro324/bna-core-db),
-rama `mysql`, en la etiqueta **`bd-v1.0-mysql`**.
+rama `mysql`, en la etiqueta **`bd-v1.1-mysql`**.
 
 **No se edita aquí.** Un cambio directo se perdería o chocaría con la siguiente
 actualización. Todo cambio de la base va primero a bna-core-db: rama nueva desde
@@ -65,3 +65,6 @@ esquema, o cambia el mes en desarrollo, hay que recrear el volumen, lo que borra
 ```bash
 docker compose -f docker-compose.coredb.yml --env-file backend/COREDB/.env down -v
 ```
+
+`bd-v1.1-mysql` cambia el esquema (`core.usuario_sistema`): una base creada con
+`bd-v1.0-mysql` debe recrearse así.

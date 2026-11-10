@@ -4,7 +4,7 @@ Generado por `pruebas/mysql/run_tests.sh`. Los ID son los de la rama main (Postg
 L02, M20c, F32 y G01 a G05 son solo de MySQL. Un ID pasa si pasan todas sus filas
 (`app` = bna_app_user, `admin` = bna_admin_user). Las G confirman una brecha conocida.
 
-- MySQL 8.4.11: 6 N/A, 5 brecha conocida, 78 pasa, 14 pasa vía privilegio, 3 pasa vía procedimiento, 2 pasa vía procedimiento y privilegio.
+- MySQL 8.4.11: 6 N/A, 5 brecha conocida, 83 pasa, 14 pasa vía privilegio, 3 pasa vía procedimiento, 2 pasa vía procedimiento y privilegio.
 
 | ID | Grupo | Referencia | Prueba | Mecanismo | Esperado | Obtenido | Resultado |
 |---|---|---|---|---|---|---|---|
@@ -78,6 +78,7 @@ L02, M20c, F32 y G01 a G05 son solo de MySQL. Un ID pasa si pasan todas sus fila
 | F12l | Tarjetas | Tope diario (RN-TOP-001) | Una autorización de ayer contabilizada hoy cuenta para el tope de ayer, no para el de hoy | trigger | ayer 1000.00; hoy 1500.00; vinculada; contable 12500.00; disponible 12500.00 | ayer 1000.00; hoy 1500.00; vinculada; contable 12500.00; disponible 12500.00 | pasa |
 | F12m | Tarjetas | Extorno (Tarjetas, C07) | El extorno hoy del movimiento de una autorización de ayer libera el tope de ayer, no el de hoy | trigger | ayer 0.00; hoy 400.00 | ayer 0.00; hoy 400.00 | pasa |
 | F12n | Tarjetas | trg_autorizacion_bu (C07) | El extorno hoy de una autorización de ayer sin movimiento libera el tope de ayer y el saldo | trigger | ayer 0.00; hoy 400.00; disponible 14600.00 | ayer 0.00; hoy 400.00; disponible 14600.00 | pasa |
+| F12o | Tarjetas | sp_validar_reglas_autorizacion (fila ausente) | No se autoriza por un canal y moneda sin fila en limite_canal | trigger | Rechazo: ERR-TAR-006: el canal HB no opera en USD$ | Rechazo: ERR-TAR-006: el canal HB no opera en USD | pasa |
 | F13 | Tarjetas | trg_autorizacion_bd (RN-ATM-003) | Una autorización no se borra; se extorna | privilegio + trigger | app: Rechazo: DELETE command denied; admin: Rechazo: ERR-TAR-009 | app: Rechazo: DELETE command denied to user 'bna_app_user'@'localhost' for table 'autorizacion'; admin: Rechazo: ERR-TAR-009: tarjetas.autorizacion es de solo inserción (DELETE no permitido) | pasa vía privilegio |
 | F14a | Tarjetas | trg_cliente_ref_au (INT-T07) | Si Clientes bloquea al cliente, se bloquean sus tarjetas | trigger | BLOQUEADA por MODULO_CLIENTES | BLOQUEADA por MODULO_CLIENTES | pasa |
 | F14b | Tarjetas | trg_cliente_ref_au (INT-T07) | Si Clientes da de baja al cliente, se cancelan sus tarjetas | trigger | CANCELADA | CANCELADA | pasa |
@@ -103,6 +104,10 @@ L02, M20c, F32 y G01 a G05 son solo de MySQL. Un ID pasa si pasan todas sus fila
 | F30 | Desembolso | des_v_conciliacion_diaria | La vista cuadra lo ordenado con lo abonado por fecha y moneda | declarativo | PEN: ordenado 10000.00, abonado 10000.00, sin abono 0 | PEN: ordenado 10000.00, abonado 10000.00, sin abono 0 | pasa |
 | F31 | Índices | Consultas de Tarjetas y Desembolso | Existen los índices de consulta y ninguno repite a otro de clave foránea | declarativo | 8 índices de consulta; 0 redundantes | 8 índices de consulta; 0 redundantes | pasa |
 | F32 | CORE | Bitácoras (decisión del informe) | El identificador de una bitácora lo asigna la base | privilegio + trigger | app: Rechazo: INSERT command denied; admin: Rechazo: BNA-IDENTIDAD | app: Rechazo: INSERT command denied to user 'bna_app_user'@'localhost' for column 'id_intento' in table 'intento_autenticacion'; admin: Rechazo: BNA-IDENTIDAD: tarjetas.intento_autenticacion.id_intento lo asigna la base (se recibió 999) | pasa vía privilegio |
+| F32a | Cuentas | trg_movimiento_validar (fila ausente) | Un débito por AGE, sin fila en limite_canal, se rechaza | trigger | Rechazo: BNA-CANAL: el canal AGE | Rechazo: BNA-CANAL: el canal AGE no opera en PEN | pasa |
+| F32b | Cuentas | trg_movimiento_validar (fila ausente) | Un débito en USD por HB, sin fila en limite_canal, se rechaza | trigger | Rechazo: BNA-CANAL: el canal HB | Rechazo: BNA-CANAL: el canal HB no opera en USD | pasa |
+| F32c | Cuentas | trg_movimiento_validar (RN-BD-002) | Un débito en USD por BD, con la fila deshabilitada, se rechaza | trigger | Rechazo: RN-BD-002: el canal BD | Rechazo: RN-BD-002: el canal BD no opera en USD | pasa |
+| F32d | Cuentas | trg_movimiento_validar (Tarjetas, tabla 4) | Ventanilla opera sin tope automático: su fila tiene monto nulo | trigger | aceptado | aceptado | pasa |
 | R1 | Regresión | Pruebas negativas del DDL | Evento de auditoría sobre un registro no registrado como auditable | declarativo | Rechazo: fk_evento_auditoria_2 | Rechazo: Cannot add or update a child row: a foreign key constraint fails (`creditos`.`evento_auditoria`, CONSTRAINT `fk_evento_auditoria_2` FOREIGN KEY (`id_entidad`) REFERENCES `entidad_auditada` (`id_entidad`)) | pasa |
 | R2 | Regresión | Pruebas negativas del DDL | Intento con coordenada para una credencial que no es la matriz | declarativo | Rechazo: ck_intento_autenticacion_4 | Rechazo: Check constraint 'ck_intento_autenticacion_4' is violated. | pasa |
 | R3 | Regresión | Pruebas negativas del DDL | Intento con terminal y canal a la vez | declarativo | Rechazo: ck_intento_autenticacion_5 | Rechazo: Check constraint 'ck_intento_autenticacion_5' is violated. | pasa |

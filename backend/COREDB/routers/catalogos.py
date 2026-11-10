@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
+from COREDB.auth import actor_actual
 from COREDB.database import db_session
 from COREDB.models import Agencia, Moneda, ProductoAhorro, ProductoCredito, TipoCambio
 
-router = APIRouter(prefix="/coredb/catalogos", tags=["catálogos"])
+# Cualquier usuario autenticado lee los catálogos.
+router = APIRouter(prefix="/coredb/catalogos", tags=["catálogos"], dependencies=[Depends(actor_actual)])
 
 
 class _Lectura(BaseModel):

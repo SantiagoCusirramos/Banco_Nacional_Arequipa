@@ -73,6 +73,61 @@ X132	bna_api_user	bna_api no puede: INSERT en usuario_sistema	pasa
 X133	bna_api_user	bna_api no puede: UPDATE de la bitácora	pasa
 X134	bna_api_user	bna_api lee la tarjeta por la vista, sin pan_token	pasa
 X135	bna_api_user	bna_api lee lo que usa la API	pasa
+X150	bna_api_user	Se crea un usuario de servicio para un módulo	pasa
+X151	bna_api_user	crear_usuario no crea un usuario de servicio	pasa
+X152	bna_api_user	Un usuario de servicio exige un módulo existente	pasa
+X153	bna_api_user	Se renueva la credencial de un usuario de servicio	pasa
+X154	bna_api_user	No se renueva por esta vía la contraseña de una persona	pasa
+X155	bna_api_user	No se renueva la credencial de un usuario inexistente	pasa
+X156	bna_api_user	Desactivar un usuario lo cambia una vez; repetirlo no cambia nada	pasa
+X157	bna_api_user	No se registra el login de un usuario inactivo	pasa
+X158	bna_api_user	No se registra el login de un usuario inexistente	pasa
+X159	bna_api_user	No se cambia el estado de un usuario inexistente	pasa
+X160	bna_api_user	Un cliente HABILITADO queda ACTIVO con código CLI y nueve dígitos	pasa
+X161	bna_api_user	Un cliente OBSERVADO queda OBSERVADO	pasa
+X162	bna_api_user	CE, PTP y pasaporte en sus límites se aceptan, con códigos distintos	pasa
+X163	bna_api_user	Un DNI de siete dígitos se rechaza sin repetir el número	pasa
+X164	bna_api_user	Un DNI con una letra se rechaza	pasa
+X165	bna_api_user	Un PTP con una letra se rechaza (es numérico)	pasa
+X166	bna_api_user	Un pasaporte en minúsculas se rechaza (la API lo normaliza)	pasa
+X167	bna_api_user	Un tipo de documento desconocido se rechaza	pasa
+X168	bna_api_user	Un documento ya registrado se rechaza	pasa
+X169	bna_api_user	Un correo ya registrado se rechaza aunque cambie de mayúsculas	pasa
+X170	bna_api_user	Un celular ya registrado se rechaza	pasa
+X171	bna_api_user	Un celular que no empieza en 9 se rechaza	pasa
+X172	bna_api_user	La versión del contrato en blanco se rechaza	pasa
+X173	bna_api_user	Los nombres en blanco se rechazan	pasa
+X174	bna_api_user	Un correo sin arroba se rechaza sin repetirlo	pasa
+X175	bna_api_user	El registro exige correlation_id	pasa
+X176	bna_api_user	Un estado habilitante desconocido se rechaza	pasa
+X177	bna_api_user	El apellido paterno en blanco se rechaza	pasa
+X178	bna_api_user	La consulta por código no devuelve biometría y un código inexistente da NULL	pasa
+X179	bna_api_user	Los catálogos traen los cuatro tipos de documento y los cinco estados	pasa
+X180	bna_api_user	Sin identidad verificada, cliente y no cliente reciben la misma respuesta	pasa
+X181	bna_api_user	Con identidad verificada, un cliente ACTIVO se aprueba	pasa
+X182	bna_api_user	Con identidad verificada, un cliente BLOQUEADO se rechaza y se informa su estado	pasa
+X183	bna_api_user	Con identidad verificada, un documento sin cliente se rechaza sin datos	pasa
+X184	bna_api_user	Un cliente OBSERVADO no se aprueba (RF-CLI-001 exige ACTIVO)	pasa
+X185	bna_api_user	La verificación exige correlation_id	pasa
+X186	bna_api_user	La verificación exige declarar si la identidad se verificó	pasa
+X187	bna_api_user	Se registra una validación dactilar de un cliente	pasa
+X188	bna_api_user	La validación de documento no se registra por esta vía	pasa
+X189	bna_api_user	Una validación de un cliente inexistente se rechaza	pasa
+X190	bna_api_user	Un resultado desconocido se rechaza	pasa
+X191	bna_api_user	Un tipo de validación desconocido se rechaza	pasa
+X192	bna_api_user	Bloquear un cliente con motivo bloquea su tarjeta activa	pasa
+X193	bna_api_user	Dar de baja un cliente cancela su tarjeta	pasa
+X194	bna_api_user	El cambio de estado exige un motivo	pasa
+X195	bna_api_user	BAJA es final: un cliente dado de baja no vuelve a ACTIVO	pasa
+X196	bna_api_user	No se cambia el estado de un cliente inexistente	pasa
+X197	bna_api_user	Un estado desconocido se rechaza	pasa
+X198	bna_api_user	Reactivar un cliente no desbloquea sus tarjetas (lo hace Seguridad)	pasa
+X199	bna_api_user	El mismo estado no cambia nada y devuelve el actual	pasa
+X200	bna_api_user	bna_api no puede: SELECT clientes.validacion_identidad	pasa
+X201	bna_api_user	bna_api no puede: INSERT en clientes.cliente	pasa
+X202	bna_api_user	bna_api no puede: UPDATE del estado del cliente	pasa
+X203	bna_api_user	bna_api no puede: INSERT en clientes.numerador_cliente	pasa
+X204	bna_api_user	bna_api no puede: UPDATE de usuario_sistema	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
@@ -82,6 +137,10 @@ X35	bna_admin_user	El identificador del empleado debe ser un UUID válido (M6)	p
 X45	bna_admin_user	No se emite tarjeta sobre una cuenta cancelada (I3)	pasa
 X69	bna_admin_user	Sin la fila explícita, ventanilla también se rechaza (C2)	pasa
 X56	bna_admin_user	Un canal inactivo se rechaza (I7)	pasa
+X205	bna_admin_user	Un usuario SERVICIO sin módulo se rechaza aun con privilegios	pasa
+X206	bna_admin_user	Una persona con módulo se rechaza aun con privilegios	pasa
+X207	bna_admin_user	bna_admin ejecuta los procedimientos de clientes por su privilegio sobre la base	pasa
+X234	bna_app_user	Dos registros simultáneos con el mismo correo dejan un solo cliente	pasa
 X70	bna_api_user	Una transferencia a una cuenta bloqueada no deja nada (C1)	pasa
 X71	bna_api_user	Repetir la llave tras un fallo no informa éxito (C1)	pasa
 X72	bna_api_user	Un retiro sin saldo no deja asiento ni llave (C1)	pasa
@@ -132,3 +191,29 @@ X136	bna_api_user	bna_api lee exactamente los objetos de lecturas_api.txt (R4)	p
 X137	root	bna_api no tiene SELECT global, por base, por columna ni roles heredados (R4)	pasa
 X138	bna_api_user	Un depósito rechaza una llave sin operación registrada	pasa
 X139	bna_api_user	Una transferencia rechaza una llave sin operación registrada	pasa
+X208	bna_api_user	Crear un usuario de servicio y su login dejan sus eventos; el login toma el actor de la fila (v1.1)	pasa
+X209	bna_api_user	Renovar, desactivar y reactivar dejan un evento cada uno, sin el hash (v1.1)	pasa
+X210	bna_api_user	Registrar un cliente deja su captación y un evento de CLIENTES sin datos personales (v1.1)	pasa
+X211	bna_api_user	La verificación por documento deja su validación y el evento con los dos motivos (v1.1)	pasa
+X212	bna_api_user	Una validación dactilar deja su fila y el motivo en el evento (v1.1)	pasa
+X213	bna_api_user	Un cambio de estado deja el motivo en el evento; repetir el estado no deja otro (v1.1)	pasa
+X214	bna_api_user	registrar_cliente no deja cliente ni captación si falla el evento (C1)	pasa
+X215	bna_api_user	Un correo duplicado no deja una captación huérfana (C1)	pasa
+X216	bna_api_user	verificar_documento no deja la validación si falla el evento (C1)	pasa
+X217	bna_api_user	registrar_validacion no deja la validación si falla el evento (C1)	pasa
+X218	bna_api_user	cambiar_estado_cliente no cambia el estado ni bloquea tarjetas si falla el evento (C1)	pasa
+X219	bna_api_user	crear_usuario_servicio no deja la fila si falla el evento (C1)	pasa
+X220	bna_api_user	renovar_credencial no cambia el hash si falla el evento (C1)	pasa
+X221	bna_api_user	cambiar_estado_usuario no desactiva si falla el evento (C1)	pasa
+X222	bna_api_user	registrar_cliente deshace solo lo suyo dentro de una transacción (N2)	pasa
+X223	bna_api_user	cambiar_estado_cliente deshace solo lo suyo dentro de una transacción (N2)	pasa
+X224	bna_api_user	verificar_documento deshace solo lo suyo dentro de una transacción (N2)	pasa
+X225	bna_api_user	registrar_cliente conserva 1213 en la transacción de quien llama (R3)	pasa
+X226	bna_api_user	verificar_documento conserva 1213 en la transacción de quien llama (R3)	pasa
+X227	bna_api_user	registrar_validacion conserva 1213 en la transacción de quien llama (R3)	pasa
+X228	bna_api_user	cambiar_estado_cliente conserva 1213 en la transacción de quien llama (R3)	pasa
+X229	bna_api_user	crear_usuario_servicio conserva 1213 en la transacción de quien llama (R3)	pasa
+X230	bna_api_user	renovar_credencial conserva 1213 en la transacción de quien llama (R3)	pasa
+X231	bna_api_user	cambiar_estado_usuario conserva 1213 en la transacción de quien llama (R3)	pasa
+X232	bna_api_user	registrar_login conserva 1213 en la transacción de quien llama (R3)	pasa
+X233	bna_api_user	bna_app no ejecuta los procedimientos de clientes ni de usuarios de servicio (v1.1)	pasa

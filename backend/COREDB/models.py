@@ -28,6 +28,7 @@ class Usuario(Base):
     id_empleado: Mapped[uuid.UUID | None] = mapped_column(UuidBinario)
     activo: Mapped[bool] = mapped_column()
     creado_en: Mapped[datetime] = mapped_column(FechaUtc)
+    modulo: Mapped[str | None] = mapped_column(String(40))
 
 
 class Moneda(Base):

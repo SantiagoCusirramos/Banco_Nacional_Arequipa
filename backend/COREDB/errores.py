@@ -8,6 +8,7 @@ from sqlalchemy.exc import DBAPIError
 # Los rechazos de la base empiezan con el código de la regla.
 ESTADOS_POR_REGLA = {
     "BNA-CUENTA": 404,
+    "BNA-USUARIO": 404,
     "BNA-DESBLOQUEO": 403,
     "BNA-IDEMPOTENCIA": 409,
 }
@@ -29,6 +30,13 @@ class ErrorCoreDb(Exception):
         self.message = message
         self.status_code = status_code
         super().__init__(message)
+
+
+class ErrorAutenticacion(ErrorCoreDb):
+    """401: sin token, token inválido o vencido, usuario no vigente o login fallido."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(code, message, 401)
 
 
 class ErrorBaseDatos(ErrorCoreDb):
@@ -67,6 +75,7 @@ def registrar_manejadores(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={"error": {"code": exc.code, "message": exc.message}},
+            headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
         )
 
     @app.exception_handler(DBAPIError)

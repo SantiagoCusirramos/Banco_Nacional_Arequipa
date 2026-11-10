@@ -386,3 +386,173 @@ llave_sin_operacion X138 'Un depósito rechaza una llave sin operación registra
   "CALL cuentas.registrar_movimiento('AC-1', 'DEPOSITO', 10, 'g', 'VEN', UUID_TO_BIN(UUID()), 'k138', REPEAT('a', 64), 'pruebas', @m, @r);"
 llave_sin_operacion X139 'Una transferencia rechaza una llave sin operación registrada' k139 \
   "$(TRANSFERENCIA k139)"
+
+# --- v1.1: usuarios de servicio, clientes y validaciones. Lo que bna_api no puede
+# leer (la bitácora y clientes.*) lo comprueba root después.
+SRV="UUID_TO_BIN('15000000-0000-4000-8000-0000000000a1')"
+uuid_v11() { echo "UUID_TO_BIN('15000000-0000-4000-8000-0000000000$1')"; }
+caso X208 'Crear un usuario de servicio y su login dejan sus eventos; el login toma el actor de la fila (v1.1)' \
+  "SELECT (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'CREAR_USUARIO_SERVICIO' AND id_entidad = BIN_TO_UUID($SRV)
+             AND actor = 'admin-x208' AND detalle->>'\$.modulo' = 'CLIENTES') = 1
+      AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'LOGIN' AND id_entidad = BIN_TO_UUID($SRV)
+             AND actor = 'svc-x208' AND correlation_id = $(uuid_v11 c1) AND detalle->>'\$.modulo' = 'CLIENTES') = 1" <<SQL
+CALL core.crear_usuario_servicio($SRV, 'svc-x208', 'Clientes', 'CLIENTES', 'h0', 'BCRYPT', 'v2', 'admin-x208');
+CALL core.registrar_login($SRV, $(uuid_v11 c1));
+SQL
+caso X209 'Renovar, desactivar y reactivar dejan un evento cada uno, sin el hash (v1.1)' \
+  "SELECT (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'RENOVAR_CREDENCIAL' AND id_entidad = BIN_TO_UUID($SRV)
+             AND JSON_SEARCH(detalle, 'one', 'h1') IS NULL) = 1
+      AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'DESACTIVAR_USUARIO' AND id_entidad = BIN_TO_UUID($SRV)) = 1
+      AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'ACTIVAR_USUARIO' AND id_entidad = BIN_TO_UUID($SRV)) = 1
+      AND (SELECT activo AND hash_password = 'h1' FROM core.usuario_sistema WHERE id_usuario = $SRV)" <<SQL
+CALL core.renovar_credencial($SRV, 'h1', 'BCRYPT', 'v2', 'admin', @f);
+CALL core.cambiar_estado_usuario($SRV, FALSE, 'admin', @f);
+CALL core.cambiar_estado_usuario($SRV, FALSE, 'admin', @f);
+CALL core.cambiar_estado_usuario($SRV, TRUE, 'admin', @f);
+SQL
+caso X210 'Registrar un cliente deja su captación y un evento de CLIENTES sin datos personales (v1.1)' \
+  "SELECT (SELECT c.estado_cliente = 'ACTIVO' AND v.estado_habilitante = 'HABILITADO' AND c.correo = 'c210@example.com'
+             FROM clientes.cliente c JOIN clientes.verificacion_captacion v USING (id_verificacion_captacion)
+            WHERE c.numero_documento = '71000210')
+      AND (SELECT COUNT(*) FROM core.evento_auditoria e JOIN clientes.cliente c ON e.id_entidad = c.cod_cliente
+            WHERE c.numero_documento = '71000210' AND e.accion = 'REGISTRAR_CLIENTE' AND e.actor = 'svc-x208'
+              AND e.correlation_id = $(uuid_v11 c2) AND e.id_modulo = 2
+              AND JSON_SEARCH(e.detalle, 'one', '71000210') IS NULL AND JSON_SEARCH(e.detalle, 'one', '%example.com') IS NULL
+              AND JSON_SEARCH(e.detalle, 'one', '961000210') IS NULL) = 1" <<SQL
+CALL clientes.registrar_cliente('DNI', '71000210', ' Prueba ', 'Ficticio', '', ' C210@Example.com ', '961000210', 'v1', 'HABILITADO', $(uuid_v11 c2), 'svc-x208', @c);
+SQL
+caso X211 'La verificación por documento deja su validación y el evento con los dos motivos (v1.1)' \
+  "SELECT (SELECT COUNT(*) FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 c3)
+             AND tipo_validacion = 'DOCUMENTO' AND resultado = 'RECHAZADO' AND cod_cliente = 'C001') = 1
+      AND (SELECT COUNT(*) FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 c4)
+             AND resultado = 'RECHAZADO' AND cod_cliente IS NULL) = 1
+      AND (SELECT COUNT(*) FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 c5)
+             AND resultado = 'APROBADO' AND cod_cliente = 'C001') = 1
+      AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'VALIDAR_DOCUMENTO' AND correlation_id = $(uuid_v11 c3)
+             AND detalle->>'\$.motivo_llamador' = 'RENIEC_NO_COINCIDE' AND detalle->>'\$.motivo_core' = 'IDENTIDAD_NO_VERIFICADA') = 1" <<SQL
+CALL clientes.verificar_documento('DNI', '70000001', FALSE, 'RENIEC_NO_COINCIDE', $(uuid_v11 c3), 'pruebas', @i, @r, @m, @j);
+CALL clientes.verificar_documento('DNI', '71999999', FALSE, 'RENIEC_NO_COINCIDE', $(uuid_v11 c4), 'pruebas', @i, @r, @m, @j);
+CALL clientes.verificar_documento('DNI', '70000001', TRUE, NULL, $(uuid_v11 c5), 'pruebas', @i, @r, @m, @j);
+SQL
+caso X212 'Una validación dactilar deja su fila y el motivo en el evento (v1.1)' \
+  "SELECT (SELECT COUNT(*) FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 c6)
+             AND tipo_validacion = 'HUELLA' AND resultado = 'RECHAZADO' AND cod_cliente = 'C002') = 1
+      AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'REGISTRAR_VALIDACION' AND correlation_id = $(uuid_v11 c6)
+             AND detalle->>'\$.motivo' = 'SIMILITUD_BAJA') = 1" <<SQL
+CALL clientes.registrar_validacion('C002', 'HUELLA', 'RECHAZADO', 'SIMILITUD_BAJA', $(uuid_v11 c6), 'pruebas', @i);
+SQL
+caso X213 'Un cambio de estado deja el motivo en el evento; repetir el estado no deja otro (v1.1)' \
+  "SELECT (SELECT COUNT(*) FROM core.evento_auditoria e JOIN clientes.cliente c ON e.id_entidad = c.cod_cliente
+            WHERE c.numero_documento = '71000213' AND e.accion = 'CAMBIAR_ESTADO_CLIENTE' AND e.detalle->>'\$.motivo' = 'Fraude'
+              AND e.detalle->>'\$.estado_anterior' = 'ACTIVO' AND e.detalle->>'\$.estado_nuevo' = 'SUSPENDIDO') = 1
+      AND (SELECT COUNT(*) FROM core.evento_auditoria e JOIN clientes.cliente c ON e.id_entidad = c.cod_cliente
+            WHERE c.numero_documento = '71000213' AND e.accion = 'CAMBIAR_ESTADO_CLIENTE') = 1" <<SQL
+CALL clientes.registrar_cliente('DNI', '71000213', 'Prueba', 'Ficticio', NULL, 'c213@example.com', '961000213', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'pruebas', @c);
+CALL clientes.cambiar_estado_cliente(@c, 'SUSPENDIDO', 'Fraude', 'pruebas', @a);
+CALL clientes.cambiar_estado_cliente(@c, 'SUSPENDIDO', 'Otra vez', 'pruebas', @a);
+SQL
+
+# C1 para v1.1: sin actor, el evento (último paso) falla con las escrituras hechas.
+root_ <<'SQL'
+INSERT INTO clientes.verificacion_captacion (id_verificacion_captacion, estado_habilitante) VALUES ('VC-X218', 'HABILITADO');
+INSERT INTO clientes.cliente (cod_cliente, tipo_documento, numero_documento, nombres, apellido_paterno, correo, celular,
+                              estado_cliente, id_verificacion_captacion, version_contrato)
+VALUES ('CX218', 'DNI', '71000218', 'Prueba', 'Ficticio', 'c218@example.com', '961000218', 'ACTIVO', 'VC-X218', 'v1');
+INSERT INTO tarjetas.tarjeta (id_tarjeta, pan_token, bin, ultimos4, fecha_emision, fecha_vencimiento, estado_tarjeta, cod_cliente)
+VALUES (UUID_TO_BIN('15000000-0000-4000-8000-0000000000d1'), 'tok-x218', '455788', '1234', '2026-01-01', '2030-01-01', 'ACTIVA', 'CX218');
+SQL
+captaciones() { root_ -N -e "SELECT COUNT(*) FROM clientes.verificacion_captacion"; }
+vc="$(captaciones)"
+caso X214 'registrar_cliente no deja cliente ni captación si falla el evento (C1)' \
+  "SELECT (SELECT COUNT(*) FROM clientes.cliente WHERE numero_documento = '71000214') = 0
+      AND (SELECT COUNT(*) FROM clientes.verificacion_captacion) = $vc" <<'SQL'
+CALL clientes.registrar_cliente('DNI', '71000214', 'Prueba', 'Ficticio', NULL, 'c214@example.com', '961000214', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), NULL, @c);
+SQL
+caso X215 'Un correo duplicado no deja una captación huérfana (C1)' \
+  "SELECT (SELECT COUNT(*) FROM clientes.cliente WHERE numero_documento = '71000215') = 0
+      AND (SELECT COUNT(*) FROM clientes.verificacion_captacion) = $vc" <<'SQL'
+CALL clientes.registrar_cliente('DNI', '71000215', 'Prueba', 'Ficticio', NULL, 'juan@example.com', '961000215', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'pruebas', @c);
+SQL
+caso X216 'verificar_documento no deja la validación si falla el evento (C1)' \
+  "SELECT COUNT(*) = 0 FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 c7)" <<SQL
+CALL clientes.verificar_documento('DNI', '70000001', TRUE, NULL, $(uuid_v11 c7), NULL, @i, @r, @m, @j);
+SQL
+caso X217 'registrar_validacion no deja la validación si falla el evento (C1)' \
+  "SELECT COUNT(*) = 0 FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 c8)" <<SQL
+CALL clientes.registrar_validacion('C001', 'HUELLA', 'APROBADO', NULL, $(uuid_v11 c8), NULL, @i);
+SQL
+TARJETA_X218="UUID_TO_BIN('15000000-0000-4000-8000-0000000000d1')"
+caso X218 'cambiar_estado_cliente no cambia el estado ni bloquea tarjetas si falla el evento (C1)' \
+  "SELECT (SELECT estado_cliente FROM clientes.cliente WHERE cod_cliente = 'CX218') = 'ACTIVO'
+      AND ($(estado "$TARJETA_X218" ACTIVA))
+      AND (SELECT COUNT(*) FROM tarjetas.historial_estado_tarjeta WHERE id_tarjeta = $TARJETA_X218 AND estado_nuevo = 'BLOQUEADA') = 0" <<'SQL'
+CALL clientes.cambiar_estado_cliente('CX218', 'BLOQUEADO', 'Fraude', NULL, @a);
+SQL
+caso X219 'crear_usuario_servicio no deja la fila si falla el evento (C1)' \
+  "SELECT COUNT(*) = 0 FROM core.usuario_sistema WHERE username = 'svc-x219'" <<'SQL'
+CALL core.crear_usuario_servicio(UUID_TO_BIN(UUID()), 'svc-x219', 'S', 'CLIENTES', 'h', 'BCRYPT', 'v2', NULL);
+SQL
+caso X220 'renovar_credencial no cambia el hash si falla el evento (C1)' \
+  "SELECT hash_password = 'h1' FROM core.usuario_sistema WHERE id_usuario = $SRV" <<SQL
+CALL core.renovar_credencial($SRV, 'h2', 'BCRYPT', 'v2', NULL, @f);
+SQL
+caso X221 'cambiar_estado_usuario no desactiva si falla el evento (C1)' \
+  "SELECT activo FROM core.usuario_sistema WHERE id_usuario = $SRV" <<SQL
+CALL core.cambiar_estado_usuario($SRV, FALSE, NULL, @f);
+SQL
+# N2 para v1.1: dentro de la transacción de quien llama, solo se deshace lo propio.
+caso X222 'registrar_cliente deshace solo lo suyo dentro de una transacción (N2)' \
+  "SELECT $(quedo p222) AND (SELECT COUNT(*) FROM clientes.cliente WHERE numero_documento = '71000222') = 0
+      AND (SELECT COUNT(*) FROM clientes.verificacion_captacion) = $vc" <<SQL
+$(previo p222)
+CALL clientes.registrar_cliente('DNI', '71000222', 'Prueba', 'Ficticio', NULL, 'c222@example.com', '961000222', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), NULL, @c);
+COMMIT;
+SQL
+caso X223 'cambiar_estado_cliente deshace solo lo suyo dentro de una transacción (N2)' \
+  "SELECT $(quedo p223) AND (SELECT estado_cliente FROM clientes.cliente WHERE cod_cliente = 'CX218') = 'ACTIVO'
+      AND ($(estado "$TARJETA_X218" ACTIVA))" <<SQL
+$(previo p223)
+CALL clientes.cambiar_estado_cliente('CX218', 'BAJA', 'Baja', NULL, @a);
+COMMIT;
+SQL
+caso X224 'verificar_documento deshace solo lo suyo dentro de una transacción (N2)' \
+  "SELECT $(quedo p224) AND (SELECT COUNT(*) FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 c9)) = 0" <<SQL
+$(previo p224)
+CALL clientes.verificar_documento('DNI', '70000001', TRUE, NULL, $(uuid_v11 c9), NULL, @i, @r, @m, @j);
+COMMIT;
+SQL
+# R3 para v1.1: el deadlock llega a quien llama y no queda nada.
+deadlock_procedimiento X225 registrar_cliente "SELECT COUNT(*) = 0 FROM clientes.cliente WHERE numero_documento = '71000225'" \
+  "CALL clientes.registrar_cliente('DNI', '71000225', 'Prueba', 'Ficticio', NULL, 'c225@example.com', '961000225', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'pruebas', @c);"
+deadlock_procedimiento X226 verificar_documento \
+  "SELECT COUNT(*) = 0 FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 ca)" \
+  "CALL clientes.verificar_documento('DNI', '70000001', TRUE, NULL, $(uuid_v11 ca), 'pruebas', @i, @r, @m, @j);"
+deadlock_procedimiento X227 registrar_validacion \
+  "SELECT COUNT(*) = 0 FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 cb)" \
+  "CALL clientes.registrar_validacion('C001', 'FACIAL', 'APROBADO', NULL, $(uuid_v11 cb), 'pruebas', @i);"
+deadlock_procedimiento X228 cambiar_estado_cliente \
+  "SELECT (SELECT estado_cliente FROM clientes.cliente WHERE cod_cliente = 'CX218') = 'ACTIVO' AND ($(estado "$TARJETA_X218" ACTIVA))" \
+  "CALL clientes.cambiar_estado_cliente('CX218', 'BLOQUEADO', 'x', 'pruebas', @a);"
+deadlock_procedimiento X229 crear_usuario_servicio "SELECT COUNT(*) = 0 FROM core.usuario_sistema WHERE username = 'svc-x229'" \
+  "CALL core.crear_usuario_servicio(UUID_TO_BIN(UUID()), 'svc-x229', 'S', 'CLIENTES', 'h', 'BCRYPT', 'v2', 'pruebas');"
+deadlock_procedimiento X230 renovar_credencial "SELECT hash_password = 'h1' FROM core.usuario_sistema WHERE id_usuario = $SRV" \
+  "CALL core.renovar_credencial($SRV, 'h3', 'BCRYPT', 'v2', 'pruebas', @f);"
+deadlock_procedimiento X231 cambiar_estado_usuario "SELECT activo FROM core.usuario_sistema WHERE id_usuario = $SRV" \
+  "CALL core.cambiar_estado_usuario($SRV, FALSE, 'pruebas', @f);"
+deadlock_procedimiento X232 registrar_login \
+  "SELECT COUNT(*) = 0 FROM core.evento_auditoria WHERE accion = 'LOGIN' AND correlation_id = $(uuid_v11 cc)" \
+  "CALL core.registrar_login($SRV, $(uuid_v11 cc));"
+# Los procedimientos nuevos son solo de bna_api: bna_app, que conserva INSERT directo, no
+# los ejecuta.
+CLIENTE=app_ caso X233 'bna_app no ejecuta los procedimientos de clientes ni de usuarios de servicio (v1.1)' \
+  "SELECT (SELECT COUNT(*) FROM clientes.cliente WHERE numero_documento = '71000233') = 0
+      AND (SELECT COUNT(*) FROM clientes.validacion_identidad WHERE correlation_id = $(uuid_v11 cd)) = 0
+      AND (SELECT COUNT(*) FROM core.usuario_sistema WHERE username = 'svc-x233') = 0
+      AND (SELECT estado_cliente FROM clientes.cliente WHERE cod_cliente = 'CX218') = 'ACTIVO'
+      AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'LOGIN' AND correlation_id = $(uuid_v11 cd)) = 0" <<SQL
+CALL clientes.registrar_cliente('DNI', '71000233', 'Prueba', 'Ficticio', NULL, 'c233@example.com', '961000233', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'pruebas', @c);
+CALL clientes.verificar_documento('DNI', '70000001', TRUE, NULL, $(uuid_v11 cd), 'pruebas', @i, @r, @m, @j);
+CALL clientes.cambiar_estado_cliente('CX218', 'BLOQUEADO', 'x', 'pruebas', @a);
+CALL core.crear_usuario_servicio(UUID_TO_BIN(UUID()), 'svc-x233', 'S', 'CLIENTES', 'h', 'BCRYPT', 'v2', 'pruebas');
+CALL core.registrar_login($SRV, $(uuid_v11 cd));
+SQL

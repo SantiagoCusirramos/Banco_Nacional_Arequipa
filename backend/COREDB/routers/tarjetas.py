@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from COREDB.auth import Actor, actor_actual
+from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session, llamar
 from COREDB.errores import ErrorCoreDb
 from COREDB.models import EquivalenciaCatalogo, Tarjeta
@@ -74,7 +74,8 @@ def aplicar_cambio_estado(
     )
 
 
-@router.get("/{id_tarjeta}", response_model=TarjetaRespuesta)
+@router.get("/{id_tarjeta}", response_model=TarjetaRespuesta,
+            dependencies=[Depends(requiere_permiso("VER_TARJETA"))])
 def ver(id_tarjeta: uuid.UUID, db: Session = Depends(db_session)):
     return _obtener(db, id_tarjeta)
 
@@ -83,7 +84,7 @@ def ver(id_tarjeta: uuid.UUID, db: Session = Depends(db_session)):
 def emitir(
     datos: TarjetaEmitir,
     db: Session = Depends(db_session),
-    actor: Actor = Depends(actor_actual),
+    actor: Actor = Depends(requiere_permiso("CREAR_TARJETA")),
 ):
     id_tarjeta = uuid.uuid4()
     con_reintentos(
@@ -103,9 +104,9 @@ def cambiar_estado(
     id_tarjeta: uuid.UUID,
     datos: EstadoCambiar,
     db: Session = Depends(db_session),
-    actor: Actor = Depends(actor_actual),
+    actor: Actor = Depends(requiere_permiso("BLOQUEAR_TARJETA")),
 ):
-    """Cambia el estado de una tarjeta. El origen viene del actor, no de la petición. El
+    """Cambia el estado de una tarjeta. El origen viene del token, no de la petición. El
     desbloqueo no está disponible: pendiente de un cliente de Seguridad (403 BNA-DESBLOQUEO)."""
     tarjeta = _obtener(db, id_tarjeta)
     aplicar_cambio_estado(

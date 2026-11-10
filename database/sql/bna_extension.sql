@@ -28,6 +28,15 @@ SET NAMES utf8mb4;
 --   operación y el evento se confirman o se deshacen juntos.
 -- DECISIÓN: los catálogos de la API que no tienen equivalente exacto no se
 --   agregan a la base (core.equivalencia_catalogo solo guarda los exactos).
+-- DECISIÓN (v1.1): un módulo se autentica en la API con un usuario de servicio (rol
+--   SERVICIO y su módulo), que se crea, renueva y revoca por procedimientos; los
+--   permisos de cada rol los decide la API.
+-- DECISIÓN (v1.1): bna_api no lee clientes.*: consulta, registra y cambia clientes solo
+--   por los procedimientos de la sección 10, que se conceden solo a bna_api. Sus
+--   mensajes de error no repiten documentos, correos ni celulares.
+-- DECISIÓN (v1.1): la consulta por documento no revela si alguien es cliente mientras
+--   quien llama no declare la identidad verificada; cada consulta queda en
+--   clientes.validacion_identidad y en la bitácora, con quien la hizo.
 
 -- ---------------------------------------------------------------------
 -- 1. Usuarios y empleados
@@ -58,10 +67,14 @@ CREATE TABLE core.usuario_sistema (
     id_empleado    BINARY(16),
     activo         TINYINT(1) DEFAULT TRUE NOT NULL,
     creado_en      DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    -- Solo de los usuarios de servicio: el módulo que se autentica con este usuario.
+    modulo         VARCHAR(40),
     CONSTRAINT pk_usuario_sistema PRIMARY KEY (id_usuario),
     CONSTRAINT uk_usuario_sistema_1 UNIQUE (username),
     CONSTRAINT fk_usuario_empleado FOREIGN KEY (id_empleado) REFERENCES core.empleado (id_empleado),
-    CONSTRAINT ck_usuario_rol CHECK (rol IN ('ADMINISTRADOR', 'ASESOR', 'ANALISTA', 'OPERADOR', 'AUDITOR')),
+    CONSTRAINT fk_usuario_modulo FOREIGN KEY (modulo) REFERENCES core.modulo (nombre),
+    CONSTRAINT ck_usuario_rol CHECK (rol IN ('ADMINISTRADOR', 'ASESOR', 'ANALISTA', 'OPERADOR', 'AUDITOR', 'SERVICIO')),
+    CONSTRAINT ck_usuario_servicio CHECK ((rol = 'SERVICIO') = (modulo IS NOT NULL)),
     CONSTRAINT ck_usuario_activo CHECK (activo IN (0, 1)),
     CONSTRAINT ck_usuario_id CHECK ((ASCII(SUBSTR(id_usuario, 7, 1)) >> 4) BETWEEN 1 AND 8
                                     AND (ASCII(SUBSTR(id_usuario, 9, 1)) & 0xC0) = 0x80)
@@ -733,3 +746,473 @@ GRANT EXECUTE ON PROCEDURE cuentas.registrar_transferencia TO bna_api, bna_app, 
 GRANT EXECUTE ON PROCEDURE cuentas.abrir_cuenta TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.emitir_tarjeta TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.cambiar_estado_tarjeta TO bna_api, bna_app, bna_admin;
+
+-- ---------------------------------------------------------------------
+-- 10. Usuarios de servicio y clientes (v1.1)
+-- ---------------------------------------------------------------------
+-- Lo que necesitan la autenticación de COREDB y el módulo Clientes. Los procedimientos
+-- siguen el patrón de la sección 8 y se conceden solo a bna_api; bna_admin los ejecuta
+-- por su privilegio sobre core.* y clientes.*.
+
+-- Numeración de cod_cliente: CLI y nueve dígitos. Una operación deshecha deja un hueco.
+CREATE TABLE clientes.numerador_cliente (
+    numero    BIGINT AUTO_INCREMENT,
+    creado_en DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_numerador_cliente PRIMARY KEY (numero)
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: numeración de cod_cliente.';
+
+DELIMITER //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.crear_usuario_servicio(
+    IN p_id BINARY(16), IN p_username VARCHAR(40), IN p_nombre VARCHAR(100), IN p_modulo VARCHAR(40),
+    IN p_hash VARCHAR(255), IN p_algoritmo VARCHAR(20), IN p_version VARCHAR(10), IN p_actor VARCHAR(40))
+    COMMENT 'Crea el usuario de servicio con el que un módulo se autentica.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        INSERT INTO core.usuario_sistema (id_usuario, username, nombre, rol, hash_password, algoritmo_hash,
+                                          version_hash, activo, modulo)
+        VALUES (p_id, p_username, p_nombre, 'SERVICIO', p_hash, p_algoritmo, p_version, TRUE, p_modulo);
+        CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'CREAR_USUARIO_SERVICIO', p_actor,
+                                   NULL, JSON_OBJECT('username', p_username, 'modulo', p_modulo));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Solo usuarios de servicio: la contraseña de una persona no se cambia por esta vía.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.renovar_credencial(
+    IN p_id BINARY(16), IN p_hash VARCHAR(255), IN p_algoritmo VARCHAR(20), IN p_version VARCHAR(10),
+    IN p_actor VARCHAR(40), OUT p_filas INT)
+    COMMENT 'Reemplaza la credencial de un usuario de servicio.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_rol VARCHAR(15);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT rol INTO v_rol FROM core.usuario_sistema WHERE id_usuario = p_id FOR UPDATE;
+        IF v_rol IS NULL THEN
+            CALL core.fallar('BNA-USUARIO: el usuario no existe');
+        END IF;
+        IF v_rol <> 'SERVICIO' THEN
+            CALL core.fallar('BNA-USUARIO-SERVICIO: solo se renueva la credencial de un usuario de servicio');
+        END IF;
+        UPDATE core.usuario_sistema
+           SET hash_password = p_hash, algoritmo_hash = p_algoritmo, version_hash = p_version
+         WHERE id_usuario = p_id;
+        SET p_filas = ROW_COUNT();
+        CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'RENOVAR_CREDENCIAL', p_actor, NULL,
+                                   JSON_OBJECT('algoritmo', p_algoritmo));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Revoca o restituye el acceso. Pedir el estado que ya tiene no cambia nada (p_filas = 0).
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.cambiar_estado_usuario(
+    IN p_id BINARY(16), IN p_activo BOOLEAN, IN p_actor VARCHAR(40), OUT p_filas INT)
+    COMMENT 'Activa o desactiva un usuario.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_activo BOOLEAN;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_activo IS NULL THEN
+            CALL core.fallar('BNA-USUARIO-ESTADO: falta el estado');
+        END IF;
+        SELECT activo INTO v_activo FROM core.usuario_sistema WHERE id_usuario = p_id FOR UPDATE;
+        IF v_activo IS NULL THEN
+            CALL core.fallar('BNA-USUARIO: el usuario no existe');
+        END IF;
+        SET p_filas = 0;
+        IF v_activo <> p_activo THEN
+            UPDATE core.usuario_sistema SET activo = p_activo WHERE id_usuario = p_id;
+            SET p_filas = ROW_COUNT();
+            CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id),
+                                       IF(p_activo, 'ACTIVAR_USUARIO', 'DESACTIVAR_USUARIO'), p_actor, NULL, NULL);
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- El actor es el propio usuario, leído de su fila: quien llama no puede atribuir un
+-- login a otro nombre. Los intentos fallidos no se registran (como en CORE).
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.registrar_login(IN p_id BINARY(16), IN p_correlation_id BINARY(16))
+    COMMENT 'Registra un inicio de sesión exitoso.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_username VARCHAR(40);
+    DECLARE v_rol VARCHAR(15);
+    DECLARE v_modulo VARCHAR(40);
+    DECLARE v_activo BOOLEAN;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT username, rol, modulo, activo INTO v_username, v_rol, v_modulo, v_activo
+          FROM core.usuario_sistema WHERE id_usuario = p_id;
+        IF v_username IS NULL OR NOT v_activo THEN
+            CALL core.fallar('BNA-USUARIO: el usuario no existe o no está activo');
+        END IF;
+        CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'LOGIN', v_username, p_correlation_id,
+                                   JSON_OBJECT('rol', v_rol, 'modulo', v_modulo));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Interno: la vista del cliente que devuelven los procedimientos. Sin biometría.
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION clientes.fn_cliente_json(p_cod_cliente VARCHAR(12)) RETURNS JSON
+    READS SQL DATA
+    COMMENT 'El cliente como objeto JSON, o NULL si no existe.'
+BEGIN
+    DECLARE v_cliente JSON;
+    SELECT JSON_OBJECT(
+               'cod_cliente', c.cod_cliente, 'tipo_documento', c.tipo_documento,
+               'numero_documento', c.numero_documento, 'nombres', c.nombres,
+               'apellido_paterno', c.apellido_paterno, 'apellido_materno', c.apellido_materno,
+               'correo', c.correo, 'celular', c.celular, 'estado_cliente', c.estado_cliente,
+               'permite_operar', CAST(IF(e.permite_operar, 'true', 'false') AS JSON),
+               'version_contrato', c.version_contrato,
+               'id_verificacion_captacion', c.id_verificacion_captacion,
+               'estado_habilitante', v.estado_habilitante,
+               'fecha_verificacion', DATE_FORMAT(v.fecha_verificacion, '%Y-%m-%dT%H:%i:%s.%fZ'))
+      INTO v_cliente
+      FROM clientes.cliente c
+      JOIN clientes.estado_cliente e ON e.cod_estado = c.estado_cliente
+      JOIN clientes.verificacion_captacion v ON v.id_verificacion_captacion = c.id_verificacion_captacion
+     WHERE c.cod_cliente = p_cod_cliente;
+    RETURN v_cliente;
+END //
+
+-- La base valida el documento con clientes.tipo_documento y genera cod_cliente. El
+-- estado inicial sale del resultado de la verificación de captación: HABILITADO da
+-- ACTIVO y OBSERVADO da OBSERVADO. Quién puede registrar HABILITADO lo decide la API.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.registrar_cliente(
+    IN p_tipo_documento VARCHAR(10), IN p_numero_documento VARCHAR(12), IN p_nombres VARCHAR(100),
+    IN p_apellido_paterno VARCHAR(100), IN p_apellido_materno VARCHAR(100), IN p_correo VARCHAR(150),
+    IN p_celular CHAR(9), IN p_version_contrato VARCHAR(10), IN p_estado_habilitante VARCHAR(25),
+    IN p_correlation_id BINARY(16), IN p_actor VARCHAR(40), OUT p_cod_cliente VARCHAR(12))
+    COMMENT 'Registra un cliente con su verificación de captación.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_min, v_max SMALLINT;
+    DECLARE v_alfanumerico BOOLEAN;
+    DECLARE v_numero BIGINT;
+    DECLARE v_captacion VARCHAR(36);
+    DECLARE v_correo VARCHAR(150) DEFAULT LOWER(TRIM(p_correo));
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT longitud_min, longitud_max, es_alfanumerico INTO v_min, v_max, v_alfanumerico
+          FROM clientes.tipo_documento WHERE cod_tipo_documento = p_tipo_documento;
+        IF v_min IS NULL THEN
+            CALL core.fallar('BNA-DOCUMENTO: tipo de documento desconocido');
+        END IF;
+        IF p_numero_documento IS NULL OR CHAR_LENGTH(p_numero_documento) NOT BETWEEN v_min AND v_max
+           OR NOT REGEXP_LIKE(p_numero_documento, IF(v_alfanumerico, '^[A-Z0-9]+$', '^[0-9]+$'), 'c') THEN
+            CALL core.fallar('BNA-DOCUMENTO: el número no cumple el formato de su tipo de documento');
+        END IF;
+        IF coalesce(TRIM(p_nombres), '') = '' OR coalesce(TRIM(p_apellido_paterno), '') = ''
+           OR coalesce(TRIM(p_version_contrato), '') = '' THEN
+            CALL core.fallar('BNA-DATOS-CLIENTE: faltan los nombres, el apellido paterno o la versión del contrato');
+        END IF;
+        IF v_correo IS NULL OR NOT REGEXP_LIKE(v_correo, '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$') THEN
+            CALL core.fallar('BNA-DATOS-CLIENTE: el correo no es válido');
+        END IF;
+        IF p_estado_habilitante IS NULL OR p_estado_habilitante NOT IN ('HABILITADO', 'OBSERVADO') THEN
+            CALL core.fallar('BNA-DATOS-CLIENTE: el estado habilitante es HABILITADO u OBSERVADO');
+        END IF;
+        IF p_correlation_id IS NULL THEN
+            CALL core.fallar('BNA-DATOS-CLIENTE: falta el correlation_id');
+        END IF;
+        INSERT INTO clientes.numerador_cliente () VALUES ();
+        SET v_numero = LAST_INSERT_ID();
+        IF v_numero > 999999999 THEN
+            CALL core.fallar('BNA-NUMERACION: se agotó la numeración de clientes');
+        END IF;
+        SET p_cod_cliente = CONCAT('CLI', LPAD(v_numero, 9, '0'));
+        SET v_captacion = BIN_TO_UUID(core.uuid_v4());
+        INSERT INTO clientes.verificacion_captacion (id_verificacion_captacion, estado_habilitante)
+        VALUES (v_captacion, p_estado_habilitante);
+        INSERT INTO clientes.cliente (cod_cliente, tipo_documento, numero_documento, nombres, apellido_paterno,
+                                      apellido_materno, correo, celular, estado_cliente, id_verificacion_captacion,
+                                      version_contrato)
+        VALUES (p_cod_cliente, p_tipo_documento, p_numero_documento, TRIM(p_nombres), TRIM(p_apellido_paterno),
+                NULLIF(TRIM(p_apellido_materno), ''), v_correo, p_celular,
+                IF(p_estado_habilitante = 'HABILITADO', 'ACTIVO', 'OBSERVADO'), v_captacion, TRIM(p_version_contrato));
+        CALL core.registrar_evento('CLIENTES', 'cliente', p_cod_cliente, 'REGISTRAR_CLIENTE', p_actor, p_correlation_id,
+                                   JSON_OBJECT('tipo_documento', p_tipo_documento,
+                                               'estado_habilitante', p_estado_habilitante,
+                                               'version_contrato', TRIM(p_version_contrato)));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Consulta por código: quien lo conoce ya sabe que es cliente. Sin auditoría, como las
+-- demás lecturas de la API.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.consultar_cliente(IN p_cod_cliente VARCHAR(12), OUT p_cliente JSON)
+    READS SQL DATA
+    COMMENT 'Devuelve el cliente en JSON, o NULL si no existe.'
+BEGIN
+    SET p_cliente = clientes.fn_cliente_json(p_cod_cliente);
+END //
+
+-- Consulta por documento (RF-CLI-001). Sin identidad verificada, la respuesta es la
+-- misma para un cliente y para quien no lo es; con identidad verificada, aprueba solo
+-- a un cliente ACTIVO. Siempre deja la validación y su evento.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.verificar_documento(
+    IN p_tipo_documento VARCHAR(10), IN p_numero_documento VARCHAR(12), IN p_identidad_verificada BOOLEAN,
+    IN p_motivo VARCHAR(60), IN p_correlation_id BINARY(16), IN p_actor VARCHAR(40),
+    OUT p_id_validacion BIGINT, OUT p_resultado VARCHAR(25), OUT p_motivo_core VARCHAR(60), OUT p_cliente JSON)
+    COMMENT 'Verifica un documento y registra la validación.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_cod VARCHAR(12);
+    DECLARE v_estado VARCHAR(25);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_identidad_verificada IS NULL THEN
+            CALL core.fallar('BNA-VALIDACION: falta indicar si la identidad se verificó');
+        END IF;
+        IF p_correlation_id IS NULL THEN
+            CALL core.fallar('BNA-VALIDACION: falta el correlation_id');
+        END IF;
+        SELECT cod_cliente, estado_cliente INTO v_cod, v_estado
+          FROM clientes.cliente WHERE tipo_documento = p_tipo_documento AND numero_documento = p_numero_documento;
+        SET p_cliente = NULL, p_motivo_core = NULL, p_resultado = 'RECHAZADO';
+        IF NOT p_identidad_verificada THEN
+            SET p_motivo_core = 'IDENTIDAD_NO_VERIFICADA';
+        ELSEIF v_cod IS NULL THEN
+            SET p_motivo_core = 'NO_ES_CLIENTE';
+        ELSEIF v_estado <> 'ACTIVO' THEN
+            SET p_motivo_core = 'CLIENTE_NO_ACTIVO', p_cliente = clientes.fn_cliente_json(v_cod);
+        ELSE
+            SET p_resultado = 'APROBADO', p_cliente = clientes.fn_cliente_json(v_cod);
+        END IF;
+        INSERT INTO clientes.validacion_identidad (tipo_validacion, resultado, correlation_id, cod_cliente)
+        VALUES ('DOCUMENTO', p_resultado, p_correlation_id, v_cod);
+        SET p_id_validacion = LAST_INSERT_ID();
+        CALL core.registrar_evento('CLIENTES', 'validacion_identidad', p_id_validacion, 'VALIDAR_DOCUMENTO', p_actor,
+                                   p_correlation_id,
+                                   JSON_OBJECT('tipo_documento', p_tipo_documento, 'cod_cliente', v_cod,
+                                               'identidad_verificada', p_identidad_verificada IS TRUE,
+                                               'resultado', p_resultado, 'motivo_llamador', p_motivo,
+                                               'motivo_core', p_motivo_core));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Los veredictos de huella, rostro, celular y correo que produce Clientes. El de
+-- documento pasa por verificar_documento.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.registrar_validacion(
+    IN p_cod_cliente VARCHAR(12), IN p_tipo_validacion VARCHAR(15), IN p_resultado VARCHAR(25),
+    IN p_motivo VARCHAR(60), IN p_correlation_id BINARY(16), IN p_actor VARCHAR(40), OUT p_id_validacion BIGINT)
+    COMMENT 'Registra una validación de identidad de un cliente.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_tipo_validacion = 'DOCUMENTO' THEN
+            CALL core.fallar('BNA-VALIDACION: la validación de documento se hace con verificar_documento');
+        END IF;
+        IF p_resultado IS NULL OR p_resultado NOT IN ('APROBADO', 'RECHAZADO') THEN
+            CALL core.fallar('BNA-VALIDACION: el resultado es APROBADO o RECHAZADO');
+        END IF;
+        IF p_correlation_id IS NULL THEN
+            CALL core.fallar('BNA-VALIDACION: falta el correlation_id');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM clientes.cliente WHERE cod_cliente = p_cod_cliente) THEN
+            CALL core.fallar('BNA-CLIENTE: el cliente no existe');
+        END IF;
+        INSERT INTO clientes.validacion_identidad (tipo_validacion, resultado, correlation_id, cod_cliente)
+        VALUES (p_tipo_validacion, p_resultado, p_correlation_id, p_cod_cliente);
+        SET p_id_validacion = LAST_INSERT_ID();
+        CALL core.registrar_evento('CLIENTES', 'validacion_identidad', p_id_validacion, 'REGISTRAR_VALIDACION', p_actor,
+                                   p_correlation_id,
+                                   JSON_OBJECT('cod_cliente', p_cod_cliente, 'tipo_validacion', p_tipo_validacion,
+                                               'resultado', p_resultado, 'motivo', p_motivo));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- El motivo es obligatorio y queda en la bitácora. BAJA es final; pedir el estado que ya
+-- tiene no cambia nada. tg_cliente_estado_tarjetas bloquea o cancela sus tarjetas, y
+-- reactivar al cliente no las desbloquea (eso es de Seguridad). Qué estados puede fijar
+-- cada actor lo decide la API.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.cambiar_estado_cliente(
+    IN p_cod_cliente VARCHAR(12), IN p_estado VARCHAR(25), IN p_motivo VARCHAR(255), IN p_actor VARCHAR(40),
+    OUT p_anterior VARCHAR(25))
+    COMMENT 'Cambia el estado de un cliente.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF coalesce(TRIM(p_motivo), '') = '' THEN
+            CALL core.fallar('BNA-MOTIVO: el cambio de estado exige un motivo');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM clientes.estado_cliente WHERE cod_estado = p_estado) THEN
+            CALL core.fallar('BNA-ESTADO: estado de cliente desconocido');
+        END IF;
+        SET p_anterior = NULL;
+        SELECT estado_cliente INTO p_anterior FROM clientes.cliente WHERE cod_cliente = p_cod_cliente FOR UPDATE;
+        IF p_anterior IS NULL THEN
+            CALL core.fallar('BNA-CLIENTE: el cliente no existe');
+        END IF;
+        IF p_anterior <> p_estado THEN
+            IF p_anterior = 'BAJA' THEN
+                CALL core.fallar('BNA-ESTADO: un cliente dado de baja no cambia de estado');
+            END IF;
+            UPDATE clientes.cliente SET estado_cliente = p_estado WHERE cod_cliente = p_cod_cliente;
+            CALL core.registrar_evento('CLIENTES', 'cliente', p_cod_cliente, 'CAMBIAR_ESTADO_CLIENTE', p_actor, NULL,
+                                       JSON_OBJECT('estado_anterior', p_anterior, 'estado_nuevo', p_estado,
+                                                   'motivo', TRIM(p_motivo)));
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Los catálogos que la API publica y usa para validar antes de llamar.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.catalogos_cliente(OUT p_catalogos JSON)
+    READS SQL DATA
+    COMMENT 'Tipos de documento y estados de cliente, en JSON.'
+BEGIN
+    SET p_catalogos = JSON_OBJECT(
+        'tipos_documento', (SELECT JSON_ARRAYAGG(JSON_OBJECT(
+                                       'codigo', cod_tipo_documento, 'descripcion', descripcion,
+                                       'longitud_min', longitud_min, 'longitud_max', longitud_max,
+                                       'es_alfanumerico', CAST(IF(es_alfanumerico, 'true', 'false') AS JSON)))
+                              FROM clientes.tipo_documento),
+        'estados_cliente', (SELECT JSON_ARRAYAGG(JSON_OBJECT(
+                                       'codigo', cod_estado, 'descripcion', descripcion,
+                                       'permite_operar', CAST(IF(permite_operar, 'true', 'false') AS JSON)))
+                              FROM clientes.estado_cliente));
+END //
+
+DELIMITER ;
+
+GRANT EXECUTE ON PROCEDURE core.crear_usuario_servicio TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.renovar_credencial TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.cambiar_estado_usuario TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.registrar_login TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.registrar_cliente TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.consultar_cliente TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.verificar_documento TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.registrar_validacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.cambiar_estado_cliente TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.catalogos_cliente TO bna_api;
