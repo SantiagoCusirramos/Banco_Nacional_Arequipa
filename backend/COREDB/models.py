@@ -105,6 +105,25 @@ class CuentaAhorro(Base):
     id_agencia: Mapped[str | None] = mapped_column(String(10))
 
 
+class CtaTransaccion(Base):
+    __tablename__ = "cta_transaccion"
+    __table_args__ = {"schema": "cuentas"}
+
+    id_transaccion: Mapped[str] = mapped_column(String(36), primary_key=True)
+    uuid_transaccion: Mapped[str] = mapped_column(String(36), unique=True)
+    num_cuenta: Mapped[str] = mapped_column(String(20))
+    num_cuenta_contraparte: Mapped[str | None] = mapped_column(String(20))
+    tipo_operacion: Mapped[str] = mapped_column(String(30))
+    tipo_movimiento: Mapped[str] = mapped_column(String(1))
+    monto: Mapped[Decimal] = mapped_column(Numeric(15, 2))
+    moneda: Mapped[str] = mapped_column(String(3))
+    id_canal: Mapped[str] = mapped_column(String(5))
+    saldo_posterior: Mapped[Decimal] = mapped_column(Numeric(15, 2))
+    estado_transaccion: Mapped[str] = mapped_column(String(25))
+    idempotency_key: Mapped[str | None] = mapped_column(String(64))
+    fecha_hora: Mapped[datetime] = mapped_column(FechaUtc)
+
+
 class Tarjeta(Base):
     # La vista no incluye pan_token: bna_api no lee la tabla.
     __tablename__ = "v_tarjeta_api"

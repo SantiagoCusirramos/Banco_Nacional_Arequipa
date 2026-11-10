@@ -1,3 +1,4 @@
+//REEMPLAZAR HOMBANKING/ATM/BILLETERA DIGITAL para sus operaciones y td la wea que usen
 "use client";
 
 import { useMemo, useState, useEffect } from "react"; // Añadido useEffect para la carga de datos reales de cuentas

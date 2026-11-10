@@ -41,3 +41,11 @@ def transferir(core: CoreClient, datos: TransferenciaIn, id_canal: str,
     payload.update(id_canal=id_canal, idempotency_key=idempotency_key,
                    actor=ACTOR, correlation_id=correlation_id)
     return core.transferir(payload, idempotency_key, correlation_id)
+
+
+def listar_movimientos(core: CoreClient, num_cuenta: str, correlation_id: str):
+    return core.listar_movimientos(num_cuenta, correlation_id)
+
+
+def ver_movimiento(core: CoreClient, uuid_transaccion: str, correlation_id: str):
+    return core.ver_movimiento(uuid_transaccion, correlation_id)

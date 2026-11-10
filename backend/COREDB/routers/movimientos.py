@@ -1,13 +1,16 @@
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session
+from COREDB.errores import ErrorCoreDb
+from COREDB.models import CtaTransaccion
 from COREDB.services import movimientos
 
 router = APIRouter(prefix="/coredb/movimientos", tags=["movimientos"])
@@ -44,6 +47,23 @@ class TransferenciaRespuesta(BaseModel):
     repetido: bool
 
 
+class MovimientoRespuestaDetalle(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_transaccion: str
+    uuid_transaccion: str
+    num_cuenta: str
+    num_cuenta_contraparte: str | None
+    tipo_operacion: str
+    tipo_movimiento: str
+    monto: Decimal
+    moneda: str
+    id_canal: str
+    saldo_posterior: Decimal
+    estado_transaccion: str
+    fecha_hora: datetime
+
+
 @router.post("", response_model=MovimientoRespuesta, status_code=status.HTTP_201_CREATED)
 def registrar(
     datos: MovimientoRegistrar,
@@ -64,3 +84,18 @@ def transferir(
     actor: Actor = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
 ):
     return movimientos.transferir(db, **datos.model_dump(), actor=actor.usuario)
+
+
+@router.get("/cuenta/{num_cuenta}", response_model=list[MovimientoRespuestaDetalle],
+            dependencies=[Depends(requiere_permiso("VER_CUENTA"))])
+def listar_por_cuenta(num_cuenta: str, db: Session = Depends(db_session)):
+    return db.query(CtaTransaccion).filter(CtaTransaccion.num_cuenta == num_cuenta).order_by(CtaTransaccion.fecha_hora.desc()).all()
+
+
+@router.get("/{uuid_transaccion}", response_model=MovimientoRespuestaDetalle,
+            dependencies=[Depends(requiere_permiso("VER_CUENTA"))])
+def ver_movimiento(uuid_transaccion: str, db: Session = Depends(db_session)):
+    mov = db.query(CtaTransaccion).filter(CtaTransaccion.uuid_transaccion == uuid_transaccion).first()
+    if not mov:
+        raise ErrorCoreDb("MOVIMIENTO_NO_ENCONTRADO", f"El movimiento {uuid_transaccion} no existe.", 404)
+    return mov

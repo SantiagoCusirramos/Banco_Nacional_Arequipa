@@ -57,3 +57,17 @@ def transferir(request: Request, datos: TransferenciaIn, core: CoreClient = Depe
                ctx: ContextoOperacion = Depends(contexto_operacion)):
     res = TransferenciaOut(**svc.transferir(core, datos, ctx.id_canal, ctx.idempotency_key, ctx.cid))
     return exito(request, res.model_dump(mode="json"), 201, _msg_replay(res.replay))
+
+
+@router.get("/{num_cuenta}/movimientos")
+def listar_movimientos(request: Request, num_cuenta: str, core: CoreClient = Depends(get_core_client),
+                       cid: str = Depends(correlation_id)):
+    movs = svc.listar_movimientos(core, num_cuenta, cid)
+    return exito(request, movs)
+
+
+@router.get("/movimiento/{uuid_transaccion}")
+def ver_movimiento(request: Request, uuid_transaccion: str, core: CoreClient = Depends(get_core_client),
+                   cid: str = Depends(correlation_id)):
+    mov = svc.ver_movimiento(core, uuid_transaccion, cid)
+    return exito(request, mov)
