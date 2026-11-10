@@ -1,10 +1,13 @@
-//REEMPLAZAR HOMBANKING/ATM/BILLETERA DIGITAL para sus operaciones y td la wea que usen
-"use client";
+ "use client";
 
-import { useMemo, useState, useEffect } from "react"; // Añadido useEffect para la carga de datos reales de cuentas
-import { obtenerCuentasCliente, abrirCuenta } from "@/lib/cuentas"; // Importadas las funciones API de cuentas reales
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { cerrarSesion, obtenerToken, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { CrearCuenta } from "./components/CrearCuenta";
+import { ModificarCuenta } from "./components/ModificarCuenta";
+import type { Cuenta } from "@/lib/cuentas";
 
-type Tab = "inicio" | "cuentas" | "transferencias" | "movimientos" | "tarjetas";
+type Tab = "inicio" | "cuentas" | "crear-cuenta" | "modificar-cuenta" | "transferencias" | "movimientos" | "tarjetas";
 
 const initialMovements = [
   { id: "OP-20481", title: "Compra en Plaza Vea", detail: "Hoy · 10:42 a. m.", amount: -128.5, category: "Compra" },
@@ -17,6 +20,33 @@ const money = (amount: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(amount);
 
 export default function Home() {
+  const router = useRouter();
+  const [usuarioAutenticado, setUsuarioAutenticado] = useState<Usuario | null>(null);
+  const [verificandoSesion, setVerificandoSesion] = useState(true);
+
+  useEffect(() => {
+    if (!obtenerToken()) {
+      router.replace("/login");
+      return;
+    }
+    obtenerMiPerfil()
+      .then(setUsuarioAutenticado)
+      .catch(() => {
+        cerrarSesion();
+        router.replace("/login");
+      })
+      .finally(() => setVerificandoSesion(false));
+  }, [router]);
+
+  function salir() {
+    cerrarSesion();
+    router.replace("/login");
+  }
+
+  if (verificandoSesion || !usuarioAutenticado) {
+    return <main className="auth-page"><div className="auth-loading">Cargando tu banca personal...</div></main>;
+  }
+
   const [tab, setTab] = useState<Tab>("inicio");
   const [showBalance, setShowBalance] = useState(true);
   const [search, setSearch] = useState("");
@@ -25,41 +55,15 @@ export default function Home() {
   const [amount, setAmount] = useState("");
   const [movements, setMovements] = useState(initialMovements);
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [cuentasList, setCuentasList] = useState<any[]>([]); // Estado añadido para almacenar cuentas obtenidas del backend
+  const [cuentaParaModificar, setCuentaParaModificar] = useState<Cuenta | null>(null);
 
-  // Carga automática de cuentas reales desde la API al cambiar a la pestaña cuentas
-  useEffect(() => {
-    obtenerCuentasCliente("CLI-001").then((res) => {
-      if (res && res.data) setCuentasList(res.data);
-    }).catch(() => {});
-  }, [tab]);
-
-  const balance = cuentasList.length > 0 ? cuentasList.reduce((acc, c) => acc + Number(c.saldo_disponible || 0), 0) : 12480.75;
+  const balance = 12480.75;
   const filteredMovements = useMemo(
     () => movements.filter((m) => `${m.title} ${m.id} ${m.category}`.toLowerCase().includes(search.toLowerCase())),
     [movements, search]
   );
 
-async function handleAperturarCuentaReal() {
-  try {
-    const res = await abrirCuenta({ 
-      id_cliente: "CLI-001", 
-      id_producto_ahorro: "PROD-001", // Cambiado: El backend no recibe 'moneda', recibe el ID del producto
-      id_agencia: "AG1",
-      regimen: "LIBRE",
-      titulares: [
-        { id_cliente: "CLI-001", rol_titular: "TITULAR" } // Añadido: El backend espera la lista de titulares
-      ]
-    });
-    setNotice("Cuenta creada exitosamente en el backend: " + (res.data?.num_cuenta || "OK"));
-    const updated = await obtenerCuentasCliente("CLI-001");
-    if (updated && updated.data) setCuentasList(updated.data);
-  } catch (err: any) {
-    setNotice("Error al conectar con la API de cuentas: " + (err.response?.data?.message || err.message));
-  }
-}
-
-  function submitTransfer(event: React.FormEvent) {
+  function submitTransfer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = Number(amount);
     if (!destination.trim() || !Number.isFinite(value) || value <= 0) {
@@ -83,6 +87,8 @@ async function handleAperturarCuentaReal() {
   const navItems: { id: Tab; label: string; icon: string }[] = [
     { id: "inicio", label: "Resumen", icon: "⌂" },
     { id: "cuentas", label: "Mis cuentas", icon: "▤" },
+    { id: "crear-cuenta", label: "Crear cuenta", icon: "＋" },
+    { id: "modificar-cuenta", label: "Modificar cuenta", icon: "✎" },
     { id: "transferencias", label: "Transferencias", icon: "⇄" },
     { id: "movimientos", label: "Movimientos", icon: "↕" },
     { id: "tarjetas", label: "Tarjetas", icon: "▰" },
@@ -98,7 +104,7 @@ async function handleAperturarCuentaReal() {
         <div className="side-caption">BANCA PERSONAL</div>
         <nav className="navigation" aria-label="Navegación principal">
           {navItems.map((item) => (
-            <button key={item.id} className={`nav-item ${tab === item.id ? "active" : ""}`} onClick={() => { setTab(item.id); setNotice(""); setMobileMenu(false); }}>
+            <button key={item.id} className={`nav-item ${tab === item.id ? "active" : ""}`} onClick={() => { setTab(item.id); setNotice(""); setCuentaParaModificar(null); setMobileMenu(false); }}>
               <span className="nav-icon">{item.icon}</span>{item.label}
               {item.id === "movimientos" && <span className="nav-dot" />}
             </button>
@@ -106,7 +112,7 @@ async function handleAperturarCuentaReal() {
         </nav>
         <div className="sidebar-bottom">
           <div className="help-card"><span className="help-icon">?</span><strong>¿Necesitas ayuda?</strong><p>Estamos aquí para ayudarte con tus operaciones.</p><button onClick={() => setNotice("Centro de ayuda: esta vista es una demostración académica.")}>Ir al centro de ayuda <span>↗</span></button></div>
-          <div className="profile"><div className="avatar">DV</div><div className="profile-text"><strong>Diego Vargas</strong><span>Cliente personal</span></div><a href="/auth" aria-label="Cerrar sesión" title="Cerrar sesión / Crear cuenta" style={{ background: "#fee2e2", color: "#991b1b", border: 0, borderRadius: "6px", padding: "4px 8px", fontSize: "11px", fontWeight: "600", textDecoration: "none", marginLeft: "auto" }}>Salir</a></div>
+          <div className="profile"><div className="avatar">{usuarioAutenticado.nombre.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}</div><div className="profile-text"><strong>{usuarioAutenticado.nombre}</strong><span>{usuarioAutenticado.rol}</span></div><button aria-label="Cerrar sesión" title="Cerrar sesión" className="more-button" onClick={salir}>↪</button></div>
         </div>
       </aside>
 
@@ -114,7 +120,7 @@ async function handleAperturarCuentaReal() {
         <header className="topbar">
           <button className="mobile-toggle" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Abrir menú">☰</button>
           <div className="breadcrumb">Banca personal <span>/</span> <strong>{navItems.find((item) => item.id === tab)?.label}</strong></div>
-          <div className="top-actions"><a href="/auth" style={{ fontSize: "12px", fontWeight: "600", color: "#2359a8", textDecoration: "none", padding: "6px 12px", background: "#eaf1fb", borderRadius: "8px" }}>Ingresar / Registro</a><span className="secure"><span className="secure-dot" /> Conexión segura</span><button className="icon-button" aria-label="Notificaciones" onClick={() => setNotice("No tienes notificaciones nuevas.")}>♧<i /></button><div className="top-avatar">DV</div></div>
+          <div className="top-actions"><span className="secure"><span className="secure-dot" /> Conexión segura</span><button className="icon-button" aria-label="Notificaciones" onClick={() => setNotice("No tienes notificaciones nuevas.")}>♧<i /></button><div className="top-avatar">DV</div></div>
         </header>
 
         <div className="content">
@@ -140,22 +146,11 @@ async function handleAperturarCuentaReal() {
             <MovementTable movements={movements.slice(0, 4)} />
           </>}
 
-          {tab === "cuentas" && <div className="product-grid">
-            {cuentasList.length > 0 ? cuentasList.map((cta) => (
-              <article className="account-card" key={cta.num_cuenta}>
-                <div className="account-card-top"><span className="product-icon">▤</span><span className="status-pill"><i/> {cta.estado_cuenta}</span></div>
-                <p className="mini-label">CUENTA DE AHORROS · {cta.moneda}</p>
-                <h2>Cuenta {cta.regimen?.toLowerCase() || "principal"}</h2>
-                <p className="account-number">{cta.num_cuenta}</p>
-                <div className="account-balance-label">Saldo disponible</div>
-                <div className="account-balance">{showBalance ? money(cta.saldo_disponible) : "S/ ••••••"}</div>
-                <div className="account-bottom"><span>Saldo contable <strong>{showBalance ? money(cta.saldo_contable) : "••••••"}</strong></span><button onClick={() => setShowBalance(!showBalance)}>{showBalance ? "Ocultar" : "Mostrar"}</button></div>
-              </article>
-            )) : (
-              <article className="account-card"><div className="account-card-top"><span className="product-icon">▤</span><span className="status-pill"><i/> Activa</span></div><p className="mini-label">CUENTA DE AHORROS · PEN</p><h2>Cuenta principal (Demo)</h2><p className="account-number">•••• •••• •••• 4821</p><div className="account-balance-label">Saldo disponible</div><div className="account-balance">{showBalance ? money(balance) : "S/ ••••••"}</div><div className="account-bottom"><span>Saldo contable <strong>{showBalance ? money(balance) : "••••••"}</strong></span><button onClick={() => setShowBalance(!showBalance)}>{showBalance ? "Ocultar" : "Mostrar"}</button></div></article>
-            )}
-            <article className="add-account"><span className="add-circle">＋</span><h3>¿Necesitas otra cuenta?</h3><p>Solicita la apertura de una nueva cuenta conectada al backend.</p><button className="outline-button" onClick={handleAperturarCuentaReal}>Aperturar cuenta real</button></article>
-          </div>}
+          {tab === "cuentas" && <div className="product-grid"><article className="account-card"><div className="account-card-top"><span className="product-icon">▤</span><span className="status-pill"><i/> Activa</span></div><p className="mini-label">CUENTA DE AHORROS · PEN</p><h2>Cuenta principal</h2><p className="account-number">•••• •••• •••• 4821</p><div className="account-balance-label">Saldo disponible</div><div className="account-balance">{showBalance ? money(balance) : "S/ ••••••"}</div><div className="account-bottom"><span>Saldo contable <strong>{showBalance ? money(balance) : "••••••"}</strong></span><button onClick={() => setShowBalance(!showBalance)}>{showBalance ? "Ocultar" : "Mostrar"}</button></div></article><article className="add-account"><span className="add-circle">＋</span><h3>¿Necesitas otra cuenta?</h3><p>Abre una nueva cuenta de ahorros en pocos pasos.</p><button className="outline-button" onClick={() => { setTab("crear-cuenta"); setNotice(""); }}>Abrir una cuenta</button></article></div>}
+
+          {tab === "crear-cuenta" && <CrearCuenta onNotice={setNotice} onModificar={(cuenta) => { setCuentaParaModificar(cuenta); setTab("modificar-cuenta"); setNotice(""); }} />}
+
+          {tab === "modificar-cuenta" && <ModificarCuenta cuentaInicial={cuentaParaModificar} onNotice={setNotice} />}
 
           {tab === "transferencias" && <div className="form-card"><div className="form-intro"><span className="form-icon">⇄</span><div><h2>Nueva transferencia</h2><p>Completa los datos para simular una operación entre cuentas.</p></div></div><div className="demo-warning">Modo demostración: esta operación solo modifica la lista local de movimientos. No se conecta al banco ni transfiere dinero real.</div><form className="transfer-form" onSubmit={submitTransfer}><label>Cuenta de origen</label><div className="select-like"><span className="account-small-icon">▤</span><span><strong>Cuenta principal</strong><small>•••• 4821 · Saldo: {money(balance)}</small></span><span className="select-arrow">⌄</span></div><label htmlFor="destination">Cuenta de destino</label><input id="destination" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Ingresa el número de cuenta" minLength={4} required/><label htmlFor="amount">Monto a transferir (PEN)</label><div className="amount-input"><span>S/</span><input id="amount" type="number" min="0.01" max={balance} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required/></div><div className="transfer-summary"><span>Monto de la operación</span><strong>{money(Number(amount) || 0)}</strong><span>Comisión</span><strong>{money(0)}</strong></div><button className="primary-button" type="submit">Continuar transferencia <span>→</span></button></form></div>}
 
