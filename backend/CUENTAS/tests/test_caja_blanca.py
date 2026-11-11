@@ -206,29 +206,52 @@ def test_core_client_error_http_de_core_se_propaga():
 
 # services
 
-def test_abrir_cuenta_sin_titulares_no_valida_mancomunada():
+_BASE = {"num_cuenta": "123", "cci": "0" * 20, "id_agencia": "A"}
+
+
+def test_abrir_cuenta_individual_con_id_cliente_pasa():
     c = _core(httpx.Response(201, json={"ok": 1}))
-    datos = AbrirCuentaIn(id_cliente="C", id_producto_ahorro="P", id_agencia="A")
-    assert svc.abrir_cuenta(c, datos, "cid") == {"ok": 1}
+    datos = AbrirCuentaIn(id_cliente="C", **_BASE)
+    assert svc.abrir_cuenta(c, datos, "cid", "Bearer x") == {"ok": 1}
+
+
+def test_abrir_cuenta_sin_titulares_es_invalida():
+    with pytest.raises(ValidationError):
+        AbrirCuentaIn(**_BASE)
+
+
+def test_abrir_cuenta_mancomunada_con_un_titular_no_llama_a_core():
+    c = _core(httpx.Response(201, json={"ok": 1}))
+    datos = AbrirCuentaIn(id_cliente="C", regimen="MANCOMUNADA_CONJUNTA", **_BASE)
+    with pytest.raises(CuentasError) as exc:
+        svc.abrir_cuenta(c, datos, "cid", "Bearer x")
+    assert exc.value.code == "ERR-CTA-MANCOMUNADA-SIN-COTITULARES"
 
 
 def test_abrir_cuenta_mancomunada_con_dos_titulares_pasa():
     c = _core(httpx.Response(201, json={"ok": 1}))
-    datos = AbrirCuentaIn(
-        id_cliente="C", id_producto_ahorro="P", id_agencia="A",
-        titulares=[{"id_cliente": "C", "rol_titular": "MANCOMUNADO"},
-                   {"id_cliente": "D", "rol_titular": "MANCOMUNADO"}],
-    )
-    assert svc.abrir_cuenta(c, datos, "cid") == {"ok": 1}
+    datos = AbrirCuentaIn(regimen="MANCOMUNADA_INDISTINTA",
+                          titulares=[{"id_cliente": "C"}, {"id_cliente": "D"}], **_BASE)
+    assert svc.abrir_cuenta(c, datos, "cid", "Bearer x") == {"ok": 1}
 
 
-def test_abrir_cuenta_titulares_sin_mancomunado_pasa():
+def test_abrir_cuenta_individual_con_dos_titulares_falla():
     c = _core(httpx.Response(201, json={"ok": 1}))
-    datos = AbrirCuentaIn(
-        id_cliente="C", id_producto_ahorro="P", id_agencia="A",
-        titulares=[{"id_cliente": "C"}],
-    )
-    assert svc.abrir_cuenta(c, datos, "cid") == {"ok": 1}
+    datos = AbrirCuentaIn(titulares=[{"id_cliente": "C"}, {"id_cliente": "D"}], **_BASE)
+    with pytest.raises(CuentasError) as exc:
+        svc.abrir_cuenta(c, datos, "cid", "Bearer x")
+    assert exc.value.code == "ERR-CTA-REGIMEN-INVALIDO"
+
+
+def test_cuentas_del_cliente_no_implementado():
+    with pytest.raises(CuentasError) as exc:
+        svc.cuentas_del_cliente(None, "C", "cid")
+    assert exc.value.status_code == 501
+
+
+def test_uuid_helper():
+    assert svc._uuid(KEY_V4) == KEY_V4
+    assert len(svc._uuid("no-es-uuid")) == 36
 
 
 def test_transferir_misma_cuenta_no_llama_a_core():
@@ -272,4 +295,4 @@ def test_num_cuenta_maximo_20():
 
 def test_regimen_invalido():
     with pytest.raises(ValidationError):
-        AbrirCuentaIn(id_cliente="C", id_producto_ahorro="P", id_agencia="A", regimen="OTRO")
+        AbrirCuentaIn(id_cliente="C", regimen="OTRO", **_BASE)

@@ -1,7 +1,7 @@
 import httpx
 
 from CUENTAS.tests.test_cuentas import (
-    APERTURA, BASE, CUENTA_CORE, HEADERS_OP, KEY, MOV_CORE, NUM,
+    APERTURA, AUTH, BASE, CUENTA_CORE, HEADERS_OP, KEY, MOV_CORE, NUM, TRANSF_CORE,
 )
 
 
@@ -32,13 +32,12 @@ def test_humo_docs_disponible(client):
 
 def test_humo_flujo_completo(client, core):
     core.respuesta = httpx.Response(201, json=CUENTA_CORE)
-    assert client.post(f"{BASE}/apertura", json=APERTURA).status_code == 201
+    assert client.post(f"{BASE}/apertura", json=APERTURA, headers=AUTH).status_code == 201
 
     core.respuesta = httpx.Response(200, json=CUENTA_CORE)
-    assert client.get(f"{BASE}/{NUM}").status_code == 200
+    assert client.get(f"{BASE}/{NUM}", headers=AUTH).status_code == 200
 
-    core.respuesta = httpx.Response(200, json=[CUENTA_CORE])
-    assert client.get(f"{BASE}/consolidada/CLI-1").status_code == 200
+    assert client.get(f"{BASE}/consolidada/CLI-1", headers=AUTH).status_code == 501
 
     core.respuesta = httpx.Response(201, json=MOV_CORE)
     dep = client.post(f"{BASE}/deposito", json={"num_cuenta": NUM, "monto": "100.00"}, headers=HEADERS_OP)
@@ -46,20 +45,16 @@ def test_humo_flujo_completo(client, core):
     ret = client.post(f"{BASE}/retiro", json={"num_cuenta": NUM, "monto": "40.00"}, headers=HEADERS_OP)
     assert ret.status_code == 201
 
-    core.respuesta = httpx.Response(201, json={
-        "origen": {**MOV_CORE, "num_cuenta": "111"},
-        "destino": {**MOV_CORE, "num_cuenta": "222"},
-        "id_asiento": "a1", "replay": False,
-    })
+    core.respuesta = httpx.Response(201, json=TRANSF_CORE)
     tr = client.post(f"{BASE}/transferencia", headers=HEADERS_OP,
                      json={"num_cuenta_origen": "111", "num_cuenta_destino": "222", "monto": "10"})
     assert tr.status_code == 201
-    assert len(core.llamadas) == 6
+    assert len(core.llamadas) == 5
 
 
 def test_humo_todas_las_respuestas_traen_envelope(client, core):
     core.respuesta = httpx.Response(200, json=CUENTA_CORE)
-    ok = client.get(f"{BASE}/{NUM}").json()
+    ok = client.get(f"{BASE}/{NUM}", headers=AUTH).json()
     assert {"success", "status_code", "message", "data", "metadata"} <= ok.keys()
     mal = client.get("/api/v1/no-existe").json()
     assert {"success", "status_code", "error_code", "message", "details", "metadata"} <= mal.keys()

@@ -58,11 +58,22 @@ def request_timestamp(x_request_timestamp: str | None = Header(default=None)) ->
         raise _header_error("ERR-CTA-HEADER-INVALIDO", "X-Request-Timestamp debe ser ISO-8601", "X-Request-Timestamp")
 
 
+def autorizacion(authorization: str | None = Header(default=None)) -> str:
+    # COREDB valida el JWT; aqui solo se exige que venga para reenviarlo
+    if not authorization:
+        raise CuentasError("ERR-CTA-TOKEN-REQUERIDO", "Falta el header Authorization: Bearer <token>", 401)
+    esquema, _, valor = authorization.partition(" ")
+    if esquema.lower() != "bearer" or not valor.strip():
+        raise CuentasError("ERR-CTA-TOKEN-INVALIDO", "Authorization debe tener el formato Bearer <token>", 401)
+    return authorization
+
+
 @dataclass
 class ContextoOperacion:
     idempotency_key: str
     id_canal: str
     cid: str
+    authorization: str
 
 
 def contexto_operacion(
@@ -70,5 +81,6 @@ def contexto_operacion(
     id_canal: str = Depends(canal),
     _ts: datetime = Depends(request_timestamp),
     cid: str = Depends(correlation_id),
+    authorization: str = Depends(autorizacion),
 ) -> ContextoOperacion:
-    return ContextoOperacion(key, id_canal, cid)
+    return ContextoOperacion(key, id_canal, cid, authorization)

@@ -1,18 +1,18 @@
 # CUENTAS
 
-Modulo de Cuentas (linea Ahorros). No tiene base de datos propia: valida y llama a CORE (`/core/*`).
+Modulo de Cuentas (linea Ahorros). No tiene base de datos propia: valida y llama a COREDB (`/coredb/*`, puerto 8012).
 Sigue el estandar del Comite de Ahorros (DOC-ITIL-01 y DOC-ITIL-02).
 
 ## Endpoints
 
-| Metodo | Ruta | Llama a CORE |
+| Metodo | Ruta | Llama a COREDB |
 |---|---|---|
-| POST | /api/v1/cuentas/apertura | POST /core/cuentas |
-| GET | /api/v1/cuentas/{num_cuenta} | GET /core/cuentas/{num} |
-| GET | /api/v1/cuentas/consolidada/{id_cliente} | GET /core/cuentas/cliente/{id} |
-| POST | /api/v1/cuentas/deposito | POST /core/movimientos |
-| POST | /api/v1/cuentas/retiro | POST /core/movimientos |
-| POST | /api/v1/cuentas/transferencia | POST /core/movimientos/transferencias |
+| POST | /api/v1/cuentas/apertura | POST /coredb/cuentas |
+| GET | /api/v1/cuentas/{num_cuenta} | GET /coredb/cuentas/{num} |
+| GET | /api/v1/cuentas/consolidada/{id_cliente} | (pendiente: COREDB no tiene la ruta, responde 501) |
+| POST | /api/v1/cuentas/deposito | POST /coredb/movimientos |
+| POST | /api/v1/cuentas/retiro | POST /coredb/movimientos |
+| POST | /api/v1/cuentas/transferencia | POST /coredb/movimientos/transferencias |
 | GET | /health | - |
 
 ## Cabeceras
@@ -35,14 +35,18 @@ Los montos van como texto decimal ("500.00") para no perder precision, igual que
 
 | Origen | error_code | HTTP |
 |---|---|---|
-| CORE SALDO_INSUFICIENTE | ERR-CTA-FONDOS-INSUFICIENTES | 400 |
-| CORE TOPE_DIARIO_EXCEDIDO | ERR-CTA-TOPE-EXCEDIDO | 400 |
-| CORE CUENTA_NO_OPERATIVA | ERR-CTA-BLOQUEADA | 403 |
+| COREDB BNA-SALDO | ERR-CTA-FONDOS-INSUFICIENTES | 400 |
+| COREDB RN-TOP-001 | ERR-CTA-TOPE-EXCEDIDO | 400 |
+| COREDB BNA-ESTADO-CUENTA | ERR-CTA-BLOQUEADA | 403 |
 | CORE CUENTA_NO_ENCONTRADA | ERR-CTA-NO-ENCONTRADA | 404 |
 | CORE CLIENTE_NO_ENCONTRADO | ERR-CLI-NO-ENCONTRADO | 404 |
 | CORE TIPO_CAMBIO_NO_ENCONTRADO | ERR-COR-TC-NO-VIGENTE | 400 |
 | CORE CUENTA_MANCOMUNADA_INCOMPLETA | ERR-CTA-MANCOMUNADA-SIN-COTITULARES | 400 |
 | CORE TRANSFERENCIA_MISMA_CUENTA | ERR-CTA-CUENTAS-IGUALES | 400 |
+| COREDB BNA-CUENTA | ERR-CTA-NO-ENCONTRADA | 404 |
+| COREDB BNA-REGIMEN / BNA-CANAL | ERR-CTA-REGIMEN-INVALIDO / ERR-CTA-CANAL-INVALIDO | 400 |
+| COREDB BNA-IDEMPOTENCIA / REGISTRO_DUPLICADO | ERR-CTA-IDEMPOTENCIA / ERR-CTA-CUENTA-DUPLICADA | 409 |
+| COREDB TOKEN_* / PERMISO_DENEGADO | ERR-CTA-TOKEN-* / ERR-CTA-PERMISO-DENEGADO | 401 / 403 |
 | Otro codigo de CORE | ERR-COR-<CODIGO> | el de CORE |
 | Pydantic | ERR-VALIDACION-ESQUEMA | 400 |
 | Header faltante o invalido | ERR-CTA-HEADER-REQUERIDO / ERR-CTA-HEADER-INVALIDO | 400 |
@@ -84,3 +88,13 @@ python -m pytest CUENTAS/tests -q
 - Validacion de token (Seguridad) y paso por el Bus: no existen aun
 - Tope diario: lo valida CORE con `limite_canal`, sus valores no coinciden con el Diccionario
 - Mancomunada indistinta/conjunta: CORE no lo guarda
+
+
+## Autenticacion y campos (COREDB)
+- Todas las rutas piden `Authorization: Bearer <token>` (JWT de `POST /coredb/auth/login`). Cuentas lo reenvia a COREDB, que valida rol y permisos. Sin el header responde 401 `ERR-CTA-TOKEN-REQUERIDO`.
+- Abrir cuenta y mover dinero requieren rol ADMINISTRADOR u OPERADOR en COREDB.
+- Apertura: `num_cuenta`, `cci` (20 digitos), `moneda` (PEN/USD), `regimen` (INDIVIDUAL, MANCOMUNADA_INDISTINTA, MANCOMUNADA_CONJUNTA), `id_agencia` y `titulares` (lista de `{id_cliente}`) o `id_cliente` si es un solo titular.
+- Deposito/retiro: `num_cuenta`, `monto`, `glosa` (opcional). Respuesta: `uuid_transaccion` y `replay`.
+- Transferencia: `num_cuenta_origen`, `num_cuenta_destino`, `monto`, `glosa` (opcional). Respuesta: `uuid_debito`, `uuid_abono`, `replay`.
+- PROPUESTA: los codigos ERR-CTA nuevos de esta tabla no estan en ITIL-02, falta aprobarlos.
+- PENDIENTE (equipo COREDB): ruta para listar cuentas por cliente.

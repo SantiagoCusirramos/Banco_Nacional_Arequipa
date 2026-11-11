@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, Request
 
 from CUENTAS.core_client import CoreClient
-from CUENTAS.dependencies import ContextoOperacion, contexto_operacion, correlation_id, get_core_client
+from CUENTAS.dependencies import (
+    ContextoOperacion, autorizacion, contexto_operacion, correlation_id, get_core_client,
+)
 from CUENTAS.respuestas import exito
 from CUENTAS.schemas.cuentas import (
     AbrirCuentaIn, CuentaOut, MovimientoOut, OperacionIn, TransferenciaIn, TransferenciaOut,
@@ -19,55 +21,56 @@ def _msg_replay(replay: bool) -> str:
 
 @router.post("/apertura", status_code=201)
 def abrir_cuenta(request: Request, datos: AbrirCuentaIn, core: CoreClient = Depends(get_core_client),
-                 cid: str = Depends(correlation_id)):
-    cuenta = CuentaOut(**svc.abrir_cuenta(core, datos, cid))
+                 cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
+    cuenta = CuentaOut(**svc.abrir_cuenta(core, datos, cid, token))
     return exito(request, cuenta.model_dump(mode="json"), 201, "Cuenta de ahorros creada")
 
 
 @router.get("/consolidada/{id_cliente}")
 def cuentas_del_cliente(request: Request, id_cliente: str, core: CoreClient = Depends(get_core_client),
-                        cid: str = Depends(correlation_id)):
-    cuentas = [CuentaOut(**c).model_dump(mode="json") for c in svc.cuentas_del_cliente(core, id_cliente, cid)]
+                        cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
+    cuentas = [CuentaOut(**c).model_dump(mode="json") for c in svc.cuentas_del_cliente(core, id_cliente, cid, token)]
     return exito(request, cuentas)
 
 
 @router.get("/{num_cuenta}")
 def ver_cuenta(request: Request, num_cuenta: str, core: CoreClient = Depends(get_core_client),
-               cid: str = Depends(correlation_id)):
-    cuenta = CuentaOut(**svc.ver_cuenta(core, num_cuenta, cid))
+               cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
+    cuenta = CuentaOut(**svc.ver_cuenta(core, num_cuenta, cid, token))
     return exito(request, cuenta.model_dump(mode="json"))
 
 
 @router.post("/deposito", status_code=201)
 def depositar(request: Request, datos: OperacionIn, core: CoreClient = Depends(get_core_client),
               ctx: ContextoOperacion = Depends(contexto_operacion)):
-    mov = MovimientoOut(**svc.operar(core, "DEPOSITO", datos, ctx.id_canal, ctx.idempotency_key, ctx.cid))
+    mov = MovimientoOut(**svc.operar(core, "DEPOSITO", datos, ctx.id_canal, ctx.idempotency_key,
+                                     ctx.cid, ctx.authorization))
     return exito(request, mov.model_dump(mode="json"), 201, _msg_replay(mov.replay))
 
 
 @router.post("/retiro", status_code=201)
 def retirar(request: Request, datos: OperacionIn, core: CoreClient = Depends(get_core_client),
             ctx: ContextoOperacion = Depends(contexto_operacion)):
-    mov = MovimientoOut(**svc.operar(core, "RETIRO", datos, ctx.id_canal, ctx.idempotency_key, ctx.cid))
+    mov = MovimientoOut(**svc.operar(core, "RETIRO", datos, ctx.id_canal, ctx.idempotency_key,
+                                     ctx.cid, ctx.authorization))
     return exito(request, mov.model_dump(mode="json"), 201, _msg_replay(mov.replay))
 
 
 @router.post("/transferencia", status_code=201)
 def transferir(request: Request, datos: TransferenciaIn, core: CoreClient = Depends(get_core_client),
                ctx: ContextoOperacion = Depends(contexto_operacion)):
-    res = TransferenciaOut(**svc.transferir(core, datos, ctx.id_canal, ctx.idempotency_key, ctx.cid))
+    res = TransferenciaOut(**svc.transferir(core, datos, ctx.id_canal, ctx.idempotency_key,
+                                            ctx.cid, ctx.authorization))
     return exito(request, res.model_dump(mode="json"), 201, _msg_replay(res.replay))
 
 
 @router.get("/{num_cuenta}/movimientos")
 def listar_movimientos(request: Request, num_cuenta: str, core: CoreClient = Depends(get_core_client),
-                       cid: str = Depends(correlation_id)):
-    movs = svc.listar_movimientos(core, num_cuenta, cid)
-    return exito(request, movs)
+                       cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
+    return exito(request, svc.listar_movimientos(core, num_cuenta, cid, token))
 
 
 @router.get("/movimiento/{uuid_transaccion}")
 def ver_movimiento(request: Request, uuid_transaccion: str, core: CoreClient = Depends(get_core_client),
-                   cid: str = Depends(correlation_id)):
-    mov = svc.ver_movimiento(core, uuid_transaccion, cid)
-    return exito(request, mov)
+                   cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
+    return exito(request, svc.ver_movimiento(core, uuid_transaccion, cid, token))
