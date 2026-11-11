@@ -14,10 +14,9 @@ COPY . /fuente
 RUN rm -rf /fuente/node_modules /fuente/.next /fuente/.env.local \
     && cp -a /fuente/. /app/ && rm -rf /fuente
 
+# Las direcciones de los servicios se leen al ejecutar (COREDB_URL, CUENTAS_GATEWAY_URL,
+# SOL_GATEWAY_URL): la imagen no lleva ninguna.
 FROM pruebas AS construccion
-# Next.js fija las variables NEXT_PUBLIC_* al compilar: es la URL que usa el navegador.
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 
 FROM ${NODE_IMAGE}

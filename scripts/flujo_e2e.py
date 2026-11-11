@@ -5,7 +5,9 @@ servicios por su nombre en la red interna y solo usa la biblioteca estándar.
 
 Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
-saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora.
+saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
+COREDB; después, las mismas cuentas por el módulo CUENTAS y por los puentes del
+frontend, que es el camino que sigue el navegador.
 """
 
 import json
@@ -18,15 +20,19 @@ import urllib.request
 import uuid
 
 COREDB = os.environ.get("E2E_COREDB", "http://127.0.0.1:8012")
+CUENTAS = os.environ.get("E2E_CUENTAS", "http://cuentas:8001")
+FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
 SERVICIOS = {
     "COREDB": (COREDB + "/coredb/salud", {}),
-    "CUENTAS": (os.environ.get("E2E_CUENTAS", "http://cuentas:8001") + "/health", {}),
+    "CUENTAS": (CUENTAS + "/health", {}),
     "SOL": (os.environ.get("E2E_SOL", "http://sol:8011") + "/ready", {}),
     "Seguridad": (os.environ.get("E2E_SEGURIDAD", "http://seguridad:8013") + "/seguridad/estado",
                   {"X-Correlation-ID": "flujo-e2e"}),
-    "frontend": (os.environ.get("E2E_FRONTEND", "http://frontend:3000") + "/", {}),
-    "CORE legado": (os.environ.get("E2E_CORE_LEGADO", "http://core-legado:8000") + "/health", {}),
+    "frontend": (FRONTEND + "/login", {}),
 }
+# Solo si se levantó con el perfil `legado`.
+if os.environ.get("E2E_CORE_LEGADO"):
+    SERVICIOS["CORE legado"] = (os.environ["E2E_CORE_LEGADO"] + "/health", {})
 USUARIO = os.environ.get("BNA_ADMIN_USUARIO", "admin")
 PASSWORD = os.environ.get("BNA_ADMIN_PASSWORD", "")
 AGENCIA = "AQP01"
@@ -177,6 +183,39 @@ def flujo():
         exigir(len(eventos) == 1 and eventos[0]["actor"] == USUARIO,
                f"La bitácora no tiene un evento {accion} de {USUARIO} para {id_entidad}: {eventos}")
     paso(f"la bitácora registra el cliente, la cuenta y la transferencia, a nombre de {USUARIO}")
+
+    # ── Por el módulo CUENTAS, que reenvía el token a COREDB ────────────────
+    base = CUENTAS + "/api/v1/cuentas"
+    estado, _ = pedir("GET", f"{base}/{origen}")
+    exigir(estado == 401, f"CUENTAS sin token debía responder 401 y respondió {estado}")
+    estado, respuesta = pedir("GET", f"{base}/{origen}", token=token)
+    exigir(estado == 200 and respuesta["data"]["saldo_disponible"] == "300.00"
+           and respuesta["data"]["titulares"] == [cliente],
+           f"CUENTAS no devolvió la cuenta esperada: {estado} {respuesta}")
+    estado, respuesta = pedir(
+        "POST", f"{base}/deposito", {"num_cuenta": origen, "monto": "50.00"}, token,
+        cabeceras={"X-Idempotency-Key": str(uuid.uuid4()), "X-Channel-ID": "VEN",
+                   "X-Request-Timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+    )
+    exigir(estado == 201 and respuesta["success"] is True, f"Depósito por CUENTAS: {estado} {respuesta}")
+    estado, respuesta = pedir("GET", f"{base}/{origen}/movimientos", token=token)
+    exigir(estado == 200 and respuesta["data"][0]["tipo_operacion"] == "DEPOSITO"
+           and respuesta["data"][0]["monto"] == "50.00",
+           f"Movimientos por CUENTAS: {estado} {respuesta}")
+    estado, respuesta = pedir("GET", f"{base}/consolidada/{cliente}", token=token)
+    exigir(estado == 200 and sorted(c["num_cuenta"] for c in respuesta["data"]) == sorted(cuentas),
+           f"Consolidada por CUENTAS: {estado} {respuesta}")
+    paso("CUENTAS: cuenta, depósito de 50.00, movimientos y consolidada del cliente")
+
+    # ── Por los puentes del frontend, como lo hace el navegador ─────────────
+    estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
+    exigir(estado == 200 and respuesta["username"] == USUARIO, f"Puente a COREDB: {estado} {respuesta}")
+    estado, respuesta = pedir("GET", f"{FRONTEND}/api/cuenta/{origen}", token=token)
+    exigir(estado == 200 and respuesta["data"]["saldo_disponible"] == "350.00",
+           f"Puente a CUENTAS: {estado} {respuesta}")
+    estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
+    exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
+    paso("frontend: sus puentes llegan a COREDB y a CUENTAS con el token del usuario")
 
 
 if __name__ == "__main__":
