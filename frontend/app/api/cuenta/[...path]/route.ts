@@ -17,7 +17,11 @@ async function proxy(
     "Content-Type": "application/json",
     "X-Correlation-ID": trace,
   });
-  
+  for (const nombre of ["authorization", "x-idempotency-key", "x-channel-id", "x-request-timestamp"]) {
+    const valor = request.headers.get(nombre);
+    if (valor) headers.set(nombre, valor);
+  }
+
   try {
     const upstream = await fetch(
       `${base.replace(/\/$/, "")}/${route}${request.nextUrl.search}`,

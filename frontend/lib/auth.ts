@@ -46,13 +46,13 @@ export function cerrarSesion() {
 }
 
 export async function iniciarSesion(username: string, password: string) {
-  const { data } = await api.post<LoginRespuesta>("/core/auth/login", { username, password });
+  const { data } = await api.post<LoginRespuesta>("/coredb/auth/login", { username, password });
   guardarSesion(data.access_token, data.usuario);
   return data;
 }
 
 export async function obtenerMiPerfil() {
-  const { data } = await api.get<Usuario>("/core/auth/me");
+  const { data } = await api.get<Usuario>("/coredb/auth/me");
   if (obtenerToken()) guardarSesion(obtenerToken()!, data);
   return data;
 }
@@ -64,7 +64,7 @@ export async function registrarUsuario(datos: {
   rol: string;
   id_empleado?: string | null;
 }) {
-  const { data } = await api.post<Usuario>("/core/usuarios", {
+  const { data } = await api.post<Usuario>("/coredb/usuarios", {
     ...datos,
     activo: true,
   });

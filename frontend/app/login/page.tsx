@@ -24,7 +24,7 @@ export default function LoginPage() {
   useEffect(() => {
     const token = obtenerToken();
     if (token) {
-      api.get("/core/auth/me")
+      api.get("/coredb/auth/me")
         .then(() => router.replace("/"))
         .catch(() => cerrarSesion())
         .finally(() => setYaReviso(true));
@@ -131,7 +131,7 @@ export default function LoginPage() {
         </form>
 
         {modo === "registro" && (
-          <p className="auth-note">Este formulario crea usuarios internos del sistema mediante <code>POST /core/usuarios</code>. No es un registro público de clientes. Si recibes un error 403, inicia sesión con un usuario administrador autorizado.</p>
+          <p className="auth-note">Este formulario crea usuarios internos del sistema mediante <code>POST /coredb/usuarios</code>. No es un registro público de clientes. Si recibes un error 403, inicia sesión con un usuario administrador autorizado.</p>
         )}
 
         <div className="auth-bottom">

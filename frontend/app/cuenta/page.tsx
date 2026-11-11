@@ -32,6 +32,15 @@ type MovimientoInfo = {
   fecha_hora: string;
 };
 
+function cabeceraAuth(): Record<string, string> {
+  try {
+    const token = localStorage.getItem("bna_access_token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function CuentaPage() {
   const [tab, setTab] = useState<"apertura" | "consulta" | "operaciones" | "movimientos" | "detalleMovimiento">("apertura");
   const [numCuentaConsulta, setNumCuentaConsulta] = useState("");
@@ -41,9 +50,8 @@ export default function CuentaPage() {
 
   // Formulario de apertura
   const [idCliente, setIdCliente] = useState("CLI-001");
-  const [idProductoAhorro, setIdProductoAhorro] = useState("PROD-001");
   const [idAgencia, setIdAgencia] = useState("AG1");
-  const [regimen, setRegimen] = useState("LIBRE");
+  const [regimen, setRegimen] = useState("INDIVIDUAL");
   const [cci, setCci] = useState("19100000000000000101");
   const [numCuentaNueva, setNumCuentaNueva] = useState("1010000001");
 
@@ -65,10 +73,10 @@ export default function CuentaPage() {
     setLoading(true);
     setNotice(null);
     try {
-      const res = await fetch(`/api/cuenta/${numCuentaConsulta.trim()}`);
+      const res = await fetch(`/api/cuenta/${numCuentaConsulta.trim()}`, { headers: cabeceraAuth() });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.message || json.detail || "No se pudo consultar la cuenta.");
+        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se pudo consultar la cuenta.");
       }
       setCuentaActual(json.data || json);
     } catch (err: any) {
@@ -90,17 +98,16 @@ export default function CuentaPage() {
         moneda: "PEN",
         regimen,
         id_agencia: idAgencia,
-        id_producto_ahorro: idProductoAhorro,
-        titulares: [{ id_cliente: idCliente, rol_titular: "TITULAR" }],
+        titulares: [{ id_cliente: idCliente }],
       };
       const res = await fetch(`/api/cuenta/apertura`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...cabeceraAuth() },
         body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.message || json.detail || "No se pudo abrir la cuenta.");
+        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se pudo abrir la cuenta.");
       }
       const cta = json.data || json;
       setCuentaActual(cta);
@@ -136,6 +143,7 @@ export default function CuentaPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...cabeceraAuth(),
           "X-Idempotency-Key": crypto.randomUUID(),
           "X-Channel-ID": "AGE",
           "X-Request-Timestamp": new Date().toISOString(),
@@ -144,7 +152,7 @@ export default function CuentaPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.message || json.detail || "No se pudo completar la operación.");
+        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se pudo completar la operación.");
       }
       setNotice({ text: `Operación ${tipoOp} ejecutada correctamente en COREDB (8012). Transacción registrada.`, error: false });
     } catch (err: any) {
@@ -160,10 +168,10 @@ export default function CuentaPage() {
     setLoading(true);
     setNotice(null);
     try {
-      const res = await fetch(`/api/cuenta/${cuentaMovs.trim()}/movimientos`);
+      const res = await fetch(`/api/cuenta/${cuentaMovs.trim()}/movimientos`, { headers: cabeceraAuth() });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.message || json.detail || "No se pudieron obtener los movimientos.");
+        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se pudieron obtener los movimientos.");
       }
       setMovimientosList(json.data || json || []);
     } catch (err: any) {
@@ -180,10 +188,10 @@ export default function CuentaPage() {
     setLoading(true);
     setNotice(null);
     try {
-      const res = await fetch(`/api/cuenta/movimiento/${uuidMovimiento.trim()}`);
+      const res = await fetch(`/api/cuenta/movimiento/${uuidMovimiento.trim()}`, { headers: cabeceraAuth() });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.message || json.detail || "No se encontró el movimiento específico.");
+        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se encontró el movimiento específico.");
       }
       setMovimientoDetalle(json.data || json);
     } catch (err: any) {
@@ -277,21 +285,15 @@ export default function CuentaPage() {
                   <input value={idCliente} onChange={(e) => setIdCliente(e.target.value)} required />
                 </div>
                 <div className="sol-field">
-                  <label>Producto de Ahorro</label>
-                  <input value={idProductoAhorro} onChange={(e) => setIdProductoAhorro(e.target.value)} required />
-                </div>
-                <div className="sol-field">
                   <label>Agencia</label>
                   <input value={idAgencia} onChange={(e) => setIdAgencia(e.target.value)} required />
                 </div>
                 <div className="sol-field">
                   <label>Régimen</label>
                   <select value={regimen} onChange={(e) => setRegimen(e.target.value)}>
-                    <option value="LIBRE">LIBRE</option>
-                    <option value="PROGRAMADO">PROGRAMADO</option>
-                    <option value="INFANTIL">INFANTIL</option>
-                    <option value="CTS">CTS</option>
-                    <option value="A_PLAZO">A_PLAZO</option>
+                    <option value="INDIVIDUAL">INDIVIDUAL</option>
+                    <option value="MANCOMUNADA_INDISTINTA">MANCOMUNADA_INDISTINTA</option>
+                    <option value="MANCOMUNADA_CONJUNTA">MANCOMUNADA_CONJUNTA</option>
                   </select>
                 </div>
                 <div style={{ gridColumn: "1 / -2", marginTop: "10px" }}>
@@ -334,7 +336,6 @@ export default function CuentaPage() {
                     <div><small>Saldo Disponible:</small> <strong style={{ fontSize: "18px", color: "#15324f" }}>S/ {Number(cuentaActual.saldo_disponible || 0).toFixed(2)}</strong></div>
                     <div><small>Saldo Contable:</small> <strong>S/ {Number(cuentaActual.saldo_contable || 0).toFixed(2)}</strong></div>
                     <div><small>Agencia:</small> <strong>{cuentaActual.id_agencia}</strong></div>
-                    <div><small>Producto:</small> <strong>{cuentaActual.id_producto_ahorro}</strong></div>
                   </div>
                 </div>
               )}
