@@ -1,6 +1,6 @@
 # Módulo 9 · Seguridad · Prototipo local v0.2.0
 
-Prototipo de laboratorio independiente de MySQL y del Bus, montado también en `main:app`. No autentica ni protege automáticamente los endpoints preexistentes `/core`. No sustituye la base de identidades del CORE. No mueve dinero.
+Prototipo de laboratorio independiente de MySQL y del Bus. Corre como servicio aparte; no está montado en `main:app`. No autentica ni protege automáticamente los endpoints preexistentes `/core`. No sustituye la base de identidades del CORE. No mueve dinero.
 
 ## Instalación reproducible
 
@@ -8,7 +8,7 @@ Desde la raíz del repositorio (Python 3.11+):
 
 ```bash
 python3 -m venv .venv-seguridad
-.venv-seguridad/bin/pip install -r backend/requirements.txt
+.venv-seguridad/bin/pip install -r backend/requirements-seguridad.txt
 cd backend
 cp seguridad/.env.example .env.seguridad.local
 # Editar .env.seguridad.local: asignar SEGURIDAD_SECRET_KEY aleatoria.
@@ -22,8 +22,8 @@ cd ..
 backend/seguridad/run_local.sh
 ```
 
-Consola: http://127.0.0.1:8001 · API: http://127.0.0.1:8001/docs.
-El puerto 8001 evita interferir con el CORE en 8000. No se necesita frontend Next.js para la consola técnica. El servidor escucha exclusivamente en loopback.
+Consola: http://127.0.0.1:8013 · API: http://127.0.0.1:8013/docs.
+El puerto 8013 evita interferir con el CORE (8000), CUENTAS (8001), SOL (8011) y COREDB (8012). No se necesita frontend Next.js para la consola técnica. El servidor escucha exclusivamente en loopback.
 
 En este equipo ya se crearon `admin.demo`, `cliente.demo` y `auditor.demo`. La contraseña aleatoria está en `backend/.env.seguridad.local`, campo `DEMO_PASSWORD`, solo para la demostración local; no se incluye en informes, capturas ni control de versiones. No es una cuenta del banco.
 
@@ -65,10 +65,10 @@ Incidente: ABIERTO → EN_PROGRESO → RESUELTO (requiere descripción) → CERR
 
 ```bash
 cd backend
-../.venv-seguridad/bin/python -m pytest
+../.venv-seguridad/bin/python -m pytest seguridad/tests
 ```
 
-20 casos de Seguridad + 43 existentes del CORE. Incluye tokens inválidos/vencidos, bloqueo, roles, topes, desafío, idempotencia concurrente, manipulación de auditoría, incidentes, backup/restauración y montaje en backend. Las pruebas del CORE no acreditan disponibilidad de MySQL ni integración bancaria.
+19 casos. Incluye tokens inválidos/vencidos, bloqueo, roles, topes, desafío, idempotencia concurrente, manipulación de auditoría, incidentes y backup/restauración. Las pruebas del CORE no acreditan disponibilidad de MySQL ni integración bancaria.
 
 ## Copia y restauración
 
