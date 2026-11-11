@@ -4,6 +4,10 @@
 # y de esta ejecución.
 #
 # Uso, desde cualquier carpeta: backend/COREDB/scripts/pruebas_integracion.sh [argumentos de pytest]
+#
+# Con COREDB_IMAGEN_PRUEBAS=<imagen> las pruebas corren en un contenedor de esa imagen
+# (la de docker/python/Dockerfile), dentro de la red de la base: no hace falta Python
+# en esta máquina. Prueban el código que está en la imagen.
 set -euo pipefail
 
 BACKEND="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -34,6 +38,13 @@ compose up -d --wait >/dev/null
 set -a
 . "$ENTORNO"
 set +a
-cd "$BACKEND/COREDB"
-COREDB_INTEGRACION=1 CORE_DB_HOST=127.0.0.1 PYTHONDONTWRITEBYTECODE=1 \
-  "$PYTHON" -m pytest -p no:cacheprovider -q "$@"
+if [ -n "${COREDB_IMAGEN_PRUEBAS:-}" ]; then
+  docker run --rm --network "${PROYECTO}_default" --env-file "$ENTORNO" \
+    -e COREDB_INTEGRACION=1 -e CORE_DB_HOST=bna-core-db -e CORE_DB_PORT=3306 \
+    "$COREDB_IMAGEN_PRUEBAS" \
+    sh -c 'cd COREDB && exec python -m pytest -p no:cacheprovider -q "$@"' pytest "$@"
+else
+  cd "$BACKEND/COREDB"
+  COREDB_INTEGRACION=1 CORE_DB_HOST=127.0.0.1 PYTHONDONTWRITEBYTECODE=1 \
+    "$PYTHON" -m pytest -p no:cacheprovider -q "$@"
+fi

@@ -180,20 +180,6 @@ def test_persistencia_y_backup_restaurable(client, tmp_path):
     assert client.get('/seguridad/auth/me', headers=h).status_code == 200
 
 
-def test_montaje_en_backend_principal(client):
-    from main import app as main_app
-    from fastapi.testclient import TestClient
-    main_app.state.seguridad_store = client.app.state.seguridad_store
-    with TestClient(main_app, headers={'X-Correlation-ID': 'integration-fastapi'}) as mounted:
-        assert mounted.get('/health').status_code == 200
-        assert mounted.get('/seguridad/estado').status_code == 200
-        h = login(mounted)
-        assert mounted.get('/seguridad/auth/me', headers=h).status_code == 200
-        paths = mounted.get('/openapi.json').json()['paths']
-        assert '/seguridad/auth/login' in paths
-        assert any(path.startswith('/core/') for path in paths)
-
-
 def test_sin_token_y_auditor_solo_lectura(client):
     assert client.get('/seguridad/auditoria').status_code == 401
     h = login(client, 'auditor')

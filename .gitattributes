@@ -1,0 +1,5 @@
+# Estos archivos corren en Linux (contenedores, Git Bash) aunque el clon sea de Windows.
+/bna text eol=lf
+/compose.yaml text eol=lf
+/docker/** text eol=lf
+/scripts/** text eol=lf

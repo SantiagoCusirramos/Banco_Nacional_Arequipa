@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Órdenes del producto integrado del BNA. Requiere Docker con Compose 2.20 o superior.
+# En Windows: Git Bash o WSL2.
+set -euo pipefail
+
+RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$RAIZ"
+
+ESPERA_SEGUNDOS="${BNA_ESPERA_SEGUNDOS:-600}"
+
+ayuda() {
+  cat <<'TEXTO'
+Uso: ./bna <orden>
+
+  up              Crea .env si falta, construye las imágenes, levanta todo y
+                  espera a que cada servicio esté sano
+  down            Detiene y elimina los contenedores; conserva los datos
+  reset           Elimina también los volúmenes y vuelve a levantar todo desde cero
+  ps              Estado de los servicios
+  logs [servicio] Registros, en vivo
+  smoke           Flujo de extremo a extremo contra el producto levantado
+  test            Todas las suites de pruebas, en contenedores, y el flujo
+  help            Esta ayuda
+
+Con make: `make up`, `make test`, etc.
+TEXTO
+}
+
+compose() { docker compose "$@"; }
+
+# Valor de una variable: el del entorno si está definida; si no, el de .env.
+valor() {
+  if [ -n "${!1:-}" ]; then
+    printf '%s\n' "${!1}"
+  else
+    grep -E "^$1=" .env | tail -n 1 | cut -d= -f2-
+  fi
+}
+
+revisar_docker() {
+  docker compose version >/dev/null 2>&1 || {
+    echo "No se encontró Docker con Compose. Instale Docker y vuelva a intentar." >&2
+    exit 1
+  }
+  docker info >/dev/null 2>&1 || {
+    echo "Docker no responde. Inícielo y vuelva a intentar." >&2
+    exit 1
+  }
+}
+
+# Espera a que cada servicio esté sano y a que los de arranque (-init) terminen bien.
+esperar() {
+  local limite=$((SECONDS + ESPERA_SEGUNDOS)) pendientes ids id servicio estado salud salida
+  while :; do
+    pendientes=""
+    ids="$(compose ps -aq)"
+    [ -n "$ids" ] || { echo "No hay contenedores del producto." >&2; return 1; }
+    for id in $ids; do
+      read -r servicio estado salud salida < <(docker inspect --format \
+        '{{index .Config.Labels "com.docker.compose.service"}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}sin-sonda{{end}} {{.State.ExitCode}}' "$id")
+      case "$servicio:$estado:$salud" in
+        *-init:exited:*)
+          if [ "$salida" != 0 ]; then
+            echo "El servicio $servicio terminó con error:" >&2
+            compose logs --tail=30 "$servicio" >&2
+            return 1
+          fi ;;
+        *:running:healthy) ;;
+        *:exited:*|*:dead:*)
+          echo "El servicio $servicio se detuvo:" >&2
+          compose logs --tail=30 "$servicio" >&2
+          return 1 ;;
+        *) pendientes="$pendientes $servicio" ;;
+      esac
+    done
+    [ -z "$pendientes" ] && return 0
+    if [ "$SECONDS" -ge "$limite" ]; then
+      echo "Tras ${ESPERA_SEGUNDOS} s siguen sin estar sanos:$pendientes" >&2
+      echo "Revise con: ./bna logs <servicio>" >&2
+      return 1
+    fi
+    printf '\r  esperando:%-60s' "$pendientes"
+    sleep 3
+  done
+}
+
+resumen() {
+  printf '\r%-75s\n' "Todos los servicios están sanos."
+  cat <<TEXTO
+
+  Frontend          http://localhost:$(valor BNA_PUERTO_FRONTEND)
+  Solicitud crédito http://localhost:$(valor BNA_PUERTO_FRONTEND)/solicitud-credito
+  COREDB (API)      http://127.0.0.1:$(valor BNA_PUERTO_COREDB)/docs
+  CUENTAS           http://127.0.0.1:$(valor BNA_PUERTO_CUENTAS)/docs
+  SOL               http://127.0.0.1:$(valor BNA_PUERTO_SOL)/docs
+  Seguridad         http://127.0.0.1:$(valor BNA_PUERTO_SEGURIDAD)
+  CORE legado       http://127.0.0.1:$(valor BNA_PUERTO_CORE_LEGADO)/docs
+  MySQL (CORE)      127.0.0.1:$(valor BNA_PUERTO_DB)
+
+  Administrador de COREDB: usuario $(valor BNA_ADMIN_USUARIO); su contraseña está en
+  .env (BNA_ADMIN_PASSWORD), junto con las demás claves generadas.
+  Para comprobar el producto: ./bna smoke
+TEXTO
+}
+
+levantar() {
+  revisar_docker
+  scripts/generar_env.sh "$RAIZ"
+  compose up -d --build
+  esperar
+  resumen
+}
+
+humo() {
+  [ -f .env ] || { echo "No hay .env: ejecute primero ./bna up" >&2; exit 1; }
+  compose exec -T \
+    -e BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
+    -e BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
+    coredb python - < scripts/flujo_e2e.py
+}
+
+orden="${1:-help}"
+[ $# -gt 0 ] && shift
+case "$orden" in
+  up) levantar ;;
+  down) compose down ;;
+  reset)
+    revisar_docker
+    compose down -v
+    levantar ;;
+  ps) compose ps -a ;;
+  logs) compose logs -f --tail=100 "$@" ;;
+  smoke) humo ;;
+  test) exec scripts/pruebas.sh "$@" ;;
+  help|-h|--help) ayuda ;;
+  *)
+    echo "Orden desconocida: $orden" >&2
+    ayuda >&2
+    exit 2 ;;
+esac
