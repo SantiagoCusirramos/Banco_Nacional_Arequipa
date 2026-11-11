@@ -1,6 +1,6 @@
  "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { CrearCuenta } from "./components/CrearCuenta";
 import { ModificarCuenta } from "./components/ModificarCuenta";
 import type { Cuenta } from "@/lib/cuentas";
@@ -17,7 +17,15 @@ const initialMovements = [
 const money = (amount: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(amount);
 
+const sinSuscripcion = () => () => {};
+const fechaDeHoy = () =>
+  new Date()
+    .toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    .toUpperCase();
+
 export default function Home() {
+  // La página se genera al compilar: la fecha se lee en el navegador, no en el servidor.
+  const fechaHoy = useSyncExternalStore(sinSuscripcion, fechaDeHoy, () => "");
   const [tab, setTab] = useState<Tab>("inicio");
   const [showBalance, setShowBalance] = useState(true);
   const [search, setSearch] = useState("");
@@ -95,7 +103,7 @@ export default function Home() {
         </header>
 
         <div className="content">
-          <div className="welcome-row"><div><p className="eyebrow">MIÉRCOLES, 21 DE OCTUBRE DE 2026</p><h1>{tab === "inicio" ? "¡Hola, Diego!" : navItems.find((item) => item.id === tab)?.label}</h1><p className="subtitle">{tab === "inicio" ? "Este es el resumen de tus finanzas de hoy." : "Administra tus productos bancarios de forma sencilla y segura."}</p></div><button className="outline-button" onClick={() => setNotice("Reporte de demostración: no hay datos reales conectados.")}><span>↧</span> Descargar reporte</button></div>
+          <div className="welcome-row"><div><p className="eyebrow">{fechaHoy}</p><h1>{tab === "inicio" ? "¡Hola, Diego!" : navItems.find((item) => item.id === tab)?.label}</h1><p className="subtitle">{tab === "inicio" ? "Este es el resumen de tus finanzas de hoy." : "Administra tus productos bancarios de forma sencilla y segura."}</p></div><button className="outline-button" onClick={() => setNotice("Reporte de demostración: no hay datos reales conectados.")}><span>↧</span> Descargar reporte</button></div>
 
           {notice && <div className="notice" role="status"><span>ⓘ</span><p>{notice}</p><button onClick={() => setNotice("")} aria-label="Cerrar aviso">×</button></div>}
 
