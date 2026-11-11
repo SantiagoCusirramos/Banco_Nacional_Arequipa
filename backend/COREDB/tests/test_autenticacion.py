@@ -233,3 +233,13 @@ def test_login_sin_campos_extra():
         "/coredb/auth/login", json={"username": "a", "password": "b", "rol": "ADMINISTRADOR"})
     assert respuesta.status_code == 422
     assert "ADMINISTRADOR" not in respuesta.text
+
+
+def test_solo_el_servicio_de_clientes_registra_habilitado_y_solo_una_persona_da_de_baja():
+    servicio = Actor(uuid.uuid4(), "svc", "SERVICIO", "CLIENTES")
+    otro_servicio = Actor(uuid.uuid4(), "svc", "SERVICIO", "CUENTAS")
+    asesor = Actor(uuid.uuid4(), "ana", "ASESOR")
+    assert permisos.puede_registrar_habilitado(servicio)
+    assert not permisos.puede_registrar_habilitado(otro_servicio)
+    assert not permisos.puede_registrar_habilitado(asesor)
+    assert permisos.puede_dar_de_baja(asesor) and not permisos.puede_dar_de_baja(servicio)
