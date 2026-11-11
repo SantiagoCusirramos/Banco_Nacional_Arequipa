@@ -63,7 +63,8 @@ su módulo), nunca con una cuenta de persona:
 
 **Primer administrador:** `python -m COREDB.scripts.crear_administrador` lo crea con las
 credenciales de la base y pide la contraseña en la terminal. Se niega si ya hay un
-administrador activo.
+administrador activo. Con `--si-falta` eso no es un error: así lo usa el arranque del
+producto (`compose.yaml`), que toma la contraseña de `CORE_DB_ADMIN_INICIAL_PASSWORD`.
 
 **Pendiente:** ningún límite de intentos de login ni de frecuencia.
 
@@ -103,3 +104,6 @@ Documentación interactiva: `http://127.0.0.1:8012/docs`. Especificación public
 cd backend/COREDB && python -m pytest -q         # unitarias; integración omitida
 backend/COREDB/scripts/pruebas_integracion.sh    # contra un contenedor nuevo
 ```
+
+Sin Python 3.11 en la máquina, `./bna test` desde la raíz corre las dos suites en
+contenedores (el script acepta `COREDB_IMAGEN_PRUEBAS=<imagen>` para eso).
