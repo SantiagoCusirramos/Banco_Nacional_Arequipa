@@ -326,9 +326,9 @@ describe("Defectos conocidos (DEF)", () => {
     expect(screen.getByRole("status")).toHaveTextContent("supera el saldo");
   });
 
-  it.fails("DEF-03 La fecha del encabezado debería ser la fecha actual y no estar fija", () => {
+  it("DEF-03 La fecha del encabezado es la fecha actual", () => {
     render(<Home />);
     const hoy = new Date().toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    expect(screen.getByText(/DE 20\d\d$/).textContent!.toLowerCase()).toContain(hoy.split(" ")[0].toLowerCase());
+    expect(screen.getByText(/DE 20\d\d$/).textContent!.toLowerCase()).toBe(hoy.toLowerCase());
   });
 });

@@ -161,13 +161,29 @@ celulares, porque la API puede devolverlos. Qué actor puede registrar un client
 HABILITADO o fijar cada estado lo decide la API. **Una base creada con
 `bd-v1.0-mysql` debe recrearse** (volumen nuevo): `core.usuario_sistema` cambió.
 
+### Lecturas de consulta de la API (desde `bd-v1.2-mysql`)
+
+Para listar los movimientos de una cuenta, las cuentas de un cliente y la bitácora,
+`bna_api` lee dos vistas y una tabla más. Sigue sin leer `cuentas.movimiento` ni
+`core.evento_auditoria`.
+
+| Objeto | Qué entrega |
+|---|---|
+| `cuentas.v_movimiento_api` | El movimiento sin su asiento contable, con la naturaleza de la operación (`D` o `C`) y la moneda de la cuenta |
+| `core.v_evento_auditoria_api` | La bitácora general con el nombre del módulo. Los procedimientos no guardan datos personales en el detalle |
+| `cuentas.titularidad` | Qué cuentas tiene cada cliente |
+
+Solo agrega objetos: una base creada con `bd-v1.1-mysql` sigue sirviendo a una API
+anterior, pero necesita un volumen nuevo para tener las vistas, porque los scripts de
+inicio solo corren sobre un volumen vacío.
+
 `pruebas/mysql/run_tests.sh` ejecuta toda la suite con la extensión cargada. Sus
 pruebas (ID `X`) quedan en `resultados/mysql/resultado-extension.tsv`, fuera de la
 matriz. `pruebas_sin_transaccion.sh` prueba cada procedimiento en autocommit, porque
 el arnés siempre abre una transacción.
 
-`sql/bna_datos_dev.sql` es **solo para desarrollo**: periodo abierto del mes en curso,
-BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
+`sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
+desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.
 
 ## Brechas conocidas

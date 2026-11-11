@@ -63,11 +63,53 @@ su módulo), nunca con una cuenta de persona:
 
 **Primer administrador:** `python -m COREDB.scripts.crear_administrador` lo crea con las
 credenciales de la base y pide la contraseña en la terminal. Se niega si ya hay un
-administrador activo.
+administrador activo. Con `--si-falta` eso no es un error: así lo usa el arranque del
+producto (`compose.yaml`), que toma la contraseña de `CORE_DB_ADMIN_INICIAL_PASSWORD`.
 
 **Pendiente:** ningún límite de intentos de login ni de frecuencia.
 
+## Clientes
+
+Las rutas que usa el módulo Clientes, y el personal, están descritas en
+[`CONTRATO_CLIENTES.md`](CONTRATO_CLIENTES.md):
+
+| Ruta | Permiso |
+|---|---|
+| `POST /coredb/clientes` | `CREAR_CLIENTE` |
+| `POST /coredb/clientes/validaciones/documento` | `VALIDAR_IDENTIDAD` |
+| `POST /coredb/clientes/{cod_cliente}/validaciones` | `VALIDAR_IDENTIDAD` |
+| `GET /coredb/clientes/{cod_cliente}` | `VER_CLIENTE` |
+| `POST /coredb/clientes/{cod_cliente}/estado` | `MODIFICAR_CLIENTE` |
+| `GET /coredb/catalogos/clientes` | autenticado |
+
+- El usuario de la API no lee `clientes.*`: el cliente llega como JSON de un
+  procedimiento, sin datos biométricos.
+- **Quién registra (punto R-01, por confirmar con el equipo):** solo el usuario de
+  servicio del módulo Clientes registra un cliente `HABILITADO`; los demás registran
+  `OBSERVADO`. La regla está en `permisos.puede_registrar_habilitado`.
+- La baja es final y la fija una persona, no un usuario de servicio.
+- Ningún mensaje de error repite el documento, el correo ni el celular.
+- `X-Correlation-ID` es opcional; vuelve siempre en la respuesta y queda en la bitácora.
+- No hay rutas para listar clientes ni para buscarlos por nombre, correo o celular.
+
 El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM.md`.
+
+## Consultas
+
+| Ruta | Permiso | Qué devuelve |
+|---|---|---|
+| `GET /coredb/movimientos/cuenta/{num_cuenta}` | `VER_CUENTA` | Los movimientos de una cuenta, del más reciente al más antiguo (`limite`, `antes_de`) |
+| `GET /coredb/movimientos/{uuid_transaccion}` | `VER_CUENTA` | Un movimiento |
+| `GET /coredb/cuentas?cod_cliente=` | `VER_CUENTA` | Las cuentas en las que el cliente es titular |
+| `GET /coredb/auditoria` | `VER_AUDITORIA` | La bitácora, del evento más reciente al más antiguo, con filtros |
+
+- Un movimiento trae `naturaleza` (`D` débito, `C` crédito) y la moneda de su cuenta, y
+  no trae el asiento contable. Una transferencia se lee como `TRANSFERENCIA_ENVIADA` en
+  la cuenta de origen y `TRANSFERENCIA_RECIBIDA` en la de destino.
+- Toda cuenta incluye `titulares`, los códigos de sus clientes titulares.
+- No hay una ruta que liste todas las cuentas ni todos los clientes.
+- Se leen por las vistas de `bd-v1.2-mysql`; el usuario de la API no lee
+  `cuentas.movimiento` ni `core.evento_auditoria`.
 
 Documentación interactiva: `http://127.0.0.1:8012/docs`. Especificación publicada:
 `openapi.json`, que se regenera desde `backend/` con
@@ -103,3 +145,6 @@ Documentación interactiva: `http://127.0.0.1:8012/docs`. Especificación public
 cd backend/COREDB && python -m pytest -q         # unitarias; integración omitida
 backend/COREDB/scripts/pruebas_integracion.sh    # contra un contenedor nuevo
 ```
+
+Sin Python 3.11 en la máquina, `./bna test` desde la raíz corre las dos suites en
+contenedores (el script acepta `COREDB_IMAGEN_PRUEBAS=<imagen>` para eso).

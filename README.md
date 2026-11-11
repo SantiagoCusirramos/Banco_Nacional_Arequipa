@@ -6,6 +6,45 @@ Sistema ERP bancario desarrollado como proyecto académico en la UCSM. Arquitect
 
 ---
 
+## Inicio rápido con Docker
+
+Solo hace falta Docker con Compose 2.20 o superior y bash (en Windows, Git Bash o WSL2).
+
+```bash
+git clone https://github.com/SantiagoCusirramos/Banco_Nacional_Arequipa.git
+cd Banco_Nacional_Arequipa
+./bna up        # o: make up
+./bna smoke     # comprueba el producto de extremo a extremo
+```
+
+`./bna up` crea `.env` con claves aleatorias (no se versiona), construye las imágenes, levanta todos los servicios y espera a que estén sanos. La primera vez tarda unos minutos. Al terminar muestra las direcciones:
+
+| Servicio | Dirección |
+|---|---|
+| Frontend | http://localhost:3000 |
+| COREDB, la API del CORE | http://127.0.0.1:8012/docs |
+| CUENTAS | http://127.0.0.1:8001/docs |
+| SOL | http://127.0.0.1:8011/docs |
+| Seguridad | http://127.0.0.1:8013 |
+| CORE legado | http://127.0.0.1:8000/docs |
+| MySQL de la base integrada | 127.0.0.1:3307 |
+
+El administrador de COREDB es `admin`; su contraseña está en `.env`, en `BNA_ADMIN_PASSWORD`.
+
+| Orden | Qué hace |
+|---|---|
+| `./bna up` | Levanta todo |
+| `./bna down` | Detiene y elimina los contenedores; conserva los datos |
+| `./bna reset` | Elimina también los datos y vuelve a levantar desde cero |
+| `./bna ps` | Estado de los servicios |
+| `./bna logs [servicio]` | Registros en vivo |
+| `./bna smoke` | Flujo de extremo a extremo: login, registro de un cliente, apertura de cuentas, depósito, transferencia, consulta de movimientos y bitácora |
+| `./bna test` | Todas las suites de pruebas, en contenedores |
+
+El resto de este documento describe la instalación manual de cada componente.
+
+---
+
 ## Estructura del repositorio
 
 ```
@@ -127,6 +166,7 @@ El frontend quedará disponible en `http://localhost:3000`.
 | CUENTAS    | http://localhost:8001      |
 | SOL        | http://127.0.0.1:8011      |
 | COREDB     | http://127.0.0.1:8012      |
+| Seguridad  | http://127.0.0.1:8013      |
 | Frontend   | http://localhost:3000      |
 | MySQL      | localhost:3306             |
 | Bus de Servicios (previsto, aún no existe) | http://localhost:9000 |
@@ -142,7 +182,10 @@ Cada componente tiene su propio archivo de ejemplo:
 | `backend/.env.example`      | `backend/.env`        | Configuración de la API y base de datos |
 | `backend/.env.sol.example`  | `backend/.env.sol`    | Módulo SOL                              |
 | `backend/COREDB/.env.example` | `backend/COREDB/.env` | API COREDB                              |
-| `frontend/.env.sol.example` | `frontend/.env.local` | Puente del frontend hacia SOL           |
+| `backend/seguridad/.env.example` | `backend/.env.seguridad.local` | Módulo de Seguridad               |
+| `.env.example`              | `.env` (lo crea `./bna up`) | Producto completo con Docker      |
+| `frontend/.env.example`     | `frontend/.env.local` | URL del backend para el navegador       |
+| `frontend/.env.sol.example` | `frontend/.env.local` (agregar) | Puente del frontend hacia SOL |
 
 Copia cada archivo como se indica y completa los valores. **Nunca subas el `.env` al repositorio.**
 

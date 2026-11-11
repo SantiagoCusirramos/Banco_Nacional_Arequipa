@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from COREDB.auth import actor_actual
 from COREDB.database import db_session
 from COREDB.models import Agencia, Moneda, ProductoAhorro, ProductoCredito, TipoCambio
+from COREDB.services import clientes
 
 # Cualquier usuario autenticado lee los catálogos.
 router = APIRouter(prefix="/coredb/catalogos", tags=["catálogos"], dependencies=[Depends(actor_actual)])
@@ -77,3 +78,29 @@ def productos_credito(db: Session = Depends(db_session)):
 @router.get("/tipos-cambio", response_model=list[TipoCambioRespuesta])
 def tipos_cambio(db: Session = Depends(db_session)):
     return db.query(TipoCambio).order_by(TipoCambio.fecha.desc()).limit(200).all()
+
+
+class TipoDocumentoRespuesta(BaseModel):
+    codigo: str
+    descripcion: str
+    longitud_min: int
+    longitud_max: int
+    es_alfanumerico: bool
+
+
+class EstadoClienteRespuesta(BaseModel):
+    codigo: str
+    descripcion: str
+    permite_operar: bool
+
+
+class CatalogosClientesRespuesta(BaseModel):
+    tipos_documento: list[TipoDocumentoRespuesta]
+    estados_cliente: list[EstadoClienteRespuesta]
+
+
+@router.get("/clientes", response_model=CatalogosClientesRespuesta)
+def catalogos_de_clientes(db: Session = Depends(db_session)):
+    """Tipos de documento con sus reglas y estados de cliente. Conviene que el módulo
+    Clientes lea de aquí las reglas de documento en lugar de fijarlas en su código."""
+    return clientes.catalogos(db)

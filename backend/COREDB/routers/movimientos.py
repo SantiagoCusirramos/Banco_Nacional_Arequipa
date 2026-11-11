@@ -1,16 +1,17 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session
 from COREDB.errores import ErrorCoreDb
-from COREDB.models import CtaTransaccion
+from COREDB.models import Movimiento
+from COREDB.routers.cuentas import obtener as obtener_cuenta
 from COREDB.services import movimientos
 
 router = APIRouter(prefix="/coredb/movimientos", tags=["movimientos"])
@@ -47,23 +48,6 @@ class TransferenciaRespuesta(BaseModel):
     repetido: bool
 
 
-class MovimientoRespuestaDetalle(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id_transaccion: str
-    uuid_transaccion: str
-    num_cuenta: str
-    num_cuenta_contraparte: str | None
-    tipo_operacion: str
-    tipo_movimiento: str
-    monto: Decimal
-    moneda: str
-    id_canal: str
-    saldo_posterior: Decimal
-    estado_transaccion: str
-    fecha_hora: datetime
-
-
 @router.post("", response_model=MovimientoRespuesta, status_code=status.HTTP_201_CREATED)
 def registrar(
     datos: MovimientoRegistrar,
@@ -86,16 +70,56 @@ def transferir(
     return movimientos.transferir(db, **datos.model_dump(), actor=actor.usuario)
 
 
-@router.get("/cuenta/{num_cuenta}", response_model=list[MovimientoRespuestaDetalle],
-            dependencies=[Depends(requiere_permiso("VER_CUENTA"))])
-def listar_por_cuenta(num_cuenta: str, db: Session = Depends(db_session)):
-    return db.query(CtaTransaccion).filter(CtaTransaccion.num_cuenta == num_cuenta).order_by(CtaTransaccion.fecha_hora.desc()).all()
+class MovimientoDetalle(BaseModel):
+    """Un movimiento aplicado a una cuenta. `naturaleza` es D (débito) o C (crédito)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    uuid_transaccion: uuid.UUID
+    num_cuenta: str
+    tipo_operacion: str
+    naturaleza: Literal["D", "C", "N"]
+    monto: Decimal
+    moneda: str
+    glosa: str
+    id_canal: str | None
+    estado_transaccion: str
+    fecha_hora: datetime
 
 
-@router.get("/{uuid_transaccion}", response_model=MovimientoRespuestaDetalle,
-            dependencies=[Depends(requiere_permiso("VER_CUENTA"))])
-def ver_movimiento(uuid_transaccion: str, db: Session = Depends(db_session)):
-    mov = db.query(CtaTransaccion).filter(CtaTransaccion.uuid_transaccion == uuid_transaccion).first()
-    if not mov:
-        raise ErrorCoreDb("MOVIMIENTO_NO_ENCONTRADO", f"El movimiento {uuid_transaccion} no existe.", 404)
-    return mov
+@router.get("/cuenta/{num_cuenta}", response_model=list[MovimientoDetalle],
+            dependencies=[Depends(requiere_permiso("VER_CUENTA"))],
+            responses={404: {"description": "CUENTA_NO_ENCONTRADA"}})
+def de_una_cuenta(
+    num_cuenta: str,
+    limite: int = Query(default=50, ge=1, le=200),
+    antes_de: datetime | None = Query(
+        default=None, description="Solo movimientos anteriores a esta fecha y hora (para paginar)."
+    ),
+    db: Session = Depends(db_session),
+):
+    """Los movimientos de una cuenta, del más reciente al más antiguo. Una transferencia
+    aparece como TRANSFERENCIA_ENVIADA en la cuenta de origen y TRANSFERENCIA_RECIBIDA
+    en la de destino."""
+    obtener_cuenta(db, num_cuenta)
+    consulta = db.query(Movimiento).filter(Movimiento.num_cuenta == num_cuenta)
+    if antes_de is not None:
+        # La base guarda UTC sin zona.
+        if antes_de.tzinfo is not None:
+            antes_de = antes_de.astimezone(timezone.utc).replace(tzinfo=None)
+        consulta = consulta.filter(Movimiento.fecha_hora < antes_de)
+    return (
+        consulta.order_by(Movimiento.fecha_hora.desc(), Movimiento.uuid_transaccion)
+        .limit(limite)
+        .all()
+    )
+
+
+@router.get("/{uuid_transaccion}", response_model=MovimientoDetalle,
+            dependencies=[Depends(requiere_permiso("VER_CUENTA"))],
+            responses={404: {"description": "MOVIMIENTO_NO_ENCONTRADO"}})
+def ver(uuid_transaccion: uuid.UUID, db: Session = Depends(db_session)):
+    movimiento = db.get(Movimiento, uuid_transaccion)
+    if movimiento is None:
+        raise ErrorCoreDb("MOVIMIENTO_NO_ENCONTRADO", "El movimiento no existe.", 404)
+    return movimiento

@@ -13,7 +13,7 @@ from sqlalchemy.exc import OperationalError
 from COREDB.config import Settings
 from COREDB import transacciones
 from COREDB.database import INIT_COMMAND, UuidBinario, get_engine, llamar
-from COREDB.errores import ErrorCoreDb, registrar_manejadores
+from COREDB.errores import ErrorBaseDatos, ErrorCoreDb, registrar_manejadores
 from COREDB.main import app
 from COREDB.models import Base
 from COREDB.services.movimientos import _uuid
@@ -147,3 +147,32 @@ def test_uuid_nulo_es_conflicto_de_idempotencia():
     with pytest.raises(ErrorCoreDb) as exc:
         _uuid(None)
     assert (exc.value.code, exc.value.status_code) == ("BNA-IDEMPOTENCIA", 409)
+
+
+def test_un_duplicado_conserva_la_restriccion_y_no_el_valor():
+    import pymysql
+    from sqlalchemy.exc import IntegrityError
+
+    original = pymysql.err.IntegrityError(
+        1062, "Duplicate entry 'alguien@example.com' for key 'cliente.uk_cliente_2'"
+    )
+    error = ErrorBaseDatos.desde(IntegrityError("CALL", {}, original))
+    assert (error.code, error.status_code, error.restriccion) == ("REGISTRO_DUPLICADO", 409, "uk_cliente_2")
+    assert "alguien" not in error.message
+
+
+def test_la_correlacion_vuelve_tambien_en_un_error():
+    from COREDB.correlacion import correlacion
+
+    prueba = FastAPI()
+    registrar_manejadores(prueba)
+
+    @prueba.get("/falla")
+    def falla(_: uuid.UUID = Depends(correlacion)):
+        raise ErrorCoreDb("X", "x", 409)
+
+    enviada = str(uuid.uuid4())
+    respuesta = TestClient(prueba).get("/falla", headers={"X-Correlation-ID": enviada})
+    assert respuesta.status_code == 409 and respuesta.headers["x-correlation-id"] == enviada
+    generada = TestClient(prueba).get("/falla", headers={"X-Correlation-ID": "no-es-uuid"})
+    assert uuid.UUID(generada.headers["x-correlation-id"])

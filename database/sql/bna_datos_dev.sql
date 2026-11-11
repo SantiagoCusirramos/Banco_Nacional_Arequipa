@@ -6,12 +6,18 @@ SET NAMES utf8mb4;
 -- =====================================================================
 -- Se carga después de sql/bna_extension.sql para que una base nueva pueda hacer
 -- un depósito. No va en producción: los datos reales los mantiene bna_admin.
--- El periodo es el del mes en curso al crear el volumen: al cambiar de mes hay
--- que recrear el volumen o agregar otro periodo.
+-- Los periodos van del mes en curso al crear el volumen hasta 23 meses después,
+-- todos abiertos, para que la base de desarrollo no deje de aceptar movimientos al
+-- cambiar de mes.
 SET @hoy = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', 'America/Lima'));
 
 INSERT INTO core.periodo_contable (anio, mes, fecha_inicio, fecha_fin, estado)
-VALUES (YEAR(@hoy), MONTH(@hoy), DATE_FORMAT(@hoy, '%Y-%m-01'), LAST_DAY(@hoy), 'ABIERTO');
+WITH RECURSIVE meses (inicio, n) AS (
+    SELECT CAST(DATE_FORMAT(@hoy, '%Y-%m-01') AS DATE), 0
+    UNION ALL
+    SELECT inicio + INTERVAL 1 MONTH, n + 1 FROM meses WHERE n < 23
+)
+SELECT YEAR(inicio), MONTH(inicio), inicio, LAST_DAY(inicio), 'ABIERTO' FROM meses;
 
 INSERT INTO core.agencia VALUES
     ('AQP01', 'Agencia Arequipa Centro', 'Calle Mercaderes 120', 'Cercado', 'Arequipa', 'ACTIVA');

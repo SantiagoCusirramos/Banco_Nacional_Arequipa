@@ -19,6 +19,29 @@
         "title": "AgenciaRespuesta",
         "type": "object"
       },
+      "COREDB__routers__clientes__EstadoCambiar": {
+        "additionalProperties": false,
+        "properties": {
+          "estado": {
+            "maxLength": 25,
+            "minLength": 1,
+            "title": "Estado",
+            "type": "string"
+          },
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "estado",
+          "motivo"
+        ],
+        "title": "EstadoCambiar",
+        "type": "object"
+      },
       "COREDB__routers__tarjetas__EstadoCambiar": {
         "additionalProperties": false,
         "properties": {
@@ -58,6 +81,313 @@
           "activo"
         ],
         "title": "EstadoCambiar",
+        "type": "object"
+      },
+      "CatalogosClientesRespuesta": {
+        "properties": {
+          "estados_cliente": {
+            "items": {
+              "$ref": "#/components/schemas/EstadoClienteRespuesta"
+            },
+            "title": "Estados Cliente",
+            "type": "array"
+          },
+          "tipos_documento": {
+            "items": {
+              "$ref": "#/components/schemas/TipoDocumentoRespuesta"
+            },
+            "title": "Tipos Documento",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tipos_documento",
+          "estados_cliente"
+        ],
+        "title": "CatalogosClientesRespuesta",
+        "type": "object"
+      },
+      "ClienteConEstadoAnterior": {
+        "properties": {
+          "apellido_materno": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido Materno"
+          },
+          "apellido_paterno": {
+            "title": "Apellido Paterno",
+            "type": "string"
+          },
+          "celular": {
+            "title": "Celular",
+            "type": "string"
+          },
+          "cod_cliente": {
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "correo": {
+            "title": "Correo",
+            "type": "string"
+          },
+          "estado_anterior": {
+            "title": "Estado Anterior",
+            "type": "string"
+          },
+          "estado_cliente": {
+            "title": "Estado Cliente",
+            "type": "string"
+          },
+          "estado_habilitante": {
+            "title": "Estado Habilitante",
+            "type": "string"
+          },
+          "fecha_verificacion": {
+            "title": "Fecha Verificacion",
+            "type": "string"
+          },
+          "id_verificacion_captacion": {
+            "title": "Id Verificacion Captacion",
+            "type": "string"
+          },
+          "nombres": {
+            "title": "Nombres",
+            "type": "string"
+          },
+          "numero_documento": {
+            "title": "Numero Documento",
+            "type": "string"
+          },
+          "permite_operar": {
+            "title": "Permite Operar",
+            "type": "boolean"
+          },
+          "tipo_documento": {
+            "title": "Tipo Documento",
+            "type": "string"
+          },
+          "version_contrato": {
+            "title": "Version Contrato",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "tipo_documento",
+          "numero_documento",
+          "nombres",
+          "apellido_paterno",
+          "apellido_materno",
+          "correo",
+          "celular",
+          "estado_cliente",
+          "permite_operar",
+          "version_contrato",
+          "id_verificacion_captacion",
+          "estado_habilitante",
+          "fecha_verificacion",
+          "estado_anterior"
+        ],
+        "title": "ClienteConEstadoAnterior",
+        "type": "object"
+      },
+      "ClienteRegistrado": {
+        "properties": {
+          "cod_cliente": {
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "estado_cliente": {
+            "title": "Estado Cliente",
+            "type": "string"
+          },
+          "estado_habilitante": {
+            "title": "Estado Habilitante",
+            "type": "string"
+          },
+          "id_verificacion_captacion": {
+            "title": "Id Verificacion Captacion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "estado_cliente",
+          "estado_habilitante",
+          "id_verificacion_captacion"
+        ],
+        "title": "ClienteRegistrado",
+        "type": "object"
+      },
+      "ClienteRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "apellido_materno": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido Materno"
+          },
+          "apellido_paterno": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Apellido Paterno",
+            "type": "string"
+          },
+          "celular": {
+            "description": "Nueve dígitos, empieza con 9. Sin +51.",
+            "pattern": "^9\\d{8}$",
+            "title": "Celular",
+            "type": "string"
+          },
+          "correo": {
+            "maxLength": 150,
+            "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+            "title": "Correo",
+            "type": "string"
+          },
+          "estado_habilitante": {
+            "enum": [
+              "HABILITADO",
+              "OBSERVADO"
+            ],
+            "title": "Estado Habilitante",
+            "type": "string"
+          },
+          "nombres": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Nombres",
+            "type": "string"
+          },
+          "numero_documento": {
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Numero Documento",
+            "type": "string"
+          },
+          "tipo_documento": {
+            "maxLength": 10,
+            "minLength": 1,
+            "title": "Tipo Documento",
+            "type": "string"
+          },
+          "version_contrato": {
+            "maxLength": 10,
+            "minLength": 1,
+            "title": "Version Contrato",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_documento",
+          "numero_documento",
+          "nombres",
+          "apellido_paterno",
+          "correo",
+          "celular",
+          "version_contrato",
+          "estado_habilitante"
+        ],
+        "title": "ClienteRegistrar",
+        "type": "object"
+      },
+      "ClienteRespuesta": {
+        "description": "El cliente, sin datos biométricos.",
+        "properties": {
+          "apellido_materno": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido Materno"
+          },
+          "apellido_paterno": {
+            "title": "Apellido Paterno",
+            "type": "string"
+          },
+          "celular": {
+            "title": "Celular",
+            "type": "string"
+          },
+          "cod_cliente": {
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "correo": {
+            "title": "Correo",
+            "type": "string"
+          },
+          "estado_cliente": {
+            "title": "Estado Cliente",
+            "type": "string"
+          },
+          "estado_habilitante": {
+            "title": "Estado Habilitante",
+            "type": "string"
+          },
+          "fecha_verificacion": {
+            "title": "Fecha Verificacion",
+            "type": "string"
+          },
+          "id_verificacion_captacion": {
+            "title": "Id Verificacion Captacion",
+            "type": "string"
+          },
+          "nombres": {
+            "title": "Nombres",
+            "type": "string"
+          },
+          "numero_documento": {
+            "title": "Numero Documento",
+            "type": "string"
+          },
+          "permite_operar": {
+            "title": "Permite Operar",
+            "type": "boolean"
+          },
+          "tipo_documento": {
+            "title": "Tipo Documento",
+            "type": "string"
+          },
+          "version_contrato": {
+            "title": "Version Contrato",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "tipo_documento",
+          "numero_documento",
+          "nombres",
+          "apellido_paterno",
+          "apellido_materno",
+          "correo",
+          "celular",
+          "estado_cliente",
+          "permite_operar",
+          "version_contrato",
+          "id_verificacion_captacion",
+          "estado_habilitante",
+          "fecha_verificacion"
+        ],
+        "title": "ClienteRespuesta",
         "type": "object"
       },
       "CredencialRespuesta": {
@@ -174,6 +504,14 @@
           "saldo_disponible": {
             "title": "Saldo Disponible",
             "type": "string"
+          },
+          "titulares": {
+            "description": "Códigos de los clientes titulares, en orden.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Titulares",
+            "type": "array"
           }
         },
         "required": [
@@ -184,9 +522,187 @@
           "saldo_contable",
           "saldo_disponible",
           "estado_cuenta",
-          "id_agencia"
+          "id_agencia",
+          "titulares"
         ],
         "title": "CuentaRespuesta",
+        "type": "object"
+      },
+      "DocumentoVerificado": {
+        "properties": {
+          "cliente": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClienteRespuesta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id_validacion": {
+            "title": "Id Validacion",
+            "type": "integer"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "resultado": {
+            "enum": [
+              "APROBADO",
+              "RECHAZADO"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_validacion",
+          "resultado",
+          "motivo",
+          "cliente"
+        ],
+        "title": "DocumentoVerificado",
+        "type": "object"
+      },
+      "DocumentoVerificar": {
+        "additionalProperties": false,
+        "properties": {
+          "identidad_verificada": {
+            "title": "Identidad Verificada",
+            "type": "boolean"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "numero_documento": {
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Numero Documento",
+            "type": "string"
+          },
+          "tipo_documento": {
+            "maxLength": 10,
+            "minLength": 1,
+            "title": "Tipo Documento",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_documento",
+          "numero_documento",
+          "identidad_verificada"
+        ],
+        "title": "DocumentoVerificar",
+        "type": "object"
+      },
+      "EstadoClienteRespuesta": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          },
+          "permite_operar": {
+            "title": "Permite Operar",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "codigo",
+          "descripcion",
+          "permite_operar"
+        ],
+        "title": "EstadoClienteRespuesta",
+        "type": "object"
+      },
+      "EventoRespuesta": {
+        "properties": {
+          "accion": {
+            "title": "Accion",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "entidad": {
+            "title": "Entidad",
+            "type": "string"
+          },
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "id_entidad": {
+            "title": "Id Entidad",
+            "type": "string"
+          },
+          "id_evento": {
+            "title": "Id Evento",
+            "type": "integer"
+          },
+          "modulo": {
+            "title": "Modulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_evento",
+          "modulo",
+          "entidad",
+          "id_entidad",
+          "accion",
+          "actor",
+          "correlation_id",
+          "detalle",
+          "fecha_hora"
+        ],
+        "title": "EventoRespuesta",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -251,6 +767,79 @@
           "decimales"
         ],
         "title": "MonedaRespuesta",
+        "type": "object"
+      },
+      "MovimientoDetalle": {
+        "description": "Un movimiento aplicado a una cuenta. `naturaleza` es D (débito) o C (crédito).",
+        "properties": {
+          "estado_transaccion": {
+            "title": "Estado Transaccion",
+            "type": "string"
+          },
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "glosa": {
+            "title": "Glosa",
+            "type": "string"
+          },
+          "id_canal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "naturaleza": {
+            "enum": [
+              "D",
+              "C",
+              "N"
+            ],
+            "title": "Naturaleza",
+            "type": "string"
+          },
+          "num_cuenta": {
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "tipo_operacion": {
+            "title": "Tipo Operacion",
+            "type": "string"
+          },
+          "uuid_transaccion": {
+            "format": "uuid",
+            "title": "Uuid Transaccion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_transaccion",
+          "num_cuenta",
+          "tipo_operacion",
+          "naturaleza",
+          "monto",
+          "moneda",
+          "glosa",
+          "id_canal",
+          "estado_transaccion",
+          "fecha_hora"
+        ],
+        "title": "MovimientoDetalle",
         "type": "object"
       },
       "MovimientoRegistrar": {
@@ -634,6 +1223,39 @@
         "title": "TipoCambioRespuesta",
         "type": "object"
       },
+      "TipoDocumentoRespuesta": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          },
+          "es_alfanumerico": {
+            "title": "Es Alfanumerico",
+            "type": "boolean"
+          },
+          "longitud_max": {
+            "title": "Longitud Max",
+            "type": "integer"
+          },
+          "longitud_min": {
+            "title": "Longitud Min",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "codigo",
+          "descripcion",
+          "longitud_min",
+          "longitud_max",
+          "es_alfanumerico"
+        ],
+        "title": "TipoDocumentoRespuesta",
+        "type": "object"
+      },
       "TokenRespuesta": {
         "properties": {
           "access_token": {
@@ -922,6 +1544,60 @@
         "title": "UsuarioSesion",
         "type": "object"
       },
+      "ValidacionRegistrada": {
+        "properties": {
+          "id_validacion": {
+            "title": "Id Validacion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id_validacion"
+        ],
+        "title": "ValidacionRegistrada",
+        "type": "object"
+      },
+      "ValidacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "resultado": {
+            "enum": [
+              "APROBADO",
+              "RECHAZADO"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          },
+          "tipo_validacion": {
+            "enum": [
+              "HUELLA",
+              "FACIAL",
+              "CELULAR",
+              "CORREO"
+            ],
+            "title": "Tipo Validacion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_validacion",
+          "resultado"
+        ],
+        "title": "ValidacionRegistrar",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -970,6 +1646,182 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/coredb/auditoria": {
+      "get": {
+        "description": "Los eventos de la bitácora, del más reciente al más antiguo. Cada operación de la\nAPI deja el suyo con el usuario que la hizo. El detalle no lleva datos personales.",
+        "operationId": "eventos_coredb_auditoria_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "modulo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Modulo"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entidad",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entidad"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id_entidad",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Id Entidad"
+            }
+          },
+          {
+            "in": "query",
+            "name": "accion",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 60,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accion"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "correlation_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Correlation Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Solo eventos con un id menor (para paginar).",
+            "in": "query",
+            "name": "antes_de_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Solo eventos con un id menor (para paginar).",
+              "title": "Antes De Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventoRespuesta"
+                  },
+                  "title": "Response Eventos Coredb Auditoria Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Eventos",
+        "tags": [
+          "auditoría"
+        ]
+      }
+    },
     "/coredb/auth/login": {
       "post": {
         "description": "Usuario inexistente, clave incorrecta, usuario inactivo y contraseña no admitida\nresponden el mismo 401. Un login exitoso queda en la bitácora (LOGIN).",
@@ -1084,6 +1936,33 @@
           }
         ],
         "summary": "Agencias",
+        "tags": [
+          "catálogos"
+        ]
+      }
+    },
+    "/coredb/catalogos/clientes": {
+      "get": {
+        "description": "Tipos de documento con sus reglas y estados de cliente. Conviene que el módulo\nClientes lea de aquí las reglas de documento en lugar de fijarlas en su código.",
+        "operationId": "catalogos_de_clientes_coredb_catalogos_clientes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogosClientesRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Catalogos De Clientes",
         "tags": [
           "catálogos"
         ]
@@ -1209,7 +2088,423 @@
         ]
       }
     },
+    "/coredb/clientes": {
+      "post": {
+        "description": "Registra un cliente. El código lo genera el CORE. HABILITADO da un cliente ACTIVO y\nOBSERVADO da un cliente OBSERVADO. Solo el usuario de servicio del módulo Clientes\npuede registrar HABILITADO.\n\nLos 409 revelan que un documento, correo o celular ya pertenece a un cliente: el\nmódulo Clientes no debe reenviarlos al usuario final antes de verificar su identidad.",
+        "operationId": "registrar_coredb_clientes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClienteRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO o HABILITACION_NO_PERMITIDA"
+          },
+          "409": {
+            "description": "CLIENTE_DUPLICADO, CORREO_DUPLICADO o CELULAR_DUPLICADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar",
+        "tags": [
+          "clientes"
+        ]
+      }
+    },
+    "/coredb/clientes/validaciones/documento": {
+      "post": {
+        "description": "Consulta por documento (RF-CLI-001), después de que quien llama verificó la identidad.\nResponde siempre 201, nunca 404. Sin identidad verificada la respuesta es la misma\npara un cliente y para quien no lo es, salvo `id_validacion`. Con identidad verificada\naprueba solo a un cliente ACTIVO. Cada llamada queda registrada.",
+        "operationId": "verificar_documento_coredb_clientes_validaciones_documento_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentoVerificar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentoVerificado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Verificar Documento",
+        "tags": [
+          "clientes"
+        ]
+      }
+    },
+    "/coredb/clientes/{cod_cliente}": {
+      "get": {
+        "operationId": "ver_coredb_clientes__cod_cliente__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_cliente",
+            "required": true,
+            "schema": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CLIENTE_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Ver",
+        "tags": [
+          "clientes"
+        ]
+      }
+    },
+    "/coredb/clientes/{cod_cliente}/estado": {
+      "post": {
+        "description": "Cambia el estado de un cliente; el motivo queda en la bitácora.\n\nBLOQUEADO o SUSPENDIDO bloquean sus tarjetas activas y por activar, y BAJA las cancela\ntodas. Reactivar al cliente no desbloquea sus tarjetas: eso lo hace Seguridad. BAJA es\nfinal y solo la fija una persona. Pedir el estado que ya tiene no cambia nada.",
+        "operationId": "cambiar_estado_coredb_clientes__cod_cliente__estado_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_cliente",
+            "required": true,
+            "schema": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/COREDB__routers__clientes__EstadoCambiar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClienteConEstadoAnterior"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CLIENTE_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Cambiar Estado",
+        "tags": [
+          "clientes"
+        ]
+      }
+    },
+    "/coredb/clientes/{cod_cliente}/validaciones": {
+      "post": {
+        "description": "Registra el veredicto de una validación de huella, rostro, celular o correo. La de\ndocumento se registra con `/coredb/clientes/validaciones/documento`.",
+        "operationId": "registrar_validacion_coredb_clientes__cod_cliente__validaciones_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_cliente",
+            "required": true,
+            "schema": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidacionRegistrada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CLIENTE_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Validacion",
+        "tags": [
+          "clientes"
+        ]
+      }
+    },
     "/coredb/cuentas": {
+      "get": {
+        "description": "Las cuentas en las que el cliente es titular, por número de cuenta. No hay una\nruta que liste todas las cuentas.",
+        "operationId": "de_un_cliente_coredb_cuentas_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cod_cliente",
+            "required": true,
+            "schema": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CuentaRespuesta"
+                  },
+                  "title": "Response De Un Cliente Coredb Cuentas Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "CLIENTE_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "De Un Cliente",
+        "tags": [
+          "cuentas"
+        ]
+      },
       "post": {
         "operationId": "abrir_coredb_cuentas_post",
         "requestBody": {
@@ -1348,6 +2643,92 @@
         ]
       }
     },
+    "/coredb/movimientos/cuenta/{num_cuenta}": {
+      "get": {
+        "description": "Los movimientos de una cuenta, del más reciente al más antiguo. Una transferencia\naparece como TRANSFERENCIA_ENVIADA en la cuenta de origen y TRANSFERENCIA_RECIBIDA\nen la de destino.",
+        "operationId": "de_una_cuenta_coredb_movimientos_cuenta__num_cuenta__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "num_cuenta",
+            "required": true,
+            "schema": {
+              "title": "Num Cuenta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Solo movimientos anteriores a esta fecha y hora (para paginar).",
+            "in": "query",
+            "name": "antes_de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Solo movimientos anteriores a esta fecha y hora (para paginar).",
+              "title": "Antes De"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MovimientoDetalle"
+                  },
+                  "title": "Response De Una Cuenta Coredb Movimientos Cuenta  Num Cuenta  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "CUENTA_NO_ENCONTRADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "De Una Cuenta",
+        "tags": [
+          "movimientos"
+        ]
+      }
+    },
     "/coredb/movimientos/transferencias": {
       "post": {
         "operationId": "transferir_coredb_movimientos_transferencias_post",
@@ -1389,6 +2770,57 @@
           }
         ],
         "summary": "Transferir",
+        "tags": [
+          "movimientos"
+        ]
+      }
+    },
+    "/coredb/movimientos/{uuid_transaccion}": {
+      "get": {
+        "operationId": "ver_coredb_movimientos__uuid_transaccion__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid_transaccion",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Uuid Transaccion",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovimientoDetalle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "MOVIMIENTO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Ver",
         "tags": [
           "movimientos"
         ]

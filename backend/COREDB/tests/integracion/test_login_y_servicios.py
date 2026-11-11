@@ -235,3 +235,19 @@ def test_el_arranque_no_crea_un_segundo_administrador(consulta, token_admin, cla
     assert clave_admin not in resultado.stderr + resultado.stdout
     despues = consulta("SELECT COUNT(*) n FROM core.usuario_sistema WHERE rol='ADMINISTRADOR'")[0]["n"]
     assert despues == antes
+
+
+def test_el_arranque_con_si_falta_no_falla_si_ya_hay_administrador(consulta, token_admin, clave_admin):
+    """Un arranque automático se repite: con --si-falta el segundo no es un error."""
+    antes = consulta("SELECT COUNT(*) n FROM core.usuario_sistema WHERE rol='ADMINISTRADOR'")[0]["n"]
+    entorno = {**os.environ, "CORE_DB_ADMIN_INICIAL_PASSWORD": clave_admin}
+    resultado = subprocess.run(
+        [sys.executable, "-m", "COREDB.scripts.crear_administrador", "--username", "otro-admin",
+         "--nombre", "Otro", "--si-falta"],
+        cwd=Path(__file__).resolve().parents[3], env=entorno, capture_output=True, text=True,
+    )
+    assert resultado.returncode == 0, resultado.stderr
+    assert "ya existe" in resultado.stdout.lower()
+    assert clave_admin not in resultado.stderr + resultado.stdout
+    despues = consulta("SELECT COUNT(*) n FROM core.usuario_sistema WHERE rol='ADMINISTRADOR'")[0]["n"]
+    assert despues == antes
