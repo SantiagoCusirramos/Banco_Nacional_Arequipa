@@ -1,0 +1,262 @@
+# Producto integrado del BNA en una máquina local.
+#
+#   ./bna up      crea .env con claves aleatorias, construye y levanta todo
+#   ./bna help    las demás órdenes
+#
+# Todos los puertos se publican solo en 127.0.0.1 y ninguna clave está en este
+# archivo: salen de .env, que `./bna up` genera a partir de .env.example.
+name: bna
+
+x-construir-backend: &construir-backend
+  context: ./backend
+  dockerfile: ../docker/python/Dockerfile
+
+# Cada imagen la construye un solo servicio; los demás que la usan la toman ya
+# construida (pull_policy: never). Así dos construcciones no compiten por la misma etiqueta.
+x-backend: &backend
+  image: bna/backend:local
+  pull_policy: never
+
+x-coredb: &coredb
+  image: bna/coredb:local
+  pull_policy: never
+  environment: &coredb-entorno
+    CORE_DB_HOST: db
+    CORE_DB_PORT: "3306"
+    CORE_DB_APP_USER: bna_app_user
+    CORE_DB_APP_PASSWORD: ${CORE_DB_APP_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    CORE_DB_JWT_CLAVE: ${CORE_DB_JWT_CLAVE:?Falta en .env. Ejecute ./bna up}
+
+x-sol: &sol
+  image: bna/sol:local
+  pull_policy: never
+  environment: &sol-entorno
+    SOL_DB_HOST: db-aux
+    SOL_DB_PORT: "3306"
+    SOL_DB_USER: sol_user
+    SOL_DB_PASSWORD: ${SOL_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    SOL_DB_NAME: bna_sol_mvp
+    SOL_INTEGRATION_MODE: SIMULADO
+
+x-sonda: &sonda
+  interval: 5s
+  timeout: 5s
+  retries: 60
+  start_period: 5s
+
+services:
+  # ── Base integrada del CORE (bna-core-db) ───────────────────────────────
+  # Solo COREDB se conecta a ella. Incluye los datos de desarrollo.
+  db:
+    image: bna/core-db:local
+    build:
+      context: ./database
+      dockerfile: ../docker/core-db/Dockerfile
+    # No definir MYSQL_DATABASE ni MYSQL_USER: crearían un usuario con todos los
+    # privilegios, fuera de los roles de la base.
+    environment:
+      MYSQL_ROOT_PASSWORD: ${CORE_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      CORE_DB_APP_PASSWORD: ${CORE_DB_APP_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      CORE_DB_ADMIN_PASSWORD: ${CORE_DB_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      CORE_DB_SEGURIDAD_PASSWORD: ${CORE_DB_SEGURIDAD_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    volumes:
+      - core-db-datos:/var/lib/mysql
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_DB:-3307}:3306"
+    healthcheck:
+      <<: *sonda
+      # Por TCP: el servidor de inicialización no escucha por TCP, así que solo
+      # pasa cuando la carga terminó.
+      test:
+        - CMD-SHELL
+        - MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -uroot -h127.0.0.1 --protocol=TCP -e 'CALL core.verificar_configuracion()'
+
+  # ── COREDB: la API del CORE sobre la base integrada ─────────────────────
+  coredb:
+    <<: *coredb
+    build:
+      <<: *construir-backend
+      args:
+        REQUISITOS: requirements-coredb.txt
+    command: uvicorn COREDB.main:app --host 0.0.0.0 --port 8012
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_COREDB:-8012}:8012"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8012/coredb/salud", timeout=3)
+
+  # Crea el primer administrador si no hay ninguno, y termina.
+  coredb-init:
+    <<: *coredb
+    command:
+      - python
+      - -m
+      - COREDB.scripts.crear_administrador
+      - --username
+      - ${BNA_ADMIN_USUARIO:-admin}
+      - --nombre
+      - Administrador inicial
+      - --si-falta
+    environment:
+      <<: *coredb-entorno
+      CORE_DB_ADMIN_INICIAL_PASSWORD: ${BNA_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── CUENTAS ─────────────────────────────────────────────────────────────
+  # En main todavía llama al CORE legado; el PR #29 lo pasa a COREDB.
+  cuentas:
+    <<: *backend
+    command: uvicorn CUENTAS.main:app --host 0.0.0.0 --port 8001
+    environment:
+      CORE_BASE_URL: http://core-legado:8000
+    depends_on:
+      core-legado:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_CUENTAS:-8001}:8001"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8001/health", timeout=3)
+
+  # ── SOL: solicitud de crédito, con Captación y Evaluación simuladas ─────
+  sol:
+    <<: *sol
+    build:
+      <<: *construir-backend
+      args:
+        REQUISITOS: requirements-sol.txt
+    command: uvicorn SOL.app:app --host 0.0.0.0 --port 8011
+    depends_on:
+      sol-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_SOL:-8011}:8011"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8011/ready", timeout=3)
+
+  # Crea la base de SOL y sus cuentas de demostración, y termina. No borra datos.
+  sol-init:
+    <<: *sol
+    command: python -m SOL.manage init
+    environment:
+      <<: *sol-entorno
+      SOL_INITIAL_PASSWORD: ${SOL_INITIAL_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    depends_on:
+      db-aux:
+        condition: service_healthy
+
+  # ── Seguridad: prototipo sobre SQLite ───────────────────────────────────
+  seguridad:
+    image: bna/seguridad:local
+    build:
+      <<: *construir-backend
+      args:
+        REQUISITOS: requirements-seguridad.txt
+    command: uvicorn seguridad.app:app --host 0.0.0.0 --port 8013
+    environment:
+      SEGURIDAD_SECRET_KEY: ${SEGURIDAD_SECRET_KEY:?Falta en .env. Ejecute ./bna up}
+      SEGURIDAD_DB: /datos/seguridad.sqlite3
+    volumes:
+      - seguridad-datos:/datos
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_SEGURIDAD:-8013}:8013"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen(u.Request("http://127.0.0.1:8013/seguridad/estado", headers={"X-Correlation-ID":"sonda"}), timeout=3)
+
+  # ── Frontend ────────────────────────────────────────────────────────────
+  frontend:
+    image: bna/frontend:local
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend/Dockerfile
+      args:
+        # La usa el navegador, por eso apunta al puerto publicado en esta máquina.
+        NEXT_PUBLIC_API_URL: http://localhost:${BNA_PUERTO_CORE_LEGADO:-8000}
+    environment:
+      SOL_GATEWAY_URL: http://sol:8011/gateway/sol
+      SOL_COOKIE_SECURE: "false"
+    depends_on:
+      sol:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_FRONTEND:-3000}:3000"
+    healthcheck:
+      <<: *sonda
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+
+  # ── CORE legado ─────────────────────────────────────────────────────────
+  # API anterior sobre el esquema `bna`. Sigue aquí mientras CUENTAS y el
+  # frontend la llamen; 22 de sus rutas no exigen token (issue #32).
+  core-legado:
+    <<: *backend
+    # Construye la imagen de los servicios que usan backend/requirements.txt.
+    build:
+      <<: *construir-backend
+      args:
+        REQUISITOS: requirements.txt
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    environment:
+      DB_HOST: db-aux
+      DB_PORT: "3306"
+      DB_NAME: bna
+      DB_USER: bna_user
+      DB_PASSWORD: ${LEGADO_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      SECRET_KEY: ${LEGADO_SECRET_KEY:?Falta en .env. Ejecute ./bna up}
+    depends_on:
+      db-aux:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_CORE_LEGADO:-8000}:8000"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8000/health", timeout=3)
+
+  # ── Base auxiliar: `bna` legada y `bna_sol_mvp` de SOL ──────────────────
+  # Aparte de la base integrada, que no recibe esquemas ni usuarios ajenos.
+  db-aux:
+    image: mysql:8.4@sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70
+    environment:
+      MYSQL_ROOT_PASSWORD: ${AUX_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      LEGADO_DB_PASSWORD: ${LEGADO_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      SOL_DB_PASSWORD: ${SOL_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    volumes:
+      - "./backend/Infraestructura - BD/Trabajo_hecho/BD/99_bna_unificado.sql:/docker-entrypoint-initdb.d/01_bna_legada.sql:ro"
+      - ./docker/db-aux/02_usuarios.sh:/docker-entrypoint-initdb.d/02_usuarios.sh:ro
+      - db-aux-datos:/var/lib/mysql
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD-SHELL
+        - MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -uroot -h127.0.0.1 --protocol=TCP -e 'SELECT 1 FROM mysql.user WHERE user = "sol_user"' | grep -q 1
+
+volumes:
+  core-db-datos:
+  db-aux-datos:
+  seguridad-datos:
