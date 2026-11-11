@@ -38,7 +38,7 @@ El administrador de COREDB es `admin`; su contraseña está en `.env`, en `BNA_A
 | `./bna reset` | Elimina también los datos y vuelve a levantar desde cero |
 | `./bna ps` | Estado de los servicios |
 | `./bna logs [servicio]` | Registros en vivo |
-| `./bna smoke` | Flujo de extremo a extremo: login, apertura de cuentas, depósito y transferencia |
+| `./bna smoke` | Flujo de extremo a extremo: login, registro de un cliente, apertura de cuentas, depósito y transferencia |
 | `./bna test` | Todas las suites de pruebas, en contenedores |
 
 El resto de este documento describe la instalación manual de cada componente.
