@@ -11,8 +11,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from CORE.exceptions import CoreError
-
-from CORE.routers import admin, clientes, creditos, cuentas, movimientos, tarjetas
 from CORE.routers import admin, auth, catalogos, clientes, creditos, cuentas, movimientos, tarjetas
 
 
