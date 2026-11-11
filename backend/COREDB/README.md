@@ -68,6 +68,30 @@ producto (`compose.yaml`), que toma la contraseña de `CORE_DB_ADMIN_INICIAL_PAS
 
 **Pendiente:** ningún límite de intentos de login ni de frecuencia.
 
+## Clientes
+
+Las rutas que usa el módulo Clientes, y el personal, están descritas en
+[`CONTRATO_CLIENTES.md`](CONTRATO_CLIENTES.md):
+
+| Ruta | Permiso |
+|---|---|
+| `POST /coredb/clientes` | `CREAR_CLIENTE` |
+| `POST /coredb/clientes/validaciones/documento` | `VALIDAR_IDENTIDAD` |
+| `POST /coredb/clientes/{cod_cliente}/validaciones` | `VALIDAR_IDENTIDAD` |
+| `GET /coredb/clientes/{cod_cliente}` | `VER_CLIENTE` |
+| `POST /coredb/clientes/{cod_cliente}/estado` | `MODIFICAR_CLIENTE` |
+| `GET /coredb/catalogos/clientes` | autenticado |
+
+- El usuario de la API no lee `clientes.*`: el cliente llega como JSON de un
+  procedimiento, sin datos biométricos.
+- **Quién registra (punto R-01, por confirmar con el equipo):** solo el usuario de
+  servicio del módulo Clientes registra un cliente `HABILITADO`; los demás registran
+  `OBSERVADO`. La regla está en `permisos.puede_registrar_habilitado`.
+- La baja es final y la fija una persona, no un usuario de servicio.
+- Ningún mensaje de error repite el documento, el correo ni el celular.
+- `X-Correlation-ID` es opcional; vuelve siempre en la respuesta y queda en la bitácora.
+- No hay rutas para listar clientes ni para buscarlos por nombre, correo o celular.
+
 El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM.md`.
 
 Documentación interactiva: `http://127.0.0.1:8012/docs`. Especificación publicada:

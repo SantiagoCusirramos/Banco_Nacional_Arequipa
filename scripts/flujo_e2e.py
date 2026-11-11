@@ -3,13 +3,14 @@
 Corre dentro del contenedor de COREDB (`./bna smoke`), así que llega a los demás
 servicios por su nombre en la red interna y solo usa la biblioteca estándar.
 
-Pasos: salud de cada servicio, login del administrador, apertura de dos cuentas
-para el cliente de desarrollo, depósito, transferencia, repetición idempotente y
+Pasos: salud de cada servicio, login del administrador, registro de un cliente,
+apertura de dos cuentas para él, depósito, transferencia, repetición idempotente y
 saldos finales.
 """
 
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
@@ -28,7 +29,6 @@ SERVICIOS = {
 }
 USUARIO = os.environ.get("BNA_ADMIN_USUARIO", "admin")
 PASSWORD = os.environ.get("BNA_ADMIN_PASSWORD", "")
-CLIENTE = "DEV001"
 AGENCIA = "AQP01"
 CANAL = "HB"
 
@@ -93,8 +93,22 @@ def flujo():
     exigir(perfil["rol"] == "ADMINISTRADOR", f"El usuario {USUARIO} no es administrador")
     paso(f"login de {USUARIO} (ADMINISTRADOR)")
 
-    # Números nuevos en cada corrida, para poder repetirla sobre la misma base.
+    # Datos nuevos en cada corrida, para poder repetirla sobre la misma base. Una persona
+    # registra OBSERVADO: HABILITADO es del módulo Clientes, que verifica la identidad.
     base = int(time.time() * 1000) % 10**15 * 10
+    sufijo = f"{random.randrange(10**8):08d}"
+    registrado = coredb("POST", "/coredb/clientes", 201, {
+        "tipo_documento": "DNI", "numero_documento": sufijo,
+        "nombres": "Cliente", "apellido_paterno": "De Prueba", "apellido_materno": None,
+        "correo": f"flujo-{base}@example.com", "celular": "9" + sufijo,
+        "version_contrato": "v1", "estado_habilitante": "OBSERVADO",
+    }, token)
+    cliente = registrado["cod_cliente"]
+    vista = coredb("GET", f"/coredb/clientes/{cliente}", 200, token=token)
+    exigir(vista["estado_cliente"] == "OBSERVADO" and vista["permite_operar"] is True,
+           f"El cliente registrado no puede operar: {vista}")
+    paso(f"cliente {cliente} registrado (OBSERVADO, puede operar)")
+
     cuentas = []
     for indice in (1, 2):
         numero = base + indice
@@ -104,11 +118,11 @@ def flujo():
             "moneda": "PEN",
             "regimen": "INDIVIDUAL",
             "id_agencia": AGENCIA,
-            "titulares": [CLIENTE],
+            "titulares": [cliente],
         }, token)
         cuentas.append(cuenta["num_cuenta"])
     origen, destino = cuentas
-    paso(f"dos cuentas abiertas para {CLIENTE}: {origen} y {destino}")
+    paso(f"dos cuentas abiertas para {cliente}: {origen} y {destino}")
 
     coredb("POST", "/coredb/movimientos", 201, {
         "num_cuenta": origen, "tipo": "DEPOSITO", "monto": "500.00",

@@ -43,9 +43,8 @@ correr "Frontend, imagen de pruebas" \
 correr "Frontend, lint" docker run --rm bna/frontend-pruebas:local npm run lint
 correr "Frontend, pruebas" docker run --rm bna/frontend-pruebas:local npm test
 
-if [ -z "$(docker compose ps -q 2>/dev/null)" ]; then
-  correr "Producto, arranque" ./bna up
-fi
+# Siempre: si el producto ya está levantado, recrea los servicios cuya imagen cambió.
+correr "Producto, arranque" ./bna up
 correr "Producto, flujo de extremo a extremo" ./bna smoke
 
 echo

@@ -1,9 +1,13 @@
 """Errores de la API y su traducción desde la base."""
 
+import re
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
+
+from COREDB.correlacion import cabeceras_de_error
 
 # Los rechazos de la base empiezan con el código de la regla.
 ESTADOS_POR_REGLA = {
@@ -22,6 +26,8 @@ ERROR_REGLA = 1644          # SIGNAL de core.fallar
 ERROR_DUPLICADO = 1062
 ERRORES_DATOS = {1048, 1216, 1217, 1264, 1292, 1366, 1406, 1451, 1452, 3819}
 ERRORES_REINTENTABLES = {1205, 1213}  # espera de bloqueo y deadlock
+# «Duplicate entry '…' for key 'cliente.uk_cliente_2'»: solo interesa la restricción.
+_RESTRICCION = re.compile(r"for key '(?:[^'.]*\.)?([^']+)'")
 
 
 class ErrorCoreDb(Exception):
@@ -40,6 +46,9 @@ class ErrorAutenticacion(ErrorCoreDb):
 
 
 class ErrorBaseDatos(ErrorCoreDb):
+    # En un duplicado, la restricción única que lo rechazó. El valor duplicado no se guarda.
+    restriccion: str | None = None
+
     @staticmethod
     def _codigo(exc: DBAPIError) -> int | None:
         argumentos = getattr(exc.orig, "args", ())
@@ -57,7 +66,10 @@ class ErrorBaseDatos(ErrorCoreDb):
             regla = mensaje.split(":", 1)[0]
             return cls(regla, MENSAJES_POR_REGLA.get(regla, mensaje), ESTADOS_POR_REGLA.get(regla, 422))
         if codigo == ERROR_DUPLICADO:
-            return cls("REGISTRO_DUPLICADO", "Ya existe un registro con esos datos.", 409)
+            error = cls("REGISTRO_DUPLICADO", "Ya existe un registro con esos datos.", 409)
+            hallada = _RESTRICCION.search(mensaje)
+            error.restriccion = hallada.group(1) if hallada else None
+            return error
         if codigo in ERRORES_DATOS:
             return cls("DATOS_INVALIDOS", "Los datos no cumplen las reglas de la base.", 422)
         raise exc
@@ -75,7 +87,10 @@ def registrar_manejadores(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={"error": {"code": exc.code, "message": exc.message}},
-            headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+            headers={
+                **cabeceras_de_error(request),
+                **({"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else {}),
+            },
         )
 
     @app.exception_handler(DBAPIError)
@@ -104,4 +119,5 @@ def registrar_manejadores(app: FastAPI) -> None:
                     for e in exc.errors()
                 ]
             },
+            headers=cabeceras_de_error(request),
         )

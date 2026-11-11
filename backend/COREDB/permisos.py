@@ -47,6 +47,17 @@ PERMISOS: dict[str, frozenset[str]] = {
 }
 
 
+def puede_registrar_habilitado(actor: Actor) -> bool:
+    """Punto R-01: solo el módulo Clientes, que verificó la identidad, registra un cliente
+    HABILITADO. Los demás registran OBSERVADO. Si el equipo decide otra cosa, cambia aquí."""
+    return actor.clave_permisos == "SERVICIO:CLIENTES"
+
+
+def puede_dar_de_baja(actor: Actor) -> bool:
+    """La baja es final y cancela las tarjetas del cliente: la fija una persona."""
+    return not actor.es_servicio
+
+
 def acciones_de(actor: Actor) -> frozenset[str]:
     return PERMISOS.get(actor.clave_permisos, frozenset())
 
