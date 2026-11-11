@@ -1,0 +1,94 @@
+# COREDB: la API del CORE sobre la base integrada.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredb
+  labels: { app.kubernetes.io/name: coredb }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: coredb }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: coredb }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        # La base solo acepta conexiones por su Service cuando terminó de cargar el esquema.
+        - name: esperar-db
+          image: bna/coredb:local
+          command:
+            - python
+            - -c
+            - |
+              import socket, sys, time
+              for _ in range(150):
+                  try:
+                      socket.create_connection(("db", 3306), 2).close()
+                      sys.exit(0)
+                  except OSError:
+                      time.sleep(2)
+              sys.exit("La base integrada no respondió a tiempo.")
+          resources: &recursos-arranque
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: &contenedor-seguro
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+        # Crea el primer administrador si no hay ninguno.
+        - name: primer-administrador
+          image: bna/coredb:local
+          command: [python, -m, COREDB.scripts.crear_administrador, --username, $(BNA_ADMIN_USUARIO), --nombre, Administrador inicial, --si-falta]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: BNA_ADMIN_USUARIO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BNA_ADMIN_USUARIO } }
+            - name: CORE_DB_ADMIN_INICIAL_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BNA_ADMIN_PASSWORD } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
+      containers:
+        - name: coredb
+          image: bna/coredb:local
+          command: [uvicorn, COREDB.main:app, --host, 0.0.0.0, --port, "8012"]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_JWT_CLAVE
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_JWT_CLAVE } }
+          ports:
+            - { name: http, containerPort: 8012 }
+          startupProbe:
+            httpGet: { path: /coredb/salud, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /coredb/salud, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /coredb/salud, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 384Mi }
+          securityContext: *contenedor-seguro
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coredb
+spec:
+  selector: { app.kubernetes.io/name: coredb }
+  ports:
+    - { name: http, port: 8012, targetPort: http }

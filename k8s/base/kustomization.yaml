@@ -1,0 +1,19 @@
+# Producto integrado del BNA: una Deployment y un Service por servicio.
+# Las claves van en el Secret `bna-secretos`, que NO está aquí: lo crea
+# scripts/k8s.sh a partir del .env local.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: bna
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: bna
+resources:
+  - namespace.yaml
+  - configuracion.yaml
+  - db.yaml
+  - db-aux.yaml
+  - coredb.yaml
+  - cuentas.yaml
+  - sol.yaml
+  - seguridad.yaml
+  - frontend.yaml

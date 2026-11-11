@@ -1,0 +1,20 @@
+# Configuración que no es secreta: direcciones internas de los servicios.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bna-configuracion
+data:
+  CORE_DB_HOST: db
+  CORE_DB_PORT: "3306"
+  CORE_DB_APP_USER: bna_app_user
+  CORE_BASE_URL: http://coredb:8012
+  SOL_DB_HOST: db-aux
+  SOL_DB_PORT: "3306"
+  SOL_DB_USER: sol_user
+  SOL_DB_NAME: bna_sol_mvp
+  SOL_INTEGRATION_MODE: SIMULADO
+  SEGURIDAD_DB: /datos/seguridad.sqlite3
+  COREDB_URL: http://coredb:8012
+  CUENTAS_GATEWAY_URL: http://cuentas:8001/api/v1/cuentas
+  SOL_GATEWAY_URL: http://sol:8011/gateway/sol
+  SOL_COOKIE_SECURE: "false"

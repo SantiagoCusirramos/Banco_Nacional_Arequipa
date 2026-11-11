@@ -22,6 +22,14 @@ Uso: ./bna <orden>
   test            Todas las suites de pruebas, en contenedores, y el flujo
   help            Esta ayuda
 
+En Kubernetes, sobre un clúster local de kind (requiere kind y kubectl):
+
+  k8s-up          Crea el clúster si falta, carga las imágenes, aplica el Secret
+                  generado desde .env y despliega k8s/overlays/local
+  k8s-smoke       El mismo flujo de extremo a extremo, dentro del clúster
+  k8s-ps          Pods y servicios
+  k8s-down        Elimina el clúster
+
 Con make: `make up`, `make test`, etc.
 
 El CORE legado no se levanta por omisión. Para incluirlo:
@@ -134,6 +142,7 @@ case "$orden" in
   logs) compose logs -f --tail=100 "$@" ;;
   smoke) humo ;;
   test) exec scripts/pruebas.sh "$@" ;;
+  k8s-up|k8s-smoke|k8s-ps|k8s-down) exec scripts/k8s.sh "${orden#k8s-}" ;;
   help|-h|--help) ayuda ;;
   *)
     echo "Orden desconocida: $orden" >&2

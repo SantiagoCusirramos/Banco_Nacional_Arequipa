@@ -43,3 +43,34 @@ jobs:
       - name: Detener el producto
         if: always()
         run: docker compose down -v || true
+
+  k8s:
+    name: Despliegue en Kubernetes (kind)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Los manifiestos se generan y ningún Secret está versionado
+        run: |
+          kubectl kustomize k8s/overlays/local > /dev/null
+          if grep -rlE '^kind:[[:space:]]*Secret' k8s; then
+            echo "::error::Hay un Secret versionado en k8s/ (ver la lista de arriba). Lo crea scripts/k8s.sh desde .env."
+            exit 1
+          fi
+
+      - name: Desplegar en un clúster de kind
+        run: ./bna k8s-up
+
+      - name: Flujo de extremo a extremo dentro del clúster
+        run: ./bna k8s-smoke
+
+      - name: Estado del clúster
+        if: failure()
+        run: scripts/k8s.sh diagnostico || true
+
+      - name: Eliminar el clúster
+        if: always()
+        run: ./bna k8s-down || true
