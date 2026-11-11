@@ -26,6 +26,8 @@ correr() {
 
 en_backend() { docker run --rm bna/backend:local $PYTEST "$@"; }
 
+# compose.yaml exige las variables de .env incluso para construir.
+scripts/generar_env.sh "$RAIZ" || exit 1
 correr "Imágenes" docker compose build -q
 correr "CORE legado" en_backend
 correr "CUENTAS" en_backend CUENTAS/tests
