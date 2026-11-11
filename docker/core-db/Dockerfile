@@ -4,7 +4,7 @@
 ARG MYSQL_IMAGE=mysql:8.4@sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70
 FROM ${MYSQL_IMAGE}
 
-# 1 carga los datos de desarrollo: periodo contable del mes en curso, una agencia,
+# 1 carga los datos de desarrollo: periodos contables de 24 meses, una agencia,
 # un terminal por canal, el BIN 004499 y el cliente DEV001. Sin ellos ningún
 # movimiento se acepta. No usar 1 en producción.
 ARG DATOS_DEV=1
