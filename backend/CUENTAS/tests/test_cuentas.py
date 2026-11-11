@@ -72,11 +72,32 @@ def test_ver_cuenta(client, core):
     assert core.llamadas[0]["ruta"] == f"/coredb/cuentas/{NUM}"
 
 
-def test_consolidada_aun_no_implementada(client, core):
-    r = client.get(f"{BASE}/consolidada/CLI-1", headers=AUTH)
-    assert r.status_code == 501
-    assert r.json()["error_code"] == "ERR-CTA-NO-IMPLEMENTADO"
-    assert core.llamadas == []
+def test_consolidada_pide_a_coredb_las_cuentas_del_cliente(client, core):
+    core.respuesta = httpx.Response(200, json=[{**CUENTA_CORE, "titulares": ["CLI000000001"]}])
+    r = client.get(f"{BASE}/consolidada/CLI000000001", headers=AUTH)
+    assert r.status_code == 200
+    llamada = core.llamadas[0]
+    assert (llamada["metodo"], llamada["ruta"]) == ("GET", "/coredb/cuentas")
+    assert llamada["query"] == {"cod_cliente": "CLI000000001"}
+    assert llamada["headers"]["authorization"] == AUTH["Authorization"]
+    cuentas = r.json()["data"]
+    assert [c["num_cuenta"] for c in cuentas] == [NUM]
+    assert cuentas[0]["titulares"] == ["CLI000000001"]
+
+
+def test_consolidada_de_un_cliente_inexistente_404(client, core):
+    core.respuesta = httpx.Response(
+        404, json={"error": {"code": "CLIENTE_NO_ENCONTRADO", "message": "El cliente no existe."}}
+    )
+    r = client.get(f"{BASE}/consolidada/CLI999999999", headers=AUTH)
+    assert r.status_code == 404
+    assert r.json()["error_code"] == "ERR-CLI-NO-ENCONTRADO"
+
+
+def test_ver_cuenta_incluye_sus_titulares(client, core):
+    core.respuesta = httpx.Response(200, json={**CUENTA_CORE, "titulares": ["C001", "C002"]})
+    r = client.get(f"{BASE}/{NUM}", headers=AUTH)
+    assert r.json()["data"]["titulares"] == ["C001", "C002"]
 
 
 def test_cuenta_inexistente(client, core):

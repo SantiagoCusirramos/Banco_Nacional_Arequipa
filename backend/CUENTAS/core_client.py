@@ -17,6 +17,7 @@ class CoreClient:
         self._http.close()
 
     def _request(self, method: str, path: str, *, json: dict | None = None,
+                 params: dict | None = None,
                  correlation_id: str | None = None,
                  idempotency_key: str | None = None,
                  authorization: str | None = None,
@@ -29,7 +30,7 @@ class CoreClient:
         if idempotency_key:
             headers["X-Idempotency-Key"] = idempotency_key
         try:
-            resp = self._http.request(method, path, json=json, headers=headers)
+            resp = self._http.request(method, path, json=json, params=params, headers=headers)
         except httpx.ConnectError:
             raise CuentasError("ERR-COR-NO-DISPONIBLE", "No se pudo conectar con COREDB (puerto 8012)", 503)
         except httpx.HTTPError:
@@ -67,6 +68,11 @@ class CoreClient:
     def ver_cuenta(self, num_cuenta: str, correlation_id: str | None = None,
                    authorization: str | None = None):
         return self._request("GET", f"/coredb/cuentas/{num_cuenta}",
+                             correlation_id=correlation_id, authorization=authorization)
+
+    def cuentas_de_cliente(self, cod_cliente: str, correlation_id: str | None = None,
+                           authorization: str | None = None):
+        return self._request("GET", "/coredb/cuentas", params={"cod_cliente": cod_cliente},
                              correlation_id=correlation_id, authorization=authorization)
 
     def registrar_movimiento(self, payload: dict, idempotency_key: str,

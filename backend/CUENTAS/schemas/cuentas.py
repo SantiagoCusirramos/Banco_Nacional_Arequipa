@@ -61,6 +61,8 @@ class CuentaOut(BaseModel):
     saldo_contable: Decimal
     saldo_disponible: Decimal
     id_agencia: str | None = None
+    # codigos de los clientes titulares, como los devuelve COREDB
+    titulares: list[str] = []
 
 
 class MovimientoOut(BaseModel):

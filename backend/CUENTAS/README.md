@@ -9,10 +9,12 @@ Sigue el estandar del Comite de Ahorros (DOC-ITIL-01 y DOC-ITIL-02).
 |---|---|---|
 | POST | /api/v1/cuentas/apertura | POST /coredb/cuentas |
 | GET | /api/v1/cuentas/{num_cuenta} | GET /coredb/cuentas/{num} |
-| GET | /api/v1/cuentas/consolidada/{id_cliente} | (pendiente: COREDB no tiene la ruta, responde 501) |
+| GET | /api/v1/cuentas/consolidada/{id_cliente} | GET /coredb/cuentas?cod_cliente= |
 | POST | /api/v1/cuentas/deposito | POST /coredb/movimientos |
 | POST | /api/v1/cuentas/retiro | POST /coredb/movimientos |
 | POST | /api/v1/cuentas/transferencia | POST /coredb/movimientos/transferencias |
+| GET | /api/v1/cuentas/{num_cuenta}/movimientos | GET /coredb/movimientos/cuenta/{num} |
+| GET | /api/v1/cuentas/movimiento/{uuid_transaccion} | GET /coredb/movimientos/{uuid} |
 | GET | /health | - |
 
 ## Cabeceras
@@ -63,13 +65,16 @@ Una linea JSON por peticion con los campos de ITIL-02 (timestamp, level, uuid_tr
 
 ## Correr
 
+Con todo el producto, desde la raiz del repositorio: `./bna up` (CUENTAS queda en http://127.0.0.1:8001/docs).
+
+Solo el modulo, con COREDB ya levantado:
+
 ```bash
 cd backend
-uvicorn main:app --port 8000                  # CORE
-uvicorn CUENTAS.main:app --port 8001          # CUENTAS
+uvicorn CUENTAS.main:app --port 8001
 ```
 
-Variables: `CORE_BASE_URL` (por defecto http://localhost:8000), `CORE_TIMEOUT_SECONDS` (5).
+Variables: `CORE_BASE_URL` (por defecto http://localhost:8012, la API COREDB), `CORE_TIMEOUT_SECONDS` (5) y `CORS_ORIGINS` (por defecto http://localhost:3000,http://127.0.0.1:3000).
 
 ## Tests
 
@@ -97,4 +102,5 @@ python -m pytest CUENTAS/tests -q
 - Deposito/retiro: `num_cuenta`, `monto`, `glosa` (opcional). Respuesta: `uuid_transaccion` y `replay`.
 - Transferencia: `num_cuenta_origen`, `num_cuenta_destino`, `monto`, `glosa` (opcional). Respuesta: `uuid_debito`, `uuid_abono`, `replay`.
 - PROPUESTA: los codigos ERR-CTA nuevos de esta tabla no estan en ITIL-02, falta aprobarlos.
-- PENDIENTE (equipo COREDB): ruta para listar cuentas por cliente.
+- Cada cuenta trae `titulares`, los codigos de sus clientes, como los devuelve COREDB.
+- Un movimiento trae `tipo_operacion`, `naturaleza` (D debito, C credito), `monto`, `moneda`, `glosa`, `id_canal`, `estado_transaccion` y `fecha_hora`. COREDB no guarda el saldo posterior ni la cuenta de contraparte.

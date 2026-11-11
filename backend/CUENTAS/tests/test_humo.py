@@ -37,7 +37,8 @@ def test_humo_flujo_completo(client, core):
     core.respuesta = httpx.Response(200, json=CUENTA_CORE)
     assert client.get(f"{BASE}/{NUM}", headers=AUTH).status_code == 200
 
-    assert client.get(f"{BASE}/consolidada/CLI-1", headers=AUTH).status_code == 501
+    core.respuesta = httpx.Response(200, json=[CUENTA_CORE])
+    assert client.get(f"{BASE}/consolidada/CLI-1", headers=AUTH).status_code == 200
 
     core.respuesta = httpx.Response(201, json=MOV_CORE)
     dep = client.post(f"{BASE}/deposito", json={"num_cuenta": NUM, "monto": "100.00"}, headers=HEADERS_OP)
@@ -49,7 +50,7 @@ def test_humo_flujo_completo(client, core):
     tr = client.post(f"{BASE}/transferencia", headers=HEADERS_OP,
                      json={"num_cuenta_origen": "111", "num_cuenta_destino": "222", "monto": "10"})
     assert tr.status_code == 201
-    assert len(core.llamadas) == 5
+    assert len(core.llamadas) == 6
 
 
 def test_humo_todas_las_respuestas_traen_envelope(client, core):

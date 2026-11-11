@@ -45,9 +45,7 @@ def ver_cuenta(core: CoreClient, num_cuenta: str, correlation_id: str,
 
 def cuentas_del_cliente(core: CoreClient, id_cliente: str, correlation_id: str,
                         authorization: str | None = None):
-    # COREDB no tiene todavia una ruta que liste las cuentas de un cliente
-    raise CuentasError("ERR-CTA-NO-IMPLEMENTADO",
-                       "COREDB aun no ofrece la consulta de cuentas por cliente", 501)
+    return core.cuentas_de_cliente(id_cliente, correlation_id, authorization)
 
 
 def operar(core: CoreClient, tipo: str, datos: OperacionIn, id_canal: str,

@@ -243,10 +243,9 @@ def test_abrir_cuenta_individual_con_dos_titulares_falla():
     assert exc.value.code == "ERR-CTA-REGIMEN-INVALIDO"
 
 
-def test_cuentas_del_cliente_no_implementado():
-    with pytest.raises(CuentasError) as exc:
-        svc.cuentas_del_cliente(None, "C", "cid")
-    assert exc.value.status_code == 501
+def test_cuentas_del_cliente_reenvia_el_token():
+    c = _core(httpx.Response(200, json=[]))
+    assert svc.cuentas_del_cliente(c, "CLI000000001", "cid", "Bearer x") == []
 
 
 def test_uuid_helper():
