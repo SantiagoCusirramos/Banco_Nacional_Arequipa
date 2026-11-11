@@ -6,6 +6,10 @@ Uso, desde backend/, con backend/COREDB/.env completo:
 Pide la contraseña dos veces. Se conecta con las credenciales de la aplicación y crea
 el usuario por core.crear_usuario. Se niega si ya hay un administrador activo: los
 demás usuarios se crean por la API.
+
+Con --si-falta, que ya exista un administrador no es un error (salida 0): es para un
+arranque automático, que se repite. La contraseña se toma entonces de
+CORE_DB_ADMIN_INICIAL_PASSWORD.
 """
 
 import argparse
@@ -62,9 +66,14 @@ def principal(argumentos: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--username", required=True)
     parser.add_argument("--nombre", required=True)
+    parser.add_argument("--si-falta", action="store_true",
+                        help="no fallar si ya existe un administrador activo")
     opciones = parser.parse_args(argumentos)
     with get_session_factory()() as db:
         if _hay_administrador(db):  # antes de pedir la contraseña
+            if opciones.si_falta:
+                print("Ya existe un administrador activo: no se crea otro.")
+                return 0
             print(YA_EXISTE, file=sys.stderr)
             return 1
     password = _password()
