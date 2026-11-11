@@ -5,9 +5,8 @@ export type Usuario = {
   username: string;
   nombre: string;
   rol: string;
-  id_empleado: string | null;
-  activo: boolean;
-  creado_en: string;
+  modulo?: string | null;
+  activo?: boolean;
   acciones?: string[];
 };
 
@@ -51,10 +50,15 @@ export async function iniciarSesion(username: string, password: string) {
   return data;
 }
 
-export async function obtenerMiPerfil() {
-  const { data } = await api.get<Usuario>("/coredb/auth/me");
-  if (obtenerToken()) guardarSesion(obtenerToken()!, data);
-  return data;
+/** El perfil vigente en COREDB. Falla con 401 si el token ya no sirve. */
+export async function obtenerMiPerfil(): Promise<Usuario> {
+  const { data } = await api.get<Omit<Usuario, "nombre">>("/coredb/auth/me");
+  // /coredb/auth/me no trae el nombre: se conserva el que dio el login.
+  const guardado = obtenerUsuarioGuardado();
+  const usuario: Usuario = { ...data, nombre: guardado?.nombre || data.username };
+  const token = obtenerToken();
+  if (token) guardarSesion(token, usuario);
+  return usuario;
 }
 
 export async function registrarUsuario(datos: {
@@ -64,9 +68,6 @@ export async function registrarUsuario(datos: {
   rol: string;
   id_empleado?: string | null;
 }) {
-  const { data } = await api.post<Usuario>("/coredb/usuarios", {
-    ...datos,
-    activo: true,
-  });
+  const { data } = await api.post<Usuario>("/coredb/usuarios", datos);
   return data;
 }

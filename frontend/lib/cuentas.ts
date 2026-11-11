@@ -1,94 +1,120 @@
 import { apiCuentas as api, mensajeError } from "@/lib/api";
 
-// Agregamos "INACTIVA" para satisfacer a ModificarCuenta.tsx
-export type EstadoCuenta = "ACTIVA" | "BLOQUEADA" | "CERRADA" | "INACTIVA" | "EMBARGO";
+export type EstadoCuenta = "ACTIVA" | "BLOQUEADA" | "BLOQUEADA_PREVENTIVA" | "CANCELADA";
+export type Regimen = "INDIVIDUAL" | "MANCOMUNADA_INDISTINTA" | "MANCOMUNADA_CONJUNTA";
+export type Moneda = "PEN" | "USD";
 
-export interface Titular {
-  id_cliente: string;
-  rol_titular: string;
-}
-
+/** La cuenta como la devuelve CUENTAS, que la toma de COREDB. Los saldos llegan como texto decimal. */
 export interface Cuenta {
-  id_cuenta?: string; // opcional por si acaso
   num_cuenta: string;
-  saldo_disponible: number;
-  saldo_contable: number;
-  saldo_retenido: number;
-  estado_cuenta: EstadoCuenta;
+  cci: string;
   moneda: string;
   regimen: string;
-  fecha_apertura: string;
-  id_agencia: string;
-  id_producto_ahorro: string;
-  titulares: Titular[];
+  estado_cuenta: string;
+  saldo_contable: string;
+  saldo_disponible: string;
+  id_agencia: string | null;
+  titulares: string[];
 }
 
-export const REGIMENES = ["INDIVIDUAL", "MANCOMUNADA_INDISTINTA", "MANCOMUNADA_CONJUNTA"];
-export const ROLES_TITULAR = ["TITULAR", "MANCOMUNADO", "APODERADO", "TUTOR", "BENEFICIARIO", "CO-TITULAR"];
-export const ESTADOS_CUENTA = ["ACTIVA", "BLOQUEADA", "CERRADA", "INACTIVA"];
+/** Un movimiento de una cuenta. `naturaleza` es D (débito) o C (crédito). */
+export interface Movimiento {
+  uuid_transaccion: string;
+  num_cuenta: string;
+  tipo_operacion: string;
+  naturaleza: "D" | "C" | "N";
+  monto: string;
+  moneda: string;
+  glosa: string;
+  id_canal: string | null;
+  estado_transaccion: string;
+  fecha_hora: string;
+}
 
-// Ajustados para soportar un segundo argumento (ej. la moneda) que le estabas pasando en los componentes
-export const formatoFecha = (fecha: string, extraInfo?: any) => new Date(fecha).toLocaleDateString("es-PE");
-export const formatoMoneda = (monto: number, moneda?: string) => `${moneda === 'USD' ? '$' : 'S/'} ${Number(monto).toFixed(2)}`;
+export interface OperacionRegistrada {
+  uuid_transaccion: string;
+  replay: boolean;
+}
 
-export const mensajeDeError = mensajeError; 
+export interface TransferenciaRegistrada {
+  uuid_debito: string;
+  uuid_abono: string;
+  replay: boolean;
+}
+
+export interface Apertura {
+  moneda: Moneda;
+  regimen: Regimen;
+  id_agencia: string;
+  titulares: string[];
+  num_cuenta?: string;
+  cci?: string;
+}
+
+// Respuesta de CUENTAS (ITIL-02): los datos van en `data`.
+type Sobre<T> = { success: boolean; message?: string; data: T };
+
+export const REGIMENES: [Regimen, ...Regimen[]] = ["INDIVIDUAL", "MANCOMUNADA_INDISTINTA", "MANCOMUNADA_CONJUNTA"];
+export const MONEDAS: [Moneda, ...Moneda[]] = ["PEN", "USD"];
+export const ESTADOS_CUENTA: EstadoCuenta[] = ["ACTIVA", "BLOQUEADA", "BLOQUEADA_PREVENTIVA", "CANCELADA"];
+
+export const formatoFecha = (fecha: string) => new Date(fecha).toLocaleString("es-PE");
+export const formatoMoneda = (monto: string | number, moneda?: string) =>
+  `${moneda === "USD" ? "$" : "S/"} ${Number(monto).toFixed(2)}`;
+
+export const mensajeDeError = mensajeError;
 
 function digitos(n: number) {
   return Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join("");
 }
 
-// COREDB exige num_cuenta y cci; si el formulario no los trae se generan (PROPUESTA)
-function armarApertura(p: any) {
-  const titulares = (p.titulares ?? [{ id_cliente: p.id_cliente }]).map((t: any) => ({ id_cliente: t.id_cliente }));
-  return {
-    num_cuenta: p.num_cuenta ?? digitos(14),
-    cci: p.cci ?? digitos(20),
-    moneda: p.moneda ?? "PEN",
-    regimen: p.regimen ?? "INDIVIDUAL",
-    id_agencia: p.id_agencia,
-    titulares,
-  };
+// El CORE exige el número de cuenta y el CCI; si el formulario no los trae, se generan.
+export async function abrirCuenta(apertura: Apertura): Promise<Cuenta> {
+  const { data } = await api.post<Sobre<Cuenta>>("/apertura", {
+    num_cuenta: apertura.num_cuenta ?? digitos(14),
+    cci: apertura.cci ?? digitos(20),
+    moneda: apertura.moneda,
+    regimen: apertura.regimen,
+    id_agencia: apertura.id_agencia,
+    titulares: apertura.titulares.map((id_cliente) => ({ id_cliente })),
+  });
+  return data.data;
 }
 
-export async function abrirCuenta(payload: any) {
-  const { data } = await api.post("/apertura", armarApertura(payload));
-  return data;
+export async function verCuenta(numCuenta: string): Promise<Cuenta> {
+  const { data } = await api.get<Sobre<Cuenta>>(`/${encodeURIComponent(numCuenta)}`);
+  return data.data;
 }
 
-export async function crearCuenta(payload: any) {
-  return abrirCuenta(payload);
+export async function cuentasDeCliente(codCliente: string): Promise<Cuenta[]> {
+  const { data } = await api.get<Sobre<Cuenta[]>>(`/consolidada/${encodeURIComponent(codCliente)}`);
+  return data.data;
 }
 
-export async function obtenerCuenta(numCuenta: string) {
-  const { data } = await api.get(`/${numCuenta}`);
-  return data;
+// Los montos van como texto decimal ("150.00"), igual que los devuelve el CORE.
+export async function depositar(numCuenta: string, monto: string): Promise<OperacionRegistrada> {
+  const { data } = await api.post<Sobre<OperacionRegistrada>>("/deposito", { num_cuenta: numCuenta, monto });
+  return data.data;
 }
 
-export async function verCuenta(numCuenta: string) {
-  return obtenerCuenta(numCuenta);
+export async function retirar(numCuenta: string, monto: string): Promise<OperacionRegistrada> {
+  const { data } = await api.post<Sobre<OperacionRegistrada>>("/retiro", { num_cuenta: numCuenta, monto });
+  return data.data;
 }
 
-export async function modificarCuenta(numCuenta: string, payload: any) {
-  const { data } = await api.put(`/${numCuenta}`, payload);
-  return data;
+export async function transferir(origen: string, destino: string, monto: string): Promise<TransferenciaRegistrada> {
+  const { data } = await api.post<Sobre<TransferenciaRegistrada>>("/transferencia", {
+    num_cuenta_origen: origen, num_cuenta_destino: destino, monto,
+  });
+  return data.data;
 }
 
-export async function obtenerCuentasCliente(idCliente: string) {
-  const { data } = await api.get(`/consolidada/${idCliente}`);
-  return data;
+export async function movimientosDeCuenta(numCuenta: string): Promise<Movimiento[]> {
+  const { data } = await api.get<Sobre<Movimiento[]>>(`/${encodeURIComponent(numCuenta)}/movimientos`);
+  return data.data;
 }
 
-export async function realizarDeposito(payload: { num_cuenta: string; monto: number; moneda?: string; id_terminal?: string }) {
-  const { data } = await api.post("/deposito", payload);
-  return data;
-}
-
-export async function realizarRetiro(payload: { num_cuenta: string; monto: number; moneda?: string; id_terminal?: string }) {
-  const { data } = await api.post("/retiro", payload);
-  return data;
-}
-
-export async function realizarTransferencia(payload: { num_cuenta_origen: string; num_cuenta_destino: string; monto: number; moneda?: string; id_terminal?: string }) {
-  const { data } = await api.post("/transferencia", payload);
-  return data;
+export async function verMovimiento(uuidTransaccion: string): Promise<Movimiento> {
+  const { data } = await api.get<Sobre<Movimiento>>(`/movimiento/${encodeURIComponent(uuidTransaccion)}`);
+  return data.data;
 }
