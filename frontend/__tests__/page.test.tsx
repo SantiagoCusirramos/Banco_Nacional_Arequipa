@@ -1,8 +1,13 @@
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect } from "vitest";
-import Home from "../app/page";
+import { describe, it, expect, vi } from "vitest";
+import { BancaPersonal } from "../app/components/BancaPersonal";
 import RootLayout, { metadata } from "../app/layout";
+
+// La banca personal con una sesión ya iniciada; la exigencia de sesión se prueba en sesion.test.tsx.
+const alSalir = vi.fn();
+const USUARIO = { id_usuario: "u-1", username: "diego", nombre: "Diego Vargas", rol: "OPERADOR" };
+const Home = () => <BancaPersonal usuario={USUARIO} onSalir={alSalir} />;
 
 // ---------- Utilidades ----------
 const nav = () => screen.getByRole("navigation", { name: "Navegación principal" });
@@ -290,10 +295,12 @@ describe("Accesos rápidos, perfil y productos", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Movimientos" })).toBeInTheDocument();
   });
 
-  it("CP-32 El botón de opciones de perfil indica que la sesión es de demostración", async () => {
+  it("CP-32 El perfil muestra al usuario de la sesión y su botón la cierra", async () => {
     render(<Home />);
-    await userEvent.click(screen.getByRole("button", { name: "Opciones de perfil" }));
-    expect(screen.getByRole("status")).toHaveTextContent("Sesión de demostración activa.");
+    expect(screen.getByText("Diego Vargas")).toBeInTheDocument();
+    expect(screen.getByText("OPERADOR")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    expect(alSalir).toHaveBeenCalledTimes(1);
   });
 
   it("CP-33 'Abrir una cuenta' lleva a la pestaña Crear cuenta", async () => {
