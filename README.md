@@ -179,7 +179,8 @@ Cada componente tiene su propio archivo de ejemplo:
 | `backend/COREDB/.env.example` | `backend/COREDB/.env` | API COREDB                              |
 | `backend/seguridad/.env.example` | `backend/.env.seguridad.local` | Módulo de Seguridad               |
 | `.env.example`              | `.env` (lo crea `./bna up`) | Producto completo con Docker      |
-| `frontend/.env.sol.example` | `frontend/.env.local` | Puente del frontend hacia SOL           |
+| `frontend/.env.example`     | `frontend/.env.local` | URL del backend para el navegador       |
+| `frontend/.env.sol.example` | `frontend/.env.local` (agregar) | Puente del frontend hacia SOL |
 
 Copia cada archivo como se indica y completa los valores. **Nunca subas el `.env` al repositorio.**
 
