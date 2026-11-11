@@ -1216,3 +1216,32 @@ GRANT EXECUTE ON PROCEDURE clientes.verificar_documento TO bna_api;
 GRANT EXECUTE ON PROCEDURE clientes.registrar_validacion TO bna_api;
 GRANT EXECUTE ON PROCEDURE clientes.cambiar_estado_cliente TO bna_api;
 GRANT EXECUTE ON PROCEDURE clientes.catalogos_cliente TO bna_api;
+
+-- ---------------------------------------------------------------------
+-- 11. Lecturas de consulta de la API (v1.2)
+-- ---------------------------------------------------------------------
+-- Lo que COREDB necesita para listar los movimientos de una cuenta, las cuentas de un
+-- cliente y la bitácora. bna_api sigue sin leer cuentas.movimiento ni
+-- core.evento_auditoria: lee estas vistas, que corren como bna_owner.
+
+-- El movimiento sin su asiento contable, con la naturaleza de la operación
+-- (D débito, C crédito) y la moneda de la cuenta.
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW cuentas.v_movimiento_api AS
+SELECT m.uuid_transaccion, m.num_cuenta, m.tipo_operacion, o.naturaleza, m.monto, c.moneda,
+       m.glosa, m.id_canal, m.estado_transaccion, m.fecha_hora
+  FROM cuentas.movimiento m
+  JOIN cuentas.tipo_operacion o ON o.tipo_operacion = m.tipo_operacion
+  JOIN cuentas.cuenta_ahorro c ON c.num_cuenta = m.num_cuenta;
+
+-- La bitácora general con el nombre del módulo. Los procedimientos no guardan datos
+-- personales en el detalle de un evento.
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW core.v_evento_auditoria_api AS
+SELECT e.id_evento, mo.nombre AS modulo, e.entidad, e.id_entidad, e.accion, e.actor,
+       e.correlation_id, e.detalle, e.fecha_hora
+  FROM core.evento_auditoria e
+  JOIN core.modulo mo ON mo.id_modulo = e.id_modulo;
+
+GRANT SELECT ON cuentas.v_movimiento_api TO bna_api;
+GRANT SELECT ON core.v_evento_auditoria_api TO bna_api;
+-- Qué cuentas tiene un cliente: solo los dos códigos y la fecha de vinculación.
+GRANT SELECT ON cuentas.titularidad TO bna_api;
