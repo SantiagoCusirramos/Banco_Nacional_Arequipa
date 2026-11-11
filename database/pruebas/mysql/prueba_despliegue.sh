@@ -102,6 +102,17 @@ SELECT @c;
 SQL
 )"
 
+comprobar 'los datos de desarrollo abren los periodos de dos años' '^24$' "$(app 2>&1 <<'SQL' || true
+SELECT COUNT(*) FROM core.periodo_contable
+ WHERE estado = 'ABIERTO' AND fecha_inicio < DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', 'America/Lima')) + INTERVAL 24 MONTH;
+SQL
+)"
+
+comprobar 'la API lee los movimientos de una cuenta por la vista' '^DEPOSITO C PEN$' "$(app 2>&1 <<'SQL' || true
+SELECT CONCAT(tipo_operacion, ' ', naturaleza, ' ', moneda) FROM cuentas.v_movimiento_api WHERE num_cuenta = 'CTA-DESPLIEGUE';
+SQL
+)"
+
 seguridad() { docker exec -i -e MYSQL_PWD="$PW_SEGURIDAD" "$C" mysql -ubna_seguridad_user -h127.0.0.1 --protocol=TCP -N "$@"; }
 comprobar 'rol de bna_seguridad_user' 'bna_seguridad' "$(seguridad -e 'SELECT CURRENT_ROLE()' 2>&1 || true)"
 comprobar 'bna_app_user no desbloquea' 'denied' \

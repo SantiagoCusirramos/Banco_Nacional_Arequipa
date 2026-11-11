@@ -1,7 +1,7 @@
 # database/
 
 Esta carpeta es una copia de [bna-core-db](https://github.com/miguelpro324/bna-core-db),
-rama `mysql`, en la etiqueta **`bd-v1.1-mysql`**.
+rama `mysql`, en la etiqueta **`bd-v1.2-mysql`**.
 
 **No se edita aquí.** Un cambio directo se perdería o chocaría con la siguiente
 actualización. Todo cambio de la base va primero a bna-core-db: rama nueva desde
@@ -43,7 +43,7 @@ a `bna_app` si escribe el historial directamente; ninguna cuenta desplegada tien
 
 Copiar `backend/COREDB/.env.example` a `backend/COREDB/.env` y completar las claves.
 
-**En desarrollo**, con datos de referencia (periodo abierto del mes en curso, BIN 004499,
+**En desarrollo**, con datos de referencia (periodos abiertos de 24 meses desde el mes en curso, BIN 004499,
 una agencia, un terminal por canal y el cliente `DEV001`), para que una base nueva pueda
 hacer un depósito:
 
@@ -67,4 +67,6 @@ docker compose -f docker-compose.coredb.yml --env-file backend/COREDB/.env down 
 ```
 
 `bd-v1.1-mysql` cambia el esquema (`core.usuario_sistema`): una base creada con
-`bd-v1.0-mysql` debe recrearse así.
+`bd-v1.0-mysql` debe recrearse así. `bd-v1.2-mysql` solo agrega vistas de lectura, pero
+una base anterior también debe recrearse para tenerlas. Con el producto completo:
+`./bna reset`.
