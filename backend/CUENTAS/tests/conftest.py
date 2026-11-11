@@ -28,6 +28,7 @@ class CoreFalso:
         self.llamadas.append({
             "metodo": request.method,
             "ruta": request.url.path,
+            "query": dict(request.url.params),
             "headers": dict(request.headers),
             "json": cuerpo,
         })

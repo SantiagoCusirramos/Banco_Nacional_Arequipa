@@ -1,144 +1,120 @@
-import axios from "axios";
-import { z } from "zod";
-import { api } from "@/lib/api";
+import { apiCuentas as api, mensajeError } from "@/lib/api";
 
-// Valores admitidos por el backend (CORE/services/cuentassvc.py)
-export const REGIMENES = ["LIBRE", "PROGRAMADO", "INFANTIL", "CTS", "A_PLAZO"] as const;
-export const ROLES_TITULAR = ["TITULAR", "MANCOMUNADO", "APODERADO", "TUTOR", "BENEFICIARIO"] as const;
-export const ESTADOS_CUENTA = ["ACTIVA", "INACTIVA", "BLOQUEADA", "EMBARGO"] as const;
+export type EstadoCuenta = "ACTIVA" | "BLOQUEADA" | "BLOQUEADA_PREVENTIVA" | "CANCELADA";
+export type Regimen = "INDIVIDUAL" | "MANCOMUNADA_INDISTINTA" | "MANCOMUNADA_CONJUNTA";
+export type Moneda = "PEN" | "USD";
 
-export type Regimen = (typeof REGIMENES)[number];
-export type RolTitular = (typeof ROLES_TITULAR)[number];
-export type EstadoCuenta = (typeof ESTADOS_CUENTA)[number];
-
-export type Titular = { id_cliente: string; rol_titular: string };
-
-// Respuesta del backend (CuentaRespuesta). Los Decimal llegan como string.
-export type Cuenta = {
+/** La cuenta como la devuelve CUENTAS, que la toma de COREDB. Los saldos llegan como texto decimal. */
+export interface Cuenta {
   num_cuenta: string;
+  cci: string;
   moneda: string;
   regimen: string;
   estado_cuenta: string;
-  saldo_contable: string | number;
-  saldo_disponible: string | number;
-  saldo_retenido: string | number;
-  fecha_apertura: string;
-  id_agencia: string;
-  id_producto_ahorro: string;
-  titulares: Titular[];
-};
+  saldo_contable: string;
+  saldo_disponible: string;
+  id_agencia: string | null;
+  titulares: string[];
+}
 
-export type NuevaCuenta = {
-  id_cliente: string;
-  id_producto_ahorro: string;
-  id_agencia: string;
+/** Un movimiento de una cuenta. `naturaleza` es D (débito) o C (crédito). */
+export interface Movimiento {
+  uuid_transaccion: string;
+  num_cuenta: string;
+  tipo_operacion: string;
+  naturaleza: "D" | "C" | "N";
+  monto: string;
+  moneda: string;
+  glosa: string;
+  id_canal: string | null;
+  estado_transaccion: string;
+  fecha_hora: string;
+}
+
+export interface OperacionRegistrada {
+  uuid_transaccion: string;
+  replay: boolean;
+}
+
+export interface TransferenciaRegistrada {
+  uuid_debito: string;
+  uuid_abono: string;
+  replay: boolean;
+}
+
+export interface Apertura {
+  moneda: Moneda;
   regimen: Regimen;
-  titulares?: { id_cliente: string; rol_titular: RolTitular }[];
-};
-
-// Validación del formulario "nueva cuenta" (react-hook-form + zod)
-export const nuevaCuentaSchema = z
-  .object({
-    id_cliente: z.string().min(1, "Selecciona un cliente"),
-    id_producto_ahorro: z.string().min(1, "Selecciona un producto"),
-    id_agencia: z.string().min(1, "Selecciona una agencia"),
-    regimen: z.enum(REGIMENES),
-    titulares: z
-      .array(
-        z.object({
-          id_cliente: z.string().min(1, "Falta el cliente titular"),
-          rol_titular: z.enum(ROLES_TITULAR),
-        }),
-      )
-      .optional(),
-  })
-  .refine(
-    (d) => {
-      const titulares = d.titulares ?? [];
-      return !titulares.some((t) => t.rol_titular === "MANCOMUNADO") || titulares.length >= 2;
-    },
-    { message: "Una cuenta mancomunada necesita al menos 2 titulares", path: ["titulares"] },
-  );
-
-// Identifica al canal en la auditoría del backend (campo `actor`).
-const ACTOR = "portal-web";
-
-function nuevoCorrelationId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `web-${Date.now()}`;
+  id_agencia: string;
+  titulares: string[];
+  num_cuenta?: string;
+  cci?: string;
 }
 
-function conTrazabilidad() {
-  const correlation_id = nuevoCorrelationId();
-  return { correlation_id, config: { headers: { "x-correlation-id": correlation_id } } };
+// Respuesta de CUENTAS (ITIL-02): los datos van en `data`.
+type Sobre<T> = { success: boolean; message?: string; data: T };
+
+export const REGIMENES: [Regimen, ...Regimen[]] = ["INDIVIDUAL", "MANCOMUNADA_INDISTINTA", "MANCOMUNADA_CONJUNTA"];
+export const MONEDAS: [Moneda, ...Moneda[]] = ["PEN", "USD"];
+export const ESTADOS_CUENTA: EstadoCuenta[] = ["ACTIVA", "BLOQUEADA", "BLOQUEADA_PREVENTIVA", "CANCELADA"];
+
+export const formatoFecha = (fecha: string) => new Date(fecha).toLocaleString("es-PE");
+export const formatoMoneda = (monto: string | number, moneda?: string) =>
+  `${moneda === "USD" ? "$" : "S/"} ${Number(monto).toFixed(2)}`;
+
+export const mensajeDeError = mensajeError;
+
+function digitos(n: number) {
+  return Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join("");
 }
 
-/** POST /core/cuentas — Crear cuenta */
-export async function crearCuenta(datos: NuevaCuenta): Promise<Cuenta> {
-  const { correlation_id, config } = conTrazabilidad();
-  const { data } = await api.post<Cuenta>("/core/cuentas", { ...datos, actor: ACTOR, correlation_id }, config);
-  return data;
+// El CORE exige el número de cuenta y el CCI; si el formulario no los trae, se generan.
+export async function abrirCuenta(apertura: Apertura): Promise<Cuenta> {
+  const { data } = await api.post<Sobre<Cuenta>>("/apertura", {
+    num_cuenta: apertura.num_cuenta ?? digitos(14),
+    cci: apertura.cci ?? digitos(20),
+    moneda: apertura.moneda,
+    regimen: apertura.regimen,
+    id_agencia: apertura.id_agencia,
+    titulares: apertura.titulares.map((id_cliente) => ({ id_cliente })),
+  });
+  return data.data;
 }
 
-/** GET /core/cuentas/cliente/{id_cliente} — Cuentas donde el cliente es titular */
-export async function listarCuentasDeCliente(idCliente: string): Promise<Cuenta[]> {
-  const { data } = await api.get<Cuenta[]>(`/core/cuentas/cliente/${encodeURIComponent(idCliente)}`);
-  return data;
-}
-
-/** GET /core/cuentas/{num_cuenta} — Ver cuenta */
 export async function verCuenta(numCuenta: string): Promise<Cuenta> {
-  const { data } = await api.get<Cuenta>(`/core/cuentas/${encodeURIComponent(numCuenta)}`);
-  return data;
+  const { data } = await api.get<Sobre<Cuenta>>(`/${encodeURIComponent(numCuenta)}`);
+  return data.data;
 }
 
-/** PATCH /core/cuentas/{num_cuenta} — Modificar cuenta (estado) */
-export async function modificarCuenta(numCuenta: string, estado: EstadoCuenta): Promise<Cuenta> {
-  const { correlation_id, config } = conTrazabilidad();
-  const { data } = await api.patch<Cuenta>(
-    `/core/cuentas/${encodeURIComponent(numCuenta)}`,
-    { estado_cuenta: estado, actor: ACTOR, correlation_id },
-    config,
-  );
-  return data;
+export async function cuentasDeCliente(codCliente: string): Promise<Cuenta[]> {
+  const { data } = await api.get<Sobre<Cuenta[]>>(`/consolidada/${encodeURIComponent(codCliente)}`);
+  return data.data;
 }
 
-/**
- * Convierte cualquier error de las llamadas anteriores en un texto para el usuario.
- * El backend responde { error: { code, message } } para errores de negocio
- * y { detail: [...] } (FastAPI) para errores de validación (422).
- */
-export function mensajeDeError(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    if (!err.response) {
-      return `No se pudo conectar con el servidor (${api.defaults.baseURL ?? "URL no configurada"}). Verifica que el backend esté en ejecución.`;
-    }
-    const data = err.response.data as
-      | { error?: { code?: string; message?: string }; detail?: unknown }
-      | undefined;
-    if (data?.error?.message) {
-      return data.error.code ? `${data.error.message} (${data.error.code})` : data.error.message;
-    }
-    if (Array.isArray(data?.detail) && data.detail.length > 0) {
-      const primero = data.detail[0] as { loc?: unknown[]; msg?: string };
-      const campo = Array.isArray(primero.loc) ? primero.loc.filter((p) => p !== "body").join(".") : "";
-      return `Datos inválidos${campo ? ` en «${campo}»` : ""}: ${primero.msg ?? "revisa el formulario"}.`;
-    }
-    return `El servidor respondió con un error (${err.response.status}). Inténtalo nuevamente.`;
-  }
-  return "Ocurrió un error inesperado. Inténtalo nuevamente.";
+// Los montos van como texto decimal ("150.00"), igual que los devuelve el CORE.
+export async function depositar(numCuenta: string, monto: string): Promise<OperacionRegistrada> {
+  const { data } = await api.post<Sobre<OperacionRegistrada>>("/deposito", { num_cuenta: numCuenta, monto });
+  return data.data;
 }
 
-export function formatoMoneda(valor: string | number, moneda: string): string {
-  const numero = Number(valor);
-  try {
-    return new Intl.NumberFormat("es-PE", { style: "currency", currency: moneda }).format(numero);
-  } catch {
-    return `${moneda} ${numero.toFixed(2)}`;
-  }
+export async function retirar(numCuenta: string, monto: string): Promise<OperacionRegistrada> {
+  const { data } = await api.post<Sobre<OperacionRegistrada>>("/retiro", { num_cuenta: numCuenta, monto });
+  return data.data;
 }
 
-export function formatoFecha(iso: string): string {
-  const fecha = new Date(iso);
-  if (Number.isNaN(fecha.getTime())) return iso;
-  return new Intl.DateTimeFormat("es-PE", { dateStyle: "medium", timeStyle: "short" }).format(fecha);
+export async function transferir(origen: string, destino: string, monto: string): Promise<TransferenciaRegistrada> {
+  const { data } = await api.post<Sobre<TransferenciaRegistrada>>("/transferencia", {
+    num_cuenta_origen: origen, num_cuenta_destino: destino, monto,
+  });
+  return data.data;
+}
+
+export async function movimientosDeCuenta(numCuenta: string): Promise<Movimiento[]> {
+  const { data } = await api.get<Sobre<Movimiento[]>>(`/${encodeURIComponent(numCuenta)}/movimientos`);
+  return data.data;
+}
+
+export async function verMovimiento(uuidTransaccion: string): Promise<Movimiento> {
+  const { data } = await api.get<Sobre<Movimiento>>(`/movimiento/${encodeURIComponent(uuidTransaccion)}`);
+  return data.data;
 }

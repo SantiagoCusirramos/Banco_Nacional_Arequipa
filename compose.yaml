@@ -111,15 +111,19 @@ services:
       db:
         condition: service_healthy
 
-  # ── CUENTAS ─────────────────────────────────────────────────────────────
-  # En main todavía llama al CORE legado; el PR #29 lo pasa a COREDB.
+  # ── CUENTAS: cuentas de ahorro, sobre COREDB ────────────────────────────
   cuentas:
     <<: *backend
+    # Construye la imagen de los servicios que usan backend/requirements.txt.
+    build:
+      <<: *construir-backend
+      args:
+        REQUISITOS: requirements.txt
     command: uvicorn CUENTAS.main:app --host 0.0.0.0 --port 8001
     environment:
-      CORE_BASE_URL: http://core-legado:8000
+      CORE_BASE_URL: http://coredb:8012
     depends_on:
-      core-legado:
+      coredb:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BNA_PUERTO_CUENTAS:-8001}:8001"
@@ -192,13 +196,17 @@ services:
     build:
       context: ./frontend
       dockerfile: ../docker/frontend/Dockerfile
-      args:
-        # La usa el navegador, por eso apunta al puerto publicado en esta máquina.
-        NEXT_PUBLIC_API_URL: http://localhost:${BNA_PUERTO_CORE_LEGADO:-8000}
+    # El navegador solo habla con el frontend, que reenvía desde su servidor.
     environment:
+      COREDB_URL: http://coredb:8012
+      CUENTAS_GATEWAY_URL: http://cuentas:8001/api/v1/cuentas
       SOL_GATEWAY_URL: http://sol:8011/gateway/sol
       SOL_COOKIE_SECURE: "false"
     depends_on:
+      coredb:
+        condition: service_healthy
+      cuentas:
+        condition: service_healthy
       sol:
         condition: service_healthy
     ports:
@@ -207,16 +215,13 @@ services:
       <<: *sonda
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
 
-  # ── CORE legado ─────────────────────────────────────────────────────────
-  # API anterior sobre el esquema `bna`. Sigue aquí mientras CUENTAS y el
-  # frontend la llamen; 22 de sus rutas no exigen token (issue #32).
+  # ── CORE legado (opcional) ──────────────────────────────────────────────
+  # API anterior sobre el esquema `bna`. Ningún servicio la llama ya: solo se
+  # levanta con el perfil `legado` (COMPOSE_PROFILES=legado ./bna up). Tiene los
+  # créditos, que COREDB todavía no ofrece; 22 de sus rutas no exigen token (issue #32).
   core-legado:
     <<: *backend
-    # Construye la imagen de los servicios que usan backend/requirements.txt.
-    build:
-      <<: *construir-backend
-      args:
-        REQUISITOS: requirements.txt
+    profiles: [legado]
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
       DB_HOST: db-aux

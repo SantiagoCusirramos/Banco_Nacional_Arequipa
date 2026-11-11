@@ -17,27 +17,30 @@ class CoreClient:
         self._http.close()
 
     def _request(self, method: str, path: str, *, json: dict | None = None,
+                 params: dict | None = None,
                  correlation_id: str | None = None,
                  idempotency_key: str | None = None,
+                 authorization: str | None = None,
                  afecta_saldo: bool = False):
         headers = {}
+        if authorization:
+            headers["Authorization"] = authorization
         if correlation_id:
             headers["X-Correlation-ID"] = correlation_id
         if idempotency_key:
             headers["X-Idempotency-Key"] = idempotency_key
         try:
-            resp = self._http.request(method, path, json=json, headers=headers)
+            resp = self._http.request(method, path, json=json, params=params, headers=headers)
         except httpx.ConnectError:
-            raise CuentasError("ERR-COR-NO-DISPONIBLE", "No se pudo conectar con CORE", 503)
+            raise CuentasError("ERR-COR-NO-DISPONIBLE", "No se pudo conectar con COREDB (puerto 8012)", 503)
         except httpx.HTTPError:
-            # la peticion pudo llegar a CORE, no se sabe si se aplico
             if afecta_saldo:
                 raise CuentasError(
                     "ERR-CTA-OPERACION-NO-CONFIRMADA",
-                    "CORE no respondio, la operacion no esta confirmada. Reintentar con la misma llave de idempotencia",
+                    "COREDB no respondió, la operación no está confirmada. Reintentar con la misma llave de idempotencia",
                     504,
                 )
-            raise CuentasError("ERR-CTA-TIMEOUT-CORE", "CORE no respondio a tiempo", 504)
+            raise CuentasError("ERR-CTA-TIMEOUT-CORE", "COREDB no respondió a tiempo", 504)
         if resp.status_code >= 400:
             raise self._error_de_core(resp)
         return resp.json()
@@ -53,30 +56,43 @@ class CoreClient:
             return CuentasError(error.get("code", "DESCONOCIDO"), error.get("message", ""),
                                 resp.status_code, error.get("details"))
         if resp.status_code == 422:
-            return CuentasError("ERR-COR-VALIDACION-ESQUEMA", "CORE rechazo el formato de la solicitud",
+            return CuentasError("ERR-COR-VALIDACION-ESQUEMA", "COREDB rechazó el formato de la solicitud",
                                 400, {"detail": cuerpo.get("detail") if isinstance(cuerpo, dict) else None})
-        return CuentasError("ERR-COR-RESPUESTA-INVALIDA", "Respuesta inesperada de CORE", 502)
+        return CuentasError("ERR-COR-RESPUESTA-INVALIDA", "Respuesta inesperada de COREDB", 502)
 
-    def crear_cuenta(self, payload: dict, correlation_id: str | None = None):
-        return self._request("POST", "/core/cuentas", json=payload,
-                             correlation_id=correlation_id)
+    def crear_cuenta(self, payload: dict, correlation_id: str | None = None,
+                     authorization: str | None = None):
+        return self._request("POST", "/coredb/cuentas", json=payload,
+                             correlation_id=correlation_id, authorization=authorization)
 
-    def ver_cuenta(self, num_cuenta: str, correlation_id: str | None = None):
-        return self._request("GET", f"/core/cuentas/{num_cuenta}",
-                             correlation_id=correlation_id)
+    def ver_cuenta(self, num_cuenta: str, correlation_id: str | None = None,
+                   authorization: str | None = None):
+        return self._request("GET", f"/coredb/cuentas/{num_cuenta}",
+                             correlation_id=correlation_id, authorization=authorization)
 
-    def cuentas_del_cliente(self, id_cliente: str, correlation_id: str | None = None):
-        return self._request("GET", f"/core/cuentas/cliente/{id_cliente}",
-                             correlation_id=correlation_id)
+    def cuentas_de_cliente(self, cod_cliente: str, correlation_id: str | None = None,
+                           authorization: str | None = None):
+        return self._request("GET", "/coredb/cuentas", params={"cod_cliente": cod_cliente},
+                             correlation_id=correlation_id, authorization=authorization)
 
     def registrar_movimiento(self, payload: dict, idempotency_key: str,
-                             correlation_id: str | None = None):
-        return self._request("POST", "/core/movimientos", json=payload,
-                             correlation_id=correlation_id,
-                             idempotency_key=idempotency_key, afecta_saldo=True)
+                             correlation_id: str | None = None, authorization: str | None = None):
+        return self._request("POST", "/coredb/movimientos", json=payload,
+                             correlation_id=correlation_id, idempotency_key=idempotency_key,
+                             authorization=authorization, afecta_saldo=True)
 
     def transferir(self, payload: dict, idempotency_key: str,
-                   correlation_id: str | None = None):
-        return self._request("POST", "/core/movimientos/transferencias", json=payload,
-                             correlation_id=correlation_id,
-                             idempotency_key=idempotency_key, afecta_saldo=True)
+                   correlation_id: str | None = None, authorization: str | None = None):
+        return self._request("POST", "/coredb/movimientos/transferencias", json=payload,
+                             correlation_id=correlation_id, idempotency_key=idempotency_key,
+                             authorization=authorization, afecta_saldo=True)
+
+    def listar_movimientos(self, num_cuenta: str, correlation_id: str | None = None,
+                           authorization: str | None = None):
+        return self._request("GET", f"/coredb/movimientos/cuenta/{num_cuenta}",
+                             correlation_id=correlation_id, authorization=authorization)
+
+    def ver_movimiento(self, uuid_transaccion: str, correlation_id: str | None = None,
+                       authorization: str | None = None):
+        return self._request("GET", f"/coredb/movimientos/{uuid_transaccion}",
+                             correlation_id=correlation_id, authorization=authorization)

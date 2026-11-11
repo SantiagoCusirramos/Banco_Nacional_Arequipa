@@ -8,28 +8,25 @@ BASE = "/api/v1/cuentas"
 KEY = "550e8400-e29b-41d4-a716-446655440000"
 NUM = "20261020123456"
 
+TOKEN = "Bearer token-de-prueba"
 CUENTA_CORE = {
-    "num_cuenta": NUM, "moneda": "PEN", "regimen": "LIBRE", "estado_cuenta": "ACTIVA",
-    "saldo_contable": "0.00", "saldo_disponible": "0.00", "saldo_retenido": "0.00",
-    "fecha_apertura": "2026-10-20T10:00:00", "id_agencia": "AG-01", "id_producto_ahorro": "PROD-01",
-    "titulares": [{"id_cliente": "CLI-1", "rol_titular": "TITULAR"}],
+    "num_cuenta": NUM, "cci": "0" * 20, "moneda": "PEN", "regimen": "INDIVIDUAL",
+    "estado_cuenta": "ACTIVA", "saldo_contable": "0.00", "saldo_disponible": "0.00",
+    "id_agencia": "AG-01",
 }
 
-MOV_CORE = {
-    "id_transaccion": "t1", "uuid_transaccion": "u1", "num_cuenta": NUM,
-    "tipo_operacion": "DEPOSITO", "tipo_movimiento": "DEPOSITO", "monto": "500.00",
-    "moneda": "PEN", "monto_moneda_base": "500.00", "saldo_posterior": "500.00",
-    "id_asiento": "a1", "idempotency_key": KEY, "replay": False,
-}
+MOV_CORE = {"uuid_transaccion": "u1", "repetido": False}
+TRANSF_CORE = {"uuid_debito": "d1", "uuid_abono": "a1", "repetido": False}
 
-APERTURA = {"id_cliente": "CLI-1", "id_producto_ahorro": "PROD-01", "id_agencia": "AG-01"}
-HEADERS_OP = {"X-Idempotency-Key": KEY, "X-Channel-ID": "WEB", "X-Request-Timestamp": "2026-10-20T21:00:00Z"}
+APERTURA = {"num_cuenta": NUM, "cci": "0" * 20, "id_cliente": "CLI-1", "id_agencia": "AG-01"}
+AUTH = {"Authorization": TOKEN}
+HEADERS_OP = {"X-Idempotency-Key": KEY, "X-Channel-ID": "WEB",
+              "X-Request-Timestamp": "2026-10-20T21:00:00Z", **AUTH}
 
 
 def error_core(status, code, details=None):
     return httpx.Response(status, json={
         "error": {"code": code, "message": "mensaje de core", "details": details or {}},
-        "correlation_id": None,
     })
 
 
@@ -39,7 +36,7 @@ def test_health(client):
 
 def test_apertura_formato_de_exito(client, core):
     core.respuesta = httpx.Response(201, json=CUENTA_CORE)
-    r = client.post(f"{BASE}/apertura", json=APERTURA, headers={"X-Correlation-ID": "corr-1"})
+    r = client.post(f"{BASE}/apertura", json=APERTURA, headers={"X-Correlation-ID": "corr-1", **AUTH})
     assert r.status_code == 201
     cuerpo = r.json()
     assert cuerpo["success"] is True
@@ -52,14 +49,16 @@ def test_apertura_formato_de_exito(client, core):
     assert meta["timestamp"].endswith("Z")
     assert "tiempo_ejecucion_ms" in meta
     llamada = core.llamadas[0]
-    assert llamada["ruta"] == "/core/cuentas"
-    assert llamada["json"]["actor"] == "cuentas"
+    assert llamada["ruta"] == "/coredb/cuentas"
+    assert llamada["json"] == {"num_cuenta": NUM, "cci": "0" * 20, "moneda": "PEN",
+                               "regimen": "INDIVIDUAL", "id_agencia": "AG-01", "titulares": ["CLI-1"]}
+    assert llamada["headers"]["authorization"] == TOKEN
     assert llamada["headers"]["x-correlation-id"] == "corr-1"
 
 
 def test_mancomunada_con_un_titular(client, core):
-    datos = {**APERTURA, "titulares": [{"id_cliente": "CLI-1", "rol_titular": "MANCOMUNADO"}]}
-    r = client.post(f"{BASE}/apertura", json=datos)
+    datos = {**APERTURA, "regimen": "MANCOMUNADA_INDISTINTA", "titulares": [{"id_cliente": "CLI-1"}]}
+    r = client.post(f"{BASE}/apertura", json=datos, headers=AUTH)
     assert r.status_code == 400
     assert r.json()["error_code"] == "ERR-CTA-MANCOMUNADA-SIN-COTITULARES"
     assert r.json()["success"] is False
@@ -68,22 +67,42 @@ def test_mancomunada_con_un_titular(client, core):
 
 def test_ver_cuenta(client, core):
     core.respuesta = httpx.Response(200, json=CUENTA_CORE)
-    r = client.get(f"{BASE}/{NUM}")
+    r = client.get(f"{BASE}/{NUM}", headers=AUTH)
     assert r.status_code == 200
-    assert core.llamadas[0]["ruta"] == f"/core/cuentas/{NUM}"
+    assert core.llamadas[0]["ruta"] == f"/coredb/cuentas/{NUM}"
 
 
-def test_consolidada_devuelve_lista(client, core):
-    core.respuesta = httpx.Response(200, json=[CUENTA_CORE, CUENTA_CORE])
-    r = client.get(f"{BASE}/consolidada/CLI-1")
+def test_consolidada_pide_a_coredb_las_cuentas_del_cliente(client, core):
+    core.respuesta = httpx.Response(200, json=[{**CUENTA_CORE, "titulares": ["CLI000000001"]}])
+    r = client.get(f"{BASE}/consolidada/CLI000000001", headers=AUTH)
     assert r.status_code == 200
-    assert len(r.json()["data"]) == 2
-    assert core.llamadas[0]["ruta"] == "/core/cuentas/cliente/CLI-1"
+    llamada = core.llamadas[0]
+    assert (llamada["metodo"], llamada["ruta"]) == ("GET", "/coredb/cuentas")
+    assert llamada["query"] == {"cod_cliente": "CLI000000001"}
+    assert llamada["headers"]["authorization"] == AUTH["Authorization"]
+    cuentas = r.json()["data"]
+    assert [c["num_cuenta"] for c in cuentas] == [NUM]
+    assert cuentas[0]["titulares"] == ["CLI000000001"]
+
+
+def test_consolidada_de_un_cliente_inexistente_404(client, core):
+    core.respuesta = httpx.Response(
+        404, json={"error": {"code": "CLIENTE_NO_ENCONTRADO", "message": "El cliente no existe."}}
+    )
+    r = client.get(f"{BASE}/consolidada/CLI999999999", headers=AUTH)
+    assert r.status_code == 404
+    assert r.json()["error_code"] == "ERR-CLI-NO-ENCONTRADO"
+
+
+def test_ver_cuenta_incluye_sus_titulares(client, core):
+    core.respuesta = httpx.Response(200, json={**CUENTA_CORE, "titulares": ["C001", "C002"]})
+    r = client.get(f"{BASE}/{NUM}", headers=AUTH)
+    assert r.json()["data"]["titulares"] == ["C001", "C002"]
 
 
 def test_cuenta_inexistente(client, core):
     core.respuesta = error_core(404, "CUENTA_NO_ENCONTRADA")
-    r = client.get(f"{BASE}/999")
+    r = client.get(f"{BASE}/999", headers=AUTH)
     assert r.status_code == 404
     assert r.json()["error_code"] == "ERR-CTA-NO-ENCONTRADA"
 
@@ -92,11 +111,13 @@ def test_deposito_traduce_cabeceras_a_core(client, core):
     core.respuesta = httpx.Response(201, json=MOV_CORE)
     r = client.post(f"{BASE}/deposito", json={"num_cuenta": NUM, "monto": "500.00"}, headers=HEADERS_OP)
     assert r.status_code == 201
-    assert r.json()["data"]["saldo_posterior"] == "500.00"
+    assert r.json()["data"] == {"uuid_transaccion": "u1", "replay": False}
     llamada = core.llamadas[0]
-    assert llamada["ruta"] == "/core/movimientos"
+    assert llamada["ruta"] == "/coredb/movimientos"
     assert llamada["headers"]["x-idempotency-key"] == KEY
-    assert llamada["json"]["tipo_operacion"] == "DEPOSITO"
+    assert llamada["headers"]["authorization"] == TOKEN
+    assert llamada["json"]["tipo"] == "DEPOSITO"
+    assert llamada["json"]["glosa"]
     assert llamada["json"]["id_canal"] == "HB"  # WEB -> HB
     assert llamada["json"]["monto"] == "500.00"
     assert llamada["json"]["idempotency_key"] == KEY
@@ -150,7 +171,7 @@ def test_monto_con_tres_decimales_es_400_y_no_422(client, core):
 
 
 def test_fondos_insuficientes(client, core):
-    core.respuesta = error_core(422, "SALDO_INSUFICIENTE", {"saldo_disponible": "0.00"})
+    core.respuesta = error_core(422, "BNA-SALDO", {"saldo_disponible": "0.00"})
     r = client.post(f"{BASE}/retiro", json={"num_cuenta": NUM, "monto": "100"}, headers=HEADERS_OP)
     assert r.status_code == 400
     assert r.json()["error_code"] == "ERR-CTA-FONDOS-INSUFICIENTES"
@@ -158,14 +179,14 @@ def test_fondos_insuficientes(client, core):
 
 
 def test_tope_excedido(client, core):
-    core.respuesta = error_core(422, "TOPE_DIARIO_EXCEDIDO")
+    core.respuesta = error_core(422, "RN-TOP-001")
     r = client.post(f"{BASE}/retiro", json={"num_cuenta": NUM, "monto": "100"}, headers=HEADERS_OP)
     assert r.status_code == 400
     assert r.json()["error_code"] == "ERR-CTA-TOPE-EXCEDIDO"
 
 
 def test_cuenta_bloqueada_es_403(client, core):
-    core.respuesta = error_core(422, "CUENTA_NO_OPERATIVA")
+    core.respuesta = error_core(422, "BNA-ESTADO-CUENTA")
     r = client.post(f"{BASE}/retiro", json={"num_cuenta": NUM, "monto": "100"}, headers=HEADERS_OP)
     assert r.status_code == 403
     assert r.json()["error_code"] == "ERR-CTA-BLOQUEADA"
@@ -173,14 +194,14 @@ def test_cuenta_bloqueada_es_403(client, core):
 
 def test_codigo_de_core_desconocido_se_prefija(client, core):
     core.respuesta = error_core(409, "CONFLICTO_UNICIDAD")
-    r = client.post(f"{BASE}/apertura", json=APERTURA)
+    r = client.post(f"{BASE}/apertura", json=APERTURA, headers=AUTH)
     assert r.status_code == 409
     assert r.json()["error_code"] == "ERR-COR-CONFLICTO-UNICIDAD"
 
 
 def test_core_responde_422_de_pydantic(client, core):
     core.respuesta = httpx.Response(422, json={"detail": [{"loc": ["body"], "msg": "x"}]})
-    r = client.post(f"{BASE}/apertura", json=APERTURA)
+    r = client.post(f"{BASE}/apertura", json=APERTURA, headers=AUTH)
     assert r.status_code == 400
     assert r.json()["error_code"] == "ERR-COR-VALIDACION-ESQUEMA"
 
@@ -194,22 +215,20 @@ def test_transferencia_misma_cuenta(client, core):
 
 
 def test_transferencia_ok(client, core):
-    core.respuesta = httpx.Response(201, json={
-        "origen": {**MOV_CORE, "num_cuenta": "111", "tipo_operacion": "RETIRO"},
-        "destino": {**MOV_CORE, "num_cuenta": "222", "idempotency_key": KEY + "#C"},
-        "id_asiento": "a9", "replay": False,
-    })
+    core.respuesta = httpx.Response(201, json=TRANSF_CORE)
     r = client.post(f"{BASE}/transferencia", headers=HEADERS_OP,
                     json={"num_cuenta_origen": "111", "num_cuenta_destino": "222", "monto": "25.50"})
     assert r.status_code == 201
     enviado = core.llamadas[0]
-    assert enviado["ruta"] == "/core/movimientos/transferencias"
-    assert enviado["json"]["num_cuenta_origen"] == "111"
+    assert enviado["ruta"] == "/coredb/movimientos/transferencias"
+    assert enviado["json"]["origen"] == "111"
+    assert enviado["json"]["destino"] == "222"
+    assert r.json()["data"] == {"uuid_debito": "d1", "uuid_abono": "a1", "replay": False}
     assert enviado["json"]["id_canal"] == "HB"
 
 
 def test_replay_se_informa_en_el_mensaje(client, core):
-    core.respuesta = httpx.Response(201, json={**MOV_CORE, "replay": True})
+    core.respuesta = httpx.Response(201, json={**MOV_CORE, "repetido": True})
     r = client.post(f"{BASE}/deposito", json={"num_cuenta": NUM, "monto": "5"}, headers=HEADERS_OP)
     assert r.json()["data"]["replay"] is True
     assert "idempotencia" in r.json()["message"]
@@ -217,7 +236,7 @@ def test_replay_se_informa_en_el_mensaje(client, core):
 
 def test_core_caido(client, core):
     core.excepcion = httpx.ConnectError("sin conexion")
-    r = client.get(f"{BASE}/111")
+    r = client.get(f"{BASE}/111", headers=AUTH)
     assert r.status_code == 503
     assert r.json()["error_code"] == "ERR-COR-NO-DISPONIBLE"
 
@@ -231,7 +250,7 @@ def test_timeout_en_movimiento_queda_no_confirmado(client, core):
 
 def test_timeout_en_consulta(client, core):
     core.excepcion = httpx.ReadTimeout("lento")
-    r = client.get(f"{BASE}/111")
+    r = client.get(f"{BASE}/111", headers=AUTH)
     assert r.status_code == 504
     assert r.json()["error_code"] == "ERR-CTA-TIMEOUT-CORE"
 
@@ -245,7 +264,7 @@ def test_ruta_inexistente_usa_el_mismo_formato(client):
 
 def test_error_no_controlado_es_500_sin_filtrar_detalle(client, core):
     core.excepcion = RuntimeError("clave secreta interna")
-    r = client.get(f"{BASE}/111")
+    r = client.get(f"{BASE}/111", headers=AUTH)
     assert r.status_code == 500
     assert r.json()["error_code"] == "ERR-INTERNO-SERVIDOR"
     assert "secreta" not in r.text
@@ -267,7 +286,7 @@ def test_log_json_con_campos_obligatorios(client, core, caplog):
 
 
 def test_log_de_error_incluye_error_code(client, core, caplog):
-    core.respuesta = error_core(422, "SALDO_INSUFICIENTE")
+    core.respuesta = error_core(422, "BNA-SALDO")
     with caplog.at_level(logging.INFO, logger="BNA_SERVICE_LOGGER"):
         client.post(f"{BASE}/retiro", json={"num_cuenta": NUM, "monto": "5"}, headers=HEADERS_OP)
     registro = json.loads(caplog.records[-1].getMessage())
@@ -276,8 +295,35 @@ def test_log_de_error_incluye_error_code(client, core, caplog):
     assert registro["datos_contexto"]["error_code"] == "ERR-CTA-FONDOS-INSUFICIENTES"
 
 
+def test_sin_token_es_401(client, core):
+    r = client.get(f"{BASE}/{NUM}")
+    assert r.status_code == 401
+    assert r.json()["error_code"] == "ERR-CTA-TOKEN-REQUERIDO"
+    assert core.llamadas == []
+
+
+def test_token_sin_formato_bearer_es_401(client, core):
+    r = client.get(f"{BASE}/{NUM}", headers={"Authorization": "abc"})
+    assert r.status_code == 401
+    assert r.json()["error_code"] == "ERR-CTA-TOKEN-INVALIDO"
+
+
+def test_permiso_denegado_de_coredb_es_403(client, core):
+    core.respuesta = error_core(403, "PERMISO_DENEGADO")
+    r = client.post(f"{BASE}/apertura", json=APERTURA, headers=AUTH)
+    assert r.status_code == 403
+    assert r.json()["error_code"] == "ERR-CTA-PERMISO-DENEGADO"
+
+
+def test_token_vencido_en_coredb_es_401(client, core):
+    core.respuesta = error_core(401, "TOKEN_EXPIRADO")
+    r = client.get(f"{BASE}/{NUM}", headers=AUTH)
+    assert r.status_code == 401
+    assert r.json()["error_code"] == "ERR-CTA-TOKEN-EXPIRADO"
+
+
 def test_respuesta_trae_cabeceras_de_trazabilidad(client, core):
     core.respuesta = httpx.Response(200, json=CUENTA_CORE)
-    r = client.get(f"{BASE}/{NUM}")
+    r = client.get(f"{BASE}/{NUM}", headers=AUTH)
     assert "x-response-time-ms" in r.headers
     assert r.headers["x-idempotency-key"]

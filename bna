@@ -23,6 +23,9 @@ Uso: ./bna <orden>
   help            Esta ayuda
 
 Con make: `make up`, `make test`, etc.
+
+El CORE legado no se levanta por omisión. Para incluirlo:
+  COMPOSE_PROFILES=legado ./bna up     (queda en http://127.0.0.1:8000/docs)
 TEXTO
 }
 
@@ -94,7 +97,6 @@ resumen() {
   CUENTAS           http://127.0.0.1:$(valor BNA_PUERTO_CUENTAS)/docs
   SOL               http://127.0.0.1:$(valor BNA_PUERTO_SOL)/docs
   Seguridad         http://127.0.0.1:$(valor BNA_PUERTO_SEGURIDAD)
-  CORE legado       http://127.0.0.1:$(valor BNA_PUERTO_CORE_LEGADO)/docs
   MySQL (CORE)      127.0.0.1:$(valor BNA_PUERTO_DB)
 
   Administrador de COREDB: usuario $(valor BNA_ADMIN_USUARIO); su contraseña está en
