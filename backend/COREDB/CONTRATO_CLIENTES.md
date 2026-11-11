@@ -1,14 +1,14 @@
 # Contrato de COREDB para el módulo Clientes
 
-**Estado:** borrador para revisión del equipo de Clientes (Eddu Valeriano). Fecha: 2026-11-02.
-**Qué es:** las operaciones que el CORE ofrece a Clientes en `backend/COREDB`, la API sobre la base integrada (bna-core-db, etiqueta `bd-v1.1-mysql`). Las rutas de clientes llegan en un PR posterior a este documento; la autenticación, en el PR anterior. Los cambios que pidan en esta revisión se aplican antes de abrir ese PR.
-**Qué no es:** el contrato público de Clientes hacia los canales (`/api/v1/kyc/...`). Ese es de ustedes. Este documento cubre solo el tramo Clientes → CORE.
+**Estado:** implementado en `backend/COREDB`. Pendiente de la revisión del equipo de Clientes (Eddu Valeriano): los cambios que pidan se hacen sobre estas rutas.
+**Qué es:** las operaciones que el CORE ofrece a Clientes en `backend/COREDB`, la API sobre la base integrada (`database/`). La especificación exacta está en `openapi.json` y en `/docs`.
+**Qué no es:** el contrato público de Clientes hacia los canales (`/api/v1/kyc/...`). Ese es del módulo Clientes. Este documento cubre solo el tramo Clientes → CORE.
 
 ## 1. Convenciones
 
 - **URL base:** configurable, por ejemplo `CORE_BASE_URL=http://127.0.0.1:8012`. Cuando exista el Bus de Servicios apuntará al Bus. Todas las rutas empiezan con `/coredb`.
 - **Autenticación:** `Authorization: Bearer <token>` en todas las rutas salvo `/coredb/auth/login` y `/coredb/salud` (sección 2).
-- **Correlación:** cabecera `X-Correlation-ID` con un UUID. Es opcional: si falta, COREDB genera uno. Siempre vuelve en la respuesta y queda en la bitácora y en `clientes.validacion_identidad`. Conviene enviar el mismo identificador que recibió Clientes del canal.
+- **Correlación:** cabecera `X-Correlation-ID` con un UUID. Es opcional: si falta, o no es un UUID, COREDB genera uno. Siempre vuelve en la respuesta, también en las de error, y queda en la bitácora y en `clientes.validacion_identidad`. Conviene enviar el mismo identificador que recibió Clientes del canal.
 - **Cuerpos JSON estrictos:** un campo desconocido se rechaza con 422, y los textos deben ser cadenas JSON (`"70000001"`, no `70000001`).
 - **Error de negocio:** `{"error": {"code": "CODIGO", "message": "texto"}}`.
 - **Error de validación (422):** `{"detail": [{"loc": [...], "type": "..."}]}`. **No devuelve los valores recibidos.**
