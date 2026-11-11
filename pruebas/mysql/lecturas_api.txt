@@ -6,6 +6,9 @@ core.producto_ahorro
 core.producto_credito
 core.tipo_cambio
 core.usuario_sistema
+core.v_evento_auditoria_api
 cuentas.cuenta_ahorro
 cuentas.idempotencia_movimiento
+cuentas.titularidad
+cuentas.v_movimiento_api
 tarjetas.v_tarjeta_api

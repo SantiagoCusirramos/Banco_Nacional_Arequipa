@@ -352,3 +352,50 @@ CALL prueba.rechaza('X203', 'Extensión', 'bna_api', 'bna_api no puede: INSERT e
 
 CALL prueba.rechaza('X204', 'Extensión', 'bna_api', 'bna_api no puede: UPDATE de usuario_sistema',
   JSON_ARRAY("UPDATE core.usuario_sistema SET rol = 'ADMINISTRADOR'"), 'denied', 'privilegio');
+
+-- ---------------------------------------------------------------------
+-- v1.2: lecturas de consulta de la API (movimientos, titulares y bitácora)
+-- ---------------------------------------------------------------------
+CALL prueba.verifica('X235', 'Extensión', 'Consultas', 'bna_api lee el movimiento de un depósito, con su naturaleza y la moneda de la cuenta',
+  JSON_ARRAY("CALL cuentas.registrar_movimiento('CTA-PEN-1', 'DEPOSITO', 25, 'Depósito X235', 'VEN', UUID_TO_BIN(UUID()), NULL, NULL, 'pruebas', @m, @r)"),
+  "SELECT COUNT(*) = 1 FROM cuentas.v_movimiento_api WHERE uuid_transaccion = @m AND num_cuenta = 'CTA-PEN-1' AND tipo_operacion = 'DEPOSITO' AND naturaleza = 'C' AND monto = 25 AND moneda = 'PEN' AND glosa = 'Depósito X235' AND id_canal = 'VEN' AND estado_transaccion = 'APROBADO' AND fecha_hora IS NOT NULL",
+  'una fila', "SELECT COUNT(*) FROM cuentas.v_movimiento_api WHERE uuid_transaccion = @m", 'vista');
+
+CALL prueba.verifica('X236', 'Extensión', 'Consultas', 'Una transferencia se lee como un débito en el origen y un abono en el destino',
+  JSON_ARRAY("CALL cuentas.registrar_transferencia('CTA-PEN-2', 'CTA-PEN-1', 40, 'Transferencia X236', 'VEN', UUID_TO_BIN(UUID()), NULL, NULL, 'pruebas', @d, @c, @r)"),
+  "SELECT (SELECT CONCAT(num_cuenta, ' ', tipo_operacion, ' ', naturaleza) FROM cuentas.v_movimiento_api WHERE uuid_transaccion = @d) = 'CTA-PEN-2 TRANSFERENCIA_ENVIADA D' AND (SELECT CONCAT(num_cuenta, ' ', tipo_operacion, ' ', naturaleza) FROM cuentas.v_movimiento_api WHERE uuid_transaccion = @c) = 'CTA-PEN-1 TRANSFERENCIA_RECIBIDA C'",
+  'ENVIADA D y RECIBIDA C', "SELECT GROUP_CONCAT(CONCAT(num_cuenta, ' ', tipo_operacion, ' ', naturaleza) ORDER BY naturaleza DESC SEPARATOR '; ') FROM cuentas.v_movimiento_api WHERE uuid_transaccion IN (@d, @c)", 'vista');
+
+CALL prueba.rechaza('X237', 'Extensión', 'Consultas', 'La vista de movimientos no expone el asiento contable',
+  JSON_ARRAY("SELECT id_asiento FROM cuentas.v_movimiento_api"), 'Unknown column', 'vista');
+
+CALL prueba.rechaza('X238', 'Extensión', 'bna_api', 'bna_api no puede: SELECT cuentas.movimiento',
+  JSON_ARRAY("SELECT * FROM cuentas.movimiento"), 'denied', 'privilegio');
+
+CALL prueba.verifica('X239', 'Extensión', 'Consultas', 'bna_api lee las cuentas de un titular',
+  JSON_ARRAY("SET @cuentas = (SELECT GROUP_CONCAT(num_cuenta ORDER BY num_cuenta) FROM cuentas.titularidad WHERE cod_cliente = 'C002')"),
+  "SELECT @cuentas = 'CTA-CONJ,CTA-PEN-2'",
+  'CTA-CONJ,CTA-PEN-2', "SELECT @cuentas", 'privilegio');
+
+CALL prueba.verifica('X240', 'Extensión', 'Consultas', 'bna_api lee la bitácora por la vista, con el nombre del módulo y el evento de la operación',
+  JSON_ARRAY("SET @correlacion = UUID_TO_BIN(UUID())",
+             "CALL cuentas.registrar_movimiento('CTA-PEN-1', 'DEPOSITO', 30, 'Depósito X240', 'VEN', @correlacion, NULL, NULL, 'pruebas', @m, @r)"),
+  "SELECT COUNT(*) = 1 FROM core.v_evento_auditoria_api WHERE correlation_id = @correlacion AND modulo = 'CUENTAS' AND actor = 'pruebas' AND accion IS NOT NULL AND entidad IS NOT NULL AND id_entidad IS NOT NULL AND fecha_hora IS NOT NULL AND id_evento > 0",
+  'un evento de CUENTAS', "SELECT CONCAT(COUNT(*), ' ', IFNULL(GROUP_CONCAT(modulo), '')) FROM core.v_evento_auditoria_api WHERE correlation_id = @correlacion", 'vista');
+
+CALL prueba.verifica('X241', 'Extensión', 'Consultas', 'La vista de la bitácora tiene exactamente las columnas acordadas',
+  JSON_ARRAY("SET @columnas = (SELECT GROUP_CONCAT(column_name ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'core' AND table_name = 'v_evento_auditoria_api')"),
+  "SELECT @columnas = 'id_evento,modulo,entidad,id_entidad,accion,actor,correlation_id,detalle,fecha_hora'",
+  'id_evento,modulo,entidad,id_entidad,accion,actor,correlation_id,detalle,fecha_hora', "SELECT @columnas", 'vista');
+
+CALL prueba.rechaza('X242', 'Extensión', 'bna_api', 'bna_api no puede: SELECT core.evento_auditoria',
+  JSON_ARRAY("SELECT * FROM core.evento_auditoria"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X243', 'Extensión', 'bna_api', 'bna_api no puede: escribir por la vista de la bitácora',
+  JSON_ARRAY("UPDATE core.v_evento_auditoria_api SET actor = 'x'"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X244', 'Extensión', 'bna_api', 'bna_api no puede: borrar por la vista de movimientos',
+  JSON_ARRAY("DELETE FROM cuentas.v_movimiento_api"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X245', 'Extensión', 'bna_api', 'bna_api no puede: escribir en cuentas.titularidad',
+  JSON_ARRAY("INSERT INTO cuentas.titularidad (cod_cliente, num_cuenta) VALUES ('C003', 'CTA-PEN-1')"), 'denied', 'privilegio');

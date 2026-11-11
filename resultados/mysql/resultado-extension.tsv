@@ -128,6 +128,17 @@ X201	bna_api_user	bna_api no puede: INSERT en clientes.cliente	pasa
 X202	bna_api_user	bna_api no puede: UPDATE del estado del cliente	pasa
 X203	bna_api_user	bna_api no puede: INSERT en clientes.numerador_cliente	pasa
 X204	bna_api_user	bna_api no puede: UPDATE de usuario_sistema	pasa
+X235	bna_api_user	bna_api lee el movimiento de un depósito, con su naturaleza y la moneda de la cuenta	pasa
+X236	bna_api_user	Una transferencia se lee como un débito en el origen y un abono en el destino	pasa
+X237	bna_api_user	La vista de movimientos no expone el asiento contable	pasa
+X238	bna_api_user	bna_api no puede: SELECT cuentas.movimiento	pasa
+X239	bna_api_user	bna_api lee las cuentas de un titular	pasa
+X240	bna_api_user	bna_api lee la bitácora por la vista, con el nombre del módulo y el evento de la operación	pasa
+X241	bna_api_user	La vista de la bitácora tiene exactamente las columnas acordadas	pasa
+X242	bna_api_user	bna_api no puede: SELECT core.evento_auditoria	pasa
+X243	bna_api_user	bna_api no puede: escribir por la vista de la bitácora	pasa
+X244	bna_api_user	bna_api no puede: borrar por la vista de movimientos	pasa
+X245	bna_api_user	bna_api no puede: escribir en cuentas.titularidad	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
