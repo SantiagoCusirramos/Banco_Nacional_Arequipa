@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, Numeric, String
+from sqlalchemy import JSON, BigInteger, Date, Numeric, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from COREDB.database import FechaUtc, UuidBinario
@@ -103,6 +103,47 @@ class CuentaAhorro(Base):
     saldo_disponible: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     estado_cuenta: Mapped[str] = mapped_column(String(25))
     id_agencia: Mapped[str | None] = mapped_column(String(10))
+
+
+class Titularidad(Base):
+    __tablename__ = "titularidad"
+    __table_args__ = {"schema": "cuentas"}
+
+    cod_cliente: Mapped[str] = mapped_column(String(12), primary_key=True)
+    num_cuenta: Mapped[str] = mapped_column(String(20), primary_key=True)
+
+
+class Movimiento(Base):
+    # La vista no incluye el asiento contable: bna_api no lee la tabla.
+    __tablename__ = "v_movimiento_api"
+    __table_args__ = {"schema": "cuentas"}
+
+    uuid_transaccion: Mapped[uuid.UUID] = mapped_column(UuidBinario, primary_key=True)
+    num_cuenta: Mapped[str] = mapped_column(String(20))
+    tipo_operacion: Mapped[str] = mapped_column(String(25))
+    naturaleza: Mapped[str] = mapped_column(String(1))
+    monto: Mapped[Decimal] = mapped_column(Numeric(15, 2))
+    moneda: Mapped[str] = mapped_column(String(3))
+    glosa: Mapped[str] = mapped_column(String(200))
+    id_canal: Mapped[str | None] = mapped_column(String(5))
+    estado_transaccion: Mapped[str] = mapped_column(String(25))
+    fecha_hora: Mapped[datetime] = mapped_column(FechaUtc)
+
+
+class EventoAuditoria(Base):
+    # La bitácora general por su vista, con el nombre del módulo.
+    __tablename__ = "v_evento_auditoria_api"
+    __table_args__ = {"schema": "core"}
+
+    id_evento: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    modulo: Mapped[str] = mapped_column(String(40))
+    entidad: Mapped[str] = mapped_column(String(40))
+    id_entidad: Mapped[str] = mapped_column(String(40))
+    accion: Mapped[str] = mapped_column(String(60))
+    actor: Mapped[str] = mapped_column(String(40))
+    correlation_id: Mapped[uuid.UUID | None] = mapped_column(UuidBinario)
+    detalle: Mapped[dict | None] = mapped_column(JSON)
+    fecha_hora: Mapped[datetime] = mapped_column(FechaUtc)
 
 
 class Tarjeta(Base):

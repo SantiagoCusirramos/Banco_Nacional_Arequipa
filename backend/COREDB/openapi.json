@@ -504,6 +504,14 @@
           "saldo_disponible": {
             "title": "Saldo Disponible",
             "type": "string"
+          },
+          "titulares": {
+            "description": "Códigos de los clientes titulares, en orden.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Titulares",
+            "type": "array"
           }
         },
         "required": [
@@ -514,7 +522,8 @@
           "saldo_contable",
           "saldo_disponible",
           "estado_cuenta",
-          "id_agencia"
+          "id_agencia",
+          "titulares"
         ],
         "title": "CuentaRespuesta",
         "type": "object"
@@ -627,6 +636,75 @@
         "title": "EstadoClienteRespuesta",
         "type": "object"
       },
+      "EventoRespuesta": {
+        "properties": {
+          "accion": {
+            "title": "Accion",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "entidad": {
+            "title": "Entidad",
+            "type": "string"
+          },
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "id_entidad": {
+            "title": "Id Entidad",
+            "type": "string"
+          },
+          "id_evento": {
+            "title": "Id Evento",
+            "type": "integer"
+          },
+          "modulo": {
+            "title": "Modulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_evento",
+          "modulo",
+          "entidad",
+          "id_entidad",
+          "accion",
+          "actor",
+          "correlation_id",
+          "detalle",
+          "fecha_hora"
+        ],
+        "title": "EventoRespuesta",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -689,6 +767,79 @@
           "decimales"
         ],
         "title": "MonedaRespuesta",
+        "type": "object"
+      },
+      "MovimientoDetalle": {
+        "description": "Un movimiento aplicado a una cuenta. `naturaleza` es D (débito) o C (crédito).",
+        "properties": {
+          "estado_transaccion": {
+            "title": "Estado Transaccion",
+            "type": "string"
+          },
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "glosa": {
+            "title": "Glosa",
+            "type": "string"
+          },
+          "id_canal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "naturaleza": {
+            "enum": [
+              "D",
+              "C",
+              "N"
+            ],
+            "title": "Naturaleza",
+            "type": "string"
+          },
+          "num_cuenta": {
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "tipo_operacion": {
+            "title": "Tipo Operacion",
+            "type": "string"
+          },
+          "uuid_transaccion": {
+            "format": "uuid",
+            "title": "Uuid Transaccion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_transaccion",
+          "num_cuenta",
+          "tipo_operacion",
+          "naturaleza",
+          "monto",
+          "moneda",
+          "glosa",
+          "id_canal",
+          "estado_transaccion",
+          "fecha_hora"
+        ],
+        "title": "MovimientoDetalle",
         "type": "object"
       },
       "MovimientoRegistrar": {
@@ -1495,6 +1646,182 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/coredb/auditoria": {
+      "get": {
+        "description": "Los eventos de la bitácora, del más reciente al más antiguo. Cada operación de la\nAPI deja el suyo con el usuario que la hizo. El detalle no lleva datos personales.",
+        "operationId": "eventos_coredb_auditoria_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "modulo",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Modulo"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entidad",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entidad"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id_entidad",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Id Entidad"
+            }
+          },
+          {
+            "in": "query",
+            "name": "accion",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 60,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accion"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "correlation_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Correlation Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Solo eventos con un id menor (para paginar).",
+            "in": "query",
+            "name": "antes_de_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Solo eventos con un id menor (para paginar).",
+              "title": "Antes De Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventoRespuesta"
+                  },
+                  "title": "Response Eventos Coredb Auditoria Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Eventos",
+        "tags": [
+          "auditoría"
+        ]
+      }
+    },
     "/coredb/auth/login": {
       "post": {
         "description": "Usuario inexistente, clave incorrecta, usuario inactivo y contraseña no admitida\nresponden el mismo 401. Un login exitoso queda en la bitácora (LOGIN).",
@@ -2122,6 +2449,62 @@
       }
     },
     "/coredb/cuentas": {
+      "get": {
+        "description": "Las cuentas en las que el cliente es titular, por número de cuenta. No hay una\nruta que liste todas las cuentas.",
+        "operationId": "de_un_cliente_coredb_cuentas_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cod_cliente",
+            "required": true,
+            "schema": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CuentaRespuesta"
+                  },
+                  "title": "Response De Un Cliente Coredb Cuentas Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "CLIENTE_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "De Un Cliente",
+        "tags": [
+          "cuentas"
+        ]
+      },
       "post": {
         "operationId": "abrir_coredb_cuentas_post",
         "requestBody": {
@@ -2260,6 +2643,92 @@
         ]
       }
     },
+    "/coredb/movimientos/cuenta/{num_cuenta}": {
+      "get": {
+        "description": "Los movimientos de una cuenta, del más reciente al más antiguo. Una transferencia\naparece como TRANSFERENCIA_ENVIADA en la cuenta de origen y TRANSFERENCIA_RECIBIDA\nen la de destino.",
+        "operationId": "de_una_cuenta_coredb_movimientos_cuenta__num_cuenta__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "num_cuenta",
+            "required": true,
+            "schema": {
+              "title": "Num Cuenta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Solo movimientos anteriores a esta fecha y hora (para paginar).",
+            "in": "query",
+            "name": "antes_de",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Solo movimientos anteriores a esta fecha y hora (para paginar).",
+              "title": "Antes De"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MovimientoDetalle"
+                  },
+                  "title": "Response De Una Cuenta Coredb Movimientos Cuenta  Num Cuenta  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "CUENTA_NO_ENCONTRADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "De Una Cuenta",
+        "tags": [
+          "movimientos"
+        ]
+      }
+    },
     "/coredb/movimientos/transferencias": {
       "post": {
         "operationId": "transferir_coredb_movimientos_transferencias_post",
@@ -2301,6 +2770,57 @@
           }
         ],
         "summary": "Transferir",
+        "tags": [
+          "movimientos"
+        ]
+      }
+    },
+    "/coredb/movimientos/{uuid_transaccion}": {
+      "get": {
+        "operationId": "ver_coredb_movimientos__uuid_transaccion__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid_transaccion",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Uuid Transaccion",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovimientoDetalle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "MOVIMIENTO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Ver",
         "tags": [
           "movimientos"
         ]

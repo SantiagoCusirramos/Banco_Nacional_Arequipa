@@ -94,6 +94,23 @@ Las rutas que usa el módulo Clientes, y el personal, están descritas en
 
 El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM.md`.
 
+## Consultas
+
+| Ruta | Permiso | Qué devuelve |
+|---|---|---|
+| `GET /coredb/movimientos/cuenta/{num_cuenta}` | `VER_CUENTA` | Los movimientos de una cuenta, del más reciente al más antiguo (`limite`, `antes_de`) |
+| `GET /coredb/movimientos/{uuid_transaccion}` | `VER_CUENTA` | Un movimiento |
+| `GET /coredb/cuentas?cod_cliente=` | `VER_CUENTA` | Las cuentas en las que el cliente es titular |
+| `GET /coredb/auditoria` | `VER_AUDITORIA` | La bitácora, del evento más reciente al más antiguo, con filtros |
+
+- Un movimiento trae `naturaleza` (`D` débito, `C` crédito) y la moneda de su cuenta, y
+  no trae el asiento contable. Una transferencia se lee como `TRANSFERENCIA_ENVIADA` en
+  la cuenta de origen y `TRANSFERENCIA_RECIBIDA` en la de destino.
+- Toda cuenta incluye `titulares`, los códigos de sus clientes titulares.
+- No hay una ruta que liste todas las cuentas ni todos los clientes.
+- Se leen por las vistas de `bd-v1.2-mysql`; el usuario de la API no lee
+  `cuentas.movimiento` ni `core.evento_auditoria`.
+
 Documentación interactiva: `http://127.0.0.1:8012/docs`. Especificación publicada:
 `openapi.json`, que se regenera desde `backend/` con
 `python -m COREDB.scripts.exporta_openapi`.

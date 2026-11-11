@@ -4,8 +4,8 @@ Corre dentro del contenedor de COREDB (`./bna smoke`), así que llega a los dem�
 servicios por su nombre en la red interna y solo usa la biblioteca estándar.
 
 Pasos: salud de cada servicio, login del administrador, registro de un cliente,
-apertura de dos cuentas para él, depósito, transferencia, repetición idempotente y
-saldos finales.
+apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
+saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora.
 """
 
 import json
@@ -151,6 +151,32 @@ def flujo():
     exigir(float(saldos[origen]) == 300.0 and float(saldos[destino]) == 200.0,
            f"Saldos inesperados: {saldos}")
     paso(f"saldos finales: {origen} = {saldos[origen]}, {destino} = {saldos[destino]}")
+
+    movimientos = coredb("GET", f"/coredb/movimientos/cuenta/{origen}", 200, token=token)
+    leidos = [(m["tipo_operacion"], m["naturaleza"], m["monto"]) for m in movimientos]
+    exigir(leidos == [("TRANSFERENCIA_ENVIADA", "D", "200.00"), ("DEPOSITO", "C", "500.00")],
+           f"Movimientos inesperados en {origen}: {leidos}")
+    paso(f"movimientos de {origen}: la transferencia enviada y el depósito")
+
+    del_cliente = coredb("GET", f"/coredb/cuentas?cod_cliente={cliente}", 200, token=token)
+    exigir(sorted(c["num_cuenta"] for c in del_cliente) == sorted(cuentas),
+           f"Cuentas inesperadas de {cliente}: {del_cliente}")
+    paso(f"las dos cuentas figuran como cuentas de {cliente}")
+
+    # La bitácora tiene el evento de cada paso, con el usuario que lo hizo.
+    esperados = [
+        ("cliente", cliente, "REGISTRAR_CLIENTE"),
+        ("cuenta_ahorro", origen, "ABRIR_CUENTA"),
+        ("movimiento", primera["uuid_debito"], "TRANSFERENCIA"),
+    ]
+    for entidad, id_entidad, accion in esperados:
+        eventos = coredb(
+            "GET", f"/coredb/auditoria?entidad={entidad}&id_entidad={id_entidad}&accion={accion}",
+            200, token=token,
+        )
+        exigir(len(eventos) == 1 and eventos[0]["actor"] == USUARIO,
+               f"La bitácora no tiene un evento {accion} de {USUARIO} para {id_entidad}: {eventos}")
+    paso(f"la bitácora registra el cliente, la cuenta y la transferencia, a nombre de {USUARIO}")
 
 
 if __name__ == "__main__":
