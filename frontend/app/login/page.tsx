@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, mensajeError } from "@/lib/api";
-import { cerrarSesion, iniciarSesion, obtenerToken, registrarUsuario } from "@/lib/auth";
+import { mensajeError } from "@/lib/api";
+import { iniciarSesion, registrarUsuario } from "@/lib/auth";
 
 type Modo = "login" | "registro";
 
@@ -19,19 +19,6 @@ export default function LoginPage() {
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
-  const [yaReviso, setYaReviso] = useState(false);
-
-  useEffect(() => {
-    const token = obtenerToken();
-    if (token) {
-      api.get("/coredb/auth/me")
-        .then(() => router.replace("/"))
-        .catch(() => cerrarSesion())
-        .finally(() => setYaReviso(true));
-    } else {
-      setYaReviso(true);
-    }
-  }, [router]);
 
   async function enviarLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,8 +55,6 @@ export default function LoginPage() {
       setCargando(false);
     }
   }
-
-  if (!yaReviso) return <main className="auth-page"><div className="auth-loading">Verificando sesión...</div></main>;
 
   return (
     <main className="auth-page">

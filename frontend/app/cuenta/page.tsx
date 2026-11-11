@@ -1,205 +1,108 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import {
+  abrirCuenta, depositar, formatoMoneda, mensajeDeError, movimientosDeCuenta, retirar, transferir,
+  verCuenta, verMovimiento, REGIMENES, type Cuenta, type Movimiento, type Regimen,
+} from "@/lib/cuentas";
 
-type CuentaInfo = {
-  num_cuenta: string;
-  cci: string;
-  moneda: string;
-  regimen: string;
-  saldo_contable: number;
-  saldo_disponible: number;
-  saldo_retenido: number;
-  fecha_apertura: string;
-  estado_cuenta: string;
-  id_agencia: string;
-  id_producto_ahorro: string;
-  titulares: { id_cliente: string; rol_titular: string }[];
-};
-
-type MovimientoInfo = {
-  id_transaccion: string;
-  uuid_transaccion: string;
-  num_cuenta: string;
-  num_cuenta_contraparte: string | null;
-  tipo_operacion: string;
-  tipo_movimiento: string;
-  monto: number;
-  moneda: string;
-  id_canal: string;
-  saldo_posterior: number;
-  estado_transaccion: string;
-  fecha_hora: string;
-};
-
-function cabeceraAuth(): Record<string, string> {
-  try {
-    const token = localStorage.getItem("bna_access_token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
-}
+type Pestana = "apertura" | "consulta" | "operaciones" | "movimientos" | "detalleMovimiento";
+type Operacion = "deposito" | "retiro" | "transferencia";
+type Aviso = { text: string; error: boolean };
 
 export default function CuentaPage() {
-  const [tab, setTab] = useState<"apertura" | "consulta" | "operaciones" | "movimientos" | "detalleMovimiento">("apertura");
+  const [tab, setTab] = useState<Pestana>("apertura");
   const [numCuentaConsulta, setNumCuentaConsulta] = useState("");
-  const [cuentaActual, setCuentaActual] = useState<CuentaInfo | null>(null);
+  const [cuentaActual, setCuentaActual] = useState<Cuenta | null>(null);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
+  const [notice, setNotice] = useState<Aviso | null>(null);
 
   // Formulario de apertura
-  const [idCliente, setIdCliente] = useState("CLI-001");
-  const [idAgencia, setIdAgencia] = useState("AG1");
-  const [regimen, setRegimen] = useState("INDIVIDUAL");
-  const [cci, setCci] = useState("19100000000000000101");
-  const [numCuentaNueva, setNumCuentaNueva] = useState("1010000001");
+  const [idCliente, setIdCliente] = useState("");
+  const [idAgencia, setIdAgencia] = useState("");
+  const [regimen, setRegimen] = useState<Regimen>("INDIVIDUAL");
+  const [cci, setCci] = useState("");
+  const [numCuentaNueva, setNumCuentaNueva] = useState("");
 
   // Formulario operaciones
   const [cuentaOrigen, setCuentaOrigen] = useState("");
   const [cuentaDestino, setCuentaDestino] = useState("");
   const [montoOp, setMontoOp] = useState("");
-  const [tipoOp, setTipoOp] = useState<"deposito" | "retiro" | "transferencia">("deposito");
+  const [tipoOp, setTipoOp] = useState<Operacion>("deposito");
 
   // Movimientos
   const [cuentaMovs, setCuentaMovs] = useState("");
-  const [movimientosList, setMovimientosList] = useState<MovimientoInfo[]>([]);
+  const [movimientosList, setMovimientosList] = useState<Movimiento[] | null>(null);
   const [uuidMovimiento, setUuidMovimiento] = useState("");
-  const [movimientoDetalle, setMovimientoDetalle] = useState<MovimientoInfo | null>(null);
+  const [movimientoDetalle, setMovimientoDetalle] = useState<Movimiento | null>(null);
 
-  async function consultarCuenta(e: React.FormEvent) {
-    e.preventDefault();
-    if (!numCuentaConsulta.trim()) return;
+  // Ejecuta una llamada mostrando el avance y, si falla, el mensaje del servicio.
+  async function ejecutar(accion: () => Promise<void>, alFallar?: () => void) {
     setLoading(true);
     setNotice(null);
     try {
-      const res = await fetch(`/api/cuenta/${numCuentaConsulta.trim()}`, { headers: cabeceraAuth() });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se pudo consultar la cuenta.");
-      }
-      setCuentaActual(json.data || json);
-    } catch (err: any) {
-      setCuentaActual(null);
-      setNotice({ text: err.message, error: true });
+      await accion();
+    } catch (err) {
+      alFallar?.();
+      setNotice({ text: mensajeDeError(err), error: true });
     } finally {
       setLoading(false);
     }
   }
 
-  async function abrirCuenta(e: React.FormEvent) {
+  function consultarCuenta(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setNotice(null);
-    try {
-      const payload = {
-        num_cuenta: numCuentaNueva,
-        cci,
+    const numero = numCuentaConsulta.trim();
+    if (!numero) return;
+    void ejecutar(async () => setCuentaActual(await verCuenta(numero)), () => setCuentaActual(null));
+  }
+
+  function abrir(e: React.FormEvent) {
+    e.preventDefault();
+    void ejecutar(async () => {
+      const cuenta = await abrirCuenta({
+        num_cuenta: numCuentaNueva.trim(),
+        cci: cci.trim(),
         moneda: "PEN",
         regimen,
-        id_agencia: idAgencia,
-        titulares: [{ id_cliente: idCliente }],
-      };
-      const res = await fetch(`/api/cuenta/apertura`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...cabeceraAuth() },
-        body: JSON.stringify(payload),
+        id_agencia: idAgencia.trim(),
+        titulares: idCliente.split(",").map((codigo) => codigo.trim().toUpperCase()).filter(Boolean),
       });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se pudo abrir la cuenta.");
-      }
-      const cta = json.data || json;
-      setCuentaActual(cta);
-      setNotice({ text: `Cuenta ${cta.num_cuenta || numCuentaNueva} abierta exitosamente en COREDB (8012).`, error: false });
+      setCuentaActual(cuenta);
+      setNotice({ text: `Cuenta ${cuenta.num_cuenta} abierta.`, error: false });
       setTab("consulta");
-      setNumCuentaConsulta(cta.num_cuenta || numCuentaNueva);
-    } catch (err: any) {
-      setNotice({ text: err.message, error: true });
-    } finally {
-      setLoading(false);
-    }
+      setNumCuentaConsulta(cuenta.num_cuenta);
+    });
   }
 
-  async function ejecutarOperacion(e: React.FormEvent) {
+  function ejecutarOperacion(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    setNotice(null);
-    try {
-      let endpoint = tipoOp === "transferencia" ? "/transferencia" : `/${tipoOp}`;
-      let body: any = {
-        monto: Number(montoOp),
-        moneda: "PEN",
-        id_terminal: "ATM-01",
-      };
+    const monto = Number(montoOp).toFixed(2);
+    void ejecutar(async () => {
       if (tipoOp === "transferencia") {
-        body.num_cuenta_origen = cuentaOrigen;
-        body.num_cuenta_destino = cuentaDestino;
+        const resultado = await transferir(cuentaOrigen.trim(), cuentaDestino.trim(), monto);
+        setNotice({ text: `Transferencia registrada. Débito ${resultado.uuid_debito}, abono ${resultado.uuid_abono}.`, error: false });
       } else {
-        body.num_cuenta = cuentaOrigen;
+        const operar = tipoOp === "deposito" ? depositar : retirar;
+        const resultado = await operar(cuentaOrigen.trim(), monto);
+        setNotice({ text: `Operación registrada: ${resultado.uuid_transaccion}.`, error: false });
       }
-
-      const res = await fetch(`/api/cuenta${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...cabeceraAuth(),
-          "X-Idempotency-Key": crypto.randomUUID(),
-          "X-Channel-ID": "AGE",
-          "X-Request-Timestamp": new Date().toISOString(),
-        },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se pudo completar la operación.");
-      }
-      setNotice({ text: `Operación ${tipoOp} ejecutada correctamente en COREDB (8012). Transacción registrada.`, error: false });
-    } catch (err: any) {
-      setNotice({ text: err.message, error: true });
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
-  async function revisarMovimientos(e: React.FormEvent) {
+  function revisarMovimientos(e: React.FormEvent) {
     e.preventDefault();
-    if (!cuentaMovs.trim()) return;
-    setLoading(true);
-    setNotice(null);
-    try {
-      const res = await fetch(`/api/cuenta/${cuentaMovs.trim()}/movimientos`, { headers: cabeceraAuth() });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se pudieron obtener los movimientos.");
-      }
-      setMovimientosList(json.data || json || []);
-    } catch (err: any) {
-      setMovimientosList([]);
-      setNotice({ text: err.message, error: true });
-    } finally {
-      setLoading(false);
-    }
+    const numero = cuentaMovs.trim();
+    if (!numero) return;
+    void ejecutar(async () => setMovimientosList(await movimientosDeCuenta(numero)), () => setMovimientosList(null));
   }
 
-  async function buscarMovimientoEspecifico(e: React.FormEvent) {
+  function buscarMovimientoEspecifico(e: React.FormEvent) {
     e.preventDefault();
-    if (!uuidMovimiento.trim()) return;
-    setLoading(true);
-    setNotice(null);
-    try {
-      const res = await fetch(`/api/cuenta/movimiento/${uuidMovimiento.trim()}`, { headers: cabeceraAuth() });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.message || (typeof json.detail === "string" ? json.detail : null) || "No se encontró el movimiento específico.");
-      }
-      setMovimientoDetalle(json.data || json);
-    } catch (err: any) {
-      setMovimientoDetalle(null);
-      setNotice({ text: err.message, error: true });
-    } finally {
-      setLoading(false);
-    }
+    const uuid = uuidMovimiento.trim();
+    if (!uuid) return;
+    void ejecutar(async () => setMovimientoDetalle(await verMovimiento(uuid)), () => setMovimientoDetalle(null));
   }
 
   return (
@@ -213,7 +116,7 @@ export default function CuentaPage() {
         </div>
         <div className="sol-workspace">
           <span className="sol-workspace-dot" />
-          Módulo Cuentas <small>COREDB (Puerto 8012)</small>
+          Módulo Cuentas <small>sobre el CORE</small>
         </div>
         <nav aria-label="Navegación Cuentas">
           <p>GESTIÓN DE CUENTAS</p>
@@ -236,8 +139,8 @@ export default function CuentaPage() {
         <div className="sol-sidebar-bottom">
           <div className="sol-lab">
             <div>
-              <strong>COREDB Backend</strong>
-              <small>Puerto 8012 · Procedimientos SQL</small>
+              <strong>CUENTAS</strong>
+              <small>Sobre la API del CORE</small>
             </div>
           </div>
         </div>
@@ -247,11 +150,11 @@ export default function CuentaPage() {
         <header className="sol-topbar">
           <div>
             <span>Cuentas</span>
-            <b>/</b>Módulo de Ahorros y Operaciones (COREDB)
+            <b>/</b>Módulo de Ahorros y Operaciones
           </div>
           <div className="sol-topbar-right">
-            <span className="sol-demo-pill">COREDB (8012)</span>
-            <a href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>Volver al Home Banking</a>
+            <span className="sol-demo-pill">Requiere sesión iniciada</span>
+            <Link href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>Volver al Home Banking</Link>
           </div>
         </header>
 
@@ -268,37 +171,35 @@ export default function CuentaPage() {
               <div className="sol-card-title">
                 <div>
                   <h2>Crear cuenta de ahorros</h2>
-                  <p>Registra una nueva cuenta usando COREDB en el puerto 8012.</p>
+                  <p>Registra una nueva cuenta de ahorros en soles.</p>
                 </div>
               </div>
-              <form onSubmit={abrirCuenta} className="sol-form-grid" style={{ marginTop: "20px" }}>
+              <form onSubmit={abrir} className="sol-form-grid" style={{ marginTop: "20px" }}>
                 <div className="sol-field">
-                  <label>Número de cuenta (10-20 dígitos)</label>
-                  <input value={numCuentaNueva} onChange={(e) => setNumCuentaNueva(e.target.value)} required maxLength={20} />
+                  <label htmlFor="apertura-num">Número de cuenta (hasta 20 caracteres)</label>
+                  <input id="apertura-num" value={numCuentaNueva} onChange={(e) => setNumCuentaNueva(e.target.value)} required maxLength={20} placeholder="Ej. 10100000000001" />
                 </div>
                 <div className="sol-field">
-                  <label>Código de Cuenta Interbancario (CCI - 20 dígitos)</label>
-                  <input value={cci} onChange={(e) => setCci(e.target.value)} required minLength={20} maxLength={20} />
+                  <label htmlFor="apertura-cci">Código de Cuenta Interbancario (CCI - 20 dígitos)</label>
+                  <input id="apertura-cci" value={cci} onChange={(e) => setCci(e.target.value)} required minLength={20} maxLength={20} placeholder="20 dígitos" />
                 </div>
                 <div className="sol-field">
-                  <label>ID del Cliente Titular</label>
-                  <input value={idCliente} onChange={(e) => setIdCliente(e.target.value)} required />
+                  <label htmlFor="apertura-cliente">Código del cliente titular</label>
+                  <input id="apertura-cliente" value={idCliente} onChange={(e) => setIdCliente(e.target.value)} required placeholder="CLI000000001 (varios separados por coma si es mancomunada)" />
                 </div>
                 <div className="sol-field">
-                  <label>Agencia</label>
-                  <input value={idAgencia} onChange={(e) => setIdAgencia(e.target.value)} required />
+                  <label htmlFor="apertura-agencia">Agencia</label>
+                  <input id="apertura-agencia" value={idAgencia} onChange={(e) => setIdAgencia(e.target.value)} required maxLength={10} placeholder="Código de la agencia, por ejemplo AQP01" />
                 </div>
                 <div className="sol-field">
-                  <label>Régimen</label>
-                  <select value={regimen} onChange={(e) => setRegimen(e.target.value)}>
-                    <option value="INDIVIDUAL">INDIVIDUAL</option>
-                    <option value="MANCOMUNADA_INDISTINTA">MANCOMUNADA_INDISTINTA</option>
-                    <option value="MANCOMUNADA_CONJUNTA">MANCOMUNADA_CONJUNTA</option>
+                  <label htmlFor="apertura-regimen">Régimen</label>
+                  <select id="apertura-regimen" value={regimen} onChange={(e) => setRegimen(e.target.value as Regimen)}>
+                    {REGIMENES.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
                   </select>
                 </div>
                 <div style={{ gridColumn: "1 / -2", marginTop: "10px" }}>
                   <button className="sol-button primary" type="submit" disabled={loading}>
-                    {loading ? "Creando..." : "Crear cuenta en COREDB (8012)"}
+                    {loading ? "Creando..." : "Crear cuenta"}
                   </button>
                 </div>
               </form>
@@ -333,9 +234,10 @@ export default function CuentaPage() {
                     <div><small>Moneda:</small> <strong>{cuentaActual.moneda}</strong></div>
                     <div><small>Régimen:</small> <strong>{cuentaActual.regimen}</strong></div>
                     <div><small>Estado:</small> <strong style={{ color: "#0f766e" }}>{cuentaActual.estado_cuenta}</strong></div>
-                    <div><small>Saldo Disponible:</small> <strong style={{ fontSize: "18px", color: "#15324f" }}>S/ {Number(cuentaActual.saldo_disponible || 0).toFixed(2)}</strong></div>
-                    <div><small>Saldo Contable:</small> <strong>S/ {Number(cuentaActual.saldo_contable || 0).toFixed(2)}</strong></div>
+                    <div><small>Saldo Disponible:</small> <strong style={{ fontSize: "18px", color: "#15324f" }}>{formatoMoneda(cuentaActual.saldo_disponible, cuentaActual.moneda)}</strong></div>
+                    <div><small>Saldo Contable:</small> <strong>{formatoMoneda(cuentaActual.saldo_contable, cuentaActual.moneda)}</strong></div>
                     <div><small>Agencia:</small> <strong>{cuentaActual.id_agencia}</strong></div>
+                    <div><small>Titulares:</small> <strong>{cuentaActual.titulares.join(", ")}</strong></div>
                   </div>
                 </div>
               )}
@@ -347,31 +249,31 @@ export default function CuentaPage() {
               <div className="sol-card-title">
                 <div>
                   <h2>Depositar y hacer transferencias</h2>
-                  <p>Ejecuta operaciones transaccionales seguras conectadas a COREDB (8012).</p>
+                  <p>Registra depósitos, retiros y transferencias entre cuentas de la misma moneda.</p>
                 </div>
               </div>
               <form onSubmit={ejecutarOperacion} className="sol-form-grid" style={{ marginTop: "20px" }}>
                 <div className="sol-field">
-                  <label>Tipo de Operación</label>
-                  <select value={tipoOp} onChange={(e) => setTipoOp(e.target.value as any)}>
+                  <label htmlFor="operacion-tipo">Tipo de Operación</label>
+                  <select id="operacion-tipo" value={tipoOp} onChange={(e) => setTipoOp(e.target.value as Operacion)}>
                     <option value="deposito">Depositar (Depósito)</option>
                     <option value="retiro">Retiro</option>
                     <option value="transferencia">Hacer Transferencia</option>
                   </select>
                 </div>
                 <div className="sol-field">
-                  <label>{tipoOp === "transferencia" ? "Cuenta de Origen" : "Número de Cuenta"}</label>
-                  <input value={cuentaOrigen} onChange={(e) => setCuentaOrigen(e.target.value)} required placeholder="Ej. 1010000001" />
+                  <label htmlFor="operacion-cuenta">{tipoOp === "transferencia" ? "Cuenta de Origen" : "Número de Cuenta"}</label>
+                  <input id="operacion-cuenta" value={cuentaOrigen} onChange={(e) => setCuentaOrigen(e.target.value)} required placeholder="Ej. 1010000001" />
                 </div>
                 {tipoOp === "transferencia" && (
                   <div className="sol-field">
-                    <label>Cuenta de Destino</label>
-                    <input value={cuentaDestino} onChange={(e) => setCuentaDestino(e.target.value)} required placeholder="Ej. 1010000002" />
+                    <label htmlFor="operacion-destino">Cuenta de Destino</label>
+                    <input id="operacion-destino" value={cuentaDestino} onChange={(e) => setCuentaDestino(e.target.value)} required placeholder="Ej. 1010000002" />
                   </div>
                 )}
                 <div className="sol-field">
-                  <label>Monto</label>
-                  <input type="number" step="0.01" min="0.01" value={montoOp} onChange={(e) => setMontoOp(e.target.value)} required placeholder="0.00" />
+                  <label htmlFor="operacion-monto">Monto</label>
+                  <input id="operacion-monto" type="number" step="0.01" min="0.01" value={montoOp} onChange={(e) => setMontoOp(e.target.value)} required placeholder="0.00" />
                 </div>
                 <div style={{ gridColumn: "1 / -1", marginTop: "10px" }}>
                   <button className="sol-button primary" type="submit" disabled={loading}>
@@ -402,7 +304,10 @@ export default function CuentaPage() {
                 </button>
               </form>
 
-              {movimientosList.length > 0 && (
+              {movimientosList && movimientosList.length === 0 && (
+                <p role="status" style={{ marginTop: "20px" }}>La cuenta no tiene movimientos.</p>
+              )}
+              {movimientosList && movimientosList.length > 0 && (
                 <div className="sol-tablewrap" style={{ marginTop: "20px" }}>
                   <table>
                     <thead>
@@ -411,7 +316,7 @@ export default function CuentaPage() {
                         <th>Tipo</th>
                         <th>Mov.</th>
                         <th className="num">Monto</th>
-                        <th className="num">Saldo Post.</th>
+                        <th>Glosa</th>
                         <th>Fecha</th>
                       </tr>
                     </thead>
@@ -420,9 +325,9 @@ export default function CuentaPage() {
                         <tr key={m.uuid_transaccion}>
                           <td style={{ fontFamily: "monospace", fontSize: "11px" }}>{m.uuid_transaccion}</td>
                           <td>{m.tipo_operacion}</td>
-                          <td>{m.tipo_movimiento}</td>
-                          <td className="num">S/ {Number(m.monto).toFixed(2)}</td>
-                          <td className="num">S/ {Number(m.saldo_posterior).toFixed(2)}</td>
+                          <td>{m.naturaleza === "D" ? "Débito" : "Crédito"}</td>
+                          <td className="num">{formatoMoneda(m.monto, m.moneda)}</td>
+                          <td>{m.glosa}</td>
                           <td>{new Date(m.fecha_hora).toLocaleString("es-PE")}</td>
                         </tr>
                       ))}
@@ -458,11 +363,10 @@ export default function CuentaPage() {
                   <h3>Detalle del Movimiento: {movimientoDetalle.uuid_transaccion}</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
                     <div><small>Cuenta:</small> <strong>{movimientoDetalle.num_cuenta}</strong></div>
-                    <div><small>Contraparte:</small> <strong>{movimientoDetalle.num_cuenta_contraparte || "N/A"}</strong></div>
                     <div><small>Tipo Operación:</small> <strong>{movimientoDetalle.tipo_operacion}</strong></div>
-                    <div><small>Tipo Movimiento (D/C):</small> <strong>{movimientoDetalle.tipo_movimiento}</strong></div>
-                    <div><small>Monto:</small> <strong style={{ color: "#15324f" }}>S/ {Number(movimientoDetalle.monto).toFixed(2)}</strong></div>
-                    <div><small>Saldo Posterior:</small> <strong>S/ {Number(movimientoDetalle.saldo_posterior).toFixed(2)}</strong></div>
+                    <div><small>Naturaleza:</small> <strong>{movimientoDetalle.naturaleza === "D" ? "Débito" : "Crédito"}</strong></div>
+                    <div><small>Monto:</small> <strong style={{ color: "#15324f" }}>{formatoMoneda(movimientoDetalle.monto, movimientoDetalle.moneda)}</strong></div>
+                    <div><small>Glosa:</small> <strong>{movimientoDetalle.glosa}</strong></div>
                     <div><small>Canal:</small> <strong>{movimientoDetalle.id_canal}</strong></div>
                     <div><small>Estado:</small> <strong>{movimientoDetalle.estado_transaccion}</strong></div>
                     <div><small>Fecha/Hora:</small> <strong>{new Date(movimientoDetalle.fecha_hora).toLocaleString("es-PE")}</strong></div>

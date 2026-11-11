@@ -1,10 +1,10 @@
-import { formatoFecha, formatoMoneda, type Cuenta } from "@/lib/cuentas";
+import { formatoMoneda, type Cuenta } from "@/lib/cuentas";
 
 const claseEstado: Record<string, string> = {
   ACTIVA: "",
-  INACTIVA: "pill-muted",
   BLOQUEADA: "pill-danger",
-  EMBARGO: "pill-warn",
+  BLOQUEADA_PREVENTIVA: "pill-warn",
+  CANCELADA: "pill-muted",
 };
 
 export function EstadoPill({ estado }: { estado: string }) {
@@ -28,15 +28,13 @@ export function CuentaResumen({ cuenta, titulo }: { cuenta: Cuenta; titulo?: str
       <div className="account-balance-label">Saldo disponible</div>
       <div className="account-balance">{formatoMoneda(cuenta.saldo_disponible, cuenta.moneda)}</div>
       <div className="detail-row"><span>Saldo contable</span><strong>{formatoMoneda(cuenta.saldo_contable, cuenta.moneda)}</strong></div>
-      <div className="detail-row"><span>Saldo retenido</span><strong>{formatoMoneda(cuenta.saldo_retenido, cuenta.moneda)}</strong></div>
-      <div className="detail-row"><span>Fecha de apertura</span><strong>{formatoFecha(cuenta.fecha_apertura)}</strong></div>
-      <div className="detail-row"><span>Producto</span><strong className="mono">{cuenta.id_producto_ahorro}</strong></div>
-      <div className="detail-row"><span>Agencia</span><strong className="mono">{cuenta.id_agencia}</strong></div>
+      <div className="detail-row"><span>CCI</span><strong className="mono">{cuenta.cci}</strong></div>
+      <div className="detail-row"><span>Agencia</span><strong className="mono">{cuenta.id_agencia ?? "—"}</strong></div>
       <div className="detail-row detail-titulares">
         <span>Titulares</span>
         <ul>
-          {cuenta.titulares.map((t) => (
-            <li key={t.id_cliente}><strong className="mono">{t.id_cliente}</strong> <small>{t.rol_titular}</small></li>
+          {cuenta.titulares.map((codigo) => (
+            <li key={codigo}><strong className="mono">{codigo}</strong></li>
           ))}
         </ul>
       </div>

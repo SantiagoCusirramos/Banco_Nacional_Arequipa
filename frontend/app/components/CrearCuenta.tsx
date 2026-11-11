@@ -4,46 +4,45 @@ import { useEffect, useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { buscarClientesPorDocumento, nombreCompleto, type Cliente } from "@/lib/clientes";
-import { listarAgencias, listarProductosAhorro, type Agencia, type ProductoAhorro } from "@/lib/catalogos";
-import { crearCuenta, mensajeDeError, REGIMENES, ROLES_TITULAR, type Cuenta } from "@/lib/cuentas";
+import { nombreCompleto, obtenerCliente, type Cliente } from "@/lib/clientes";
+import { listarAgencias, type Agencia } from "@/lib/catalogos";
+import { abrirCuenta, mensajeDeError, MONEDAS, REGIMENES, type Cuenta } from "@/lib/cuentas";
 import { CuentaResumen } from "./CuentaResumen";
 
 const requerido = (mensaje: string) => z.string().trim().min(1, mensaje);
 
 const esquema = z
   .object({
-    id_cliente: requerido("Selecciona el cliente titular."),
-    id_producto_ahorro: requerido("Selecciona un producto de ahorro."),
+    cod_cliente: requerido("Busca y selecciona el cliente titular."),
+    moneda: z.enum(MONEDAS),
     id_agencia: requerido("Selecciona una agencia."),
     regimen: z.enum(REGIMENES),
-    rol_principal: z.enum(ROLES_TITULAR),
-    titulares: z.array(
-      z.object({ id_cliente: requerido("Selecciona el cliente titular."), rol_titular: z.enum(ROLES_TITULAR) }),
-    ),
+    titulares: z.array(z.object({ cod_cliente: requerido("Busca y selecciona el cliente titular.") })),
   })
   .superRefine((valores, ctx) => {
-    const vistos = new Set([valores.id_cliente]);
+    const vistos = new Set([valores.cod_cliente]);
     valores.titulares.forEach((titular, i) => {
-      if (vistos.has(titular.id_cliente)) {
-        ctx.addIssue({ code: "custom", path: ["titulares", i, "id_cliente"], message: "Este cliente ya figura como titular." });
+      if (titular.cod_cliente && vistos.has(titular.cod_cliente)) {
+        ctx.addIssue({ code: "custom", path: ["titulares", i, "cod_cliente"], message: "Este cliente ya figura como titular." });
       }
-      vistos.add(titular.id_cliente);
+      vistos.add(titular.cod_cliente);
     });
-    const mancomunada = valores.rol_principal === "MANCOMUNADO" || valores.titulares.some((t) => t.rol_titular === "MANCOMUNADO");
+    const mancomunada = valores.regimen !== "INDIVIDUAL";
     if (mancomunada && valores.titulares.length < 1) {
       ctx.addIssue({ code: "custom", path: ["titulares"], message: "Una cuenta mancomunada requiere al menos dos titulares (RGN-16)." });
+    }
+    if (!mancomunada && valores.titulares.length > 0) {
+      ctx.addIssue({ code: "custom", path: ["titulares"], message: "Una cuenta individual tiene un solo titular." });
     }
   });
 
 type Valores = z.infer<typeof esquema>;
 
 const VALORES_INICIALES: Valores = {
-  id_cliente: "",
-  id_producto_ahorro: "",
+  cod_cliente: "",
+  moneda: "PEN",
   id_agencia: "",
-  regimen: "LIBRE",
-  rol_principal: "TITULAR",
+  regimen: "INDIVIDUAL",
   titulares: [],
 };
 
@@ -56,37 +55,36 @@ type ClienteSelectorProps = {
   id: string;
   label: string;
   value: string;
-  onChange: (idCliente: string) => void;
+  onChange: (codCliente: string) => void;
   error?: string;
 };
 
+// El CORE no busca clientes por documento ni por nombre: se consulta por su código.
 function ClienteSelector({ id, label, value, onChange, error }: ClienteSelectorProps) {
-  const [documento, setDocumento] = useState("");
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [codigo, setCodigo] = useState("");
+  const [cliente, setCliente] = useState<Cliente | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [errorBusqueda, setErrorBusqueda] = useState("");
 
   async function buscar() {
-    const consulta = documento.trim();
+    const consulta = codigo.trim().toUpperCase();
     if (!consulta) {
-      setErrorBusqueda("Ingresa un número de documento para buscar.");
-      setClientes([]);
+      setErrorBusqueda("Ingresa el código del cliente para buscar.");
       return;
     }
-
     setBuscando(true);
     setErrorBusqueda("");
     try {
-      const encontrados = await buscarClientesPorDocumento(consulta);
-      setClientes(encontrados);
-      if (encontrados.length === 0) {
-        setErrorBusqueda("No encontramos clientes con ese documento.");
+      const encontrado = await obtenerCliente(consulta);
+      setCliente(encontrado);
+      if (encontrado.permite_operar) {
+        onChange(encontrado.cod_cliente);
+      } else {
         onChange("");
-      } else if (!encontrados.some((cliente) => cliente.id_cliente === value)) {
-        onChange("");
+        setErrorBusqueda(`El cliente está ${encontrado.estado_cliente} y no puede operar.`);
       }
     } catch (err) {
-      setClientes([]);
+      setCliente(null);
       setErrorBusqueda(mensajeDeError(err));
       onChange("");
     } finally {
@@ -96,18 +94,19 @@ function ClienteSelector({ id, label, value, onChange, error }: ClienteSelectorP
 
   return (
     <div className="fx-field">
-      <label htmlFor={id + "-documento"}>{label}</label>
+      <label htmlFor={id}>{label}</label>
       <div className="fx-search">
         <div className="fx-field fx-grow">
           <input
-            id={id + "-documento"}
+            id={id}
             autoComplete="off"
-            inputMode="numeric"
-            placeholder="DNI o número de documento"
-            value={documento}
+            placeholder="Código del cliente, por ejemplo CLI000000001"
+            maxLength={12}
+            value={codigo}
+            aria-invalid={!!error}
             onChange={(event) => {
-              setDocumento(event.target.value);
-              setClientes([]);
+              setCodigo(event.target.value);
+              setCliente(null);
               setErrorBusqueda("");
               onChange("");
             }}
@@ -117,20 +116,11 @@ function ClienteSelector({ id, label, value, onChange, error }: ClienteSelectorP
           {buscando ? "Buscando..." : "Buscar"}
         </button>
       </div>
-      {clientes.length > 0 && (
-        <div className="fx-field">
-          <label htmlFor={id}>{label.replace("Buscar ", "") + " seleccionado"}</label>
-          <select id={id} value={value} onChange={(event) => onChange(event.target.value)} aria-invalid={!!error}>
-            <option value="">Selecciona un cliente...</option>
-            {clientes.map((cliente) => (
-              <option key={cliente.id_cliente} value={cliente.id_cliente}>
-                {nombreCompleto(cliente)} · {cliente.cod_tipo_documento} {cliente.numero_documento}
-              </option>
-            ))}
-          </select>
-        </div>
+      {cliente && value && (
+        <span className="fx-hint">
+          Cliente seleccionado: {nombreCompleto(cliente)} · {cliente.tipo_documento} {cliente.numero_documento} · {cliente.estado_cliente}
+        </span>
       )}
-      {value && <span className="fx-hint">Cliente seleccionado: {value}</span>}
       {errorBusqueda && <span className="fx-error" role="status">{errorBusqueda}</span>}
       {error && <span className="fx-error">{error}</span>}
     </div>
@@ -142,7 +132,6 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
   const [errorServidor, setErrorServidor] = useState("");
   const [errorCatalogos, setErrorCatalogos] = useState("");
   const [agencias, setAgencias] = useState<Agencia[]>([]);
-  const [productos, setProductos] = useState<ProductoAhorro[]>([]);
   const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
   const {
     register,
@@ -155,29 +144,18 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
 
   useEffect(() => {
     let activo = true;
-
-    async function cargarCatalogos() {
-      setCargandoCatalogos(true);
-      setErrorCatalogos("");
-      try {
-        const [agenciasDisponibles, productosDisponibles] = await Promise.all([
-          listarAgencias(),
-          listarProductosAhorro(),
-        ]);
+    listarAgencias()
+      .then((disponibles) => {
         if (!activo) return;
-        setAgencias(agenciasDisponibles);
-        setProductos(productosDisponibles);
-        if (agenciasDisponibles.length === 0 || productosDisponibles.length === 0) {
-          setErrorCatalogos("No hay agencias o productos de ahorro activos para seleccionar.");
-        }
-      } catch (err) {
+        setAgencias(disponibles);
+        if (disponibles.length === 0) setErrorCatalogos("No hay agencias para seleccionar.");
+      })
+      .catch((err) => {
         if (activo) setErrorCatalogos(mensajeDeError(err));
-      } finally {
+      })
+      .finally(() => {
         if (activo) setCargandoCatalogos(false);
-      }
-    }
-
-    void cargarCatalogos();
+      });
     return () => {
       activo = false;
     };
@@ -185,15 +163,12 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
 
   async function enviar(valores: Valores) {
     setErrorServidor("");
-    const vinculos = [{ id_cliente: valores.id_cliente, rol_titular: valores.rol_principal }, ...valores.titulares];
-    const enviarTitulares = valores.titulares.length > 0 || valores.rol_principal !== "TITULAR";
     try {
-      const cuenta = await crearCuenta({
-        id_cliente: valores.id_cliente,
-        id_producto_ahorro: valores.id_producto_ahorro,
-        id_agencia: valores.id_agencia,
+      const cuenta = await abrirCuenta({
+        moneda: valores.moneda,
         regimen: valores.regimen,
-        titulares: enviarTitulares ? vinculos : undefined,
+        id_agencia: valores.id_agencia,
+        titulares: [valores.cod_cliente, ...valores.titulares.map((t) => t.cod_cliente)],
       });
       setCreada(cuenta);
       onNotice("Cuenta " + cuenta.num_cuenta + " creada correctamente.");
@@ -207,7 +182,7 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
       <div className="fx-stack">
         <CuentaResumen cuenta={creada} titulo="Cuenta creada" />
         <div className="fx-actions">
-          <button className="outline-button" onClick={() => onModificar(creada)}>Modificar estado de esta cuenta</button>
+          <button className="outline-button" onClick={() => onModificar(creada)}>Ver el estado de esta cuenta</button>
           <button className="primary-button" onClick={() => { setCreada(null); reset(VALORES_INICIALES); onNotice(""); }}>Abrir otra cuenta</button>
         </div>
       </div>
@@ -222,41 +197,34 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
         <span className="form-icon">+</span>
         <div>
           <h2>Abrir cuenta de ahorros</h2>
-          <p>Busca al cliente y selecciona el producto y la agencia para abrir la cuenta.</p>
+          <p>Busca al cliente por su código y elige la moneda, la agencia y el régimen de la cuenta.</p>
         </div>
       </div>
 
-      {cargandoCatalogos && <p className="fx-hint" role="status">Cargando agencias y productos...</p>}
+      {cargandoCatalogos && <p className="fx-hint" role="status">Cargando agencias...</p>}
       {errorCatalogos && <div className="fx-alert" role="alert">{errorCatalogos}</div>}
 
       <form className="fx-form" onSubmit={handleSubmit(enviar)} noValidate>
         <Controller
-          name="id_cliente"
+          name="cod_cliente"
           control={control}
           render={({ field }) => (
             <ClienteSelector
-              id="id_cliente"
-              label="Buscar cliente titular"
+              id="cod_cliente"
+              label="Cliente titular"
               value={field.value}
               onChange={field.onChange}
-              error={errors.id_cliente?.message}
+              error={errors.cod_cliente?.message}
             />
           )}
         />
 
         <div className="fx-grid">
           <div className="fx-field">
-            <label htmlFor="id_producto_ahorro">Producto de ahorro</label>
-            <select id="id_producto_ahorro" disabled={cargandoCatalogos || productos.length === 0} aria-invalid={!!errors.id_producto_ahorro} {...register("id_producto_ahorro")}>
-              <option value="">Selecciona un producto...</option>
-              {productos.map((producto) => (
-                <option key={producto.id_producto} value={producto.id_producto}>
-                  {producto.nombre} · {producto.moneda} · TEA {producto.tasa_tea}%
-                </option>
-              ))}
+            <label htmlFor="moneda">Moneda</label>
+            <select id="moneda" {...register("moneda")}>
+              {MONEDAS.map((moneda) => <option key={moneda} value={moneda}>{moneda}</option>)}
             </select>
-            {errors.id_producto_ahorro && <span className="fx-error">{errors.id_producto_ahorro.message}</span>}
-            <span className="fx-hint">La moneda de la cuenta la define el producto.</span>
           </div>
           <div className="fx-field">
             <label htmlFor="id_agencia">Agencia</label>
@@ -264,7 +232,7 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
               <option value="">Selecciona una agencia...</option>
               {agencias.map((agencia) => (
                 <option key={agencia.id_agencia} value={agencia.id_agencia}>
-                  {agencia.nombre} · {agencia.direccion}
+                  {agencia.nombre} · {agencia.id_agencia}
                 </option>
               ))}
             </select>
@@ -277,47 +245,33 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
           <select id="regimen" {...register("regimen")}>
             {REGIMENES.map((regimen) => <option key={regimen} value={regimen}>{regimen}</option>)}
           </select>
+          <span className="fx-hint">Una cuenta mancomunada necesita al menos dos titulares.</span>
         </div>
 
         <div className="fx-section">
           <div className="fx-section-head">
             <div>
-              <strong>Titulares</strong>
-              <p className="fx-hint">Opcional: agrega titulares adicionales o cambia el rol del cliente principal.</p>
+              <strong>Titulares adicionales</strong>
+              <p className="fx-hint">Solo para cuentas mancomunadas.</p>
             </div>
-            <button type="button" className="text-button" onClick={() => append({ id_cliente: "", rol_titular: "TITULAR" })}>+ Agregar titular</button>
-          </div>
-
-          <div className="fx-titular-row">
-            <div className="fx-field">
-              <label htmlFor="rol_principal">Rol del cliente principal</label>
-              <select id="rol_principal" {...register("rol_principal")}>
-                {ROLES_TITULAR.map((rol) => <option key={rol} value={rol}>{rol}</option>)}
-              </select>
-            </div>
+            <button type="button" className="text-button" onClick={() => append({ cod_cliente: "" })}>+ Agregar titular</button>
           </div>
 
           {fields.map((campo, i) => (
             <div className="fx-titular-row" key={campo.id}>
               <Controller
-                name={`titulares.${i}.id_cliente`}
+                name={`titulares.${i}.cod_cliente`}
                 control={control}
                 render={({ field }) => (
                   <ClienteSelector
                     id={"titular_" + (i + 2)}
-                    label={"Buscar titular " + (i + 2)}
+                    label={"Titular " + (i + 2)}
                     value={field.value}
                     onChange={field.onChange}
-                    error={errors.titulares?.[i]?.id_cliente?.message}
+                    error={errors.titulares?.[i]?.cod_cliente?.message}
                   />
                 )}
               />
-              <div className="fx-field">
-                <label htmlFor={"rol_titular_" + i}>{"Rol del titular " + (i + 2)}</label>
-                <select id={"rol_titular_" + i} {...register(`titulares.${i}.rol_titular`)}>
-                  {ROLES_TITULAR.map((rol) => <option key={rol} value={rol}>{rol}</option>)}
-                </select>
-              </div>
               <button type="button" className="fx-remove" aria-label={"Quitar titular " + (i + 2)} onClick={() => remove(i)}>×</button>
             </div>
           ))}
@@ -333,4 +287,3 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
     </div>
   );
 }
-
