@@ -61,7 +61,7 @@ export default function AuthPage() {
       await abrirCuenta({
         id_cliente: clienteId,
         moneda: "PEN",
-        regimen: accountType === "mancomunada" ? "PROGRAMADO" : "LIBRE",
+        regimen: accountType === "mancomunada" ? "MANCOMUNADA_INDISTINTA" : "INDIVIDUAL",
         id_agencia: "AG1",
       });
 

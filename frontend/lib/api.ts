@@ -17,6 +17,31 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Clientes y catalogos viven en el mismo origen que COREDB mientras no exista el modulo Clientes en el compose
+export const apiCore = api;
+
+// Cuentas se consume por el proxy de Next (/api/cuenta), que reenvia token y cabeceras a CUENTAS
+export const apiCuentas = axios.create({
+  baseURL: "/api/cuenta",
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000,
+});
+
+const OPERACIONES = ["/deposito", "/retiro", "/transferencia"];
+
+apiCuentas.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("bna_access_token");
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (config.method === "post" && OPERACIONES.includes(config.url || "")) {
+    config.headers["X-Idempotency-Key"] = crypto.randomUUID();
+    config.headers["X-Channel-ID"] = "AGE";
+    config.headers["X-Request-Timestamp"] = new Date().toISOString();
+  }
+  return config;
+});
+
 export function mensajeError(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data;
