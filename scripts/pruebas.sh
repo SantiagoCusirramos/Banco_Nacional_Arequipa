@@ -44,7 +44,7 @@ correr "Base integrada, despliegue" bloqueante database/pruebas/mysql/prueba_des
 correr "Frontend, imagen de pruebas" bloqueante \
   docker build -q --target pruebas -f docker/frontend/Dockerfile -t bna/frontend-pruebas:local frontend
 correr "Frontend, lint" bloqueante docker run --rm bna/frontend-pruebas:local npm run lint
-correr "Frontend, pruebas" conocida:31 docker run --rm bna/frontend-pruebas:local npm test
+correr "Frontend, pruebas" bloqueante docker run --rm bna/frontend-pruebas:local npm test
 
 if [ -z "$(docker compose ps -q 2>/dev/null)" ]; then
   correr "Producto, arranque" bloqueante ./bna up
