@@ -18,6 +18,17 @@ estandar de respuestas que CUENTAS (DOC-ITIL-02).
 Todas exigen `Authorization: Bearer <token>` de COREDB, que se reenvia: COREDB valida el token y el
 permiso (`VER_TARJETA`, `CREAR_TARJETA`, `BLOQUEAR_TARJETA`). `X-Correlation-ID` es opcional.
 
+## Emision idempotente
+
+`POST /api/v1/tarjetas/emision` exige `X-Idempotency-Key` (UUIDv4), como las operaciones de CUENTAS. De
+la llave sale siempre el mismo id de tarjeta (UUIDv5), que se envia a COREDB:
+
+- Repetir la emision con la misma llave y los mismos datos devuelve la tarjeta ya emitida (201, con el
+  mensaje de emision ya procesada) y no emite otra. Sirve para reintentar si se pierde la respuesta.
+- La misma llave con otro cliente, BIN o fechas responde 409 `ERR-TAR-IDEMPOTENCIA`.
+- La pantalla `/tarjetas` conserva la llave mientras no se edite el formulario, asi un doble clic no
+  emite dos tarjetas.
+
 ## Reglas
 
 - **El PAN no pasa por el modulo.** La emision recibe el cliente, la cuenta, el BIN y, si se quiere, las
@@ -44,6 +55,9 @@ Error: `{success:false, status_code, error_code, message, details, metadata}`. 4
 | COREDB ERR-TAR-001 a 009 | el mismo codigo | 400 |
 | COREDB PERMISO_DENEGADO | ERR-TAR-PERMISO-DENEGADO | 403 |
 | Identificador que no es UUID | ERR-TAR-ID-INVALIDO | 400 |
+| Emision sin X-Idempotency-Key | ERR-TAR-HEADER-REQUERIDO | 400 |
+| X-Idempotency-Key que no es UUIDv4 | ERR-TAR-HEADER-INVALIDO | 400 |
+| Misma llave con otros datos | ERR-TAR-IDEMPOTENCIA | 409 |
 | COREDB caido | ERR-COR-NO-DISPONIBLE | 503 |
 | COREDB no responde | ERR-TAR-TIMEOUT-CORE | 504 |
 

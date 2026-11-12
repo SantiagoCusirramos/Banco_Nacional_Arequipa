@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 
 from TARJETAS.core_client import CoreClient
-from TARJETAS.dependencies import autorizacion, correlation_id, get_core_client
+from TARJETAS.dependencies import autorizacion, correlation_id, get_core_client, idempotency_key
 from TARJETAS.respuestas import exito
 from TARJETAS.schemas.tarjetas import BloqueoIn, EmisionIn, EstadoIn, TarjetaOut
 from TARJETAS.services import tarjetas as svc
@@ -22,9 +22,14 @@ def tarjetas_del_cliente(request: Request, cod_cliente: str, core: CoreClient = 
 
 @router.post("/emision", status_code=201)
 def emitir(request: Request, datos: EmisionIn, core: CoreClient = Depends(get_core_client),
-           cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
-    tarjeta = _salida(svc.emitir(core, datos, cid, token))
-    return exito(request, tarjeta, 201, "Tarjeta emitida, pendiente de activación")
+           cid: str = Depends(correlation_id), token: str = Depends(autorizacion),
+           key: str = Depends(idempotency_key)):
+    tarjeta, repetida = svc.emitir(core, datos, key, cid, token)
+    if repetida:
+        mensaje = "Emision ya procesada antes (idempotencia), se devuelve la tarjeta original"
+    else:
+        mensaje = "Tarjeta emitida, pendiente de activación"
+    return exito(request, _salida(tarjeta), 201, mensaje)
 
 
 @router.get("/{id_tarjeta}")

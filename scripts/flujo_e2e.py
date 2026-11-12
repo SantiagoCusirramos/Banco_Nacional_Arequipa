@@ -222,13 +222,22 @@ def flujo():
     base = TARJETAS + "/api/v1/tarjetas"
     estado, _ = pedir("GET", f"{base}/cliente/{titular}")
     exigir(estado == 401, f"TARJETAS sin token debía responder 401 y respondió {estado}")
-    estado, respuesta = pedir("POST", f"{base}/emision", {"cod_cliente": cliente, "num_cuenta": origen}, token)
+    estado, respuesta = pedir("POST", f"{base}/emision", {"cod_cliente": cliente, "num_cuenta": origen}, token,
+                              cabeceras={"X-Idempotency-Key": str(uuid.uuid4())})
     exigir(estado == 400 and respuesta["error_code"] == "ERR-TAR-001",
            f"TARJETAS debía rechazar la emisión a un cliente OBSERVADO: {estado} {respuesta}")
-    estado, respuesta = pedir("POST", f"{base}/emision", {"cod_cliente": titular, "num_cuenta": cuenta_tarjeta}, token)
+    estado, respuesta = pedir("GET", f"{base}/cliente/{titular}", token=token)
+    exigir(estado == 200, f"Tarjetas del cliente por TARJETAS: {estado} {respuesta}")
+    antes = len(respuesta["data"])
+    emision = {"cod_cliente": titular, "num_cuenta": cuenta_tarjeta}
+    llave = {"X-Idempotency-Key": str(uuid.uuid4())}
+    estado, respuesta = pedir("POST", f"{base}/emision", emision, token, cabeceras=llave)
     exigir(estado == 201 and respuesta["data"]["estado_tarjeta"] == "PENDIENTE_ACTIVACION",
            f"Emisión por TARJETAS: {estado} {respuesta}")
     tarjeta = respuesta["data"]["id_tarjeta"]
+    estado, respuesta = pedir("POST", f"{base}/emision", emision, token, cabeceras=llave)
+    exigir(estado == 201 and respuesta["data"]["id_tarjeta"] == tarjeta,
+           f"Repetir la emisión con la misma llave debía devolver la misma tarjeta: {estado} {respuesta}")
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "ACTIVA",
            f"Activación por TARJETAS: {estado} {respuesta}")
@@ -241,8 +250,10 @@ def flujo():
     estado, respuesta = pedir("GET", f"{base}/cliente/{titular}", token=token)
     exigir(estado == 200 and tarjeta in [t["id_tarjeta"] for t in respuesta["data"]],
            f"Tarjetas del cliente por TARJETAS: {estado} {respuesta}")
-    paso(f"TARJETAS: emisión a {titular} (no a un cliente OBSERVADO), activación, bloqueo, "
-         "desbloqueo rechazado y tarjetas del cliente")
+    exigir(len(respuesta["data"]) == antes + 1,
+           f"Dos envíos con la misma llave debían dejar una sola tarjeta nueva: {antes} -> {len(respuesta['data'])}")
+    paso(f"TARJETAS: emisión a {titular} (no a un cliente OBSERVADO), repetición con la misma llave "
+         "sin duplicar, activación, bloqueo, desbloqueo rechazado y tarjetas del cliente")
 
     # ── Por los puentes del frontend, como lo hace el navegador ─────────────
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
