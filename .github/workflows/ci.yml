@@ -61,6 +61,17 @@ jobs:
             exit 1
           fi
 
+      # El runner trae MySQL instalado, con un perfil de AppArmor para /usr/sbin/mysqld.
+      # kind corre los pods sin perfil propio, así que ese perfil se aplica al mysqld de
+      # los pods y le impide leer /etc/my.cnf: las bases no arrancan.
+      # https://kind.sigs.k8s.io/docs/user/known-issues/#apparmor
+      - name: Quitar del runner el perfil de AppArmor de mysqld
+        run: |
+          if [ -e /etc/apparmor.d/usr.sbin.mysqld ]; then
+            sudo ln -sf /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          fi
+
       - name: Desplegar en un clúster de kind
         run: ./bna k8s-up
 

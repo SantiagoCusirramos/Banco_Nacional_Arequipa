@@ -48,6 +48,20 @@ Para cambiar una clave: editarla en `.env`, volver a ejecutar `./bna k8s-up` y r
 
 El CORE legado no se despliega aquí: ningún servicio lo usa. Sigue disponible con Docker Compose (`COMPOSE_PROFILES=legado ./bna up`).
 
+## Si algo falla
+
+`./bna k8s-up` espera a cada servicio hasta 10 minutos (`BNA_ESPERA_SEGUNDOS`). Si uno no queda listo, muestra los pods, los últimos eventos y, de cada pod que no está listo, el final de sus registros y el motivo de su último reinicio. `scripts/k8s.sh diagnostico` muestra lo mismo en cualquier momento.
+
+**Las bases no arrancan en Ubuntu con MySQL instalado.** El pod `db` se reinicia y su sonda responde `la zona del servidor es SYSTEM, no +00:00`; en los registros de su primera ejecución aparece `Can't connect to local MySQL server through socket '/var/run/mysqld/mysqld.sock'`. La causa es el perfil de AppArmor que el paquete de MySQL instala para `/usr/sbin/mysqld`: kind corre los pods sin perfil propio, así que el del anfitrión se aplica también al `mysqld` de los pods y le impide leer `/etc/my.cnf` ([problema conocido de kind](https://kind.sigs.k8s.io/docs/user/known-issues/#apparmor)). `./bna k8s-up` avisa si encuentra ese perfil. Para desactivarlo:
+
+```bash
+sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+./bna k8s-down && ./bna k8s-up    # el volumen de la base quedó a medio cargar: hay que crearlo de nuevo
+```
+
+La CI hace lo mismo antes de desplegar. Con Docker Compose (`./bna up`) no ocurre, porque Docker pone su propio perfil a cada contenedor.
+
 ## Otro clúster
 
 Para un clúster que no sea kind hace falta un overlay propio sobre `base/` con tres cosas: de dónde descarga las imágenes (un registro al que el clúster llegue), cómo se publican los servicios (por ejemplo un Ingress) y el namespace. El Secret se crea igual, desde un `.env` que no se versiona:

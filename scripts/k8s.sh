@@ -39,14 +39,44 @@ secreto() {
   echo "Secret bna-secretos aplicado desde .env."
 }
 
+# De cada pod que no está listo muestra por qué terminó su ejecución anterior y el
+# final de sus registros: el motivo de un reinicio solo queda en la ejecución anterior.
 diagnostico() {
   echo "── Estado del clúster" >&2
   k -n "$NS" get pods -o wide >&2 || true
   k -n "$NS" get events --sort-by=.lastTimestamp 2>/dev/null | tail -n 25 >&2 || true
+  local pod
+  for pod in $(k -n "$NS" get pods --no-headers 2>/dev/null \
+                 | awk '{ split($2, listos, "/"); if (listos[1] != listos[2]) print $1 }'); do
+    echo "── $pod" >&2
+    k -n "$NS" get pod "$pod" -o jsonpath='{range .status.initContainerStatuses[*]}{.name}: reinicios={.restartCount} anterior={.lastState.terminated.reason} salida={.lastState.terminated.exitCode}{"\n"}{end}{range .status.containerStatuses[*]}{.name}: reinicios={.restartCount} anterior={.lastState.terminated.reason} salida={.lastState.terminated.exitCode}{"\n"}{end}' >&2 || true
+    echo "· registros de la ejecución anterior" >&2
+    k -n "$NS" logs "$pod" --all-containers --prefix --previous --tail=25 >&2 2>/dev/null || true
+    echo "· registros de la ejecución actual" >&2
+    k -n "$NS" logs "$pod" --all-containers --prefix --tail=25 >&2 2>/dev/null || true
+  done
+}
+
+# kind corre los pods sin perfil de AppArmor propio. Si el anfitrión tiene un perfil
+# para /usr/sbin/mysqld (Ubuntu con MySQL instalado), se aplica al mysqld de los pods,
+# que no puede leer /etc/my.cnf, y las bases no arrancan. Ver k8s/README.md.
+aviso_apparmor() {
+  [ -e /etc/apparmor.d/usr.sbin.mysqld ] || return 0
+  [ ! -e /etc/apparmor.d/disable/usr.sbin.mysqld ] || return 0
+  [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" = Y ] || return 0
+  cat >&2 <<'TEXTO'
+Aviso: esta máquina tiene un perfil de AppArmor para /usr/sbin/mysqld. Con él las bases
+no arrancan dentro de kind. Para desactivarlo (lo usa el MySQL instalado en la máquina):
+
+  sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+  sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
+TEXTO
 }
 
 subir() {
   requisitos
+  aviso_apparmor
   scripts/generar_env.sh "$RAIZ"
   echo "Construyendo las imágenes..."
   docker compose build -q
