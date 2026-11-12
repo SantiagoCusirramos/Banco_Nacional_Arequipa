@@ -26,14 +26,34 @@ function IconoCerrar() {
   );
 }
 
+// Color de cada estado con las insignias de sol.css: verde operativa, rojo fuera de uso,
+// ámbar en espera y naranja vencida.
+const TONO_ESTADO: Record<string, string> = {
+  ACTIVA: "aprobada",
+  BLOQUEADA: "rechazada",
+  CANCELADA: "rechazada",
+  PENDIENTE_ACTIVACION: "en_evaluacion",
+  RETENIDA: "en_evaluacion",
+  VENCIDA: "observada",
+};
+
+function EstadoTarjeta({ estado }: { estado: string }) {
+  return (
+    <span className={`sol-badge ${TONO_ESTADO[estado] ?? ""}`}>
+      <span />
+      {estado}
+    </span>
+  );
+}
+
 function DetalleTarjeta({ tarjeta }: { tarjeta: Tarjeta }) {
   return (
     <div style={{ marginTop: "30px", background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
       <h3>Tarjeta {tarjeta.numero_enmascarado}</h3>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
-        <div><small>Identificador:</small> <strong style={{ fontFamily: "monospace", fontSize: "12px" }}>{tarjeta.id_tarjeta}</strong></div>
+        <div><small>Identificador:</small> <strong style={{ fontSize: "12px", wordBreak: "break-all" }}>{tarjeta.id_tarjeta}</strong></div>
         <div><small>Cliente:</small> <strong>{tarjeta.cod_cliente}</strong></div>
-        <div><small>Estado:</small> <strong style={{ color: "#0f766e" }}>{tarjeta.estado_tarjeta}</strong></div>
+        <div><small>Estado:</small> <EstadoTarjeta estado={tarjeta.estado_tarjeta} /></div>
         <div><small>Vencimiento:</small> <strong>{tarjeta.vencimiento_mm_aa}</strong></div>
         <div><small>Emisión:</small> <strong>{tarjeta.fecha_emision}</strong></div>
         <div><small>BIN:</small> <strong>{tarjeta.bin}</strong></div>
@@ -230,12 +250,12 @@ export default function TarjetasPage() {
                       {tarjetas.map((t) => (
                         <tr key={t.id_tarjeta}>
                           <td style={{ fontFamily: "monospace" }}>{t.numero_enmascarado}</td>
-                          <td>{t.estado_tarjeta}</td>
+                          <td><EstadoTarjeta estado={t.estado_tarjeta} /></td>
                           <td>{t.vencimiento_mm_aa}</td>
                           <td>{t.fecha_emision}</td>
                           <td style={{ display: "flex", gap: "8px" }}>
-                            <button className="sol-button" type="button" onClick={() => mostrar(t)}>Ver</button>
-                            <button className="sol-button" type="button" onClick={() => prepararCambio(t)}>Cambiar estado</button>
+                            <button className="sol-button secondary" type="button" onClick={() => mostrar(t)}>Ver</button>
+                            <button className="sol-button secondary" type="button" onClick={() => prepararCambio(t)}>Cambiar estado</button>
                           </td>
                         </tr>
                       ))}
