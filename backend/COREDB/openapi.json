@@ -2852,6 +2852,62 @@
       }
     },
     "/coredb/tarjetas": {
+      "get": {
+        "description": "Las tarjetas del cliente, de la más reciente a la más antigua. No hay una ruta que\nliste todas las tarjetas.",
+        "operationId": "de_un_cliente_coredb_tarjetas_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cod_cliente",
+            "required": true,
+            "schema": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TarjetaRespuesta"
+                  },
+                  "title": "Response De Un Cliente Coredb Tarjetas Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "CLIENTE_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "De Un Cliente",
+        "tags": [
+          "tarjetas"
+        ]
+      },
       "post": {
         "operationId": "emitir_coredb_tarjetas_post",
         "requestBody": {

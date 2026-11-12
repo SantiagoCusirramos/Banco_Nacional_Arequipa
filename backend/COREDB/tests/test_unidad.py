@@ -161,6 +161,18 @@ def test_un_duplicado_conserva_la_restriccion_y_no_el_valor():
     assert "alguien" not in error.message
 
 
+def test_tope_de_tarjeta_no_devuelve_el_disponible():
+    import pymysql
+    from sqlalchemy.exc import OperationalError
+
+    original = pymysql.err.OperationalError(
+        1644, "ERR-TAR-007: tope diario excedido (RN-TOP-001); disponible hoy 250.00 PEN"
+    )
+    error = ErrorBaseDatos.desde(OperationalError("CALL", {}, original))
+    assert (error.code, error.status_code) == ("ERR-TAR-007", 422)
+    assert "250" not in error.message
+
+
 def test_la_correlacion_vuelve_tambien_en_un_error():
     from COREDB.correlacion import correlacion
 

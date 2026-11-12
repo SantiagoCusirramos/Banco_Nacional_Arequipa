@@ -21,6 +21,7 @@ MENSAJES_POR_REGLA = {
     "BNA-DESBLOQUEO": "El desbloqueo de tarjetas no está disponible: pendiente de un cliente de Seguridad.",
     "BNA-SALDO": "Saldo disponible insuficiente.",
     "RN-TOP-001": "Se superó el tope diario del canal.",
+    "ERR-TAR-007": "Se superó el tope diario del canal.",
 }
 ERROR_REGLA = 1644          # SIGNAL de core.fallar
 ERROR_DUPLICADO = 1062
