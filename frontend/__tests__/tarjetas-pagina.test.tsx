@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
   apiTarjetas: { get: vi.fn(), post: vi.fn() },
+  api: { get: vi.fn() },
 }));
-import { apiTarjetas } from "@/lib/api";
+import { api, apiTarjetas } from "@/lib/api";
 import TarjetasPage from "../app/tarjetas/page";
 
 const get = vi.mocked(apiTarjetas.get);
@@ -24,7 +25,10 @@ const OTRA = {
   numero_enmascarado: "0044 99** **** 0002", estado_tarjeta: "BLOQUEADA",
 };
 
-const pestana = (nombre: RegExp) => userEvent.click(screen.getByRole("button", { name: nombre }));
+const perfil = vi.mocked(api.get);
+const pestana = (nombre: string) =>
+  userEvent.click(within(screen.getByRole("navigation", { name: "Navegación Tarjetas" })).getByRole("button", { name: nombre }));
+const enPantalla = () => within(screen.getByRole("main"));
 // Error con el formato ITIL-02 de TARJETAS.
 const errorTarjetas = (status: number, error_code: string, message: string) =>
   new AxiosError("Request failed", "ERR_BAD_REQUEST", undefined, undefined, {
@@ -35,6 +39,8 @@ const errorTarjetas = (status: number, error_code: string, message: string) =>
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  perfil.mockReset();
+  perfil.mockRejectedValue(new Error("sin sesión"));
 });
 
 describe("Página del módulo Tarjetas", () => {
@@ -44,11 +50,15 @@ describe("Página del módulo Tarjetas", () => {
     await userEvent.type(screen.getByLabelText("Código del cliente"), "cli000000001");
     await userEvent.click(screen.getByRole("button", { name: "Ver tarjetas" }));
     await waitFor(() => expect(get).toHaveBeenCalledWith("/cliente/CLI000000001"));
-    const filas = await screen.findAllByRole("row");
-    expect(filas).toHaveLength(3);
-    expect(within(filas[1]).getByText("0044 99** **** 0001")).toBeInTheDocument();
-    expect(within(filas[1]).getByText("01/30")).toBeInTheDocument();
-    expect(within(filas[2]).getByText("BLOQUEADA")).toBeInTheDocument();
+    const tarjetas = await screen.findAllByRole("listitem");
+    expect(tarjetas).toHaveLength(2);
+    expect(within(tarjetas[0]).getByText("0044 99** **** 0001")).toBeInTheDocument();
+    expect(within(tarjetas[0]).getByText("01/30")).toBeInTheDocument();
+    expect(within(tarjetas[1]).getByText("BLOQUEADA")).toBeInTheDocument();
+    // Resumen: 2 tarjetas, 1 activa y 1 bloqueada
+    expect(screen.getByText("Total de tarjetas").nextSibling).toHaveTextContent("2");
+    expect(screen.getByText("Activas").nextSibling).toHaveTextContent("1");
+    expect(screen.getByText("Fuera de uso").nextSibling).toHaveTextContent("1");
   });
 
   it("TJ-02 Avisa cuando el cliente no tiene tarjetas", async () => {
@@ -72,18 +82,22 @@ describe("Página del módulo Tarjetas", () => {
     render(<TarjetasPage />);
     await userEvent.type(screen.getByLabelText("Código del cliente"), "CLI000000001");
     await userEvent.click(screen.getByRole("button", { name: "Ver tarjetas" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Ver" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Ver detalle" }));
     expect(screen.getByRole("heading", { name: "Tarjeta 0044 99** **** 0001" })).toBeInTheDocument();
     expect(screen.getByText(TARJETA.id_tarjeta)).toBeInTheDocument();
+    // Una tarjeta activa ofrece bloquearla, y eso lleva al cambio de estado con BLOQUEADA elegido.
+    await userEvent.click(screen.getByRole("button", { name: "Bloquear" }));
+    expect(screen.getByLabelText("Identificador de la tarjeta")).toHaveValue(TARJETA.id_tarjeta);
+    expect(screen.getByLabelText("Nuevo estado")).toHaveValue("BLOQUEADA");
   });
 
   it("TJ-05 Emite una tarjeta sin enviar ningún dato del PAN", async () => {
     post.mockResolvedValue(sobre({ ...TARJETA, estado_tarjeta: "PENDIENTE_ACTIVACION" }));
     render(<TarjetasPage />);
-    await pestana(/3\. Emitir/);
+    await pestana("Emitir tarjeta");
     await userEvent.type(screen.getByLabelText("Código del cliente"), "cli000000001");
     await userEvent.type(screen.getByLabelText("Cuenta a vincular"), "10100000000001");
-    await userEvent.click(screen.getByRole("button", { name: "Emitir tarjeta" }));
+    await userEvent.click(enPantalla().getByRole("button", { name: "Emitir tarjeta" }));
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     const [ruta, cuerpo] = post.mock.calls[0] as [string, Record<string, string>];
     expect(ruta).toBe("/emision");
@@ -95,7 +109,7 @@ describe("Página del módulo Tarjetas", () => {
   it("TJ-06 Bloquea una tarjeta con su motivo", async () => {
     post.mockResolvedValue(sobre({ ...TARJETA, estado_tarjeta: "BLOQUEADA" }));
     render(<TarjetasPage />);
-    await pestana(/4\. Bloquear/);
+    await pestana("Bloqueos y estados");
     await userEvent.type(screen.getByLabelText("Identificador de la tarjeta"), TARJETA.id_tarjeta);
     await userEvent.type(screen.getByLabelText("Motivo"), "Robo reportado");
     await userEvent.click(screen.getByRole("button", { name: "Aplicar cambio" }));
@@ -108,11 +122,22 @@ describe("Página del módulo Tarjetas", () => {
     post.mockRejectedValue(errorTarjetas(403, "ERR-TAR-DESBLOQUEO-NO-PERMITIDO",
       "El desbloqueo de tarjetas no está disponible: pendiente de un cliente de Seguridad."));
     render(<TarjetasPage />);
-    await pestana(/4\. Bloquear/);
+    await pestana("Bloqueos y estados");
     await userEvent.type(screen.getByLabelText("Identificador de la tarjeta"), TARJETA.id_tarjeta);
     await userEvent.selectOptions(screen.getByLabelText("Nuevo estado"), "ACTIVA");
     await userEvent.click(screen.getByRole("button", { name: "Aplicar cambio" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("pendiente de un cliente de Seguridad");
     expect(post.mock.calls[0][1]).toEqual({ estado: "ACTIVA" });
+  });
+
+  it("TJ-08 Muestra en el menú quién tiene la sesión", async () => {
+    // /coredb/auth/me no trae el nombre: viene de la sesión guardada al iniciar sesión.
+    localStorage.setItem("bna_usuario", JSON.stringify({ id_usuario: "u1", username: "ana", nombre: "Ana Torres", rol: "OPERADOR" }));
+    perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "ana", rol: "OPERADOR" } });
+    render(<TarjetasPage />);
+    expect(await screen.findByText("Ana Torres")).toBeInTheDocument();
+    expect(screen.getByText("OPERADOR")).toBeInTheDocument();
+    expect(perfil).toHaveBeenCalledWith("/coredb/auth/me");
+    expect(screen.getByRole("link", { name: "Cerrar sesión" })).toHaveAttribute("href", "/login");
   });
 });
