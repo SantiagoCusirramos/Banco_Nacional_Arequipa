@@ -86,6 +86,7 @@ mysql-data/
 # ── Sistema operativo ───────────────────────────────────────
 .DS_Store
 Thumbs.db
+.directory
 *.pem
 
 # ── IDEs / editores ─────────────────────────────────────────

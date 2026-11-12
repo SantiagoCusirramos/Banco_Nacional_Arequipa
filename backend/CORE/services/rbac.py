@@ -1,7 +1,6 @@
 """GESTIONAR_PERMISOS — catálogo de acciones y asignaciones rol→acciones.
 
-El esquema unificado `bna` no tiene tablas de permisos (el módulo
-BNA_CONTROL_ACCESO solo cubre permisos de comités). Mientras se
+El esquema unificado `bna` no tiene tablas de permisos. Mientras se
 incorporan al modelo, CORE administra el catálogo en
 `CORE/data/rbac.json`, versionado en el repositorio.
 """

@@ -139,8 +139,7 @@ un MySQL real; se omite salvo que `BNA_INTEGRACION_MYSQL=1` (ver
 ## Pendientes conocidos
 
 1. **`GESTIONAR_PERMISOS`** persiste en `data/rbac.json` porque el
-   esquema `bna` no tiene tablas de permisos (el módulo
-   `BNA_CONTROL_ACCESO` solo cubre comités). Migrar a tablas cuando el
+   esquema `bna` no tiene tablas de permisos. Migrar a tablas cuando el
    diccionario de datos las incorpore.
 2. **Desembolso de crédito**: `aprobar_credito` marca la solicitud como
    APROBADA pero no genera automáticamente `cob_credito` + asiento de
