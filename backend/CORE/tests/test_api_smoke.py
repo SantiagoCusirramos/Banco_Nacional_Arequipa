@@ -38,11 +38,9 @@ def test_error_core_devuelve_json_catalogado():
     montar_en(app)
 
     client = TestClient(app, raise_server_exceptions=False)
-    # Sin BD real la sesión fallaría; usamos una ruta que solo valida
-    # el handler de CoreError montado en la app.
+    # La ruta exige token: sin él responde 401, antes de abrir una sesión de
+    # base de datos.
     resp = client.get("/core/clientes/NO-EXISTE")
-    # 500 por falta de BD (no hay MySQL en el entorno de prueba) o 404
-    # si la sesión está disponible; en ambos casos no es un 200.
     assert resp.status_code != 200
 
 
