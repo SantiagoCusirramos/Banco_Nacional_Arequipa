@@ -40,6 +40,10 @@ TEXTO
 
 compose() { docker compose "$@"; }
 
+# down con el perfil legado activo: sin él, Compose deja en marcha el CORE legado
+# que se haya levantado antes, y con él la red.
+bajar() { COMPOSE_PROFILES="${COMPOSE_PROFILES:+$COMPOSE_PROFILES,}legado" compose down "$@"; }
+
 # Valor de una variable: el del entorno si está definida; si no, el de .env.
 valor() {
   if [ -n "${!1:-}" ]; then
@@ -135,10 +139,10 @@ orden="${1:-help}"
 [ $# -gt 0 ] && shift
 case "$orden" in
   up) levantar ;;
-  down) compose down ;;
+  down) bajar ;;
   reset)
     revisar_docker
-    compose down -v
+    bajar -v
     levantar ;;
   ps) compose ps -a ;;
   logs) compose logs -f --tail=100 "$@" ;;
