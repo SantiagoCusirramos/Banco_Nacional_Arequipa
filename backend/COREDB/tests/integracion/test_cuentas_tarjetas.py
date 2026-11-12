@@ -106,6 +106,35 @@ def test_emitir_y_cambiar_estado_por_historial(cliente, abrir_cuenta, consulta):
     assert [h["e"] for h in historial] == ["PENDIENTE_ACTIVACION", "ACTIVA"]
 
 
+def test_tarjetas_de_un_cliente(cliente, abrir_cuenta):
+    emitidas = {emitir(cliente, abrir_cuenta()).json()["id_tarjeta"] for _ in range(2)}
+    respuesta = cliente.get("/coredb/tarjetas", params={"cod_cliente": "C001"})
+    assert respuesta.status_code == 200, respuesta.text
+    ids = [t["id_tarjeta"] for t in respuesta.json()]
+    assert emitidas <= set(ids)
+    assert all(t["cod_cliente"] == "C001" for t in respuesta.json())
+    assert "pan_token" not in respuesta.text
+
+
+def test_cliente_sin_tarjetas_lista_vacia(cliente, datos_base):
+    respuesta = cliente.get("/coredb/tarjetas", params={"cod_cliente": "C002"})
+    assert respuesta.status_code == 200
+    assert respuesta.json() == []
+
+
+def test_tarjetas_de_un_cliente_inexistente_404(cliente, datos_base):
+    respuesta = cliente.get("/coredb/tarjetas", params={"cod_cliente": "NOEXISTE"})
+    assert respuesta.status_code == 404
+
+
+def test_tarjetas_de_un_cliente_exige_ver_tarjeta(sesion_de):
+    encabezados, _ = sesion_de("ASESOR")
+    respuesta = TestClient(app).get(
+        "/coredb/tarjetas", params={"cod_cliente": "C001"}, headers=encabezados
+    )
+    assert respuesta.status_code == 403
+
+
 def test_valores_con_equivalente_exacto_se_traducen(cliente, abrir_cuenta):
     id_tarjeta = emitir(cliente, abrir_cuenta()).json()["id_tarjeta"]
     cliente.post(

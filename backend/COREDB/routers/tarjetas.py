@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session, llamar
 from COREDB.errores import ErrorCoreDb
 from COREDB.models import EquivalenciaCatalogo, Tarjeta
+from COREDB.services import clientes
 from COREDB.transacciones import con_reintentos
 
 router = APIRouter(prefix="/coredb/tarjetas", tags=["tarjetas"])
@@ -71,6 +72,24 @@ def aplicar_cambio_estado(
             salidas=1,
         ),
         nombre="cambiar_estado_tarjeta",
+    )
+
+
+@router.get("", response_model=list[TarjetaRespuesta],
+            dependencies=[Depends(requiere_permiso("VER_TARJETA"))],
+            responses={404: {"description": "CLIENTE_NO_ENCONTRADO"}})
+def de_un_cliente(
+    cod_cliente: str = Query(min_length=1, max_length=12, pattern=r"^[A-Za-z0-9]+$"),
+    db: Session = Depends(db_session),
+):
+    """Las tarjetas del cliente, de la más reciente a la más antigua. No hay una ruta que
+    liste todas las tarjetas."""
+    clientes.consultar(db, cod_cliente)  # 404 si el cliente no existe
+    return (
+        db.query(Tarjeta)
+        .filter(Tarjeta.cod_cliente == cod_cliente)
+        .order_by(Tarjeta.fecha_emision.desc(), Tarjeta.id_tarjeta)
+        .all()
     )
 
 
