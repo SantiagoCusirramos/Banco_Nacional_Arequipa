@@ -18,7 +18,7 @@ El resto de esta guía es la instalación manual del módulo, en Windows y con u
 ## Si ya ejecutabas la v1: actualizar conservando tus datos
 
 1. Respalda tu base `bna_sol_mvp` y conserva tus `.env.sol` y `.env.local` privados. No copies archivos sobre un backend que siga ejecutándose.
-2. Lleva los archivos SOL de esta actualización a tu carpeta del proyecto; consulta `CAMBIOS_SOL.md`. No reemplaces cambios de otros equipos.
+2. Lleva los archivos SOL de esta actualización a tu carpeta del proyecto; lo que cambió está en `Documents/solicitud-credito/CORRECCIONES_V2.md`. No reemplaces cambios de otros equipos.
 3. Desde **backend**, ejecuta:
 
 ```powershell
