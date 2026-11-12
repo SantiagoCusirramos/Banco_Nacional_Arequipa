@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
 import {
   BINES, ESTADOS_PEDIBLES, cambiarEstado, emitirTarjeta, mensajeDeError, tarjetasDeCliente, verTarjeta,
@@ -142,14 +143,21 @@ function Resumen({ tarjetas }: { tarjetas: Tarjeta[] }) {
   );
 }
 
+const esSesionInvalida = (err: unknown) => isAxiosError(err) && err.response?.status === 401;
+
 export default function TarjetasPage() {
   const [tab, setTab] = useState<Pestana>("cliente");
   const [usuario, setUsuario] = useState<Usuario | null>(null);
+  // Sin sesión o con la sesión vencida se pide iniciarla, en vez de mostrar el error técnico.
+  const [sinSesion, setSinSesion] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Quién trabaja en la pantalla; sin sesión, el pie del menú queda vacío.
   useEffect(() => {
-    obtenerMiPerfil().then(setUsuario).catch(() => setUsuario(null));
+    obtenerMiPerfil().then(setUsuario).catch((err) => {
+      setUsuario(null);
+      if (esSesionInvalida(err)) setSinSesion(true);
+    });
   }, []);
   const [notice, setNotice] = useState<Aviso | null>(null);
 
@@ -180,7 +188,8 @@ export default function TarjetasPage() {
       await accion();
     } catch (err) {
       alFallar?.();
-      setNotice({ text: mensajeDeError(err), error: true });
+      if (esSesionInvalida(err)) setSinSesion(true);
+      else setNotice({ text: mensajeDeError(err), error: true });
     } finally {
       setLoading(false);
     }
@@ -310,6 +319,15 @@ export default function TarjetasPage() {
               </button>
             )}
           </div>
+
+          {sinSesion && (
+            <div role="alert" className="sol-alert error">
+              Tu sesión no está iniciada o ya venció.
+              <Link href="/login" onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
+                Iniciar sesión
+              </Link>
+            </div>
+          )}
 
           {notice && (
             <div role={notice.error ? "alert" : "status"} className={`sol-alert ${notice.error ? "error" : "success"}`}>

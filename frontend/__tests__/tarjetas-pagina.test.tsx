@@ -142,4 +142,23 @@ describe("Página del módulo Tarjetas", () => {
     expect(perfil).toHaveBeenCalledWith("/coredb/auth/me");
     expect(screen.getByRole("link", { name: "Cerrar sesión" })).toHaveAttribute("href", "/login");
   });
+
+  it("TJ-10 Sin sesión pide iniciarla en lugar de mostrar el error técnico", async () => {
+    perfil.mockRejectedValue(errorTarjetas(401, "TOKEN_REQUERIDO", "Falta el encabezado Authorization: Bearer <token>."));
+    render(<TarjetasPage />);
+    const aviso = await screen.findByRole("alert");
+    expect(aviso).toHaveTextContent("Tu sesión no está iniciada o ya venció.");
+    expect(aviso).not.toHaveTextContent("Authorization");
+    expect(within(aviso).getByRole("link", { name: "Iniciar sesión" })).toHaveAttribute("href", "/login");
+  });
+
+  it("TJ-11 Si la sesión vence durante una consulta, pide iniciarla otra vez", async () => {
+    get.mockRejectedValue(errorTarjetas(401, "ERR-TAR-TOKEN-EXPIRADO", "El token venció."));
+    render(<TarjetasPage />);
+    escribir(screen.getByLabelText("Código del cliente"), "CLI000000001");
+    await userEvent.click(screen.getByRole("button", { name: "Ver tarjetas" }));
+    const aviso = await screen.findByRole("alert");
+    expect(aviso).toHaveTextContent("Tu sesión no está iniciada o ya venció.");
+    expect(screen.queryByText("El token venció.")).not.toBeInTheDocument();
+  });
 });
