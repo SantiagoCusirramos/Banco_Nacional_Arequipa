@@ -50,6 +50,10 @@ class CoreClient:
                                  400, {"detail": cuerpo.get("detail") if isinstance(cuerpo, dict) else None})
         return TarjetasError("ERR-COR-RESPUESTA-INVALIDA", "Respuesta inesperada de COREDB", 502)
 
+    def salud(self):
+        # Publica en COREDB: responde si COREDB y su base estan disponibles
+        return self._request("GET", "/coredb/salud")
+
     def tarjetas_de_cliente(self, cod_cliente: str, correlation_id: str | None = None,
                             authorization: str | None = None):
         return self._request("GET", "/coredb/tarjetas", params={"cod_cliente": cod_cliente},

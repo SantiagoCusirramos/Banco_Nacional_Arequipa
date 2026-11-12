@@ -24,6 +24,27 @@ def test_health(client):
     assert client.get("/health").json() == {"status": "healthy", "modulo": "tarjetas"}
 
 
+def test_ready_con_coredb(client, core):
+    core.respuesta = httpx.Response(200, json={"estado": "ok"})
+    r = client.get("/ready")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ready", "coredb": "disponible"}
+    assert (core.llamadas[0]["metodo"], core.llamadas[0]["ruta"]) == ("GET", "/coredb/salud")
+    assert "authorization" not in core.llamadas[0]["headers"]
+
+
+def test_ready_sin_coredb_503(client, core):
+    core.excepcion = httpx.ConnectError("sin conexion")
+    r = client.get("/ready")
+    assert r.status_code == 503
+    assert r.json() == {"status": "not_ready", "coredb": "no disponible"}
+
+
+def test_ready_con_coredb_sin_base_503(client, core):
+    core.respuesta = httpx.Response(500, text="Internal Server Error")
+    assert client.get("/ready").status_code == 503
+
+
 def test_tarjetas_del_cliente_formato_de_exito(client, core):
     core.respuesta = httpx.Response(200, json=[TARJETA_CORE])
     r = client.get(f"{BASE}/cliente/cli000000001", headers={"X-Correlation-ID": ID, **AUTH})
