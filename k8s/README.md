@@ -16,7 +16,7 @@ Requiere Docker, `kind` y `kubectl`. Desde la raíz del repositorio:
 ./bna k8s-up       # crea el clúster si falta, carga las imágenes y despliega
 ./bna k8s-smoke    # flujo de extremo a extremo dentro del clúster
 ./bna k8s-ps       # pods y servicios
-./bna k8s-down     # elimina el clúster
+./bna k8s-down     # elimina el clúster y la red de Docker `kind`, si nada más la usa
 ```
 
 Al terminar, `./bna k8s-up` muestra las direcciones. Usan puertos distintos de los de `./bna up`, así que los dos pueden estar levantados a la vez:

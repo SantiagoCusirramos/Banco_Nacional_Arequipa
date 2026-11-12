@@ -9,6 +9,7 @@ cd "$RAIZ"
 
 CLUSTER=bna
 CONTEXTO="kind-$CLUSTER"
+RED=kind
 NS=bna
 IMAGENES=(bna/core-db:local bna/db-aux:local bna/coredb:local bna/backend:local
           bna/sol:local bna/seguridad:local bna/frontend:local)
@@ -119,11 +120,30 @@ humo() {
     python - < scripts/flujo_e2e.py
 }
 
+# kind crea la red de Docker `kind` con el primer clúster y no la elimina con el
+# último. Se conserva si algún contenedor la usa, detenido o no: otro clúster de kind.
+quitar_red() {
+  docker network inspect "$RED" >/dev/null 2>&1 || return 0
+  if [ -n "$(docker ps -aq --filter "network=$RED")" ]; then
+    echo "La red de Docker $RED se conserva: la usan otros contenedores."
+  elif docker network rm "$RED" >/dev/null; then
+    echo "Red de Docker $RED eliminada."
+  else
+    echo "No se pudo eliminar la red de Docker $RED." >&2
+  fi
+}
+
+bajar() {
+  requisitos
+  kind delete cluster --name "$CLUSTER"
+  quitar_red
+}
+
 case "${1:-}" in
   up) subir ;;
   smoke) humo ;;
   ps) requisitos; exigir_cluster; k -n "$NS" get pods,services ;;
   diagnostico) requisitos; exigir_cluster; diagnostico ;;
-  down) requisitos; kind delete cluster --name "$CLUSTER" ;;
+  down) bajar ;;
   *) echo "Uso: scripts/k8s.sh up | smoke | ps | diagnostico | down" >&2; exit 2 ;;
 esac
