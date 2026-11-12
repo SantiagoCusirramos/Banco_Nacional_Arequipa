@@ -1,0 +1,30 @@
+# Clúster local de kind (k8s/kind-config.yaml). Publica cada servicio como NodePort,
+# que kind expone en 127.0.0.1; las imágenes se cargan en el clúster y nunca se descargan.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - target: { kind: Service, name: frontend }
+    patch: |-
+      - { op: add, path: /spec/type, value: NodePort }
+      - { op: add, path: /spec/ports/0/nodePort, value: 30000 }
+  - target: { kind: Service, name: cuentas }
+    patch: |-
+      - { op: add, path: /spec/type, value: NodePort }
+      - { op: add, path: /spec/ports/0/nodePort, value: 30001 }
+  - target: { kind: Service, name: sol }
+    patch: |-
+      - { op: add, path: /spec/type, value: NodePort }
+      - { op: add, path: /spec/ports/0/nodePort, value: 30011 }
+  - target: { kind: Service, name: coredb }
+    patch: |-
+      - { op: add, path: /spec/type, value: NodePort }
+      - { op: add, path: /spec/ports/0/nodePort, value: 30012 }
+  - target: { kind: Service, name: seguridad }
+    patch: |-
+      - { op: add, path: /spec/type, value: NodePort }
+      - { op: add, path: /spec/ports/0/nodePort, value: 30013 }
+  - target: { kind: Deployment }
+    patch: |-
+      - { op: add, path: /spec/template/spec/containers/0/imagePullPolicy, value: Never }

@@ -1,0 +1,14 @@
+# Clúster local de kind para el producto. Lo crea `./bna k8s-up`.
+# Publica en 127.0.0.1 los NodePort de k8s/overlays/local, en puertos distintos de
+# los de `./bna up` para que los dos puedan estar levantados a la vez.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: bna
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - { containerPort: 30000, hostPort: 13000, listenAddress: "127.0.0.1", protocol: TCP }  # frontend
+      - { containerPort: 30001, hostPort: 18001, listenAddress: "127.0.0.1", protocol: TCP }  # CUENTAS
+      - { containerPort: 30011, hostPort: 18011, listenAddress: "127.0.0.1", protocol: TCP }  # SOL
+      - { containerPort: 30012, hostPort: 18012, listenAddress: "127.0.0.1", protocol: TCP }  # COREDB
+      - { containerPort: 30013, hostPort: 18013, listenAddress: "127.0.0.1", protocol: TCP }  # Seguridad
