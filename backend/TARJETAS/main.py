@@ -1,0 +1,23 @@
+import os
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from TARJETAS.api import montar_en
+
+app = FastAPI(
+    title="BNA - Modulo de Tarjetas",
+    description="Modulo de Tarjetas de debito. Persistencia a traves de COREDB.",
+    version="0.1.0",
+)
+
+ORIGENES = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",") if o.strip()]
+
+app.add_middleware(CORSMiddleware, allow_origins=ORIGENES, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+montar_en(app)
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy", "modulo": "tarjetas"}

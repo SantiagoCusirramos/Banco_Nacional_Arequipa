@@ -1,6 +1,6 @@
-import { apiCore as api, mensajeError } from "@/lib/api";
+import { apiTarjetas as api, mensajeError } from "@/lib/api";
 
-/** La tarjeta como la devuelve COREDB, sin el token del PAN. */
+/** La tarjeta como la devuelve TARJETAS, que la toma de COREDB sin el token del PAN. */
 export interface Tarjeta {
   id_tarjeta: string;
   bin: string;
@@ -9,6 +9,8 @@ export interface Tarjeta {
   fecha_vencimiento: string;
   estado_tarjeta: string;
   cod_cliente: string;
+  numero_enmascarado: string;
+  vencimiento_mm_aa: string;
 }
 
 export interface Emision {
@@ -16,8 +18,6 @@ export interface Emision {
   num_cuenta: string;
   bin: string;
   fecha_vencimiento: string;
-  fecha_emision?: string;
-  ultimos4?: string;
 }
 
 // Estados que se pueden pedir. ANULADA llega a la base como CANCELADA. El desbloqueo
@@ -30,49 +30,29 @@ export const BINES = ["004499"];
 
 export const mensajeDeError = mensajeError;
 
-const RUTA = "/coredb/tarjetas";
-
-/** «MM/AA», como se imprime en la tarjeta (RN-TAR-003). */
-export const vencimientoMmAa = (fecha: string) => `${fecha.slice(5, 7)}/${fecha.slice(2, 4)}`;
-
-export const enmascarada = (tarjeta: Pick<Tarjeta, "bin" | "ultimos4">) =>
-  `${tarjeta.bin.slice(0, 4)} ${tarjeta.bin.slice(4)}•• •••• ${tarjeta.ultimos4}`;
-
-const hoy = () => new Date().toISOString().slice(0, 10);
-
-function digitos(n: number) {
-  return Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join("");
-}
+// Respuesta de TARJETAS (ITIL-02): los datos van en `data`.
+type Sobre<T> = { success: boolean; message?: string; data: T };
 
 export async function tarjetasDeCliente(codCliente: string): Promise<Tarjeta[]> {
-  const { data } = await api.get<Tarjeta[]>(RUTA, { params: { cod_cliente: codCliente } });
-  return data;
+  const { data } = await api.get<Sobre<Tarjeta[]>>(`/cliente/${encodeURIComponent(codCliente)}`);
+  return data.data;
 }
 
 export async function verTarjeta(idTarjeta: string): Promise<Tarjeta> {
-  const { data } = await api.get<Tarjeta>(`${RUTA}/${encodeURIComponent(idTarjeta)}`);
-  return data;
+  const { data } = await api.get<Sobre<Tarjeta>>(`/${encodeURIComponent(idTarjeta)}`);
+  return data.data;
 }
 
-// El PAN nunca pasa por el frontend: se envía un token aleatorio en su lugar y, si el
-// formulario no los trae, los últimos cuatro dígitos.
+// El PAN nunca pasa por el frontend: TARJETAS envía un token en su lugar.
 export async function emitirTarjeta(emision: Emision): Promise<Tarjeta> {
-  const { data } = await api.post<Tarjeta>(RUTA, {
-    pan_token: crypto.randomUUID().replaceAll("-", ""),
-    bin: emision.bin,
-    ultimos4: emision.ultimos4 ?? digitos(4),
-    fecha_emision: emision.fecha_emision ?? hoy(),
-    fecha_vencimiento: emision.fecha_vencimiento,
-    cod_cliente: emision.cod_cliente,
-    num_cuenta: emision.num_cuenta,
-  });
-  return data;
+  const { data } = await api.post<Sobre<Tarjeta>>("/emision", emision);
+  return data.data;
 }
 
 export async function cambiarEstado(idTarjeta: string, estado: EstadoPedible, motivo: string): Promise<Tarjeta> {
-  const { data } = await api.post<Tarjeta>(`${RUTA}/${encodeURIComponent(idTarjeta)}/estado`, {
+  const { data } = await api.post<Sobre<Tarjeta>>(`/${encodeURIComponent(idTarjeta)}/estado`, {
     estado,
     ...(motivo ? { motivo } : {}),
   });
-  return data;
+  return data.data;
 }

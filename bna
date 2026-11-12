@@ -104,6 +104,7 @@ resumen() {
   Solicitud crédito http://localhost:$(valor BNA_PUERTO_FRONTEND)/solicitud-credito
   COREDB (API)      http://127.0.0.1:$(valor BNA_PUERTO_COREDB)/docs
   CUENTAS           http://127.0.0.1:$(valor BNA_PUERTO_CUENTAS)/docs
+  TARJETAS          http://127.0.0.1:$(valor BNA_PUERTO_TARJETAS)/docs
   SOL               http://127.0.0.1:$(valor BNA_PUERTO_SOL)/docs
   Seguridad         http://127.0.0.1:$(valor BNA_PUERTO_SEGURIDAD)
   MySQL (CORE)      127.0.0.1:$(valor BNA_PUERTO_DB)

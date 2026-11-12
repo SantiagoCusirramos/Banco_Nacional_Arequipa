@@ -16,5 +16,6 @@ data:
   SEGURIDAD_DB: /datos/seguridad.sqlite3
   COREDB_URL: http://coredb:8012
   CUENTAS_GATEWAY_URL: http://cuentas:8001/api/v1/cuentas
+  TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
   SOL_GATEWAY_URL: http://sol:8011/gateway/sol
   SOL_COOKIE_SECURE: "false"

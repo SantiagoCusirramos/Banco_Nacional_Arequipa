@@ -9,6 +9,7 @@ Banca personal del BNA en [Next.js](https://nextjs.org) 16 (App Router) con Reac
 | `/login` | Inicio de sesión. El formulario de registro de usuarios solo funciona con una sesión que tenga el permiso `CREAR_USUARIO` | COREDB (`/coredb/auth/login`, `/coredb/usuarios`) |
 | `/` | Banca personal. Exige una sesión vigente | "Abrir una cuenta" y "Modificar cuenta" usan CUENTAS y COREDB. El resumen, las transferencias, los movimientos y las tarjetas de esta pantalla son datos de demostración, sin conexión con el banco |
 | `/cuenta` | Módulo de cuentas: abrir, consultar, depositar, retirar, transferir y ver movimientos | CUENTAS |
+| `/tarjetas` | Módulo de tarjetas, para el personal: tarjetas de un cliente, consulta, emisión, bloqueo y cambio de estado | TARJETAS |
 | `/solicitud-credito` | Solicitud de crédito | SOL, con sus propias cuentas (ver [`EMPEZAR_AQUI_SOL.md`](../EMPEZAR_AQUI_SOL.md)) |
 
 El cambio de estado de una cuenta se muestra deshabilitado: COREDB todavía no ofrece esa operación (issue #41).
@@ -21,6 +22,7 @@ El navegador solo llama a rutas de este mismo servidor, que las reenvía desde e
 |---|---|---|
 | `/api/core/coredb/*` | COREDB, `/coredb/*` | `COREDB_URL` |
 | `/api/cuenta/*` | CUENTAS, `/api/v1/cuentas/*` | `CUENTAS_GATEWAY_URL` |
+| `/api/tarjeta/*` | TARJETAS, `/api/v1/tarjetas/*` | `TARJETAS_GATEWAY_URL` |
 | `/api/solicitud-credito/*` | SOL, `/gateway/sol/*` | `SOL_GATEWAY_URL` |
 
 Las variables se leen al ejecutar, no al construir. De cada petición se reenvían `Authorization`, `X-Idempotency-Key`, `X-Channel-ID` y `X-Request-Timestamp`; si falta `X-Correlation-ID`, se genera uno. La sesión de COREDB (el token) se guarda en `localStorage`; la de SOL, en una cookie que maneja su propio puente.
@@ -32,7 +34,7 @@ Con todo el producto, desde la raíz del repositorio: `./bna up`. El frontend qu
 Para desarrollar con recarga en vivo hace falta Node.js 20.9 o superior (la imagen usa Node 22) y los servicios levantados:
 
 ```bash
-./bna up                          # en la raíz: deja COREDB, CUENTAS y SOL en sus puertos
+./bna up                          # en la raíz: deja COREDB, CUENTAS, TARJETAS y SOL en sus puertos
 cd frontend
 cat .env.example .env.sol.example > .env.local
 npm ci

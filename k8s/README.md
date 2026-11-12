@@ -4,7 +4,7 @@ Manifiestos del producto integrado, con [kustomize](https://kustomize.io/).
 
 | Carpeta | Qué contiene |
 |---|---|
-| `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `db-aux`, `coredb`, `cuentas`, `sol`, `seguridad` y `frontend`. Un ConfigMap con las direcciones internas |
+| `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `db-aux`, `coredb`, `cuentas`, `tarjetas`, `sol`, `seguridad` y `frontend`. Un ConfigMap con las direcciones internas |
 | `overlays/local/` | Ajustes para un clúster local de [kind](https://kind.sigs.k8s.io/): cada servicio como NodePort y las imágenes cargadas en el clúster |
 | `kind-config.yaml` | El clúster local, que publica esos NodePort en `127.0.0.1` |
 
@@ -26,6 +26,7 @@ Al terminar, `./bna k8s-up` muestra las direcciones. Usan puertos distintos de l
 | Frontend | http://localhost:13000 |
 | COREDB | http://127.0.0.1:18012/docs |
 | CUENTAS | http://127.0.0.1:18001/docs |
+| TARJETAS | http://127.0.0.1:18002/docs |
 | SOL | http://127.0.0.1:18011/docs |
 | Seguridad | http://127.0.0.1:18013 |
 

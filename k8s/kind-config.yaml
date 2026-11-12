@@ -9,6 +9,7 @@ nodes:
     extraPortMappings:
       - { containerPort: 30000, hostPort: 13000, listenAddress: "127.0.0.1", protocol: TCP }  # frontend
       - { containerPort: 30001, hostPort: 18001, listenAddress: "127.0.0.1", protocol: TCP }  # CUENTAS
+      - { containerPort: 30002, hostPort: 18002, listenAddress: "127.0.0.1", protocol: TCP }  # TARJETAS
       - { containerPort: 30011, hostPort: 18011, listenAddress: "127.0.0.1", protocol: TCP }  # SOL
       - { containerPort: 30012, hostPort: 18012, listenAddress: "127.0.0.1", protocol: TCP }  # COREDB
       - { containerPort: 30013, hostPort: 18013, listenAddress: "127.0.0.1", protocol: TCP }  # Seguridad

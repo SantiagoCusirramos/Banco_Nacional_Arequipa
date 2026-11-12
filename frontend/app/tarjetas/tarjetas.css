@@ -1,0 +1,182 @@
+/* Piezas propias de /tarjetas. Lo demás viene de solicitud-credito/sol.css. */
+
+.tj-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 20px;
+}
+
+.tj-item {
+  background: white;
+  border: 1px solid var(--sol-line);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tj-item-actions {
+  display: flex;
+  gap: 8px;
+}
+.tj-item-actions .sol-button {
+  flex: 1;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+/* La tarjeta física, con la proporción ISO/IEC 7810 ID-1 (85.6 x 54 mm). */
+.tj-plastico {
+  position: relative;
+  aspect-ratio: 85.6 / 54;
+  border-radius: 12px;
+  padding: 18px 20px;
+  color: white;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #15324f 0%, #1d4a6b 55%, #0f766e 100%);
+  box-shadow: 0 10px 24px #15324f2e;
+}
+.tj-plastico::after {
+  content: "";
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  right: -70px;
+  top: -90px;
+  border-radius: 50%;
+  background: #ffffff12;
+}
+.tj-plastico.apagada {
+  background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+  box-shadow: 0 10px 24px #37415124;
+}
+.tj-plastico.grande {
+  max-width: 400px;
+  padding: 24px 26px;
+}
+.tj-plastico-top,
+.tj-plastico-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  position: relative;
+  z-index: 1;
+}
+.tj-marca {
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 16px;
+}
+.tj-marca small {
+  display: block;
+  font-weight: 400;
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  opacity: 0.75;
+}
+.tj-chip {
+  position: relative;
+  z-index: 1;
+}
+.tj-numero {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 17px;
+  letter-spacing: 2px;
+  text-shadow: 0 1px 1px #0003;
+}
+.tj-plastico.grande .tj-numero {
+  font-size: 21px;
+}
+.tj-dato small {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 1.4px;
+  opacity: 0.7;
+}
+.tj-dato strong {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+.tj-estado {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+}
+.tj-estado .sol-badge {
+  box-shadow: 0 1px 2px #0002;
+}
+
+.tj-detalle {
+  display: grid;
+  grid-template-columns: minmax(280px, 400px) 1fr;
+  gap: 32px;
+  align-items: start;
+  padding: 24px;
+  border-top: 1px solid var(--sol-line);
+}
+.tj-datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 24px;
+  margin: 0;
+}
+.tj-datos dt {
+  color: var(--sol-muted);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.tj-datos dd {
+  margin: 0;
+  color: var(--sol-navy);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.tj-emision {
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 340px);
+  gap: 32px;
+  align-items: start;
+  padding: 0 24px 24px;
+}
+.tj-vista-previa > p {
+  color: var(--sol-muted);
+  font-size: 11px;
+  margin: 0 0 10px;
+}
+
+.tj-nota {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0 24px 24px;
+  padding: 14px 16px;
+  border-radius: 9px;
+  background: #f4f8fb;
+  color: #4b6478;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.tj-nota svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.tj-buscador {
+  padding: 0 24px 24px;
+}
+
+@media (max-width: 900px) {
+  .tj-detalle,
+  .tj-emision {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "../solicitud-credito/sol.css";
+import "./tarjetas.css";
 
 export const metadata: Metadata = {
   title: "Módulo de Tarjetas · BNA",

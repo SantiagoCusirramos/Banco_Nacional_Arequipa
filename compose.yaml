@@ -135,6 +135,25 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8001/health", timeout=3)
 
+  # ── TARJETAS: tarjetas de débito, sobre COREDB ──────────────────────────
+  tarjetas:
+    <<: *backend
+    command: uvicorn TARJETAS.main:app --host 0.0.0.0 --port 8002
+    environment:
+      CORE_BASE_URL: http://coredb:8012
+    depends_on:
+      coredb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_TARJETAS:-8002}:8002"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8002/health", timeout=3)
+
   # ── SOL: solicitud de crédito, con Captación y Evaluación simuladas ─────
   sol:
     <<: *sol
@@ -200,12 +219,15 @@ services:
     environment:
       COREDB_URL: http://coredb:8012
       CUENTAS_GATEWAY_URL: http://cuentas:8001/api/v1/cuentas
+      TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
       SOL_GATEWAY_URL: http://sol:8011/gateway/sol
       SOL_COOKIE_SECURE: "false"
     depends_on:
       coredb:
         condition: service_healthy
       cuentas:
+        condition: service_healthy
+      tarjetas:
         condition: service_healthy
       sol:
         condition: service_healthy

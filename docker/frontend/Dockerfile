@@ -15,7 +15,7 @@ RUN rm -rf /fuente/node_modules /fuente/.next /fuente/.env.local \
     && cp -a /fuente/. /app/ && rm -rf /fuente
 
 # Las direcciones de los servicios se leen al ejecutar (COREDB_URL, CUENTAS_GATEWAY_URL,
-# SOL_GATEWAY_URL): la imagen no lleva ninguna.
+# TARJETAS_GATEWAY_URL, SOL_GATEWAY_URL): la imagen no lleva ninguna.
 FROM pruebas AS construccion
 RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 

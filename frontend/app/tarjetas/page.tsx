@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
 import {
-  BINES, ESTADOS_PEDIBLES, cambiarEstado, emitirTarjeta, enmascarada, mensajeDeError, tarjetasDeCliente,
-  vencimientoMmAa, verTarjeta, type EstadoPedible, type Tarjeta,
+  BINES, ESTADOS_PEDIBLES, cambiarEstado, emitirTarjeta, mensajeDeError, tarjetasDeCliente, verTarjeta,
+  type EstadoPedible, type Tarjeta,
 } from "@/lib/tarjetas";
 
 type Pestana = "cliente" | "consulta" | "emision" | "estado";
@@ -16,35 +17,140 @@ const enCuatroAnios = () => {
   return fecha.toISOString().slice(0, 10);
 };
 
-function IconoCerrar() {
+// Íconos de trazo, con la misma forma que los de Solicitud de Crédito.
+function Icono({ nombre, tamano = 18 }: { nombre: string; tamano?: number }) {
+  const trazos: Record<string, ReactNode> = {
+    tarjeta: (
+      <>
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20M6 15h4" />
+      </>
+    ),
+    buscar: (
+      <>
+        <circle cx="10" cy="10" r="6" />
+        <path d="m15 15 6 6" />
+      </>
+    ),
+    mas: <path d="M12 5v14M5 12h14" />,
+    candado: (
+      <>
+        <rect x="4" y="11" width="16" height="10" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </>
+    ),
+    activa: <path d="m5 12 4 4L19 6" />,
+    reloj: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    escudo: (
+      <>
+        <path d="m12 2 9 4v6c0 5-9 10-9 10S3 17 3 12V6Z" />
+        <path d="M12 8v5m0 3h.01" />
+      </>
+    ),
+    ojo: (
+      <>
+        <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+    cerrar: <path d="M18 6 6 18M6 6l12 12" />,
+    salir: <path d="M9 3H3v18h6M12 12h9m-4-4 4 4-4 4" />,
+  };
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    <svg width={tamano} height={tamano} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
+      {trazos[nombre]}
     </svg>
   );
 }
 
-function DetalleTarjeta({ tarjeta }: { tarjeta: Tarjeta }) {
+// Color de cada estado con las insignias de sol.css: verde operativa, rojo fuera de uso,
+// ámbar en espera y naranja vencida.
+const TONO_ESTADO: Record<string, string> = {
+  ACTIVA: "aprobada",
+  BLOQUEADA: "rechazada",
+  CANCELADA: "rechazada",
+  PENDIENTE_ACTIVACION: "en_evaluacion",
+  RETENIDA: "en_evaluacion",
+  VENCIDA: "observada",
+};
+const FUERA_DE_USO = new Set(["BLOQUEADA", "CANCELADA", "VENCIDA"]);
+
+function EstadoTarjeta({ estado }: { estado: string }) {
   return (
-    <div style={{ marginTop: "30px", background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-      <h3>Tarjeta {enmascarada(tarjeta)}</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
-        <div><small>Identificador:</small> <strong style={{ fontFamily: "monospace", fontSize: "12px" }}>{tarjeta.id_tarjeta}</strong></div>
-        <div><small>Cliente:</small> <strong>{tarjeta.cod_cliente}</strong></div>
-        <div><small>Estado:</small> <strong style={{ color: "#0f766e" }}>{tarjeta.estado_tarjeta}</strong></div>
-        <div><small>Vencimiento:</small> <strong>{vencimientoMmAa(tarjeta.fecha_vencimiento)}</strong></div>
-        <div><small>Emisión:</small> <strong>{tarjeta.fecha_emision}</strong></div>
-        <div><small>BIN:</small> <strong>{tarjeta.bin}</strong></div>
+    <span className={`sol-badge ${TONO_ESTADO[estado] ?? ""}`}>
+      <span />
+      {estado.replace("_", " ")}
+    </span>
+  );
+}
+
+function Chip() {
+  return (
+    <svg className="tj-chip" width="38" height="28" viewBox="0 0 38 28" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="37" height="27" rx="5" fill="#d9b765" stroke="#b8963f" />
+      <path d="M0 10h12m14 0h12M0 18h12m14 0h12M12 0v28m14-28v28M12 14h14" stroke="#a5843a" strokeWidth="1" fill="none" />
+    </svg>
+  );
+}
+
+/** La tarjeta como se ve impresa: número enmascarado, titular y vencimiento MM/AA. */
+function Plastico({ numero, titular, vence, estado, grande = false }:
+  { numero: string; titular: string; vence: string; estado?: string; grande?: boolean }) {
+  const apagada = estado !== undefined && FUERA_DE_USO.has(estado);
+  return (
+    <div className={`tj-plastico ${apagada ? "apagada" : ""} ${grande ? "grande" : ""}`}>
+      {estado && <div className="tj-estado"><EstadoTarjeta estado={estado} /></div>}
+      <div className="tj-plastico-top">
+        <div className="tj-marca">BNA<small>DÉBITO</small></div>
       </div>
+      <Chip />
+      <div className="tj-numero">{numero}</div>
+      <div className="tj-plastico-bottom">
+        <div className="tj-dato"><small>TITULAR</small><strong>{titular || "CÓDIGO DEL CLIENTE"}</strong></div>
+        <div className="tj-dato"><small>VENCE</small><strong>{vence}</strong></div>
+      </div>
+    </div>
+  );
+}
+
+function Resumen({ tarjetas }: { tarjetas: Tarjeta[] }) {
+  const contar = (...estados: string[]) => tarjetas.filter((t) => estados.includes(t.estado_tarjeta)).length;
+  const cifras = [
+    { etiqueta: "Total de tarjetas", valor: tarjetas.length, icono: "tarjeta", tono: "blue" },
+    { etiqueta: "Activas", valor: contar("ACTIVA"), icono: "activa", tono: "green" },
+    { etiqueta: "En espera", valor: contar("PENDIENTE_ACTIVACION", "RETENIDA"), icono: "reloj", tono: "gold" },
+    { etiqueta: "Fuera de uso", valor: contar("BLOQUEADA", "CANCELADA", "VENCIDA"), icono: "candado", tono: "red" },
+  ];
+  return (
+    <div className="sol-stats" style={{ marginBottom: "24px" }}>
+      {cifras.map((c) => (
+        <div className="sol-stat" key={c.etiqueta}>
+          <div>
+            <small>{c.etiqueta}</small>
+            <strong>{c.valor}</strong>
+          </div>
+          <span className={`sol-stat-icon ${c.tono}`}><Icono nombre={c.icono} /></span>
+        </div>
+      ))}
     </div>
   );
 }
 
 export default function TarjetasPage() {
   const [tab, setTab] = useState<Pestana>("cliente");
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Quién trabaja en la pantalla; sin sesión, el pie del menú queda vacío.
+  useEffect(() => {
+    obtenerMiPerfil().then(setUsuario).catch(() => setUsuario(null));
+  }, []);
   const [notice, setNotice] = useState<Aviso | null>(null);
 
   // Tarjetas de un cliente
@@ -80,15 +186,21 @@ export default function TarjetasPage() {
     }
   }
 
+  function irA(pestana: Pestana) {
+    setTab(pestana);
+    setNotice(null);
+  }
+
   function mostrar(tarjeta: Tarjeta) {
     setTarjetaActual(tarjeta);
     setIdConsulta(tarjeta.id_tarjeta);
     setTab("consulta");
   }
 
-  function prepararCambio(tarjeta: Tarjeta) {
+  function prepararCambio(tarjeta: Tarjeta, nuevo: EstadoPedible = "BLOQUEADA") {
     setIdEstado(tarjeta.id_tarjeta);
-    setTab("estado");
+    setEstado(nuevo);
+    irA("estado");
   }
 
   function buscarDeCliente(e: React.FormEvent) {
@@ -114,7 +226,7 @@ export default function TarjetasPage() {
         bin,
         fecha_vencimiento: vencimiento,
       });
-      setNotice({ text: `Tarjeta ${enmascarada(tarjeta)} emitida (${tarjeta.estado_tarjeta}).`, error: false });
+      setNotice({ text: `Tarjeta ${tarjeta.numero_enmascarado} emitida (${tarjeta.estado_tarjeta}).`, error: false });
       mostrar(tarjeta);
     });
   }
@@ -125,11 +237,19 @@ export default function TarjetasPage() {
     if (!id) return;
     void ejecutar(async () => {
       const tarjeta = await cambiarEstado(id, estado, motivo.trim());
-      setNotice({ text: `La tarjeta ${enmascarada(tarjeta)} quedó ${tarjeta.estado_tarjeta}.`, error: false });
+      setNotice({ text: `La tarjeta ${tarjeta.numero_enmascarado} quedó ${tarjeta.estado_tarjeta}.`, error: false });
       setMotivo("");
       mostrar(tarjeta);
     });
   }
+
+  const navegacion: { id: Pestana; etiqueta: string; icono: string }[] = [
+    { id: "cliente", etiqueta: "Tarjetas del cliente", icono: "tarjeta" },
+    { id: "consulta", etiqueta: "Consultar tarjeta", icono: "buscar" },
+    { id: "emision", etiqueta: "Emitir tarjeta", icono: "mas" },
+    { id: "estado", etiqueta: "Bloqueos y estados", icono: "candado" },
+  ];
+  const vencePrevia = vencimiento ? `${vencimiento.slice(5, 7)}/${vencimiento.slice(2, 4)}` : "MM/AA";
 
   return (
     <div className="sol-shell">
@@ -140,40 +260,37 @@ export default function TarjetasPage() {
             <small>Banco Nacional de Arequipa</small>
           </div>
         </div>
-        <div className="sol-workspace">
-          <span className="sol-workspace-dot" />
-          Módulo Tarjetas <small>sobre el CORE</small>
-        </div>
-        <nav aria-label="Navegación Tarjetas">
-          <p>GESTIÓN DE TARJETAS</p>
-          <button className={tab === "cliente" ? "active" : ""} onClick={() => setTab("cliente")}>
-            1. Tarjetas de un cliente
-          </button>
-          <button className={tab === "consulta" ? "active" : ""} onClick={() => setTab("consulta")}>
-            2. Ver tarjeta específica
-          </button>
-          <button className={tab === "emision" ? "active" : ""} onClick={() => setTab("emision")}>
-            3. Emitir tarjeta
-          </button>
-          <button className={tab === "estado" ? "active" : ""} onClick={() => setTab("estado")}>
-            4. Bloquear o cambiar estado
-          </button>
+        <nav aria-label="Navegación Tarjetas" style={{ marginTop: "32px" }}>
+          <p>TARJETAS DE DÉBITO</p>
+          {navegacion.map((n) => (
+            <button key={n.id} className={tab === n.id ? "active" : ""} onClick={() => irA(n.id)}>
+              <Icono nombre={n.icono} />
+              {n.etiqueta}
+            </button>
+          ))}
         </nav>
-        <div className="sol-sidebar-bottom">
-          <div className="sol-lab">
-            <div>
-              <strong>TARJETAS</strong>
-              <small>Sobre la API del CORE</small>
+        {usuario && (
+          <div className="sol-sidebar-bottom">
+            <div className="sol-profile">
+              <span className="sol-avatar">{usuario.nombre.trim()[0]?.toUpperCase()}</span>
+              <div>
+                <strong>{usuario.nombre}</strong>
+                <small>{usuario.rol}</small>
+              </div>
+              <Link href="/login" onClick={cerrarSesion} title="Cerrar sesión" aria-label="Cerrar sesión"
+                style={{ marginLeft: "auto", color: "#b2c6d6", display: "flex" }}>
+                <Icono nombre="salir" tamano={16} />
+              </Link>
             </div>
           </div>
-        </div>
+        )}
       </aside>
 
       <div className="sol-work">
         <header className="sol-topbar">
           <div>
             <span>Tarjetas</span>
-            <b>/</b>Módulo de Tarjetas de Débito
+            <b>/</b>{navegacion.find((n) => n.id === tab)?.etiqueta}
           </div>
           <div className="sol-topbar-right">
             <span className="sol-demo-pill">Requiere sesión iniciada</span>
@@ -182,139 +299,202 @@ export default function TarjetasPage() {
         </header>
 
         <main className="sol-main">
+          <div className="sol-heading">
+            <div>
+              <h1>Tarjetas de débito</h1>
+            </div>
+            {tab !== "emision" && (
+              <button className="sol-button primary" onClick={() => irA("emision")}>
+                <Icono nombre="mas" />
+                Nueva tarjeta
+              </button>
+            )}
+          </div>
+
           {notice && (
             <div role={notice.error ? "alert" : "status"} className={`sol-alert ${notice.error ? "error" : "success"}`}>
               {notice.text}
-              <button onClick={() => setNotice(null)} aria-label="Cerrar aviso"><IconoCerrar /></button>
+              <button onClick={() => setNotice(null)} aria-label="Cerrar aviso"><Icono nombre="cerrar" tamano={14} /></button>
             </div>
           )}
 
           {tab === "cliente" && (
-            <div className="sol-card">
-              <div className="sol-card-title">
-                <div>
-                  <h2>Tarjetas de un cliente</h2>
-                  <p>Lista las tarjetas emitidas a un cliente, de la más reciente a la más antigua.</p>
+            <>
+              <section className="sol-card" style={{ marginBottom: "24px" }}>
+                <div className="sol-card-title">
+                  <div>
+                    <h2>Tarjetas de un cliente</h2>
+                    <p>Las tarjetas emitidas al cliente, de la más reciente a la más antigua.</p>
+                  </div>
                 </div>
-              </div>
-              <form onSubmit={buscarDeCliente} className="sol-toolbar" style={{ marginTop: "20px" }}>
-                <input
-                  aria-label="Código del cliente"
-                  placeholder="Código del cliente, por ejemplo CLI000000001"
-                  value={codCliente}
-                  onChange={(e) => setCodCliente(e.target.value)}
-                  maxLength={12}
-                  required
-                />
-                <button className="sol-button primary" type="submit" disabled={loading}>
-                  {loading ? "Buscando..." : "Ver tarjetas"}
-                </button>
-              </form>
+                <form onSubmit={buscarDeCliente} className="sol-toolbar">
+                  <input
+                    aria-label="Código del cliente"
+                    placeholder="Código del cliente, por ejemplo CLI000000001"
+                    value={codCliente}
+                    onChange={(e) => setCodCliente(e.target.value)}
+                    maxLength={12}
+                    required
+                    style={{ flex: 1 }}
+                  />
+                  <button className="sol-button primary" type="submit" disabled={loading}>
+                    <Icono nombre="buscar" />
+                    {loading ? "Buscando..." : "Ver tarjetas"}
+                  </button>
+                </form>
+              </section>
 
               {tarjetas && tarjetas.length === 0 && (
-                <p role="status" style={{ marginTop: "20px" }}>El cliente no tiene tarjetas.</p>
+                <section className="sol-card">
+                  <div className="sol-empty" role="status">
+                    <span><Icono nombre="tarjeta" tamano={26} /></span>
+                    <h3>El cliente no tiene tarjetas.</h3>
+                    <p>Puedes emitirle una vinculada a una de sus cuentas.</p>
+                    <button className="sol-button secondary" onClick={() => { setClienteEmision(codCliente.trim().toUpperCase()); irA("emision"); }}>
+                      <Icono nombre="mas" />
+                      Emitir tarjeta
+                    </button>
+                  </div>
+                </section>
               )}
+
               {tarjetas && tarjetas.length > 0 && (
-                <div className="sol-tablewrap" style={{ marginTop: "20px" }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Tarjeta</th>
-                        <th>Estado</th>
-                        <th>Vence</th>
-                        <th>Emisión</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tarjetas.map((t) => (
-                        <tr key={t.id_tarjeta}>
-                          <td style={{ fontFamily: "monospace" }}>{enmascarada(t)}</td>
-                          <td>{t.estado_tarjeta}</td>
-                          <td>{vencimientoMmAa(t.fecha_vencimiento)}</td>
-                          <td>{t.fecha_emision}</td>
-                          <td style={{ display: "flex", gap: "8px" }}>
-                            <button className="sol-button" type="button" onClick={() => mostrar(t)}>Ver</button>
-                            <button className="sol-button" type="button" onClick={() => prepararCambio(t)}>Cambiar estado</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  <Resumen tarjetas={tarjetas} />
+                  <ul className="tj-grid" aria-label="Tarjetas del cliente" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    {tarjetas.map((t) => (
+                      <li key={t.id_tarjeta} className="tj-item">
+                        <Plastico numero={t.numero_enmascarado} titular={t.cod_cliente} vence={t.vencimiento_mm_aa} estado={t.estado_tarjeta} />
+                        <div className="tj-item-actions">
+                          <button className="sol-button secondary" type="button" onClick={() => mostrar(t)}>
+                            <Icono nombre="ojo" tamano={16} />
+                            Ver detalle
+                          </button>
+                          <button className="sol-button secondary" type="button" onClick={() => prepararCambio(t)}>
+                            <Icono nombre="candado" tamano={16} />
+                            Cambiar estado
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
-            </div>
+            </>
           )}
 
           {tab === "consulta" && (
-            <div className="sol-card">
+            <section className="sol-card">
               <div className="sol-card-title">
                 <div>
                   <h2>Ver una tarjeta en específico</h2>
                   <p>Consulta el estado y las fechas de una tarjeta por su identificador.</p>
                 </div>
               </div>
-              <form onSubmit={consultar} className="sol-toolbar" style={{ marginTop: "20px" }}>
+              <form onSubmit={consultar} className="sol-toolbar">
                 <input
                   aria-label="Identificador de la tarjeta"
                   placeholder="Identificador de la tarjeta (UUID)"
                   value={idConsulta}
                   onChange={(e) => setIdConsulta(e.target.value)}
                   required
+                  style={{ flex: 1 }}
                 />
                 <button className="sol-button primary" type="submit" disabled={loading}>
+                  <Icono nombre="buscar" />
                   {loading ? "Buscando..." : "Ver tarjeta"}
                 </button>
               </form>
-              {tarjetaActual && <DetalleTarjeta tarjeta={tarjetaActual} />}
-            </div>
+              {tarjetaActual && (
+                <div className="tj-detalle">
+                  <Plastico grande numero={tarjetaActual.numero_enmascarado} titular={tarjetaActual.cod_cliente}
+                    vence={tarjetaActual.vencimiento_mm_aa} estado={tarjetaActual.estado_tarjeta} />
+                  <div>
+                    <h3 style={{ marginTop: 0 }}>Tarjeta {tarjetaActual.numero_enmascarado}</h3>
+                    <dl className="tj-datos">
+                      <div><dt>Estado</dt><dd><EstadoTarjeta estado={tarjetaActual.estado_tarjeta} /></dd></div>
+                      <div><dt>Cliente</dt><dd>{tarjetaActual.cod_cliente}</dd></div>
+                      <div><dt>Emisión</dt><dd>{tarjetaActual.fecha_emision}</dd></div>
+                      <div><dt>Vencimiento</dt><dd>{tarjetaActual.vencimiento_mm_aa} ({tarjetaActual.fecha_vencimiento})</dd></div>
+                      <div><dt>BIN</dt><dd>{tarjetaActual.bin}</dd></div>
+                      <div><dt>Identificador</dt><dd style={{ fontSize: "12px" }}>{tarjetaActual.id_tarjeta}</dd></div>
+                    </dl>
+                    <div className="tj-item-actions" style={{ marginTop: "24px", maxWidth: "420px" }}>
+                      {tarjetaActual.estado_tarjeta === "PENDIENTE_ACTIVACION" && (
+                        <button className="sol-button primary" type="button" onClick={() => prepararCambio(tarjetaActual, "ACTIVA")}>
+                          <Icono nombre="activa" tamano={16} />
+                          Activar
+                        </button>
+                      )}
+                      {tarjetaActual.estado_tarjeta === "ACTIVA" && (
+                        <button className="sol-button secondary" type="button" onClick={() => prepararCambio(tarjetaActual)}>
+                          <Icono nombre="candado" tamano={16} />
+                          Bloquear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
           )}
 
           {tab === "emision" && (
-            <div className="sol-card">
+            <section className="sol-card">
               <div className="sol-card-title">
                 <div>
                   <h2>Emitir tarjeta de débito</h2>
                   <p>La tarjeta queda pendiente de activación y vinculada a una cuenta del cliente.</p>
                 </div>
               </div>
-              <form onSubmit={emitir} className="sol-form-grid" style={{ marginTop: "20px" }}>
-                <div className="sol-field">
-                  <label htmlFor="emision-cliente">Código del cliente</label>
-                  <input id="emision-cliente" value={clienteEmision} onChange={(e) => setClienteEmision(e.target.value)} required maxLength={12} />
+              <div className="tj-emision">
+                <form onSubmit={emitir} className="sol-form-grid">
+                  <div className="sol-field">
+                    <label htmlFor="emision-cliente">Código del cliente</label>
+                    <input id="emision-cliente" value={clienteEmision} onChange={(e) => setClienteEmision(e.target.value)} required maxLength={12} />
+                  </div>
+                  <div className="sol-field">
+                    <label htmlFor="emision-cuenta">Cuenta a vincular</label>
+                    <input id="emision-cuenta" value={cuentaEmision} onChange={(e) => setCuentaEmision(e.target.value)} required maxLength={20} placeholder="Número de cuenta" />
+                  </div>
+                  <div className="sol-field">
+                    <label htmlFor="emision-bin">BIN</label>
+                    <select id="emision-bin" value={bin} onChange={(e) => setBin(e.target.value)}>
+                      {BINES.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
+                    </select>
+                  </div>
+                  <div className="sol-field">
+                    <label htmlFor="emision-vencimiento">Fecha de vencimiento</label>
+                    <input id="emision-vencimiento" type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} required />
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <button className="sol-button primary" type="submit" disabled={loading}>
+                      <Icono nombre="tarjeta" />
+                      {loading ? "Emitiendo..." : "Emitir tarjeta"}
+                    </button>
+                  </div>
+                </form>
+                <div className="tj-vista-previa" aria-hidden="true">
+                  <p>Vista previa</p>
+                  <Plastico numero={`${bin.slice(0, 4)} ${bin.slice(4)}** **** ••••`} titular={clienteEmision.trim().toUpperCase()} vence={vencePrevia} />
                 </div>
-                <div className="sol-field">
-                  <label htmlFor="emision-cuenta">Cuenta a vincular</label>
-                  <input id="emision-cuenta" value={cuentaEmision} onChange={(e) => setCuentaEmision(e.target.value)} required maxLength={20} placeholder="Una cuenta en la que el cliente es titular" />
-                </div>
-                <div className="sol-field">
-                  <label htmlFor="emision-bin">BIN</label>
-                  <select id="emision-bin" value={bin} onChange={(e) => setBin(e.target.value)}>
-                    {BINES.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
-                  </select>
-                </div>
-                <div className="sol-field">
-                  <label htmlFor="emision-vencimiento">Fecha de vencimiento</label>
-                  <input id="emision-vencimiento" type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} required />
-                </div>
-                <div style={{ gridColumn: "1 / -1", marginTop: "10px" }}>
-                  <button className="sol-button primary" type="submit" disabled={loading}>
-                    {loading ? "Emitiendo..." : "Emitir tarjeta"}
-                  </button>
-                </div>
-              </form>
-            </div>
+              </div>
+              <div className="tj-nota">
+                <Icono nombre="escudo" />
+                <span>El número completo de la tarjeta nunca pasa por esta pantalla: el módulo envía un token en su lugar y solo se conservan el BIN y los últimos cuatro dígitos.</span>
+              </div>
+            </section>
           )}
 
           {tab === "estado" && (
-            <div className="sol-card">
+            <section className="sol-card">
               <div className="sol-card-title">
                 <div>
                   <h2>Bloquear o cambiar el estado</h2>
-                  <p>Cada cambio queda en el historial de la tarjeta. El desbloqueo lo hace Seguridad.</p>
+                  <p>Cada cambio queda en el historial de la tarjeta, con su motivo.</p>
                 </div>
               </div>
-              <form onSubmit={cambiar} className="sol-form-grid" style={{ marginTop: "20px" }}>
+              <form onSubmit={cambiar} className="sol-form-grid" style={{ padding: "0 24px 24px" }}>
                 <div className="sol-field">
                   <label htmlFor="estado-id">Identificador de la tarjeta</label>
                   <input id="estado-id" value={idEstado} onChange={(e) => setIdEstado(e.target.value)} required />
@@ -329,13 +509,18 @@ export default function TarjetasPage() {
                   <label htmlFor="estado-motivo">Motivo</label>
                   <input id="estado-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={255} placeholder="Por ejemplo: robo reportado por el cliente" />
                 </div>
-                <div style={{ gridColumn: "1 / -1", marginTop: "10px" }}>
+                <div style={{ gridColumn: "1 / -1" }}>
                   <button className="sol-button primary" type="submit" disabled={loading}>
+                    <Icono nombre="candado" />
                     {loading ? "Aplicando..." : "Aplicar cambio"}
                   </button>
                 </div>
               </form>
-            </div>
+              <div className="tj-nota">
+                <Icono nombre="escudo" />
+                <span>El desbloqueo (de BLOQUEADA a ACTIVA) lo hace el módulo de Seguridad y aquí se rechaza. ANULADA cancela la tarjeta de forma definitiva.</span>
+              </div>
+            </section>
           )}
         </main>
       </div>
