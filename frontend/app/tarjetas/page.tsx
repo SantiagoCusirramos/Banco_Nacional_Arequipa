@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  BINES, ESTADOS_PEDIBLES, cambiarEstado, emitirTarjeta, enmascarada, mensajeDeError, tarjetasDeCliente,
-  vencimientoMmAa, verTarjeta, type EstadoPedible, type Tarjeta,
+  BINES, ESTADOS_PEDIBLES, cambiarEstado, emitirTarjeta, mensajeDeError, tarjetasDeCliente, verTarjeta,
+  type EstadoPedible, type Tarjeta,
 } from "@/lib/tarjetas";
 
 type Pestana = "cliente" | "consulta" | "emision" | "estado";
@@ -29,12 +29,12 @@ function IconoCerrar() {
 function DetalleTarjeta({ tarjeta }: { tarjeta: Tarjeta }) {
   return (
     <div style={{ marginTop: "30px", background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-      <h3>Tarjeta {enmascarada(tarjeta)}</h3>
+      <h3>Tarjeta {tarjeta.numero_enmascarado}</h3>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
         <div><small>Identificador:</small> <strong style={{ fontFamily: "monospace", fontSize: "12px" }}>{tarjeta.id_tarjeta}</strong></div>
         <div><small>Cliente:</small> <strong>{tarjeta.cod_cliente}</strong></div>
         <div><small>Estado:</small> <strong style={{ color: "#0f766e" }}>{tarjeta.estado_tarjeta}</strong></div>
-        <div><small>Vencimiento:</small> <strong>{vencimientoMmAa(tarjeta.fecha_vencimiento)}</strong></div>
+        <div><small>Vencimiento:</small> <strong>{tarjeta.vencimiento_mm_aa}</strong></div>
         <div><small>Emisión:</small> <strong>{tarjeta.fecha_emision}</strong></div>
         <div><small>BIN:</small> <strong>{tarjeta.bin}</strong></div>
       </div>
@@ -114,7 +114,7 @@ export default function TarjetasPage() {
         bin,
         fecha_vencimiento: vencimiento,
       });
-      setNotice({ text: `Tarjeta ${enmascarada(tarjeta)} emitida (${tarjeta.estado_tarjeta}).`, error: false });
+      setNotice({ text: `Tarjeta ${tarjeta.numero_enmascarado} emitida (${tarjeta.estado_tarjeta}).`, error: false });
       mostrar(tarjeta);
     });
   }
@@ -125,7 +125,7 @@ export default function TarjetasPage() {
     if (!id) return;
     void ejecutar(async () => {
       const tarjeta = await cambiarEstado(id, estado, motivo.trim());
-      setNotice({ text: `La tarjeta ${enmascarada(tarjeta)} quedó ${tarjeta.estado_tarjeta}.`, error: false });
+      setNotice({ text: `La tarjeta ${tarjeta.numero_enmascarado} quedó ${tarjeta.estado_tarjeta}.`, error: false });
       setMotivo("");
       mostrar(tarjeta);
     });
@@ -229,9 +229,9 @@ export default function TarjetasPage() {
                     <tbody>
                       {tarjetas.map((t) => (
                         <tr key={t.id_tarjeta}>
-                          <td style={{ fontFamily: "monospace" }}>{enmascarada(t)}</td>
+                          <td style={{ fontFamily: "monospace" }}>{t.numero_enmascarado}</td>
                           <td>{t.estado_tarjeta}</td>
-                          <td>{vencimientoMmAa(t.fecha_vencimiento)}</td>
+                          <td>{t.vencimiento_mm_aa}</td>
                           <td>{t.fecha_emision}</td>
                           <td style={{ display: "flex", gap: "8px" }}>
                             <button className="sol-button" type="button" onClick={() => mostrar(t)}>Ver</button>

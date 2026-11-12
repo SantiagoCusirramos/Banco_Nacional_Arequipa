@@ -32,6 +32,14 @@ export const apiCuentas = axios.create({
   timeout: 15000,
 });
 
+// TARJETAS por el puente de Next (/api/tarjeta), que reenvía el token.
+export const apiTarjetas = axios.create({
+  baseURL: "/api/tarjeta",
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000,
+});
+apiTarjetas.interceptors.request.use(conToken);
+
 const OPERACIONES = ["/deposito", "/retiro", "/transferencia"];
 
 /** Cabeceras que CUENTAS exige en toda operación que mueve dinero. */
