@@ -130,6 +130,9 @@ Documentación interactiva: `http://127.0.0.1:8012/docs`. Especificación public
   En UTC y modo estricto. El arranque falla si `core.verificar_configuracion()` no pasa.
 - **Desbloqueo de tarjetas:** no disponible, pendiente de un cliente de Seguridad. La API
   responde 403 `BNA-DESBLOQUEO`, porque solo el rol `bna_seguridad` puede desbloquear.
+- **Emisión de tarjetas:** `POST /coredb/tarjetas` acepta un `id_tarjeta` opcional. Con un id
+  que ya existe responde 409 `REGISTRO_DUPLICADO` y no emite otra tarjeta; el módulo TARJETAS
+  lo deriva de su `X-Idempotency-Key` para repetir una emisión sin duplicarla.
 - **Actor:** sale del token. Una cabecera `X-Actor` se ignora.
 - **Origen de un cambio de estado de tarjeta:** no lo envía el cliente; sale del token:
   `OPERADOR` para personas, `MODULO_CLIENTES` para el usuario de servicio de Clientes y

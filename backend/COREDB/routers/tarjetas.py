@@ -16,6 +16,12 @@ router = APIRouter(prefix="/coredb/tarjetas", tags=["tarjetas"])
 
 
 class TarjetaEmitir(BaseModel):
+    id_tarjeta: uuid.UUID | None = Field(
+        default=None,
+        description="Opcional. Con el mismo id, una segunda emisión responde 409 en lugar de "
+                    "emitir otra tarjeta: así la repite sin duplicarla quien deriva el id de su "
+                    "llave de idempotencia.",
+    )
     pan_token: str = Field(min_length=1, max_length=32)
     bin: str = Field(pattern=r"^[0-9]{6}$")
     ultimos4: str = Field(pattern=r"^[0-9]{4}$")
@@ -105,7 +111,7 @@ def emitir(
     db: Session = Depends(db_session),
     actor: Actor = Depends(requiere_permiso("CREAR_TARJETA")),
 ):
-    id_tarjeta = uuid.uuid4()
+    id_tarjeta = datos.id_tarjeta or uuid.uuid4()
     con_reintentos(
         db,
         lambda: llamar(
