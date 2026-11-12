@@ -4,6 +4,17 @@ El módulo SOL incluye una interfaz Next.js y un servicio FastAPI. Trabaja con t
 
 La interfaz se encuentra en **http://localhost:3000/solicitud-credito**.
 
+## Con el producto integrado (Docker)
+
+Desde la raíz del repositorio, `./bna up` levanta SOL junto con los demás servicios, sin instalar Python, Node ni MySQL (ver el [README](README.md)):
+
+- La interfaz queda en http://localhost:3000/solicitud-credito y el servicio en http://127.0.0.1:8011/docs.
+- Las cuatro cuentas de la sección 3 se crean solas. Su clave inicial es la de `SOL_INITIAL_PASSWORD` en `.env` (`grep SOL_INITIAL_PASSWORD .env`).
+- La base `bna_sol_mvp` vive en el servicio `db-aux`, aparte de la base del CORE. `./bna down` la conserva; `./bna reset` la borra.
+- Sigue en modo `SIMULADO`: Captación y Evaluación no se conectan con otros módulos.
+
+El resto de esta guía es la instalación manual del módulo, en Windows y con un MySQL propio.
+
 ## Si ya ejecutabas la v1: actualizar conservando tus datos
 
 1. Respalda tu base `bna_sol_mvp` y conserva tus `.env.sol` y `.env.local` privados. No copies archivos sobre un backend que siga ejecutándose.

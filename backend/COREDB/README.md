@@ -1,13 +1,19 @@
 # COREDB: API de la base integrada
 
-API FastAPI sobre la base de `database/`, aparte de la API de `CORE`, que no reemplaza.
+API FastAPI sobre la base integrada de `database/`. Es la API del CORE que usa el producto:
+CUENTAS y el frontend la llaman, y ningún otro servicio se conecta a esa base. El CORE
+legado (`backend/CORE`) es otra API, sobre otra base, y sigue aparte.
 
 > **Exige un JWT propio en toda ruta salvo `/coredb/salud` y el login.** No tiene TLS:
 > no exponer fuera de la máquina sin un proxy con TLS delante.
 
 ## Clonar y levantar
 
-Python 3.11. Desde la raíz del repositorio:
+Con todo el producto, desde la raíz del repositorio: `./bna up` (COREDB queda en
+http://127.0.0.1:8012/docs y el administrador es `admin`, con la contraseña de
+`BNA_ADMIN_PASSWORD` en `.env`).
+
+Solo la base y esta API, con Python 3.11, desde la raíz del repositorio:
 
 ```bash
 cp backend/COREDB/.env.example backend/COREDB/.env      # completar las claves y CORE_DB_JWT_CLAVE

@@ -1,13 +1,16 @@
-# CORE — API única de acceso a la base de datos `bna`
+# CORE legado — API sobre la base de datos `bna`
 
-Módulo **CORE** del backend del Banco Nacional de Arequipa. Es el
-único componente que toca la base de datos `bna` (esquema unificado en
-`backend/Infraestructura - BD/Trabajo_hecho/BD/`). El resto del software
-(incluido el futuro Bus de Servicios, RNF-22) consume estas acciones
-como API única.
+API anterior del CORE del Banco Nacional de Arequipa, sobre la base `bna`
+(esquema unificado en `backend/Infraestructura - BD/Trabajo_hecho/BD/`).
 
-Fuente de requisitos: `Contexto_BNA/Acciones CORE.md` (21 acciones;
-la billetera se omitió por no existir tablas en el modelo).
+> **Estado:** ningún servicio del producto la llama. CUENTAS y el frontend
+> usan [COREDB](../COREDB/README.md), la API sobre la base integrada de
+> `database/`. Este módulo se conserva porque tiene los créditos, que COREDB
+> todavía no ofrece, y solo se levanta si se pide (ver "Ejecución").
+
+Fuente de requisitos: `Acciones CORE.md`, documento del equipo que no está en
+este repositorio (21 acciones; la billetera se omitió por no existir tablas
+en el modelo).
 
 ## Acciones implementadas
 
@@ -74,19 +77,36 @@ backend/CORE/
 - **RNF-13**: el PAN jamás se almacena; solo token, BIN y últimos 4.
 - **RNF-29**: errores con `code` + `status_code` en respuesta JSON.
 
-## Ejecución local
+## Ejecución
+
+Con el producto, desde la raíz del repositorio:
+
+```bash
+COMPOSE_PROFILES=legado ./bna up     # queda en http://127.0.0.1:8000/docs
+```
+
+Usa el esquema `bna` del servicio `db-aux`, que se carga desde
+`99_bna_unificado.sql`. Ese script trae cinco usuarios de ejemplo, uno por rol,
+con sus contraseñas a la vista en el propio archivo (tabla `usuario_sistema`):
+sirven para probar en local y nada más.
+
+Solo el módulo, con Python 3.11 y un MySQL que ya tenga la base `bna`:
 
 ```bash
 cd backend
-python3.12 -m venv .venv && source .venv/bin/activate
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # valor para SECRET_KEY
 uvicorn main:app --reload
 ```
 
-Variables relevantes (`.env`): `DB_HOST`, `DB_PORT`, `DB_USER`,
-`DB_PASSWORD`, `DB_NAME` (`bna`, la base que crean los scripts SQL) y
-`SECRET_KEY`, sin la cual el backend no arranca. Ver "Configurar variables
-de entorno" en el README de la raíz.
+Variables relevantes (`backend/.env`, que no se versiona): `DB_HOST`,
+`DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (`bna`, la base que crean los
+scripts SQL) y `SECRET_KEY`. Sin una `SECRET_KEY` propia de al menos 32
+caracteres el backend no arranca, y el error indica qué hacer. No reutilizar
+ningún valor del antiguo `backend/.env` que estuvo versionado: están
+comprometidos.
 
 ## Autenticación
 
@@ -104,10 +124,14 @@ cd backend
 python -m pytest CORE/tests -q
 ```
 
+Sin Python 3.11 en la máquina, `./bna test` desde la raíz corre esta suite en
+un contenedor, junto con las demás.
+
 Cobertura actual: lógica de calendario francés, motor de reglas y flujo
-de créditos, concurrencia de movimientos, autenticación y JWT,
-configuración, utilidades (UUIDv7, Decimal, hashing), excepciones de
-negocio, catálogo RBAC y smoke de montaje de la app.
+de créditos, concurrencia de movimientos, autenticación y JWT, token y
+permiso en cada ruta (`test_rutas_protegidas.py`), configuración, utilidades
+(UUIDv7, Decimal, hashing), excepciones de negocio, catálogo RBAC y smoke de
+montaje de la app.
 `CORE/tests/integracion/test_real_mysql.py` prueba la autenticación contra
 un MySQL real; se omite salvo que `BNA_INTEGRACION_MYSQL=1` (ver
 [`AUTENTICACION.md`](AUTENTICACION.md)).
