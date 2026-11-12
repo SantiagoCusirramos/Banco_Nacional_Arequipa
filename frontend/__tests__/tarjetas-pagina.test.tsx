@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AxiosError } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +29,8 @@ const perfil = vi.mocked(api.get);
 const pestana = (nombre: string) =>
   userEvent.click(within(screen.getByRole("navigation", { name: "Navegación Tarjetas" })).getByRole("button", { name: nombre }));
 const enPantalla = () => within(screen.getByRole("main"));
+// Como en page.test.tsx: escribir de una vez y no tecla por tecla, que en el CI no alcanza el tiempo.
+const escribir = (campo: HTMLElement, valor: string) => fireEvent.change(campo, { target: { value: valor } });
 // Error con el formato ITIL-02 de TARJETAS.
 const errorTarjetas = (status: number, error_code: string, message: string) =>
   new AxiosError("Request failed", "ERR_BAD_REQUEST", undefined, undefined, {
@@ -47,7 +49,7 @@ describe("Página del módulo Tarjetas", () => {
   it("TJ-01 Lista las tarjetas de un cliente por su código", async () => {
     get.mockResolvedValue(sobre([TARJETA, OTRA]));
     render(<TarjetasPage />);
-    await userEvent.type(screen.getByLabelText("Código del cliente"), "cli000000001");
+    escribir(screen.getByLabelText("Código del cliente"), "cli000000001");
     await userEvent.click(screen.getByRole("button", { name: "Ver tarjetas" }));
     await waitFor(() => expect(get).toHaveBeenCalledWith("/cliente/CLI000000001"));
     const tarjetas = await screen.findAllByRole("listitem");
@@ -64,7 +66,7 @@ describe("Página del módulo Tarjetas", () => {
   it("TJ-02 Avisa cuando el cliente no tiene tarjetas", async () => {
     get.mockResolvedValue(sobre([]));
     render(<TarjetasPage />);
-    await userEvent.type(screen.getByLabelText("Código del cliente"), "CLI000000009");
+    escribir(screen.getByLabelText("Código del cliente"), "CLI000000009");
     await userEvent.click(screen.getByRole("button", { name: "Ver tarjetas" }));
     expect(await screen.findByRole("status")).toHaveTextContent("El cliente no tiene tarjetas.");
   });
@@ -72,7 +74,7 @@ describe("Página del módulo Tarjetas", () => {
   it("TJ-03 Muestra el mensaje del servicio si el cliente no existe", async () => {
     get.mockRejectedValue(errorTarjetas(404, "ERR-CLI-NO-ENCONTRADO", "El cliente NOEXISTE no existe."));
     render(<TarjetasPage />);
-    await userEvent.type(screen.getByLabelText("Código del cliente"), "NOEXISTE");
+    escribir(screen.getByLabelText("Código del cliente"), "NOEXISTE");
     await userEvent.click(screen.getByRole("button", { name: "Ver tarjetas" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("El cliente NOEXISTE no existe.");
   });
@@ -80,7 +82,7 @@ describe("Página del módulo Tarjetas", () => {
   it("TJ-04 Ver una tarjeta desde la lista abre su detalle", async () => {
     get.mockResolvedValue(sobre([TARJETA]));
     render(<TarjetasPage />);
-    await userEvent.type(screen.getByLabelText("Código del cliente"), "CLI000000001");
+    escribir(screen.getByLabelText("Código del cliente"), "CLI000000001");
     await userEvent.click(screen.getByRole("button", { name: "Ver tarjetas" }));
     await userEvent.click(await screen.findByRole("button", { name: "Ver detalle" }));
     expect(screen.getByRole("heading", { name: "Tarjeta 0044 99** **** 0001" })).toBeInTheDocument();
@@ -95,8 +97,8 @@ describe("Página del módulo Tarjetas", () => {
     post.mockResolvedValue(sobre({ ...TARJETA, estado_tarjeta: "PENDIENTE_ACTIVACION" }));
     render(<TarjetasPage />);
     await pestana("Emitir tarjeta");
-    await userEvent.type(screen.getByLabelText("Código del cliente"), "cli000000001");
-    await userEvent.type(screen.getByLabelText("Cuenta a vincular"), "10100000000001");
+    escribir(screen.getByLabelText("Código del cliente"), "cli000000001");
+    escribir(screen.getByLabelText("Cuenta a vincular"), "10100000000001");
     await userEvent.click(enPantalla().getByRole("button", { name: "Emitir tarjeta" }));
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     const [ruta, cuerpo] = post.mock.calls[0] as [string, Record<string, string>];
@@ -110,8 +112,8 @@ describe("Página del módulo Tarjetas", () => {
     post.mockResolvedValue(sobre({ ...TARJETA, estado_tarjeta: "BLOQUEADA" }));
     render(<TarjetasPage />);
     await pestana("Bloqueos y estados");
-    await userEvent.type(screen.getByLabelText("Identificador de la tarjeta"), TARJETA.id_tarjeta);
-    await userEvent.type(screen.getByLabelText("Motivo"), "Robo reportado");
+    escribir(screen.getByLabelText("Identificador de la tarjeta"), TARJETA.id_tarjeta);
+    escribir(screen.getByLabelText("Motivo"), "Robo reportado");
     await userEvent.click(screen.getByRole("button", { name: "Aplicar cambio" }));
     await waitFor(() => expect(post).toHaveBeenCalledWith(
       `/${TARJETA.id_tarjeta}/estado`, { estado: "BLOQUEADA", motivo: "Robo reportado" }));
@@ -123,7 +125,7 @@ describe("Página del módulo Tarjetas", () => {
       "El desbloqueo de tarjetas no está disponible: pendiente de un cliente de Seguridad."));
     render(<TarjetasPage />);
     await pestana("Bloqueos y estados");
-    await userEvent.type(screen.getByLabelText("Identificador de la tarjeta"), TARJETA.id_tarjeta);
+    escribir(screen.getByLabelText("Identificador de la tarjeta"), TARJETA.id_tarjeta);
     await userEvent.selectOptions(screen.getByLabelText("Nuevo estado"), "ACTIVA");
     await userEvent.click(screen.getByRole("button", { name: "Aplicar cambio" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("pendiente de un cliente de Seguridad");
