@@ -63,6 +63,11 @@ correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests
 correr "Seguridad" docker run --rm bna/seguridad:local $PYTEST seguridad/tests
 correr "COREDB, unitarias" \
   docker run --rm bna/coredb:local sh -c "cd COREDB && $PYTEST"
+# Lo que CUENTAS y TARJETAS envían a COREDB, contra los esquemas de COREDB: solo su
+# imagen los tiene; en la del backend estas pruebas se omiten.
+correr "Contratos de CUENTAS y TARJETAS con COREDB" \
+  docker run --rm bna/coredb:local $PYTEST \
+  CUENTAS/tests/test_contrato_core.py TARJETAS/tests/test_contrato_core.py
 correr "COREDB contra MySQL" \
   env COREDB_IMAGEN_PRUEBAS=bna/coredb:local backend/COREDB/scripts/pruebas_integracion.sh
 correr "Base integrada, despliegue" database/pruebas/mysql/prueba_despliegue.sh
