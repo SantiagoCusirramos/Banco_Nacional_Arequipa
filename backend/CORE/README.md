@@ -3,7 +3,7 @@
 API anterior del CORE del Banco Nacional de Arequipa, sobre la base `bna`
 (esquema unificado en `backend/Infraestructura - BD/Trabajo_hecho/BD/`).
 
-> **Estado:** ningún servicio del producto la llama. CUENTAS y el frontend
+> **Estado:** ningún servicio del producto la llama. CUENTAS, TARJETAS y el frontend
 > usan [COREDB](../COREDB/README.md), la API sobre la base integrada de
 > `database/`. Este módulo se conserva porque tiene los créditos, que COREDB
 > todavía no ofrece, y solo se levanta si se pide (ver "Ejecución").

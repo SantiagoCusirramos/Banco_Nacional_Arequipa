@@ -1,7 +1,7 @@
 # COREDB: API de la base integrada
 
 API FastAPI sobre la base integrada de `database/`. Es la API del CORE que usa el producto:
-CUENTAS y el frontend la llaman, y ningún otro servicio se conecta a esa base. El CORE
+CUENTAS, TARJETAS y el frontend la llaman, y ningún otro servicio se conecta a esa base. El CORE
 legado (`backend/CORE`) es otra API, sobre otra base, y sigue aparte.
 
 > **Exige un JWT propio en toda ruta salvo `/coredb/salud` y el login.** No tiene TLS:
