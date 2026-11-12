@@ -2,9 +2,19 @@
 
 Prototipo de laboratorio independiente de MySQL y del Bus. Corre como servicio aparte; no está montado en `main:app`. No autentica ni protege automáticamente los endpoints preexistentes `/core`. No sustituye la base de identidades del CORE. No mueve dinero.
 
+## Con el producto
+
+`./bna up`, desde la raíz del repositorio, levanta este servicio en http://127.0.0.1:8013 (API en `/docs`). Su clave sale de `SEGURIDAD_SECRET_KEY` en `.env` y su base SQLite queda en el volumen `seguridad-datos`. Ningún otro servicio del producto lo llama.
+
+No trae usuarios. Para crear uno (pide la contraseña en la terminal):
+
+```bash
+docker compose exec seguridad python -m seguridad.manage create-user admin.local --role ADMINISTRADOR
+```
+
 ## Instalación reproducible
 
-Desde la raíz del repositorio (Python 3.11+):
+Solo el módulo, desde la raíz del repositorio (Python 3.11+):
 
 ```bash
 python3 -m venv .venv-seguridad
@@ -25,7 +35,7 @@ backend/seguridad/run_local.sh
 Consola: http://127.0.0.1:8013 · API: http://127.0.0.1:8013/docs.
 El puerto 8013 evita interferir con el CORE (8000), CUENTAS (8001), SOL (8011) y COREDB (8012). No se necesita frontend Next.js para la consola técnica. El servidor escucha exclusivamente en loopback.
 
-En este equipo ya se crearon `admin.demo`, `cliente.demo` y `auditor.demo`. La contraseña aleatoria está en `backend/.env.seguridad.local`, campo `DEMO_PASSWORD`, solo para la demostración local; no se incluye en informes, capturas ni control de versiones. No es una cuenta del banco.
+No hay usuarios ni contraseñas preinstalados: cada instalación crea los suyos con `create-user`. No son cuentas del banco.
 
 ## Contratos
 
@@ -83,7 +93,7 @@ Copia consistente mediante SQLite Backup API. Conservar la clave por separado. P
 ## Pendientes para interoperabilidad / producción
 
 1. Comité de Tecnología: aprobar contrato e identidad del servicio, ubicación de datos y responsabilidad de topes.
-2. CORE: exponer autenticación, ampliar esquema para hash robusto (actual CHAR(64)), migrar SHA256/bcrypt con pruebas y proteger rutas existentes con catálogo RBAC. Las identidades locales NO se migraron ni vincularon.
+2. CORE: el CORE legado ya expone autenticación (`POST /core/auth/login`), migra SHA256 a bcrypt en el primer login y exige token y permiso del catálogo RBAC en todas sus rutas salvo el login; COREDB tiene su propio login y permisos. Sigue pendiente: las identidades locales de este módulo NO se migraron ni vincularon con ninguna de las dos.
 3. M8: Bus real, propagación de identidad/correlación, autenticación entre servicios, TLS/mTLS y políticas de reintentos.
 4. M3/M4/M5/M6/M7: homologar topes, reservas/confirmación, Token Matriz, bloqueo de tarjeta, extorno y flujos por canal.
 5. Integrar segundo factor por canal independiente, RENIEC/biometría, SMS, HSM y SIEM.

@@ -19,7 +19,8 @@ Uso: ./bna <orden>
   ps              Estado de los servicios
   logs [servicio] Registros, en vivo
   smoke           Flujo de extremo a extremo contra el producto levantado
-  test            Todas las suites de pruebas, en contenedores, y el flujo
+  test            Todas las suites de pruebas, en contenedores, y el flujo. Si el
+                  producto no estaba levantado, al terminar elimina lo que creó
   help            Esta ayuda
 
 En Kubernetes, sobre un clúster local de kind (requiere kind y kubectl):
