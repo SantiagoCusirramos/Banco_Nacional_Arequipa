@@ -11,5 +11,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
+    // Con jsdom, las pruebas que escriben en formularios pasan los 5 s por omisión cuando la
+    // máquina está ocupada (todas las suites a la vez, o el producto levantado), y fallan sin error real.
+    testTimeout: 15000,
   },
 });
