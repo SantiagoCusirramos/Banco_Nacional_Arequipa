@@ -2,7 +2,7 @@
 
 .tj-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -177,6 +177,31 @@
 @media (max-width: 900px) {
   .tj-detalle,
   .tj-emision {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* En un teléfono la barra superior deja solo la sección actual y el enlace de vuelta. */
+@media (max-width: 650px) {
+  .sol-topbar .sol-demo-pill,
+  .sol-topbar > div:first-child > span,
+  .sol-topbar > div:first-child > b {
+    display: none;
+  }
+  .sol-topbar a {
+    white-space: nowrap;
+  }
+  .tj-detalle {
+    padding: 16px;
+    gap: 20px;
+  }
+  .tj-emision {
+    padding: 0 16px 16px;
+  }
+  .tj-nota {
+    margin: 0 16px 16px;
+  }
+  .tj-datos {
     grid-template-columns: 1fr;
   }
 }

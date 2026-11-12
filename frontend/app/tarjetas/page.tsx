@@ -348,7 +348,7 @@ export default function TarjetasPage() {
                 <form onSubmit={buscarDeCliente} className="sol-toolbar">
                   <input
                     aria-label="Código del cliente"
-                    placeholder="Código del cliente, por ejemplo CLI000000001"
+                    placeholder="Código del cliente"
                     value={codCliente}
                     onChange={(e) => setCodCliente(e.target.value)}
                     maxLength={12}
