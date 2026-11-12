@@ -31,6 +31,7 @@ scripts/generar_env.sh "$RAIZ" || exit 1
 correr "Imágenes" docker compose build -q
 correr "CORE legado" en_backend
 correr "CUENTAS" en_backend CUENTAS/tests
+correr "TARJETAS" en_backend TARJETAS/tests
 correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests
 correr "Seguridad" docker run --rm bna/seguridad:local $PYTEST seguridad/tests
 correr "COREDB, unitarias" \

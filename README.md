@@ -24,6 +24,7 @@ cd Banco_Nacional_Arequipa
 | Frontend | http://localhost:3000 |
 | COREDB, la API del CORE | http://127.0.0.1:8012/docs |
 | CUENTAS | http://127.0.0.1:8001/docs |
+| TARJETAS | http://127.0.0.1:8002/docs |
 | SOL | http://127.0.0.1:8011/docs |
 | Seguridad | http://127.0.0.1:8013 |
 | MySQL de la base integrada | 127.0.0.1:3307 |
@@ -39,7 +40,7 @@ El CORE legado (la API anterior, sobre el esquema `bna`) ya no lo usa ningún se
 | `./bna reset` | Elimina también los datos y vuelve a levantar desde cero |
 | `./bna ps` | Estado de los servicios |
 | `./bna logs [servicio]` | Registros en vivo |
-| `./bna smoke` | Flujo de extremo a extremo: login, registro de un cliente, apertura de cuentas, depósito, transferencia, movimientos y bitácora, por COREDB, por CUENTAS y por el frontend |
+| `./bna smoke` | Flujo de extremo a extremo: login, registro de un cliente, apertura de cuentas, depósito, transferencia, movimientos y bitácora, por COREDB, por CUENTAS y por el frontend; emisión, bloqueo y consulta de una tarjeta por TARJETAS |
 | `./bna test` | Todas las suites de pruebas, en contenedores |
 
 El resto de este documento describe la instalación manual de cada componente.
@@ -160,6 +161,7 @@ El frontend quedará disponible en `http://localhost:3000`.
 | Backend    | http://localhost:8000      |
 | API Docs   | http://localhost:8000/docs |
 | CUENTAS    | http://localhost:8001      |
+| TARJETAS   | http://localhost:8002      |
 | SOL        | http://127.0.0.1:8011      |
 | COREDB     | http://127.0.0.1:8012      |
 | Seguridad  | http://127.0.0.1:8013      |
@@ -180,7 +182,7 @@ Cada componente tiene su propio archivo de ejemplo:
 | `backend/COREDB/.env.example` | `backend/COREDB/.env` | API COREDB                              |
 | `backend/seguridad/.env.example` | `backend/.env.seguridad.local` | Módulo de Seguridad               |
 | `.env.example`              | `.env` (lo crea `./bna up`) | Producto completo con Docker      |
-| `frontend/.env.example`     | `frontend/.env.local` | Direcciones de COREDB y CUENTAS para el servidor de Next.js |
+| `frontend/.env.example`     | `frontend/.env.local` | Direcciones de COREDB, CUENTAS y TARJETAS para el servidor de Next.js |
 | `frontend/.env.sol.example` | `frontend/.env.local` (agregar) | Puente del frontend hacia SOL |
 
 Copia cada archivo como se indica y completa los valores. **Nunca subas el `.env` al repositorio.**

@@ -6,8 +6,9 @@ servicios por su nombre en la red interna y solo usa la biblioteca estándar.
 Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
 saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
-COREDB; después, las mismas cuentas por el módulo CUENTAS y por los puentes del
-frontend, que es el camino que sigue el navegador.
+COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
+módulo TARJETAS y todo por los puentes del frontend, que es el camino que sigue el
+navegador.
 """
 
 import json
@@ -21,10 +22,12 @@ import uuid
 
 COREDB = os.environ.get("E2E_COREDB", "http://127.0.0.1:8012")
 CUENTAS = os.environ.get("E2E_CUENTAS", "http://cuentas:8001")
+TARJETAS = os.environ.get("E2E_TARJETAS", "http://tarjetas:8002")
 FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
 SERVICIOS = {
     "COREDB": (COREDB + "/coredb/salud", {}),
     "CUENTAS": (CUENTAS + "/health", {}),
+    "TARJETAS": (TARJETAS + "/health", {}),
     "SOL": (os.environ.get("E2E_SOL", "http://sol:8011") + "/ready", {}),
     "Seguridad": (os.environ.get("E2E_SEGURIDAD", "http://seguridad:8013") + "/seguridad/estado",
                   {"X-Correlation-ID": "flujo-e2e"}),
@@ -207,15 +210,52 @@ def flujo():
            f"Consolidada por CUENTAS: {estado} {respuesta}")
     paso("CUENTAS: cuenta, depósito de 50.00, movimientos y consolidada del cliente")
 
+    # ── Por el módulo TARJETAS, que reenvía el token a COREDB ───────────────
+    # Solo se emite a un cliente ACTIVO (ERR-TAR-001) y el registrado arriba está OBSERVADO:
+    # la tarjeta es del cliente de desarrollo DEV001, sobre una cuenta nueva suya.
+    numero = int(time.time() * 1000) % 10**15 * 10 + 3
+    titular = "DEV001"
+    cuenta_tarjeta = coredb("POST", "/coredb/cuentas", 201, {
+        "num_cuenta": f"CTA-{numero:016d}", "cci": f"{numero:020d}", "moneda": "PEN",
+        "regimen": "INDIVIDUAL", "id_agencia": AGENCIA, "titulares": [titular],
+    }, token)["num_cuenta"]
+    base = TARJETAS + "/api/v1/tarjetas"
+    estado, _ = pedir("GET", f"{base}/cliente/{titular}")
+    exigir(estado == 401, f"TARJETAS sin token debía responder 401 y respondió {estado}")
+    estado, respuesta = pedir("POST", f"{base}/emision", {"cod_cliente": cliente, "num_cuenta": origen}, token)
+    exigir(estado == 400 and respuesta["error_code"] == "ERR-TAR-001",
+           f"TARJETAS debía rechazar la emisión a un cliente OBSERVADO: {estado} {respuesta}")
+    estado, respuesta = pedir("POST", f"{base}/emision", {"cod_cliente": titular, "num_cuenta": cuenta_tarjeta}, token)
+    exigir(estado == 201 and respuesta["data"]["estado_tarjeta"] == "PENDIENTE_ACTIVACION",
+           f"Emisión por TARJETAS: {estado} {respuesta}")
+    tarjeta = respuesta["data"]["id_tarjeta"]
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
+    exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "ACTIVA",
+           f"Activación por TARJETAS: {estado} {respuesta}")
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
+    exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
+           f"Bloqueo por TARJETAS: {estado} {respuesta}")
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
+    exigir(estado == 403 and respuesta["error_code"] == "ERR-TAR-DESBLOQUEO-NO-PERMITIDO",
+           f"El desbloqueo por TARJETAS debía responder 403: {estado} {respuesta}")
+    estado, respuesta = pedir("GET", f"{base}/cliente/{titular}", token=token)
+    exigir(estado == 200 and tarjeta in [t["id_tarjeta"] for t in respuesta["data"]],
+           f"Tarjetas del cliente por TARJETAS: {estado} {respuesta}")
+    paso(f"TARJETAS: emisión a {titular} (no a un cliente OBSERVADO), activación, bloqueo, "
+         "desbloqueo rechazado y tarjetas del cliente")
+
     # ── Por los puentes del frontend, como lo hace el navegador ─────────────
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
     exigir(estado == 200 and respuesta["username"] == USUARIO, f"Puente a COREDB: {estado} {respuesta}")
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/cuenta/{origen}", token=token)
     exigir(estado == 200 and respuesta["data"]["saldo_disponible"] == "350.00",
            f"Puente a CUENTAS: {estado} {respuesta}")
+    estado, respuesta = pedir("GET", f"{FRONTEND}/api/tarjeta/{tarjeta}", token=token)
+    exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
+           f"Puente a TARJETAS: {estado} {respuesta}")
     estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
     exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
-    paso("frontend: sus puentes llegan a COREDB y a CUENTAS con el token del usuario")
+    paso("frontend: sus puentes llegan a COREDB, a CUENTAS y a TARJETAS con el token del usuario")
 
 
 if __name__ == "__main__":
