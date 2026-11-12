@@ -21,9 +21,24 @@ def ver_auditoria(...): ...
 ```
 
 ## Rutas protegidas
-`/core/usuarios`, `/core/permisos`, `/core/auditoria` y `/core/reportes` exigen token y permiso, y toman el actor del token: el campo `actor` del cuerpo se ignora.
+Todas las rutas de `/core` exigen `Authorization: Bearer <token>`, salvo `POST /core/auth/login`. El actor de cada escritura sale del token: el campo `actor` del cuerpo se ignora.
 
-Pendiente: `/core/clientes`, `/core/cuentas`, `/core/movimientos`, `/core/tarjetas`, `/core/creditos` y `/core/catalogos` siguen sin token y con el actor del cuerpo, porque `backend/CUENTAS` y `frontend/` las llaman sin token. Hay que migrarlas junto con esos clientes.
+| Rutas | Qué exigen |
+|---|---|
+| `/core/auth/me`, `/core/catalogos/*` | Un token vigente (los catálogos no tienen acción en `rbac.json`) |
+| `/core/clientes` | `VER_CLIENTE` (GET), `CREAR_CLIENTE` (POST), `MODIFICAR_CLIENTE` (PATCH) |
+| `/core/cuentas` | `VER_CUENTA` (GET), `CREAR_CUENTA` (POST), `MODIFICAR_CUENTA` (PATCH) |
+| `/core/movimientos` | `REGISTRAR_MOVIMIENTO` |
+| `/core/tarjetas` | `VER_TARJETA` (GET), `CREAR_TARJETA` (POST), `BLOQUEAR_TARJETA` (`cambiar-estado`) |
+| `/core/creditos` | `CREAR_SOLICITUD_CREDITO` (POST `solicitudes`), `VER_CREDITO` (GET `solicitudes/{id}`), `EVALUAR_CREDITO` (`evaluar`), `APROBAR_CREDITO` (`decision`), `CONSULTAR_DEUDA` (GET `deuda`), `REGISTRAR_PAGO` (POST `pagos`) |
+| `/core/usuarios` | `CREAR_USUARIO`; `ASIGNAR_ROLES` en `{id}/rol` |
+| `/core/permisos` | `GESTIONAR_PERMISOS` |
+| `/core/auditoria` | `VER_AUDITORIA` |
+| `/core/reportes` | `GENERAR_REPORTES` |
+
+En `POST /core/creditos/solicitudes/{id}/decision` también se ignora el `id_analista` del cuerpo: se registra el empleado del usuario que decide (`usuario_sistema.id_empleado`), o ninguno si ese usuario no tiene empleado.
+
+`CORE/tests/test_rutas_protegidas.py` falla si una ruta de `/core` distinta del login queda sin token.
 
 ## Configuración (.env)
 ```

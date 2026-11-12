@@ -15,12 +15,12 @@ información**.
     "correlation_id": "..."
   }
   ```
-- `/core/usuarios`, `/core/permisos`, `/core/auditoria` y `/core/reportes`
-  exigen `Authorization: Bearer <token>` y permiso (ver `AUTH_JWT.md`); el
-  actor sale del token.
-- Casi todos los demás endpoints de escritura aceptan en el body
-  `actor` (quién ejecuta, para auditoría) y `correlation_id`
-  (trazabilidad entre sistemas).
+- Todos los endpoints, salvo `POST /core/auth/login`, exigen
+  `Authorization: Bearer <token>`, y casi todos además un permiso (la tabla
+  está en `AUTH_JWT.md`).
+- El actor de la auditoría sale del token. Los endpoints de escritura aún
+  aceptan `actor` en el body, pero lo ignoran; `correlation_id`
+  (trazabilidad entre sistemas) sí se usa.
 
 ---
 
@@ -336,7 +336,8 @@ Respuesta: `puntaje`, `resultado`, `monto_maximo_sugerido`,
 ### POST `/core/creditos/solicitudes/{id_solicitud}/decision`
 Body: `decision` (`APROBAR`|`RECHAZAR`|`OBSERVAR`|`DERIVAR`),
 `id_analista?`, `monto_aprobado?`, `plazo_aprobado?`,
-`observacion?`.
+`observacion?`. `id_analista` se ignora: queda el empleado del usuario del
+token, si tiene uno.
 
 **Precondición**: la solicitud debe haber sido evaluada (debe
 existir al menos una fila en `eva_evaluacion`).
