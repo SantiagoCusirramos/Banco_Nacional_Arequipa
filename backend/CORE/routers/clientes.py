@@ -1,9 +1,14 @@
-"""Routers de clientes — VER/CREAR/MODIFICAR_CLIENTE."""
+"""Routers de clientes — VER/CREAR/MODIFICAR_CLIENTE.
+
+Exigen token y permiso. El actor sale siempre del token: el campo `actor` del
+cuerpo se ignora.
+"""
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from CORE.dependencies import db_session
+from CORE.dependencies import db_session, requiere_permiso
+from CORE.models import UsuarioSistema
 from CORE.schemas.clientes import (
     ClienteAltaRespuesta,
     ClienteCrear,
@@ -31,7 +36,10 @@ def _a_respuesta(cliente) -> ClienteRespuesta:
     )
 
 
-@router.get("", response_model=list[ClienteRespuesta])
+@router.get(
+    "", response_model=list[ClienteRespuesta],
+    dependencies=[Depends(requiere_permiso("VER_CLIENTE"))],
+)
 def ver_clientes(
     documento: str | None = Query(default=None),
     estado: str | None = Query(default=None),
@@ -45,13 +53,20 @@ def ver_clientes(
     return [_a_respuesta(c) for c in clientes]
 
 
-@router.get("/{id_cliente}", response_model=ClienteRespuesta)
+@router.get(
+    "/{id_cliente}", response_model=ClienteRespuesta,
+    dependencies=[Depends(requiere_permiso("VER_CLIENTE"))],
+)
 def ver_cliente(id_cliente: str, db: Session = Depends(db_session)):
     return _a_respuesta(clientessvc.obtener_cliente(db, id_cliente))
 
 
 @router.post("", response_model=ClienteAltaRespuesta, status_code=status.HTTP_201_CREATED)
-def crear_cliente(payload: ClienteCrear, db: Session = Depends(db_session)):
+def crear_cliente(
+    payload: ClienteCrear,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("CREAR_CLIENTE")),
+):
     cliente, duplicado = clientessvc.crear_cliente(
         db,
         cod_tipo_documento=payload.cod_tipo_documento,
@@ -62,7 +77,7 @@ def crear_cliente(payload: ClienteCrear, db: Session = Depends(db_session)):
         fecha_nacimiento=payload.fecha_nacimiento,
         numero_celular=payload.numero_celular,
         correo_electronico=payload.correo_electronico,
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
     )
     return ClienteAltaRespuesta(cliente=_a_respuesta(cliente), duplicado=duplicado)
@@ -70,15 +85,18 @@ def crear_cliente(payload: ClienteCrear, db: Session = Depends(db_session)):
 
 @router.patch("/{id_cliente}", response_model=ClienteRespuesta)
 def modificar_cliente(
-    id_cliente: str, payload: ClienteModificar, db: Session = Depends(db_session)
+    id_cliente: str,
+    payload: ClienteModificar,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("MODIFICAR_CLIENTE")),
 ):
     datos = payload.model_dump(exclude_unset=True)
-    actor = datos.pop("actor", "sistema")
+    datos.pop("actor", None)
     correlation_id = datos.pop("correlation_id", None)
     cliente = clientessvc.modificar_cliente(
         db,
         id_cliente,
-        actor=actor,
+        actor=usuario.username,
         correlation_id=correlation_id,
         **datos,
     )

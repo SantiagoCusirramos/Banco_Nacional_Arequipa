@@ -1,14 +1,19 @@
-"""Catálogos de solo lectura para llenar los formularios del frontend."""
+"""Catálogos de solo lectura para llenar los formularios del frontend.
+
+No tienen acción en el catálogo de permisos: basta un token vigente.
+"""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from CORE.dependencies import db_session
+from CORE.dependencies import db_session, usuario_actual
 from CORE.models.catalogos import Agencia, ProductoAhorro
 from CORE.schemas.catalogos import AgenciaRespuesta, ProductoAhorroRespuesta
 
-router = APIRouter(prefix="/catalogos", tags=["Catálogos"])
+router = APIRouter(
+    prefix="/catalogos", tags=["Catálogos"], dependencies=[Depends(usuario_actual)]
+)
 
 
 @router.get("/agencias", response_model=list[AgenciaRespuesta])

@@ -1,9 +1,14 @@
-"""Routers de tarjetas — VER/CREAR/BLOQUEAR_TARJETA."""
+"""Routers de tarjetas — VER/CREAR/BLOQUEAR_TARJETA.
+
+Exigen token y permiso. El actor sale siempre del token: el campo `actor` del
+cuerpo se ignora.
+"""
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from CORE.dependencies import db_session
+from CORE.dependencies import db_session, requiere_permiso
+from CORE.models import UsuarioSistema
 from CORE.schemas.tarjetas import (
     TarjetaCrear,
     TarjetaEstadoCambiar,
@@ -14,7 +19,10 @@ from CORE.services import tarjetassvc
 router = APIRouter(prefix="/tarjetas", tags=["Tarjetas"])
 
 
-@router.get("", response_model=list[TarjetaRespuesta])
+@router.get(
+    "", response_model=list[TarjetaRespuesta],
+    dependencies=[Depends(requiere_permiso("VER_TARJETA"))],
+)
 def listar_tarjetas(
     id_cliente: str | None = Query(default=None),
     estado: str | None = Query(default=None),
@@ -28,13 +36,20 @@ def listar_tarjetas(
     return [TarjetaRespuesta(**tarjetassvc.vista_publica(t)) for t in tarjetas]
 
 
-@router.get("/{id_tarjeta}", response_model=TarjetaRespuesta)
+@router.get(
+    "/{id_tarjeta}", response_model=TarjetaRespuesta,
+    dependencies=[Depends(requiere_permiso("VER_TARJETA"))],
+)
 def ver_tarjeta(id_tarjeta: str, db: Session = Depends(db_session)):
     return TarjetaRespuesta(**tarjetassvc.vista_publica(tarjetassvc.obtener_tarjeta(db, id_tarjeta)))
 
 
 @router.post("", response_model=TarjetaRespuesta, status_code=status.HTTP_201_CREATED)
-def crear_tarjeta(payload: TarjetaCrear, db: Session = Depends(db_session)):
+def crear_tarjeta(
+    payload: TarjetaCrear,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("CREAR_TARJETA")),
+):
     tarjeta = tarjetassvc.emitir_tarjeta(
         db,
         id_cliente=payload.id_cliente,
@@ -43,7 +58,7 @@ def crear_tarjeta(payload: TarjetaCrear, db: Session = Depends(db_session)):
         anios_vigencia=payload.anios_vigencia,
         es_principal=payload.es_principal,
         habilitada_atm=payload.habilitada_atm,
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
     )
     return TarjetaRespuesta(**tarjetassvc.vista_publica(tarjeta))
@@ -51,7 +66,10 @@ def crear_tarjeta(payload: TarjetaCrear, db: Session = Depends(db_session)):
 
 @router.post("/{id_tarjeta}/cambiar-estado", response_model=TarjetaRespuesta)
 def cambiar_estado(
-    id_tarjeta: str, payload: TarjetaEstadoCambiar, db: Session = Depends(db_session)
+    id_tarjeta: str,
+    payload: TarjetaEstadoCambiar,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("BLOQUEAR_TARJETA")),
 ):
     tarjeta = tarjetassvc.cambiar_estado_tarjeta(
         db,
@@ -59,7 +77,7 @@ def cambiar_estado(
         nuevo_estado=payload.estado_nuevo,
         motivo=payload.motivo,
         origen=payload.origen,
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
     )
     return TarjetaRespuesta(**tarjetassvc.vista_publica(tarjeta))

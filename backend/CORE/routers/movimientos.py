@@ -1,10 +1,15 @@
 """Routers de movimientos — REGISTRAR_MOVIMIENTO (depósito/retiro y
-transferencia)."""
+transferencia).
+
+Exigen token y permiso. El actor sale siempre del token: el campo `actor` del
+cuerpo se ignora.
+"""
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from CORE.dependencies import db_session
+from CORE.dependencies import db_session, requiere_permiso
+from CORE.models import UsuarioSistema
 from CORE.schemas.movimientos import (
     MovimientoRegistrar,
     MovimientoRespuesta,
@@ -35,7 +40,11 @@ def _a_respuesta(res) -> MovimientoRespuesta:
 
 
 @router.post("", response_model=MovimientoRespuesta, status_code=status.HTTP_201_CREATED)
-def registrar_movimiento(payload: MovimientoRegistrar, db: Session = Depends(db_session)):
+def registrar_movimiento(
+    payload: MovimientoRegistrar,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
+):
     res = svc.registrar_movimiento(
         db,
         tipo_operacion=payload.tipo_operacion,
@@ -46,7 +55,7 @@ def registrar_movimiento(payload: MovimientoRegistrar, db: Session = Depends(db_
         id_terminal=payload.id_terminal,
         num_cuenta_contraparte=payload.num_cuenta_contraparte,
         idempotency_key=payload.idempotency_key,
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
         comision=payload.comision,
         itf=payload.itf,
@@ -60,7 +69,11 @@ def registrar_movimiento(payload: MovimientoRegistrar, db: Session = Depends(db_
     response_model=TransferenciaRespuesta,
     status_code=status.HTTP_201_CREATED,
 )
-def transferir(payload: TransferenciaRegistrar, db: Session = Depends(db_session)):
+def transferir(
+    payload: TransferenciaRegistrar,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
+):
     res = svc.transferir_cuentas(
         db,
         num_cuenta_origen=payload.num_cuenta_origen,
@@ -70,7 +83,7 @@ def transferir(payload: TransferenciaRegistrar, db: Session = Depends(db_session
         id_canal=payload.id_canal,
         id_terminal=payload.id_terminal,
         idempotency_key=payload.idempotency_key,
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
     )
     return TransferenciaRespuesta(
