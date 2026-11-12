@@ -1,0 +1,55 @@
+# TARJETAS: tarjetas de débito, sobre COREDB. No tiene base propia.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tarjetas
+  labels: { app.kubernetes.io/name: tarjetas }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: tarjetas }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: tarjetas }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: tarjetas
+          image: bna/backend:local
+          command: [uvicorn, TARJETAS.main:app, --host, 0.0.0.0, --port, "8002"]
+          env:
+            - name: CORE_BASE_URL
+              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: CORE_BASE_URL } }
+          ports:
+            - { name: http, containerPort: 8002 }
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tarjetas
+spec:
+  selector: { app.kubernetes.io/name: tarjetas }
+  ports:
+    - { name: http, port: 8002, targetPort: http }

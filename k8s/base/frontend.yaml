@@ -1,4 +1,4 @@
-# Frontend (Next.js). El navegador solo habla con él; reenvía a COREDB, CUENTAS y SOL
+# Frontend (Next.js). El navegador solo habla con él; reenvía a COREDB, CUENTAS, TARJETAS y SOL
 # desde su servidor.
 apiVersion: apps/v1
 kind: Deployment

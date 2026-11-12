@@ -13,6 +13,10 @@ patches:
     patch: |-
       - { op: add, path: /spec/type, value: NodePort }
       - { op: add, path: /spec/ports/0/nodePort, value: 30001 }
+  - target: { kind: Service, name: tarjetas }
+    patch: |-
+      - { op: add, path: /spec/type, value: NodePort }
+      - { op: add, path: /spec/ports/0/nodePort, value: 30002 }
   - target: { kind: Service, name: sol }
     patch: |-
       - { op: add, path: /spec/type, value: NodePort }
