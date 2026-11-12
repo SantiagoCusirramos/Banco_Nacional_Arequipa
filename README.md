@@ -7,7 +7,8 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | Base integrada | `database/` | MySQL 8.4 con el esquema del CORE: clientes, cuentas, movimientos, tarjetas, contabilidad y bitácora | En uso |
 | COREDB | `backend/COREDB` | La API del CORE. Es el único servicio que se conecta a la base integrada | En uso |
 | CUENTAS | `backend/CUENTAS` | Cuentas de ahorro: apertura, depósito, retiro, transferencia y consultas. No tiene base propia: llama a COREDB | En uso |
-| Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas y solicitud de crédito | En uso |
+| TARJETAS | `backend/TARJETAS` | Tarjetas de débito: emisión, consulta, bloqueo y cambio de estado. No tiene base propia: llama a COREDB | En uso |
+| Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas y solicitud de crédito | En uso |
 | SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas | Laboratorio: base propia, sin conexión con el CORE |
 | Seguridad | `backend/seguridad` | Prototipo de login, topes, auditoría encadenada e incidentes | Laboratorio: SQLite, sin conexión con el CORE |
 | CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene los créditos, que COREDB todavía no ofrece | Opcional: ningún servicio lo llama |
@@ -18,7 +19,7 @@ Lo que no está: el módulo Clientes (en revisión en el PR #25) y el Bus de Ser
 
 - Docker con Compose 2.20 o superior, en marcha (`docker compose version`, `docker info`).
 - Git y bash. En Windows, Git Bash o WSL2.
-- Libres en la máquina: los puertos 3000, 3307, 8001, 8011, 8012 y 8013, y unos 4 GB de disco para las imágenes.
+- Libres en la máquina: los puertos 3000, 3307, 8001, 8002, 8011, 8012 y 8013, y unos 4 GB de disco para las imágenes.
 
 No hace falta Python, Node ni MySQL: todo corre en contenedores.
 
@@ -43,15 +44,17 @@ flowchart LR
   nav["Navegador"] --> fe["frontend :3000"]
   fe -->|"/api/core"| coredb["COREDB :8012"]
   fe -->|"/api/cuenta"| cta["CUENTAS :8001"]
+  fe -->|"/api/tarjeta"| tar["TARJETAS :8002"]
   fe -->|"/api/solicitud-credito"| sol["SOL :8011"]
   cta --> coredb
+  tar --> coredb
   coredb --> db[("db: base integrada, MySQL 8.4 :3307")]
   sol --> aux[("db-aux: bna_sol_mvp y bna legada")]
   seg["Seguridad :8013"] --> sq[("SQLite en un volumen")]
   leg["CORE legado :8000 (perfil legado)"] -.-> aux
 ```
 
-- El navegador solo habla con el frontend. Sus rutas `/api/core`, `/api/cuenta` y `/api/solicitud-credito` reenvían cada petición desde el servidor de Next.js, así que el navegador nunca conoce la dirección de un servicio.
+- El navegador solo habla con el frontend. Sus rutas `/api/core`, `/api/cuenta`, `/api/tarjeta` y `/api/solicitud-credito` reenvían cada petición desde el servidor de Next.js, así que el navegador nunca conoce la dirección de un servicio.
 - COREDB es la única entrada a la base integrada, y escribe en ella solo por procedimientos almacenados.
 - `db-aux` es otro MySQL, con la base de SOL (`bna_sol_mvp`) y el esquema `bna` del CORE legado. La base integrada no recibe esquemas ni usuarios ajenos.
 - Todos los puertos se publican solo en `127.0.0.1`.
@@ -64,6 +67,7 @@ flowchart LR
 | Solicitud de crédito | http://localhost:3000/solicitud-credito | `asesor.bna`, `supervisor.bna`, `auditor.bna` o `evaluador.demo`, con `SOL_INITIAL_PASSWORD` | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
 | COREDB | http://127.0.0.1:8012/docs | Token de `POST /coredb/auth/login` con `admin` | [`backend/COREDB/README.md`](backend/COREDB/README.md) |
 | CUENTAS | http://127.0.0.1:8001/docs | El mismo token de COREDB | [`backend/CUENTAS/README.md`](backend/CUENTAS/README.md) |
+| TARJETAS | http://127.0.0.1:8002/docs | El mismo token de COREDB | [`backend/TARJETAS/README.md`](backend/TARJETAS/README.md) |
 | SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
 | Seguridad | http://127.0.0.1:8013 | No trae usuarios: se crean con una orden | [`backend/seguridad/README.md`](backend/seguridad/README.md) |
 | MySQL de la base integrada | `127.0.0.1:3307` | `root` y `CORE_DB_ROOT_PASSWORD` | [`database/README.md`](database/README.md) |
@@ -114,11 +118,11 @@ Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecu
 ./bna test
 ```
 
-Corre, en contenedores, las suites del CORE legado, CUENTAS, SOL, Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
+Corre, en contenedores, las suites del CORE legado, CUENTAS, TARJETAS, SOL, Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
 
 Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
 
-`./bna smoke` inicia sesión como administrador, registra un cliente, le abre dos cuentas, deposita, transfiere, repite la transferencia para comprobar la idempotencia y lee saldos, movimientos y bitácora por COREDB; después consulta las mismas cuentas por CUENTAS y por el frontend. Cada ejecución crea un cliente nuevo.
+`./bna smoke` inicia sesión como administrador, registra un cliente, le abre dos cuentas, deposita, transfiere, repite la transferencia para comprobar la idempotencia y lee saldos, movimientos y bitácora por COREDB; después consulta las mismas cuentas por CUENTAS; por TARJETAS emite una tarjeta al cliente de desarrollo `DEV001`, la activa, la bloquea y comprueba que el desbloqueo se rechaza; y al final llega a los tres servicios por los puentes del frontend. Cada ejecución crea un cliente nuevo y una tarjeta nueva.
 
 La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue.
 
@@ -162,6 +166,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 ├── backend/
 │   ├── COREDB/        API del CORE
 │   ├── CUENTAS/       Módulo de cuentas de ahorro
+│   ├── TARJETAS/      Módulo de tarjetas de débito
 │   ├── SOL/           Solicitud de crédito
 │   ├── seguridad/     Prototipo de Seguridad
 │   ├── CORE/          CORE legado
@@ -184,7 +189,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 - Los montos son `DECIMAL(15,2)` en la base y texto decimal (`"500.00"`) en las API. Nunca `float`.
 - Las monedas siguen ISO 4217: `PEN` y `USD`.
 - El navegador no llama a ningún servicio: todo pasa por el frontend.
-- `X-Correlation-ID` identifica una petición de punta a punta. El frontend lo genera si falta, CUENTAS lo reenvía a COREDB, COREDB lo devuelve siempre y lo guarda en la bitácora, y Seguridad lo exige.
+- `X-Correlation-ID` identifica una petición de punta a punta. El frontend lo genera si falta, CUENTAS y TARJETAS lo reenvían a COREDB, COREDB lo devuelve siempre y lo guarda en la bitácora, y Seguridad lo exige.
 - Un cambio en la base va primero a [bna-core-db](https://github.com/miguelpro324/bna-core-db) y llega aquí con una etiqueta nueva. `database/` no se edita.
 - Ninguna clave se versiona.
 
