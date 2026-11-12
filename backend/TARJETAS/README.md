@@ -4,6 +4,9 @@ Modulo de Tarjetas de debito. No tiene base de datos propia: valida y llama a CO
 puerto 8012), que guarda las tarjetas en el esquema `tarjetas` de la base integrada. Sigue el mismo
 estandar de respuestas que CUENTAS (DOC-ITIL-02).
 
+Los modulos que lo usan (Cajero ATM, Home Banking, Billetera Digital) tienen su contrato en
+[`CONTRATO.md`](CONTRATO.md): credenciales, permisos, rutas, errores y lo pendiente.
+
 ## Endpoints
 
 | Metodo | Ruta | Llama a COREDB |
@@ -50,6 +53,7 @@ Error: `{success:false, status_code, error_code, message, details, metadata}`. 4
 |---|---|---|
 | COREDB TARJETA_NO_ENCONTRADA | ERR-TAR-NO-ENCONTRADA | 404 |
 | COREDB CLIENTE_NO_ENCONTRADO | ERR-CLI-NO-ENCONTRADO | 404 |
+| COREDB BNA-TARJETA (cuenta de otro titular o cancelada) | ERR-TAR-CUENTA-INVALIDA | 400 |
 | COREDB BNA-DESBLOQUEO | ERR-TAR-DESBLOQUEO-NO-PERMITIDO | 403 |
 | COREDB ERR-TAR-007 o RN-TOP-001 | ERR-TAR-TOPE-EXCEDIDO | 400 |
 | COREDB ERR-TAR-001 a 009 | el mismo codigo | 400 |
