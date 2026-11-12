@@ -73,9 +73,9 @@ flowchart LR
 | MySQL de la base integrada | `127.0.0.1:3307` | `root` y `CORE_DB_ROOT_PASSWORD` | [`database/README.md`](database/README.md) |
 | CORE legado (opcional) | http://127.0.0.1:8000/docs | Token de `POST /core/auth/login` | [`backend/CORE/README.md`](backend/CORE/README.md) |
 
-Las contraseñas están en `.env`. `db-aux` no publica ningún puerto.
+Las contraseñas están en `.env`. `db-aux` no publica ningún puerto. Sin un cliente de MySQL en la máquina, la base integrada se abre con `docker compose exec db mysql -uroot -p`.
 
-El CORE legado solo se levanta si se pide: `COMPOSE_PROFILES=legado ./bna up`. Todas sus rutas salvo el login exigen token y permiso.
+El CORE legado solo se levanta si se pide: `COMPOSE_PROFILES=legado ./bna up`. Todas sus rutas salvo el login exigen token y permiso. `./bna down` y `./bna reset` lo detienen también; con `docker compose` directo hay que nombrar su perfil: `docker compose --profile legado down`.
 
 ## Órdenes
 
