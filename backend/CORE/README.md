@@ -92,7 +92,8 @@ de entorno" en el README de la raíz.
 
 `POST /core/auth/login` emite un JWT, y `usuario_actual` y
 `requiere_permiso(accion)` (`dependencies.py`) lo validan contra el catálogo
-RBAC. Las rutas protegidas, la configuración y las rutas por migrar están en
+RBAC. Todas las rutas salvo el login lo exigen; la tabla de permisos por ruta
+y la configuración están en
 [`AUTH_JWT.md`](AUTH_JWT.md); el hash de contraseñas y la migración de SHA-256
 a bcrypt, en [`AUTENTICACION.md`](AUTENTICACION.md).
 

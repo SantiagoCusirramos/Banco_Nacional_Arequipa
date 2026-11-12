@@ -218,7 +218,7 @@ services:
   # ── CORE legado (opcional) ──────────────────────────────────────────────
   # API anterior sobre el esquema `bna`. Ningún servicio la llama ya: solo se
   # levanta con el perfil `legado` (COMPOSE_PROFILES=legado ./bna up). Tiene los
-  # créditos, que COREDB todavía no ofrece; 22 de sus rutas no exigen token (issue #32).
+  # créditos, que COREDB todavía no ofrece. Todas sus rutas salvo el login exigen token.
   core-legado:
     <<: *backend
     profiles: [legado]
