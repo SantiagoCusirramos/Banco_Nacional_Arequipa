@@ -164,7 +164,9 @@ Opciones: bloquearlo, o permitirlo solo con justificación obligatoria y un nive
 
 ### 4.2 H-B2 — Aprobación sin aprobador identificado
 
-`id_analista` es opcional y `/core/creditos` todavía no exige token (ver `AUTH_JWT.md`), así que no queda evidencia de quién aprobó. Al migrar esa ruta al JWT, `id_analista` debe salir del token y ser obligatorio.
+Resuelto en parte. `/core/creditos` exige token y el permiso `APROBAR_CREDITO` (ver `AUTH_JWT.md`): el actor de la bitácora es el usuario del token, e `id_analista` es su empleado (`usuario_sistema.id_empleado`), no el que venga en el cuerpo.
+
+Queda abierto: `id_analista` sigue siendo opcional. Un usuario sin empleado asociado puede decidir, y en ese caso solo la bitácora dice quién aprobó. Falta decidir si aprobar exige un usuario con empleado.
 
 ### 4.3 H-B3 — El monto aprobado no tiene tope
 

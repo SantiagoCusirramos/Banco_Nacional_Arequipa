@@ -240,7 +240,7 @@ services:
   # ── CORE legado (opcional) ──────────────────────────────────────────────
   # API anterior sobre el esquema `bna`. Ningún servicio la llama ya: solo se
   # levanta con el perfil `legado` (COMPOSE_PROFILES=legado ./bna up). Tiene los
-  # créditos, que COREDB todavía no ofrece; 22 de sus rutas no exigen token (issue #32).
+  # créditos, que COREDB todavía no ofrece. Todas sus rutas salvo el login exigen token.
   core-legado:
     <<: *backend
     profiles: [legado]
@@ -268,14 +268,14 @@ services:
   # ── Base auxiliar: `bna` legada y `bna_sol_mvp` de SOL ──────────────────
   # Aparte de la base integrada, que no recibe esquemas ni usuarios ajenos.
   db-aux:
-    image: mysql:8.4@sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70
+    image: bna/db-aux:local
+    build: ./docker/db-aux
     environment:
       MYSQL_ROOT_PASSWORD: ${AUX_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
       LEGADO_DB_PASSWORD: ${LEGADO_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
       SOL_DB_PASSWORD: ${SOL_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
     volumes:
       - "./backend/Infraestructura - BD/Trabajo_hecho/BD/99_bna_unificado.sql:/docker-entrypoint-initdb.d/01_bna_legada.sql:ro"
-      - ./docker/db-aux/02_usuarios.sh:/docker-entrypoint-initdb.d/02_usuarios.sh:ro
       - db-aux-datos:/var/lib/mysql
     healthcheck:
       <<: *sonda

@@ -1,0 +1,87 @@
+# Base integrada del CORE (bna-core-db). Solo COREDB se conecta a ella.
+# Deployment + PVC con estrategia Recreate, y no StatefulSet, para que también
+# sirva en clústeres donde la cuenta no puede crear StatefulSet.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-datos
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  labels: { app.kubernetes.io/name: db }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/name: db }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: db }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mysql
+          image: bna/core-db:local
+          # No definir MYSQL_DATABASE ni MYSQL_USER: crearían un usuario con todos
+          # los privilegios, fuera de los roles de la base.
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_ROOT_PASSWORD } }
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_ADMIN_PASSWORD } }
+            - name: CORE_DB_SEGURIDAD_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_SEGURIDAD_PASSWORD } }
+          ports:
+            - { name: mysql, containerPort: 3306 }
+          volumeMounts:
+            - { name: datos, mountPath: /var/lib/mysql }
+          # Por TCP: el servidor de inicialización no escucha por TCP, así que las
+          # sondas solo pasan cuando la carga del esquema terminó. La contraseña se
+          # lee del entorno del contenedor, no va en la línea de órdenes.
+          startupProbe:
+            exec:
+              command: [sh, -c, 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -h127.0.0.1 --protocol=TCP -e "CALL core.verificar_configuracion()"']
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [sh, -c, 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -h127.0.0.1 --protocol=TCP -e "SELECT 1"']
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: mysql }
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: datos
+          persistentVolumeClaim: { claimName: db-datos }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+spec:
+  selector: { app.kubernetes.io/name: db }
+  ports:
+    - { name: mysql, port: 3306, targetPort: mysql }

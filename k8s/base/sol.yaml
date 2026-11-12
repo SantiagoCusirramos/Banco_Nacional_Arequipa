@@ -1,0 +1,89 @@
+# SOL: solicitud de crédito, con Captación y Evaluación simuladas.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sol
+  labels: { app.kubernetes.io/name: sol }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: sol }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: sol }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: esperar-db-aux
+          image: bna/sol:local
+          command:
+            - python
+            - -c
+            - |
+              import socket, sys, time
+              for _ in range(150):
+                  try:
+                      socket.create_connection(("db-aux", 3306), 2).close()
+                      sys.exit(0)
+                  except OSError:
+                      time.sleep(2)
+              sys.exit("La base auxiliar no respondió a tiempo.")
+          resources: &recursos-arranque
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: &contenedor-seguro
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+        # Crea la base de SOL y sus cuentas de demostración. No borra datos.
+        - name: preparar-base
+          image: bna/sol:local
+          command: [python, -m, SOL.manage, init]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: SOL_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: SOL_DB_PASSWORD } }
+            - name: SOL_INITIAL_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: SOL_INITIAL_PASSWORD } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
+      containers:
+        - name: sol
+          image: bna/sol:local
+          command: [uvicorn, SOL.app:app, --host, 0.0.0.0, --port, "8011"]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: SOL_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: SOL_DB_PASSWORD } }
+          ports:
+            - { name: http, containerPort: 8011 }
+          startupProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 384Mi }
+          securityContext: *contenedor-seguro
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sol
+spec:
+  selector: { app.kubernetes.io/name: sol }
+  ports:
+    - { name: http, port: 8011, targetPort: http }

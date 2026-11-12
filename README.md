@@ -1,218 +1,193 @@
-> **MVP de Solicitud de Crédito:** para ejecutar la entrega local con MySQL, empieza por [EMPEZAR_AQUI_SOL.md](EMPEZAR_AQUI_SOL.md). La interfaz del módulo está en `/solicitud-credito` y usa un backend propio en el puerto 8011.
+# Banco Nacional de Arequipa (BNA)
 
-# Banco Nacional de Arequipa — ERP Monolítico Modular
+Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositorio contiene el producto integrado: la base de datos del CORE, su API, los módulos que ya trabajan sobre ella y el frontend. Todo se levanta en Docker con una orden.
 
-Sistema ERP bancario desarrollado como proyecto académico en la UCSM. Arquitectura modular con Bus de Servicios central, backend en FastAPI y frontend en Next.js.
+| Parte | Carpeta | Qué hace | Estado |
+|---|---|---|---|
+| Base integrada | `database/` | MySQL 8.4 con el esquema del CORE: clientes, cuentas, movimientos, tarjetas, contabilidad y bitácora | En uso |
+| COREDB | `backend/COREDB` | La API del CORE. Es el único servicio que se conecta a la base integrada | En uso |
+| CUENTAS | `backend/CUENTAS` | Cuentas de ahorro: apertura, depósito, retiro, transferencia y consultas. No tiene base propia: llama a COREDB | En uso |
+| Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas y solicitud de crédito | En uso |
+| SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas | Laboratorio: base propia, sin conexión con el CORE |
+| Seguridad | `backend/seguridad` | Prototipo de login, topes, auditoría encadenada e incidentes | Laboratorio: SQLite, sin conexión con el CORE |
+| CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene los créditos, que COREDB todavía no ofrece | Opcional: ningún servicio lo llama |
 
----
+Lo que no está: el módulo Clientes (en revisión en el PR #25) y el Bus de Servicios, que no existe todavía. Los servicios se llaman entre sí directamente dentro de la red de Docker.
 
-## Inicio rápido con Docker
+## Requisitos
 
-Solo hace falta Docker con Compose 2.20 o superior y bash (en Windows, Git Bash o WSL2).
+- Docker con Compose 2.20 o superior, en marcha (`docker compose version`, `docker info`).
+- Git y bash. En Windows, Git Bash o WSL2.
+- Libres en la máquina: los puertos 3000, 3307, 8001, 8011, 8012 y 8013, y unos 4 GB de disco para las imágenes.
+
+No hace falta Python, Node ni MySQL: todo corre en contenedores.
+
+## Inicio rápido
 
 ```bash
 git clone https://github.com/SantiagoCusirramos/Banco_Nacional_Arequipa.git
 cd Banco_Nacional_Arequipa
-./bna up        # o: make up
-./bna smoke     # comprueba el producto de extremo a extremo
+./bna up                          # o: make up
+./bna smoke                       # comprueba el producto de extremo a extremo
+grep BNA_ADMIN_PASSWORD .env      # la contraseña del administrador
 ```
 
-`./bna up` crea `.env` con claves aleatorias (no se versiona), construye las imágenes, levanta todos los servicios y espera a que estén sanos. La primera vez tarda unos minutos. Al terminar muestra las direcciones:
+Después, abrir http://localhost:3000 y entrar con el usuario `admin` y esa contraseña.
 
-| Servicio | Dirección |
-|---|---|
-| Frontend | http://localhost:3000 |
-| COREDB, la API del CORE | http://127.0.0.1:8012/docs |
-| CUENTAS | http://127.0.0.1:8001/docs |
-| TARJETAS | http://127.0.0.1:8002/docs |
-| SOL | http://127.0.0.1:8011/docs |
-| Seguridad | http://127.0.0.1:8013 |
-| MySQL de la base integrada | 127.0.0.1:3307 |
+`./bna up` crea `.env` con claves aleatorias (no se versiona), construye las imágenes, levanta los servicios y espera a que todos estén sanos. La primera vez tarda varios minutos, porque descarga las imágenes base y las dependencias. Al terminar muestra las direcciones.
 
-El administrador de COREDB es `admin`; su contraseña está en `.env`, en `BNA_ADMIN_PASSWORD`. Con ese usuario se entra al frontend.
+## Arquitectura
 
-El CORE legado (la API anterior, sobre el esquema `bna`) ya no lo usa ningún servicio y no se levanta por omisión. Para incluirlo: `COMPOSE_PROFILES=legado ./bna up`; queda en http://127.0.0.1:8000/docs.
+```mermaid
+flowchart LR
+  nav["Navegador"] --> fe["frontend :3000"]
+  fe -->|"/api/core"| coredb["COREDB :8012"]
+  fe -->|"/api/cuenta"| cta["CUENTAS :8001"]
+  fe -->|"/api/solicitud-credito"| sol["SOL :8011"]
+  cta --> coredb
+  coredb --> db[("db: base integrada, MySQL 8.4 :3307")]
+  sol --> aux[("db-aux: bna_sol_mvp y bna legada")]
+  seg["Seguridad :8013"] --> sq[("SQLite en un volumen")]
+  leg["CORE legado :8000 (perfil legado)"] -.-> aux
+```
+
+- El navegador solo habla con el frontend. Sus rutas `/api/core`, `/api/cuenta` y `/api/solicitud-credito` reenvían cada petición desde el servidor de Next.js, así que el navegador nunca conoce la dirección de un servicio.
+- COREDB es la única entrada a la base integrada, y escribe en ella solo por procedimientos almacenados.
+- `db-aux` es otro MySQL, con la base de SOL (`bna_sol_mvp`) y el esquema `bna` del CORE legado. La base integrada no recibe esquemas ni usuarios ajenos.
+- Todos los puertos se publican solo en `127.0.0.1`.
+
+## Servicios y puertos
+
+| Servicio | Dirección | Cómo entrar | Documentación |
+|---|---|---|---|
+| Frontend | http://localhost:3000 | `admin` y `BNA_ADMIN_PASSWORD` | [`frontend/README.md`](frontend/README.md) |
+| Solicitud de crédito | http://localhost:3000/solicitud-credito | `asesor.bna`, `supervisor.bna`, `auditor.bna` o `evaluador.demo`, con `SOL_INITIAL_PASSWORD` | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
+| COREDB | http://127.0.0.1:8012/docs | Token de `POST /coredb/auth/login` con `admin` | [`backend/COREDB/README.md`](backend/COREDB/README.md) |
+| CUENTAS | http://127.0.0.1:8001/docs | El mismo token de COREDB | [`backend/CUENTAS/README.md`](backend/CUENTAS/README.md) |
+| SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
+| Seguridad | http://127.0.0.1:8013 | No trae usuarios: se crean con una orden | [`backend/seguridad/README.md`](backend/seguridad/README.md) |
+| MySQL de la base integrada | `127.0.0.1:3307` | `root` y `CORE_DB_ROOT_PASSWORD` | [`database/README.md`](database/README.md) |
+| CORE legado (opcional) | http://127.0.0.1:8000/docs | Token de `POST /core/auth/login` | [`backend/CORE/README.md`](backend/CORE/README.md) |
+
+Las contraseñas están en `.env`. `db-aux` no publica ningún puerto.
+
+El CORE legado solo se levanta si se pide: `COMPOSE_PROFILES=legado ./bna up`. Todas sus rutas salvo el login exigen token y permiso.
+
+## Órdenes
 
 | Orden | Qué hace |
 |---|---|
-| `./bna up` | Levanta todo |
+| `./bna up` | Crea `.env` si falta, construye, levanta todo y espera a que esté sano |
 | `./bna down` | Detiene y elimina los contenedores; conserva los datos |
 | `./bna reset` | Elimina también los datos y vuelve a levantar desde cero |
 | `./bna ps` | Estado de los servicios |
 | `./bna logs [servicio]` | Registros en vivo |
-| `./bna smoke` | Flujo de extremo a extremo: login, registro de un cliente, apertura de cuentas, depósito, transferencia, movimientos y bitácora, por COREDB, por CUENTAS y por el frontend; emisión, bloqueo y consulta de una tarjeta por TARJETAS |
-| `./bna test` | Todas las suites de pruebas, en contenedores |
+| `./bna smoke` | Flujo de extremo a extremo contra el producto levantado |
+| `./bna test` | Todas las suites de pruebas, en contenedores, y el flujo |
+| `./bna k8s-up`, `k8s-smoke`, `k8s-ps`, `k8s-down` | Lo mismo en un clúster local de Kubernetes |
 
-El resto de este documento describe la instalación manual de cada componente.
+Con make: `make up`, `make test`, etc. Para quitar todo, datos incluidos: `docker compose down -v`.
 
----
+## Configuración
+
+Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo crea a partir de [`.env.example`](.env.example): pone un valor aleatorio en cada clave vacía y nunca cambia un valor que ya existe.
+
+| Variables | Para qué |
+|---|---|
+| `BNA_ADMIN_USUARIO`, `BNA_ADMIN_PASSWORD` | Primer administrador de COREDB. Se crea al arrancar si no hay ninguno |
+| `CORE_DB_*_PASSWORD` | Usuarios de la base integrada |
+| `CORE_DB_JWT_CLAVE` | Clave que firma los tokens de COREDB |
+| `SOL_INITIAL_PASSWORD` | Clave inicial de las cuatro cuentas de demostración de SOL |
+| `SEGURIDAD_SECRET_KEY` | Clave del módulo de Seguridad |
+| `AUX_DB_ROOT_PASSWORD`, `SOL_DB_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base auxiliar y CORE legado |
+| `BNA_PUERTO_*` | Puerto de cada servicio en esta máquina |
+
+- Para usar otro puerto, cambiar su `BNA_PUERTO_*` en `.env` y volver a ejecutar `./bna up`.
+- Las contraseñas de las bases y las cuentas iniciales solo se aplican al crear los datos. Para que un cambio en `.env` surta efecto en ellas: `./bna reset`, que borra los datos.
+- `.env` no se versiona. La CI falla si aparece un archivo de claves en el repositorio.
+
+Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecutar un módulo suelto, fuera de Docker. Cada README de módulo dice cómo.
+
+## Pruebas
+
+```bash
+./bna test
+```
+
+Corre, en contenedores, las suites del CORE legado, CUENTAS, SOL, Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
+
+Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
+
+`./bna smoke` inicia sesión como administrador, registra un cliente, le abre dos cuentas, deposita, transfiere, repite la transferencia para comprobar la idempotencia y lee saldos, movimientos y bitácora por COREDB; después consulta las mismas cuentas por CUENTAS y por el frontend. Cada ejecución crea un cliente nuevo.
+
+La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue.
+
+## Kubernetes
+
+Con Docker, `kind` y `kubectl` instalados:
+
+```bash
+./bna k8s-up       # crea el clúster, carga las imágenes y despliega
+./bna k8s-smoke    # el mismo flujo de extremo a extremo, dentro del clúster
+./bna k8s-down     # elimina el clúster
+```
+
+Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000). Los manifiestos, las claves y los problemas conocidos están en [`k8s/README.md`](k8s/README.md).
+
+## Si algo falla
+
+| Síntoma | Qué hacer |
+|---|---|
+| `Docker no responde` | Iniciar Docker (Docker Desktop, o `sudo systemctl start docker` en Linux) |
+| `permission denied` al conectar con Docker, en Linux | Agregar el usuario al grupo `docker` y volver a iniciar sesión |
+| `port is already allocated` o `address already in use` | Otro programa usa ese puerto. Cambiar el `BNA_PUERTO_*` correspondiente en `.env` y repetir `./bna up` |
+| `Tras 600 s siguen sin estar sanos: ...` | Ver por qué con `./bna logs <servicio>`. En una máquina lenta, dar más tiempo: `BNA_ESPERA_SEGUNDOS=1200 ./bna up` |
+| `El servicio ... se detuvo` | El mensaje trae el final de sus registros. El resto, con `./bna logs <servicio>` |
+| `Falta en .env. Ejecute ./bna up` | Se llamó a `docker compose` sin `.env`. `./bna up` lo crea |
+| El administrador no puede entrar | La contraseña es la de `BNA_ADMIN_PASSWORD` en `.env`. Si se cambió después del primer arranque no se aplicó: `./bna reset` |
+| Tras actualizar el repositorio, COREDB no arranca o una ruta responde 500 | La base se carga solo sobre un volumen vacío, así que un esquema nuevo no llega a una base ya creada: `./bna reset` |
+| Un movimiento se rechaza por falta de periodo contable | Los datos de desarrollo traen periodos para 24 meses desde que se creó la base. Pasado ese plazo: `./bna reset` |
+| Quedó algo a medias | `docker compose down -v` y `./bna up` |
 
 ## Estructura del repositorio
 
 ```
-Banco_Nacional_Arequipa/
-├── backend/          # API REST (FastAPI + Python)
-│   ├── main.py
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/         # Home Banking / UI (Next.js + TypeScript)
-│   ├── app/
-│   ├── package.json
-│   └── ...
-└── Documents/        # Stack tecnológico y guías
+├── bna, Makefile      Órdenes del producto
+├── compose.yaml       Los servicios y cómo se conectan
+├── .env.example       Variables del producto
+├── docker/            Dockerfiles de cada imagen
+├── scripts/           Lo que ejecuta ./bna: claves, pruebas, flujo y Kubernetes
+├── k8s/               Manifiestos de Kubernetes
+├── database/          Base integrada. Copia de bna-core-db: no se edita aquí
+├── backend/
+│   ├── COREDB/        API del CORE
+│   ├── CUENTAS/       Módulo de cuentas de ahorro
+│   ├── SOL/           Solicitud de crédito
+│   ├── seguridad/     Prototipo de Seguridad
+│   ├── CORE/          CORE legado
+│   └── Infraestructura - BD/   Esquema `bna` del CORE legado
+├── frontend/          Next.js
+└── Documents/         Stack, registros de validación y documentos de SOL
 ```
 
----
+## Documentación
 
-## Requisitos previos
+- Por módulo: los README enlazados en [Servicios y puertos](#servicios-y-puertos).
+- Contrato de COREDB para el módulo Clientes: [`backend/COREDB/CONTRATO_CLIENTES.md`](backend/COREDB/CONTRATO_CLIENTES.md).
+- Cómo se actualiza `database/`: [`database/README-UPSTREAM.md`](database/README-UPSTREAM.md).
+- Autenticación del CORE legado: [`backend/CORE/AUTH_JWT.md`](backend/CORE/AUTH_JWT.md) y [`backend/CORE/AUTENTICACION.md`](backend/CORE/AUTENTICACION.md).
+- Seguimiento de los hallazgos del CORE legado: [`Documents/08-seguimiento-hallazgos.md`](Documents/08-seguimiento-hallazgos.md).
+- Stack previsto y decisiones de arquitectura: [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md). Describe el diseño completo, con el Bus de Servicios; lo que hay hoy es lo de este README.
 
-Verifica que tengas instalado:
+## Convenciones
 
-| Herramienta     | Versión mínima | Verificación               |
-|-----------------|----------------|----------------------------|
-| Git             | 2.40+          | `git --version`            |
-| Python          | 3.11+          | `python3 --version`        |
-| Node.js         | 20.x LTS       | `node --version`           |
-| npm             | 10.x           | `npm --version`            |
-| Docker          | 24.x           | `docker --version`         |
-| Docker Compose  | 2.20+          | `docker compose version`   |
-
----
-
-## Instalación
-
-### 1. Clonar el repositorio
-
-```bash
-git clone git@github.com:SantiagoCusirramos/Banco_Nacional_Arequipa.git
-cd Banco_Nacional_Arequipa
-```
-
----
-
-### 2. Backend (FastAPI)
-
-#### 2.1 Crear y activar el entorno virtual
-
-```bash
-cd backend
-python3 -m venv venv
-
-# Linux / macOS
-source venv/bin/activate
-
-# Windows (PowerShell)
-venv\Scripts\Activate.ps1
-```
-
-#### 2.2 Instalar dependencias
-
-```bash
-pip install -r requirements.txt
-```
-
-#### 2.3 Configurar variables de entorno
-
-Cada persona crea su propio `backend/.env`. Ese archivo no se versiona.
-
-```bash
-cp .env.example .env
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-Pega el resultado en `SECRET_KEY` y completa `DB_PASSWORD` con un valor propio. Sin una `SECRET_KEY` propia de al menos 32 caracteres, el backend no arranca y el error indica qué hacer.
-
-No reutilices ningún valor del antiguo `backend/.env` versionado: están comprometidos.
-
-#### 2.4 Ejecutar el servidor de desarrollo
-
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-El backend quedará disponible en `http://localhost:8000`.  
-Documentación automática: `http://localhost:8000/docs`
-
----
-
-### 3. Frontend (Next.js)
-
-#### 3.1 Instalar dependencias
-
-```bash
-cd frontend
-npm install
-```
-
-#### 3.2 Ejecutar el servidor de desarrollo
-
-```bash
-npm run dev
-```
-
-El frontend quedará disponible en `http://localhost:3000`.
-
----
-
-## Resumen de puertos
-
-| Servicio   | URL                        |
-|------------|----------------------------|
-| Backend    | http://localhost:8000      |
-| API Docs   | http://localhost:8000/docs |
-| CUENTAS    | http://localhost:8001      |
-| TARJETAS   | http://localhost:8002      |
-| SOL        | http://127.0.0.1:8011      |
-| COREDB     | http://127.0.0.1:8012      |
-| Seguridad  | http://127.0.0.1:8013      |
-| Frontend   | http://localhost:3000      |
-| MySQL      | localhost:3306             |
-| Bus de Servicios (previsto, aún no existe) | http://localhost:9000 |
-
----
-
-## Variables de entorno
-
-Cada componente tiene su propio archivo de ejemplo:
-
-| Archivo                     | Copia                 | Descripción                             |
-|-----------------------------|-----------------------|-----------------------------------------|
-| `backend/.env.example`      | `backend/.env`        | Configuración de la API y base de datos |
-| `backend/.env.sol.example`  | `backend/.env.sol`    | Módulo SOL                              |
-| `backend/COREDB/.env.example` | `backend/COREDB/.env` | API COREDB                              |
-| `backend/seguridad/.env.example` | `backend/.env.seguridad.local` | Módulo de Seguridad               |
-| `.env.example`              | `.env` (lo crea `./bna up`) | Producto completo con Docker      |
-| `frontend/.env.example`     | `frontend/.env.local` | Direcciones de COREDB, CUENTAS y TARJETAS para el servidor de Next.js |
-| `frontend/.env.sol.example` | `frontend/.env.local` (agregar) | Puente del frontend hacia SOL |
-
-Copia cada archivo como se indica y completa los valores. **Nunca subas el `.env` al repositorio.**
-
----
-
-## Autenticación
-
-CORE emite tokens JWT con `POST /core/auth/login` y los valida con el header `Authorization: Bearer <token>`. `/core/usuarios`, `/core/permisos`, `/core/auditoria` y `/core/reportes` exigen token y permiso; las demás rutas de CORE todavía no.
-
-Más detalle: [`backend/CORE/AUTH_JWT.md`](backend/CORE/AUTH_JWT.md) y
-[`backend/CORE/AUTENTICACION.md`](backend/CORE/AUTENTICACION.md).
-
----
-
-## Stack tecnológico
-
-Consulta [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md) para el detalle completo del stack y las decisiones de arquitectura.
-
----
-
-## Convenciones del proyecto
-
-- Los montos siempre se manejan como `DECIMAL(15,2)`. Nunca `float`.
-- Las monedas siguen ISO 4217: `PEN`, `USD`.
-- El frontend **nunca** llama directamente al Core ni a los módulos. Toda petición pasa por el Bus de Servicios.
-- Toda petición debe incluir el header `X-Correlation-ID` para trazabilidad.
-
----
+- Los montos son `DECIMAL(15,2)` en la base y texto decimal (`"500.00"`) en las API. Nunca `float`.
+- Las monedas siguen ISO 4217: `PEN` y `USD`.
+- El navegador no llama a ningún servicio: todo pasa por el frontend.
+- `X-Correlation-ID` identifica una petición de punta a punta. El frontend lo genera si falta, CUENTAS lo reenvía a COREDB, COREDB lo devuelve siempre y lo guarda en la bitácora, y Seguridad lo exige.
+- Un cambio en la base va primero a [bna-core-db](https://github.com/miguelpro324/bna-core-db) y llega aquí con una etiqueta nueva. `database/` no se edita.
+- Ninguna clave se versiona.
 
 ## Equipo
 
-Proyecto académico — Universidad Católica de Santa María (UCSM), 2026.
+Proyecto académico de la Universidad Católica de Santa María (UCSM), 2026.

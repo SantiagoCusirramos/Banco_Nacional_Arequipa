@@ -22,7 +22,7 @@ Sigue el estandar del Comite de Ahorros (DOC-ITIL-01 y DOC-ITIL-02).
 Deposito, retiro y transferencia exigen:
 
 - `X-Idempotency-Key`: UUIDv4
-- `X-Channel-ID`: ATM, AGE, VEN, WEB o MOB (WEB pasa a HB y MOB a BD en CORE; VEN no esta en ITIL-01, se agrego porque CORE lo tiene)
+- `X-Channel-ID`: ATM, AGE, VEN, WEB o MOB (WEB pasa a HB y MOB a BD en CORE; VEN no esta en ITIL-01, se agrego porque CORE lo tiene). COREDB rechaza un debito por un canal sin limite cargado: hoy AGE no lo tiene, por eso el frontend usa VEN
 - `X-Request-Timestamp`: ISO-8601
 
 `X-Correlation-ID` es opcional. El `uuid_transaccion` de respuestas y logs sale de X-Idempotency-Key, luego X-Correlation-ID, y si no hay ninguno se genera.
@@ -83,7 +83,9 @@ cd backend
 python -m pytest CUENTAS/tests -q
 ```
 
-`test_contrato_core.py` valida los payloads contra los schemas reales de CORE (se omite si CORE no esta en el path).
+Sin Python 3.11 en la maquina, `./bna test` desde la raiz corre esta suite en un contenedor. `./bna smoke` consulta por este modulo las cuentas que abre por COREDB.
+
+`test_contrato_core.py` valida los payloads contra los schemas reales de COREDB (se omite si COREDB no esta en el path).
 
 ## Diferencias con ITIL-02 / pendientes
 

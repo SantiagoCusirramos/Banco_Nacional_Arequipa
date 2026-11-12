@@ -1,0 +1,78 @@
+# Seguridad: prototipo sobre SQLite, en su propio volumen.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seguridad-datos
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seguridad
+  labels: { app.kubernetes.io/name: seguridad }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/name: seguridad }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: seguridad }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: seguridad
+          image: bna/seguridad:local
+          command: [uvicorn, seguridad.app:app, --host, 0.0.0.0, --port, "8013"]
+          env:
+            - name: SEGURIDAD_DB
+              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: SEGURIDAD_DB } }
+            - name: SEGURIDAD_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: SEGURIDAD_SECRET_KEY } }
+          ports:
+            - { name: http, containerPort: 8013 }
+          volumeMounts:
+            - { name: datos, mountPath: /datos }
+          startupProbe: &sonda-seguridad
+            httpGet:
+              path: /seguridad/estado
+              port: http
+              httpHeaders:
+                - { name: X-Correlation-ID, value: sonda }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            <<: *sonda-seguridad
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            <<: *sonda-seguridad
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: datos
+          persistentVolumeClaim: { claimName: seguridad-datos }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seguridad
+spec:
+  selector: { app.kubernetes.io/name: seguridad }
+  ports:
+    - { name: http, port: 8013, targetPort: http }

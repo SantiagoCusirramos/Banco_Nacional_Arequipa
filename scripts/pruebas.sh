@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Todas las suites del repositorio, en contenedores: no hace falta Python ni Node
-# en esta máquina. Uso: ./bna test
+# en esta máquina. Al terminar no deja contenedores ni volúmenes que no existieran
+# antes. Uso: ./bna test
 set -uo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -28,6 +29,32 @@ en_backend() { docker run --rm bna/backend:local $PYTEST "$@"; }
 
 # compose.yaml exige las variables de .env incluso para construir.
 scripts/generar_env.sh "$RAIZ" || exit 1
+
+# Si el producto no tenía contenedores ni volúmenes al empezar, los que haya al
+# terminar los creó esta corrida: se eliminan, también si se interrumpe. Si ya
+# existía, sus datos no se tocan.
+proyecto="$(docker compose config 2>/dev/null | sed -n 's/^name: //p' | head -n 1)"
+limpiar_al_salir=0
+if [ -n "$proyecto" ] && [ -z "$(docker compose ps -aq 2>/dev/null)" ] \
+  && [ -z "$(docker volume ls -q --filter "label=com.docker.compose.project=$proyecto")" ]; then
+  limpiar_al_salir=1
+fi
+
+limpiar() {
+  [ "$limpiar_al_salir" = 1 ] || return 0
+  [ -n "$(docker compose ps -aq 2>/dev/null)" ] || return 0
+  echo
+  if [ "$fallas" -gt 0 ]; then
+    echo "══ Estado y registros de los servicios"
+    docker compose ps -a || true
+    docker compose logs --tail=80 || true
+    echo
+  fi
+  echo "══ Limpieza: se eliminan los contenedores y volúmenes de esta corrida"
+  docker compose down -v --remove-orphans || true
+}
+trap limpiar EXIT
+trap 'exit 130' INT TERM
 correr "Imágenes" docker compose build -q
 correr "CORE legado" en_backend
 correr "CUENTAS" en_backend CUENTAS/tests

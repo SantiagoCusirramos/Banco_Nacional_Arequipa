@@ -1,11 +1,17 @@
 """Routers del ciclo de crédito — CREAR_SOLICITUD_CREDITO,
 EVALUAR_CREDITO, APROBAR_CREDITO, VER_CREDITO, REGISTRAR_PAGO,
-CONSULTAR_DEUDA."""
+CONSULTAR_DEUDA.
+
+Exigen token y permiso. El actor sale siempre del token: el campo `actor` del
+cuerpo se ignora. En una decisión también se ignora `id_analista`: es el
+empleado del usuario que decide, si tiene uno.
+"""
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from CORE.dependencies import db_session
+from CORE.dependencies import db_session, requiere_permiso
+from CORE.models import UsuarioSistema
 from CORE.schemas.creditos import (
     DecisionPedir,
     DeudaRespuesta,
@@ -26,7 +32,11 @@ router = APIRouter(prefix="/creditos", tags=["Creditos"])
     response_model=SolicitudRespuesta,
     status_code=status.HTTP_201_CREATED,
 )
-def crear_solicitud(payload: SolicitudCrear, db: Session = Depends(db_session)):
+def crear_solicitud(
+    payload: SolicitudCrear,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("CREAR_SOLICITUD_CREDITO")),
+):
     solicitud = creditossvc.crear_solicitud(
         db,
         id_cliente=payload.id_cliente,
@@ -40,13 +50,16 @@ def crear_solicitud(payload: SolicitudCrear, db: Session = Depends(db_session)):
         id_caso=payload.id_caso,
         fiadores=[f.model_dump() for f in payload.fiadores],
         garantias=[g.model_dump() for g in payload.garantias],
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
     )
     return SolicitudRespuesta(**creditossvc.ver_credito(db, solicitud.id_solicitud))
 
 
-@router.get("/solicitudes/{id_solicitud}", response_model=SolicitudRespuesta)
+@router.get(
+    "/solicitudes/{id_solicitud}", response_model=SolicitudRespuesta,
+    dependencies=[Depends(requiere_permiso("VER_CREDITO"))],
+)
 def ver_solicitud(id_solicitud: str, db: Session = Depends(db_session)):
     return SolicitudRespuesta(**creditossvc.ver_credito(db, id_solicitud))
 
@@ -57,7 +70,10 @@ def ver_solicitud(id_solicitud: str, db: Session = Depends(db_session)):
     status_code=status.HTTP_201_CREATED,
 )
 def evaluar_solicitud(
-    id_solicitud: str, payload: EvaluacionPedir, db: Session = Depends(db_session)
+    id_solicitud: str,
+    payload: EvaluacionPedir,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("EVALUAR_CREDITO")),
 ):
     situacion = payload.situacion.model_dump() if payload.situacion else None
     evaluacion = creditossvc.evaluar_credito(
@@ -65,7 +81,7 @@ def evaluar_solicitud(
         id_solicitud=id_solicitud,
         situacion=situacion,
         dias_mayor_mora=payload.dias_mayor_mora,
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
     )
     return EvaluacionRespuesta(
@@ -85,23 +101,29 @@ def evaluar_solicitud(
     response_model=SolicitudRespuesta,
 )
 def decidir_solicitud(
-    id_solicitud: str, payload: DecisionPedir, db: Session = Depends(db_session)
+    id_solicitud: str,
+    payload: DecisionPedir,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("APROBAR_CREDITO")),
 ):
     solicitud, _ = creditossvc.aprobar_credito(
         db,
         id_solicitud=id_solicitud,
         decision=payload.decision,
-        id_analista=payload.id_analista,
+        id_analista=usuario.id_empleado,
         monto_aprobado=payload.monto_aprobado,
         plazo_aprobado=payload.plazo_aprobado,
         observacion=payload.observacion,
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
     )
     return SolicitudRespuesta(**creditossvc.ver_credito(db, solicitud.id_solicitud))
 
 
-@router.get("/deuda", response_model=list[DeudaRespuesta])
+@router.get(
+    "/deuda", response_model=list[DeudaRespuesta],
+    dependencies=[Depends(requiere_permiso("CONSULTAR_DEUDA"))],
+)
 def consultar_deuda(
     id_credito: str | None = Query(default=None),
     id_cliente: str | None = Query(default=None),
@@ -112,7 +134,11 @@ def consultar_deuda(
 
 
 @router.post("/pagos", response_model=PagoRespuesta, status_code=status.HTTP_201_CREATED)
-def registrar_pago(payload: PagoRegistrar, db: Session = Depends(db_session)):
+def registrar_pago(
+    payload: PagoRegistrar,
+    db: Session = Depends(db_session),
+    usuario: UsuarioSistema = Depends(requiere_permiso("REGISTRAR_PAGO")),
+):
     res = creditossvc.registrar_pago(
         db,
         id_credito=payload.id_credito,
@@ -121,7 +147,7 @@ def registrar_pago(payload: PagoRegistrar, db: Session = Depends(db_session)):
         num_cuenta=payload.num_cuenta,
         num_operacion=payload.num_operacion,
         id_cobrador=payload.id_cobrador,
-        actor=payload.actor,
+        actor=usuario.username,
         correlation_id=payload.correlation_id,
     )
     return PagoRespuesta(**res)

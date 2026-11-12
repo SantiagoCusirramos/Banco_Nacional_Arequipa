@@ -34,12 +34,14 @@ jobs:
       - name: Todas las suites y el flujo
         run: ./bna test
 
-      - name: Estado y registros de los servicios
-        if: failure()
-        run: |
-          docker compose ps -a || true
-          docker compose logs --tail=80 || true
-
-      - name: Detener el producto
+      # ./bna test muestra el estado y los registros si algo falla, y elimina lo que levantó.
+      - name: No quedan contenedores ni volúmenes del producto
         if: always()
-        run: docker compose down -v || true
+        run: |
+          sobra="$(docker ps -aq --filter label=com.docker.compose.project=bna; docker volume ls -q --filter label=com.docker.compose.project=bna)"
+          if [ -n "$sobra" ]; then
+            echo "::error::./bna test dejó contenedores o volúmenes:"
+            echo "$sobra"
+            docker compose down -v || true
+            exit 1
+          fi
