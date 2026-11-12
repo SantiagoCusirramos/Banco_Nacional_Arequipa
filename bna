@@ -28,7 +28,7 @@ En Kubernetes, sobre un clúster local de kind (requiere kind y kubectl):
                   generado desde .env y despliega k8s/overlays/local
   k8s-smoke       El mismo flujo de extremo a extremo, dentro del clúster
   k8s-ps          Pods y servicios
-  k8s-down        Elimina el clúster
+  k8s-down        Elimina el clúster y la red de Docker `kind`, si nada más la usa
 
 Con make: `make up`, `make test`, etc.
 
