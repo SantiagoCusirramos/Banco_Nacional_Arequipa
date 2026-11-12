@@ -43,9 +43,12 @@ export async function verTarjeta(idTarjeta: string): Promise<Tarjeta> {
   return data.data;
 }
 
-// El PAN nunca pasa por el frontend: TARJETAS envía un token en su lugar.
-export async function emitirTarjeta(emision: Emision): Promise<Tarjeta> {
-  const { data } = await api.post<Sobre<Tarjeta>>("/emision", emision);
+// El PAN nunca pasa por el frontend: TARJETAS envía un token en su lugar. Con la misma
+// llave, repetir la emisión devuelve la tarjeta ya emitida en vez de emitir otra.
+export async function emitirTarjeta(emision: Emision, llave: string): Promise<Tarjeta> {
+  const { data } = await api.post<Sobre<Tarjeta>>("/emision", emision, {
+    headers: { "X-Idempotency-Key": llave },
+  });
   return data.data;
 }
 

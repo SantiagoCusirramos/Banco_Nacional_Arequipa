@@ -105,7 +105,30 @@ describe("Página del módulo Tarjetas", () => {
     expect(ruta).toBe("/emision");
     expect(Object.keys(cuerpo).sort()).toEqual(["bin", "cod_cliente", "fecha_vencimiento", "num_cuenta"]);
     expect(cuerpo).toMatchObject({ cod_cliente: "CLI000000001", num_cuenta: "10100000000001", bin: "004499" });
+    const config = post.mock.calls[0][2] as { headers: Record<string, string> };
+    expect(config.headers["X-Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/);
     expect(await screen.findByRole("status")).toHaveTextContent("emitida (PENDIENTE_ACTIVACION)");
+  });
+
+  it("TJ-09 Reintentar la misma emisión repite la llave; editar un dato la cambia", async () => {
+    post.mockRejectedValueOnce(new AxiosError("Network Error", "ERR_NETWORK"));
+    post.mockResolvedValue(sobre({ ...TARJETA, estado_tarjeta: "PENDIENTE_ACTIVACION" }));
+    render(<TarjetasPage />);
+    await pestana("Emitir tarjeta");
+    escribir(screen.getByLabelText("Código del cliente"), "CLI000000001");
+    escribir(screen.getByLabelText("Cuenta a vincular"), "10100000000001");
+    const emitir = () => userEvent.click(enPantalla().getByRole("button", { name: "Emitir tarjeta" }));
+    const llave = (i: number) => (post.mock.calls[i][2] as { headers: Record<string, string> }).headers["X-Idempotency-Key"];
+    await emitir();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await emitir();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(llave(1)).toBe(llave(0));
+    await pestana("Emitir tarjeta");
+    escribir(screen.getByLabelText("Cuenta a vincular"), "10100000000002");
+    await emitir();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+    expect(llave(2)).not.toBe(llave(1));
   });
 
   it("TJ-06 Bloquea una tarjeta con su motivo", async () => {
