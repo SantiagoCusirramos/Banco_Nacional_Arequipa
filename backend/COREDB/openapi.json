@@ -1190,6 +1190,18 @@
             "title": "Id Tarjeta",
             "type": "string"
           },
+          "num_cuenta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La cuenta principal de la tarjeta, la de su emisión. Null si no tiene.",
+            "title": "Num Cuenta"
+          },
           "ultimos4": {
             "title": "Ultimos4",
             "type": "string"

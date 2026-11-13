@@ -25,7 +25,8 @@ export interface Emision {
 export const ESTADOS_PEDIBLES = ["ACTIVA", "BLOQUEADA", "RETENIDA", "ANULADA"] as const;
 export type EstadoPedible = (typeof ESTADOS_PEDIBLES)[number];
 
-// Único BIN del catálogo de la base integrada (tarjetas.bin_tarjeta).
+// Único BIN del catálogo de la base integrada (tarjetas.bin_tarjeta): de desarrollo y FISICA.
+// Los BIN reales son un pendiente del emisor (issue #34, pregunta 7).
 export const BINES = ["004499"];
 
 export const mensajeDeError = mensajeError;
