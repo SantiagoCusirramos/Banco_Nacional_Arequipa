@@ -116,6 +116,24 @@ def test_tarjetas_de_un_cliente(cliente, abrir_cuenta):
     assert "pan_token" not in respuesta.text
 
 
+def test_tarjetas_de_un_cliente_de_la_mas_reciente_a_la_mas_antigua(cliente, abrir_cuenta):
+    def emitir_el(fecha):
+        respuesta = cliente.post("/coredb/tarjetas", json={
+            "pan_token": uuid.uuid4().hex, "bin": "004499", "ultimos4": "1234",
+            "fecha_emision": fecha, "fecha_vencimiento": "2031-01-01",
+            "cod_cliente": "C001", "num_cuenta": abrir_cuenta(),
+        })
+        assert respuesta.status_code == 201, respuesta.text
+        return respuesta.json()["id_tarjeta"]
+
+    antigua, reciente = emitir_el("2025-02-01"), emitir_el("2026-06-01")
+    tarjetas = cliente.get("/coredb/tarjetas", params={"cod_cliente": "C001"}).json()
+    ids = [t["id_tarjeta"] for t in tarjetas]
+    assert ids.index(reciente) < ids.index(antigua)
+    fechas = [t["fecha_emision"] for t in tarjetas]
+    assert fechas == sorted(fechas, reverse=True)
+
+
 def test_cliente_sin_tarjetas_lista_vacia(cliente, datos_base):
     respuesta = cliente.get("/coredb/tarjetas", params={"cod_cliente": "C002"})
     assert respuesta.status_code == 200
