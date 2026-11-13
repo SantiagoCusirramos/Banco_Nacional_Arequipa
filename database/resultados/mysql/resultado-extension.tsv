@@ -139,6 +139,9 @@ X242	bna_api_user	bna_api no puede: SELECT core.evento_auditoria	pasa
 X243	bna_api_user	bna_api no puede: escribir por la vista de la bitácora	pasa
 X244	bna_api_user	bna_api no puede: borrar por la vista de movimientos	pasa
 X245	bna_api_user	bna_api no puede: escribir en cuentas.titularidad	pasa
+X246	bna_api_user	La vista de tarjetas tiene exactamente las columnas acordadas	pasa
+X247	bna_api_user	bna_api lee la cuenta principal de una tarjeta: una fila por tarjeta, NULL si no tiene cuenta	pasa
+X248	bna_api_user	Una tarjeta emitida por el procedimiento muestra su cuenta en la vista	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
