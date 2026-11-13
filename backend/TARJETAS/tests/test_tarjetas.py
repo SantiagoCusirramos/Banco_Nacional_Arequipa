@@ -3,6 +3,9 @@ import logging
 from datetime import date
 
 import httpx
+import pytest
+
+from TARJETAS.services import tarjetas as svc
 
 BASE = "/api/v1/tarjetas"
 ID = "7e570001-0000-4000-8000-000000000001"
@@ -12,8 +15,11 @@ AUTH = {"Authorization": TOKEN}
 TARJETA_CORE = {
     "id_tarjeta": ID, "bin": "004499", "ultimos4": "0001", "fecha_emision": "2026-01-15",
     "fecha_vencimiento": "2030-01-31", "estado_tarjeta": "ACTIVA", "cod_cliente": "CLI000000001",
+    "num_cuenta": "10100000000001",
 }
 EMISION = {"cod_cliente": "cli000000001", "num_cuenta": "10100000000001"}
+KEY = "550e8400-e29b-41d4-a716-446655440000"
+HEADERS_EMISION = {"X-Idempotency-Key": KEY, **AUTH}
 
 
 def error_core(status, code, message="mensaje de core"):
@@ -84,7 +90,7 @@ def test_cliente_inexistente_404(client, core):
 
 def test_emision_envia_un_token_y_no_el_pan(client, core):
     core.respuesta = httpx.Response(201, json={**TARJETA_CORE, "estado_tarjeta": "PENDIENTE_ACTIVACION"})
-    r = client.post(f"{BASE}/emision", json=EMISION, headers=AUTH)
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
     assert r.status_code == 201
     assert r.json()["message"] == "Tarjeta emitida, pendiente de activación"
     enviado = core.llamadas[0]["json"]
@@ -101,7 +107,7 @@ def test_emision_envia_un_token_y_no_el_pan(client, core):
 def test_emision_respeta_las_fechas_y_los_ultimos4(client, core):
     core.respuesta = httpx.Response(201, json=TARJETA_CORE)
     datos = {**EMISION, "fecha_emision": "2026-01-15", "fecha_vencimiento": "2030-01-31", "ultimos4": "1234"}
-    client.post(f"{BASE}/emision", json=datos, headers=AUTH)
+    client.post(f"{BASE}/emision", json=datos, headers=HEADERS_EMISION)
     enviado = core.llamadas[0]["json"]
     assert (enviado["fecha_emision"], enviado["fecha_vencimiento"], enviado["ultimos4"]) == (
         "2026-01-15", "2030-01-31", "1234")
@@ -109,22 +115,121 @@ def test_emision_respeta_las_fechas_y_los_ultimos4(client, core):
 
 def test_emision_que_vence_antes_de_emitirse_400(client, core):
     datos = {**EMISION, "fecha_emision": "2026-01-15", "fecha_vencimiento": "2026-01-15"}
-    r = client.post(f"{BASE}/emision", json=datos, headers=AUTH)
+    r = client.post(f"{BASE}/emision", json=datos, headers=HEADERS_EMISION)
     assert r.status_code == 400
     assert r.json()["error_code"] == "ERR-VALIDACION-ESQUEMA"
     assert core.llamadas == []
 
 
 def test_emision_con_un_pan_se_rechaza(client, core):
-    r = client.post(f"{BASE}/emision", json={**EMISION, "pan": "4111111111111111"}, headers=AUTH)
+    r = client.post(f"{BASE}/emision", json={**EMISION, "pan": "4111111111111111"}, headers=HEADERS_EMISION)
     assert r.status_code == 400
     assert "4111111111111111" not in r.text
     assert core.llamadas == []
 
 
+def test_emision_sin_llave_400_sin_llamar_a_core(client, core):
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=AUTH)
+    assert r.status_code == 400
+    assert r.json()["error_code"] == "ERR-TAR-HEADER-REQUERIDO"
+    assert core.llamadas == []
+
+
+def test_emision_con_llave_que_no_es_uuid4_400(client, core):
+    r = client.post(f"{BASE}/emision", json=EMISION, headers={**AUTH, "X-Idempotency-Key": "abc"})
+    assert r.json()["error_code"] == "ERR-TAR-HEADER-INVALIDO"
+    assert core.llamadas == []
+
+
+def test_el_id_de_la_tarjeta_sale_de_la_llave(client, core):
+    core.respuesta = httpx.Response(201, json=TARJETA_CORE)
+    client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    otra = "6fa459ea-ee8a-4ca4-894e-db77e160355e"
+    client.post(f"{BASE}/emision", json=EMISION, headers={**AUTH, "X-Idempotency-Key": otra})
+    primera, segunda = (c["json"]["id_tarjeta"] for c in core.llamadas)
+    assert primera == svc.id_de_emision(KEY) != segunda == svc.id_de_emision(otra)
+    assert svc.id_de_emision(KEY) == svc.id_de_emision(KEY)
+
+
+def test_emision_repetida_devuelve_la_tarjeta_original(client, core):
+    core.respuesta = [error_core(409, "REGISTRO_DUPLICADO"), httpx.Response(200, json=TARJETA_CORE)]
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert r.status_code == 201
+    assert r.json()["message"].startswith("Emision ya procesada antes")
+    assert r.json()["data"]["id_tarjeta"] == ID
+    emision, lectura = core.llamadas
+    assert (emision["metodo"], lectura["metodo"]) == ("POST", "GET")
+    assert lectura["ruta"] == f"/coredb/tarjetas/{svc.id_de_emision(KEY)}"
+
+
+def test_la_misma_llave_con_otros_datos_409(client, core):
+    otra = {**TARJETA_CORE, "cod_cliente": "CLI000000002"}
+    core.respuesta = [error_core(409, "REGISTRO_DUPLICADO"), httpx.Response(200, json=otra)]
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert r.status_code == 409
+    assert r.json()["error_code"] == "ERR-TAR-IDEMPOTENCIA"
+
+
+@pytest.mark.parametrize("cambio", [
+    {"num_cuenta": "10100000000002"},
+    {"bin": "999102"},
+    {"ultimos4": "9999"},
+    {"fecha_emision": "2026-01-16"},
+    {"fecha_vencimiento": "2030-02-28"},
+], ids=lambda cambio: next(iter(cambio)))
+def test_la_misma_llave_con_un_dato_distinto_409(client, core, cambio):
+    """La tarjeta original se emitió con EMISION. Repetir la llave con otra cuenta del mismo
+    cliente, u otro dato fijado por quien llama, no devuelve la original."""
+    core.respuesta = [error_core(409, "REGISTRO_DUPLICADO"), httpx.Response(200, json=TARJETA_CORE)]
+    r = client.post(f"{BASE}/emision", json={**EMISION, **cambio}, headers=HEADERS_EMISION)
+    assert r.status_code == 409
+    assert r.json()["error_code"] == "ERR-TAR-IDEMPOTENCIA"
+
+
+def test_core_sin_la_cuenta_no_da_por_repetida_la_emision(client, core):
+    sin_cuenta = {k: v for k, v in TARJETA_CORE.items() if k != "num_cuenta"}
+    core.respuesta = [error_core(409, "REGISTRO_DUPLICADO"), httpx.Response(200, json=sin_cuenta)]
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert r.status_code == 409
+    assert r.json()["error_code"] == "ERR-TAR-IDEMPOTENCIA"
+
+
+def test_reintento_tras_un_error_de_negocio_emite_normal(client, core):
+    """Si la primera emisión falla por una regla (no se insertó nada), la misma llave sirve
+    para reintentar: no es una repetición ni un 409."""
+    core.respuesta = [error_core(422, "ERR-TAR-001", "la cuenta está cancelada"),
+                      httpx.Response(201, json=TARJETA_CORE)]
+    primera = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert primera.status_code == 400
+    assert primera.json()["error_code"] == "ERR-TAR-001"
+    segunda = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert segunda.status_code == 201
+    assert segunda.json()["message"] == "Tarjeta emitida, pendiente de activación"
+    assert [c["metodo"] for c in core.llamadas] == ["POST", "POST"]
+    assert core.llamadas[0]["json"]["id_tarjeta"] == core.llamadas[1]["json"]["id_tarjeta"]
+
+
+def test_repeticion_otro_dia_con_la_fecha_por_omision(client, core, monkeypatch):
+    """La original se emitió el 2026-01-15 sin fechas explícitas. Al repetirla al día siguiente,
+    la fecha por omisión cambia, pero sigue siendo la misma emisión."""
+
+    class Manana(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 1, 16)
+
+    monkeypatch.setattr(svc, "date", Manana)
+    core.respuesta = [error_core(409, "REGISTRO_DUPLICADO"), httpx.Response(200, json=TARJETA_CORE)]
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert core.llamadas[0]["json"]["fecha_emision"] == "2026-01-16"
+    assert r.status_code == 201
+    assert r.json()["message"].startswith("Emision ya procesada antes")
+    assert r.json()["data"]["fecha_emision"] == "2026-01-15"
+
+
 def test_emision_cuenta_de_otro_titular(client, core):
     core.respuesta = error_core(422, "ERR-TAR-001", "no se emite tarjeta al cliente")
-    r = client.post(f"{BASE}/emision", json=EMISION, headers=AUTH)
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
     assert r.status_code == 400
     assert r.json()["error_code"] == "ERR-TAR-001"
 

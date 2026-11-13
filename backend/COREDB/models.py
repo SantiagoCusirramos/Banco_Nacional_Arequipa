@@ -158,3 +158,5 @@ class Tarjeta(Base):
     fecha_vencimiento: Mapped[date] = mapped_column(Date)
     estado_tarjeta: Mapped[str] = mapped_column(String(25))
     cod_cliente: Mapped[str] = mapped_column(String(12))
+    # La cuenta principal (tarjetas.tarjeta_cuenta), NULL si no tiene.
+    num_cuenta: Mapped[str | None] = mapped_column(String(20))

@@ -113,6 +113,12 @@ SELECT CONCAT(tipo_operacion, ' ', naturaleza, ' ', moneda) FROM cuentas.v_movim
 SQL
 )"
 
+comprobar 'la API lee la cuenta principal de una tarjeta por la vista' '^1$' "$(app 2>&1 <<'SQL' || true
+SELECT COUNT(*) FROM information_schema.columns
+ WHERE table_schema = 'tarjetas' AND table_name = 'v_tarjeta_api' AND column_name = 'num_cuenta';
+SQL
+)"
+
 seguridad() { docker exec -i -e MYSQL_PWD="$PW_SEGURIDAD" "$C" mysql -ubna_seguridad_user -h127.0.0.1 --protocol=TCP -N "$@"; }
 comprobar 'rol de bna_seguridad_user' 'bna_seguridad' "$(seguridad -e 'SELECT CURRENT_ROLE()' 2>&1 || true)"
 comprobar 'bna_app_user no desbloquea' 'denied' \

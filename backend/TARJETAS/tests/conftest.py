@@ -34,6 +34,9 @@ class CoreFalso:
         })
         if self.excepcion:
             raise self.excepcion
+        # Una lista da una respuesta por llamada, en orden.
+        if isinstance(self.respuesta, list):
+            return self.respuesta.pop(0)
         return self.respuesta
 
 

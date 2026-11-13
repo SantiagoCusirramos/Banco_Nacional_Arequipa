@@ -1,6 +1,6 @@
 import httpx
 
-from TARJETAS.tests.test_tarjetas import AUTH, BASE, EMISION, ID, TARJETA_CORE
+from TARJETAS.tests.test_tarjetas import AUTH, BASE, EMISION, HEADERS_EMISION, ID, TARJETA_CORE
 
 
 def test_humo_openapi_lista_los_endpoints(client):
@@ -21,7 +21,7 @@ def test_humo_docs_disponible(client):
 
 def test_humo_flujo_completo(client, core):
     core.respuesta = httpx.Response(201, json=TARJETA_CORE)
-    assert client.post(f"{BASE}/emision", json=EMISION, headers=AUTH).status_code == 201
+    assert client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION).status_code == 201
     core.respuesta = httpx.Response(200, json=TARJETA_CORE)
     assert client.post(f"{BASE}/{ID}/estado", json={"estado": "ACTIVA"}, headers=AUTH).status_code == 200
     assert client.get(f"{BASE}/{ID}", headers=AUTH).status_code == 200

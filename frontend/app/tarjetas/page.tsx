@@ -166,6 +166,13 @@ export default function TarjetasPage() {
   const [cuentaEmision, setCuentaEmision] = useState("");
   const [bin, setBin] = useState(BINES[0]);
   const [vencimiento, setVencimiento] = useState(enCuatroAnios);
+  // Llave de idempotencia de esta emisión: se mantiene si se repite el mismo envío (doble
+  // clic, reintento tras un error) y cambia al editar un dato o al emitir con éxito.
+  const [llaveEmision, setLlaveEmision] = useState(() => crypto.randomUUID());
+  const editarEmision = (cambiar: (valor: string) => void) => (valor: string) => {
+    cambiar(valor);
+    setLlaveEmision(crypto.randomUUID());
+  };
 
   // Cambio de estado
   const [idEstado, setIdEstado] = useState("");
@@ -225,7 +232,8 @@ export default function TarjetasPage() {
         num_cuenta: cuentaEmision.trim(),
         bin,
         fecha_vencimiento: vencimiento,
-      });
+      }, llaveEmision);
+      setLlaveEmision(crypto.randomUUID());
       setNotice({ text: `Tarjeta ${tarjeta.numero_enmascarado} emitida (${tarjeta.estado_tarjeta}).`, error: false });
       mostrar(tarjeta);
     });
@@ -350,7 +358,7 @@ export default function TarjetasPage() {
                     <span><Icono nombre="tarjeta" tamano={26} /></span>
                     <h3>El cliente no tiene tarjetas.</h3>
                     <p>Puedes emitirle una vinculada a una de sus cuentas.</p>
-                    <button className="sol-button secondary" onClick={() => { setClienteEmision(codCliente.trim().toUpperCase()); irA("emision"); }}>
+                    <button className="sol-button secondary" onClick={() => { editarEmision(setClienteEmision)(codCliente.trim().toUpperCase()); irA("emision"); }}>
                       <Icono nombre="mas" />
                       Emitir tarjeta
                     </button>
@@ -451,21 +459,21 @@ export default function TarjetasPage() {
                 <form onSubmit={emitir} className="sol-form-grid">
                   <div className="sol-field">
                     <label htmlFor="emision-cliente">Código del cliente</label>
-                    <input id="emision-cliente" value={clienteEmision} onChange={(e) => setClienteEmision(e.target.value)} required maxLength={12} />
+                    <input id="emision-cliente" value={clienteEmision} onChange={(e) => editarEmision(setClienteEmision)(e.target.value)} required maxLength={12} />
                   </div>
                   <div className="sol-field">
                     <label htmlFor="emision-cuenta">Cuenta a vincular</label>
-                    <input id="emision-cuenta" value={cuentaEmision} onChange={(e) => setCuentaEmision(e.target.value)} required maxLength={20} placeholder="Número de cuenta" />
+                    <input id="emision-cuenta" value={cuentaEmision} onChange={(e) => editarEmision(setCuentaEmision)(e.target.value)} required maxLength={20} placeholder="Número de cuenta" />
                   </div>
                   <div className="sol-field">
                     <label htmlFor="emision-bin">BIN</label>
-                    <select id="emision-bin" value={bin} onChange={(e) => setBin(e.target.value)}>
+                    <select id="emision-bin" value={bin} onChange={(e) => editarEmision(setBin)(e.target.value)}>
                       {BINES.map((opcion) => <option key={opcion} value={opcion}>{opcion}</option>)}
                     </select>
                   </div>
                   <div className="sol-field">
                     <label htmlFor="emision-vencimiento">Fecha de vencimiento</label>
-                    <input id="emision-vencimiento" type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} required />
+                    <input id="emision-vencimiento" type="date" value={vencimiento} onChange={(e) => editarEmision(setVencimiento)(e.target.value)} required />
                   </div>
                   <div style={{ gridColumn: "1 / -1" }}>
                     <button className="sol-button primary" type="submit" disabled={loading}>
