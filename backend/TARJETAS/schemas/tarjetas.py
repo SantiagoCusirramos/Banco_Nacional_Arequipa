@@ -15,6 +15,7 @@ class _Entrada(BaseModel):
 class EmisionIn(_Entrada):
     cod_cliente: str = Field(min_length=1, max_length=12, pattern=r"^[A-Za-z0-9]+$")
     num_cuenta: str = Field(min_length=1, max_length=20)
+    # BIN de desarrollo, FISICA. Los reales son un pendiente del emisor (issue #34, pregunta 7).
     bin: str = Field(default="004499", pattern=r"^[0-9]{6}$")
     fecha_emision: date | None = Field(default=None, description="Hoy si no se envía.")
     fecha_vencimiento: date | None = Field(default=None, description="Cuatro años después de la emisión si no se envía.")

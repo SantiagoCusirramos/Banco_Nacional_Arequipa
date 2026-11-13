@@ -716,10 +716,14 @@ DELIMITER ;
 -- ---------------------------------------------------------------------
 -- 9. Lecturas de la API
 -- ---------------------------------------------------------------------
--- La tarjeta sin pan_token: la API no necesita el token (PCI-DSS).
+-- La tarjeta sin pan_token: la API no necesita el token (PCI-DSS). num_cuenta es la
+-- cuenta principal (a lo sumo una, por ux_tarjeta_principal), NULL si no tiene: la API la
+-- compara al repetir una emisión con la misma llave de idempotencia.
 CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW tarjetas.v_tarjeta_api AS
-SELECT id_tarjeta, bin, ultimos4, fecha_emision, fecha_vencimiento, estado_tarjeta, cod_cliente
-  FROM tarjetas.tarjeta;
+SELECT t.id_tarjeta, t.bin, t.ultimos4, t.fecha_emision, t.fecha_vencimiento, t.estado_tarjeta, t.cod_cliente,
+       tc.num_cuenta
+  FROM tarjetas.tarjeta t
+  LEFT JOIN tarjetas.tarjeta_cuenta tc ON tc.id_tarjeta = t.id_tarjeta AND tc.es_principal = 1;
 
 CREATE ROLE IF NOT EXISTS bna_api, bna_seguridad;
 GRANT EXECUTE ON PROCEDURE tarjetas.desbloquear_tarjeta TO bna_seguridad;
