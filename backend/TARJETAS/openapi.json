@@ -1,0 +1,497 @@
+{
+  "components": {
+    "schemas": {
+      "BloqueoIn": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "title": "BloqueoIn",
+        "type": "object"
+      },
+      "EmisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "bin": {
+            "default": "004499",
+            "pattern": "^[0-9]{6}$",
+            "title": "Bin",
+            "type": "string"
+          },
+          "cod_cliente": {
+            "maxLength": 12,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9]+$",
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "fecha_emision": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hoy si no se envía.",
+            "title": "Fecha Emision"
+          },
+          "fecha_vencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cuatro años después de la emisión si no se envía.",
+            "title": "Fecha Vencimiento"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "ultimos4": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{4}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Los últimos cuatro dígitos del PAN. El PAN nunca se envía.",
+            "title": "Ultimos4"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "num_cuenta"
+        ],
+        "title": "EmisionIn",
+        "type": "object"
+      },
+      "EstadoIn": {
+        "additionalProperties": false,
+        "properties": {
+          "estado": {
+            "enum": [
+              "ACTIVA",
+              "BLOQUEADA",
+              "RETENIDA",
+              "ANULADA"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "required": [
+          "estado"
+        ],
+        "title": "EstadoIn",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Modulo de Tarjetas de debito. Persistencia a traves de COREDB.",
+    "title": "BNA - Modulo de Tarjetas",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/tarjetas/cliente/{cod_cliente}": {
+      "get": {
+        "operationId": "tarjetas_del_cliente_api_v1_tarjetas_cliente__cod_cliente__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_cliente",
+            "required": true,
+            "schema": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tarjetas Del Cliente",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/api/v1/tarjetas/emision": {
+      "post": {
+        "operationId": "emitir_api_v1_tarjetas_emision_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Emitir",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/api/v1/tarjetas/{id_tarjeta}": {
+      "get": {
+        "operationId": "ver_tarjeta_api_v1_tarjetas__id_tarjeta__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ver Tarjeta",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/api/v1/tarjetas/{id_tarjeta}/bloqueo": {
+      "post": {
+        "operationId": "bloquear_api_v1_tarjetas__id_tarjeta__bloqueo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BloqueoIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bloquear",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/api/v1/tarjetas/{id_tarjeta}/estado": {
+      "post": {
+        "operationId": "cambiar_estado_api_v1_tarjetas__id_tarjeta__estado_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstadoIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cambiar Estado",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    }
+  }
+}
