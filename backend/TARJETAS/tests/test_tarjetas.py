@@ -42,6 +42,14 @@ def test_tarjetas_del_cliente_formato_de_exito(client, core):
     assert llamada["headers"]["x-correlation-id"] == ID
 
 
+def test_codigo_de_cliente_invalido_400_sin_llamar_a_core(client, core):
+    for codigo in ["CLI-0001", "A" * 13, "CLI%200001"]:
+        r = client.get(f"{BASE}/cliente/{codigo}", headers=AUTH)
+        assert r.status_code == 400, codigo
+        assert r.json()["error_code"] == "ERR-VALIDACION-ESQUEMA"
+    assert core.llamadas == []
+
+
 def test_sin_token_401_sin_llamar_a_core(client, core):
     r = client.get(f"{BASE}/cliente/CLI000000001")
     assert r.status_code == 401
