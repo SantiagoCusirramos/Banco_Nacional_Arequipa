@@ -94,7 +94,9 @@ Ocurre dentro de `autenticar()`, después de verificar la clave y el estado:
 `CORE/tests/integracion/test_real_mysql.py` prueba este flujo contra un MySQL real.
 Se omite salvo que `BNA_INTEGRACION_MYSQL=1`, porque escribe en la BD y necesita una
 carga limpia: las semillas deben seguir en SHA-256. No se debe activar contra una BD
-compartida. Desde `backend/`, con Docker, en bash:
+compartida. Lo más simple es `backend/CORE/scripts/pruebas_integracion.sh`, que
+levanta una base propia y la elimina al terminar. A mano, desde `backend/`, con
+Docker, en bash:
 
 ```bash
 docker run -d --name bna-prueba -e MYSQL_ROOT_PASSWORD=raiz-local \

@@ -334,17 +334,20 @@ Respuesta: `puntaje`, `resultado`, `monto_maximo_sugerido`,
 `nivel_riesgo`, `detalle_reglas`.
 
 ### POST `/core/creditos/solicitudes/{id_solicitud}/decision`
-Body: `decision` (`APROBAR`|`RECHAZAR`|`OBSERVAR`|`DERIVAR`),
+Body: `decision` (`APROBAR`|`RECHAZAR`|`DERIVAR`),
 `id_analista?`, `monto_aprobado?`, `plazo_aprobado?`,
 `observacion?`. `id_analista` se ignora: queda el empleado del usuario del
-token, si tiene uno.
+token. Si el usuario no tiene empleado asociado responde 422
+`ANALISTA_REQUERIDO` (`eva_decision_analista.id_analista` es NOT NULL).
+`OBSERVAR` responde 422 `DECISION_INVALIDO`: OBSERVADO es un resultado de la
+evaluación, no una decisión del analista (issue #19).
 
 **Precondición**: la solicitud debe haber sido evaluada (debe
 existir al menos una fila en `eva_evaluacion`).
 
 **Escrituras**: `eva_decision_analista` (decisión del humano),
-`sol_solicitud.estado_solicitud` (→ `APROBADA`, `RECHAZADA`,
-`OBSERVADO` o `EN_EVALUACION`), `sol_historial_estado`.
+`sol_solicitud.estado_solicitud` (→ `APROBADA`, `RECHAZADA` o
+`EN_EVALUACION`), `sol_historial_estado`.
 
 > **Nota (RGN-12 parcial)**: al aprobar aún no se genera
 > automáticamente `cob_credito` ni el asiento de desembolso; eso

@@ -214,7 +214,7 @@ ESCRITURAS = [
      tarjetassvc, "cambiar_estado_tarjeta"),
     ("post", "/core/creditos/solicitudes",
      {"id_cliente": "c-1", "id_producto_credito": "pc-1", "monto_solicitado": "1000.00",
-      "plazo_meses": 12},
+      "plazo_meses": 12, "destino_credito": "Consumo"},
      creditossvc, "crear_solicitud"),
     ("post", "/core/creditos/solicitudes/s-1/evaluar", {}, creditossvc, "evaluar_credito"),
     ("post", "/core/creditos/solicitudes/s-1/decision", {"decision": "APROBAR"},

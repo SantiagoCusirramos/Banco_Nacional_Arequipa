@@ -53,7 +53,7 @@ Documentadas en `backend/CORE/CREDITOS_MOTOR_Y_FLUJO.md`; no son errores corregi
 | H-A3 | Solicitante sin ingresos queda APROBADO | Abierto (test `xfail`) |
 | H-A4 | `float` e `int` en la ponderación del puntaje | Abierto |
 | H-B1 | Se puede aprobar una evaluación RECHAZADA | Abierto (test `xfail`) |
-| H-B2 | Aprobación sin aprobador identificado | Resuelto en parte (PR #46): `/core/creditos` exige token y permiso, y `id_analista` es el empleado del usuario que decide. Abierto: si aprobar exige un usuario con empleado (`CREDITOS_MOTOR_Y_FLUJO.md` §4.2) |
+| H-B2 | Aprobación sin aprobador identificado | Resuelto (PR #46 e issue #19): `/core/creditos` exige token y permiso, `id_analista` es el empleado del usuario que decide, y un usuario sin empleado recibe 422 `ANALISTA_REQUERIDO` (`CREDITOS_MOTOR_Y_FLUJO.md` §4.2) |
 | H-B3 | El monto aprobado no tiene tope | Abierto (test `xfail`) |
 | H-B4 | No existe workflow de aprobación por monto | Abierto |
 | EXCLUYE | Se comporta igual que ENTRE | Abierto |
@@ -78,6 +78,7 @@ No hubo una ronda de validación nueva. Esta sección solo registra qué hallazg
 | 2026-11-11 | H1 `actor` por el cuerpo | 🟡 Resuelto en 4 routers | ✅ El actor sale del token en todos | #46 | `test_rutas_protegidas.py` |
 | 2026-11-11 | H3 `catalogos` con `select()` y sin token | ❌ | 🟡 Con token; el `select()` sigue en el router | #46 | `routers/catalogos.py` |
 | 2026-11-11 | H-B2 Aprobación sin aprobador identificado | Abierto | Resuelto en parte: el analista es el empleado del usuario del token | #46 | `CREDITOS_MOTOR_Y_FLUJO.md` §4.2 |
+| 2026-11-13 | H-B2 Aprobación sin aprobador identificado | Resuelto en parte | Resuelto: decidir sin empleado asociado responde 422 en vez de 500 en MySQL | issue #19 | `test_creditos_mysql.py`, `CREDITOS_MOTOR_Y_FLUJO.md` §4.2 |
 
 Sin cambios en el código de `main` desde la Ronda 3: #8, #12, #14, S1, S2, S3, S7 (sigue sin test), H2 y H4. Lo que figura como pendiente en #2, #3, #10 y #11 no se revisó aquí.
 
