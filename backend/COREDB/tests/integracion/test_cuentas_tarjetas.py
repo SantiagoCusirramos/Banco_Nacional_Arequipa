@@ -108,6 +108,18 @@ def test_el_mismo_id_no_emite_dos_tarjetas(cliente, abrir_cuenta, consulta):
     )[0]["n"] == 1
 
 
+def test_la_tarjeta_muestra_su_cuenta_principal(cliente, abrir_cuenta):
+    """TARJETAS la compara al repetir una emisión: la misma llave con otra cuenta es un 409."""
+    cuenta = abrir_cuenta()
+    emitida = emitir(cliente, cuenta)
+    assert emitida.status_code == 201, emitida.text
+    assert emitida.json()["num_cuenta"] == cuenta
+    id_tarjeta = emitida.json()["id_tarjeta"]
+    assert cliente.get(f"/coredb/tarjetas/{id_tarjeta}").json()["num_cuenta"] == cuenta
+    del_cliente = cliente.get("/coredb/tarjetas", params={"cod_cliente": "C001"}).json()
+    assert [t["num_cuenta"] for t in del_cliente if t["id_tarjeta"] == id_tarjeta] == [cuenta]
+
+
 def test_emitir_y_cambiar_estado_por_historial(cliente, abrir_cuenta, consulta):
     tarjeta = emitir(cliente, abrir_cuenta())
     assert tarjeta.status_code == 201

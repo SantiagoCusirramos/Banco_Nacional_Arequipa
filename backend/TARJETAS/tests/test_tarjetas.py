@@ -3,6 +3,7 @@ import logging
 from datetime import date
 
 import httpx
+import pytest
 
 from TARJETAS.services import tarjetas as svc
 
@@ -14,6 +15,7 @@ AUTH = {"Authorization": TOKEN}
 TARJETA_CORE = {
     "id_tarjeta": ID, "bin": "004499", "ultimos4": "0001", "fecha_emision": "2026-01-15",
     "fecha_vencimiento": "2030-01-31", "estado_tarjeta": "ACTIVA", "cod_cliente": "CLI000000001",
+    "num_cuenta": "10100000000001",
 }
 EMISION = {"cod_cliente": "cli000000001", "num_cuenta": "10100000000001"}
 KEY = "550e8400-e29b-41d4-a716-446655440000"
@@ -166,6 +168,63 @@ def test_la_misma_llave_con_otros_datos_409(client, core):
     r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
     assert r.status_code == 409
     assert r.json()["error_code"] == "ERR-TAR-IDEMPOTENCIA"
+
+
+@pytest.mark.parametrize("cambio", [
+    {"num_cuenta": "10100000000002"},
+    {"bin": "999102"},
+    {"ultimos4": "9999"},
+    {"fecha_emision": "2026-01-16"},
+    {"fecha_vencimiento": "2030-02-28"},
+], ids=lambda cambio: next(iter(cambio)))
+def test_la_misma_llave_con_un_dato_distinto_409(client, core, cambio):
+    """La tarjeta original se emitió con EMISION. Repetir la llave con otra cuenta del mismo
+    cliente, u otro dato fijado por quien llama, no devuelve la original."""
+    core.respuesta = [error_core(409, "REGISTRO_DUPLICADO"), httpx.Response(200, json=TARJETA_CORE)]
+    r = client.post(f"{BASE}/emision", json={**EMISION, **cambio}, headers=HEADERS_EMISION)
+    assert r.status_code == 409
+    assert r.json()["error_code"] == "ERR-TAR-IDEMPOTENCIA"
+
+
+def test_core_sin_la_cuenta_no_da_por_repetida_la_emision(client, core):
+    sin_cuenta = {k: v for k, v in TARJETA_CORE.items() if k != "num_cuenta"}
+    core.respuesta = [error_core(409, "REGISTRO_DUPLICADO"), httpx.Response(200, json=sin_cuenta)]
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert r.status_code == 409
+    assert r.json()["error_code"] == "ERR-TAR-IDEMPOTENCIA"
+
+
+def test_reintento_tras_un_error_de_negocio_emite_normal(client, core):
+    """Si la primera emisión falla por una regla (no se insertó nada), la misma llave sirve
+    para reintentar: no es una repetición ni un 409."""
+    core.respuesta = [error_core(422, "ERR-TAR-001", "la cuenta está cancelada"),
+                      httpx.Response(201, json=TARJETA_CORE)]
+    primera = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert primera.status_code == 400
+    assert primera.json()["error_code"] == "ERR-TAR-001"
+    segunda = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert segunda.status_code == 201
+    assert segunda.json()["message"] == "Tarjeta emitida, pendiente de activación"
+    assert [c["metodo"] for c in core.llamadas] == ["POST", "POST"]
+    assert core.llamadas[0]["json"]["id_tarjeta"] == core.llamadas[1]["json"]["id_tarjeta"]
+
+
+def test_repeticion_otro_dia_con_la_fecha_por_omision(client, core, monkeypatch):
+    """La original se emitió el 2026-01-15 sin fechas explícitas. Al repetirla al día siguiente,
+    la fecha por omisión cambia, pero sigue siendo la misma emisión."""
+
+    class Manana(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 1, 16)
+
+    monkeypatch.setattr(svc, "date", Manana)
+    core.respuesta = [error_core(409, "REGISTRO_DUPLICADO"), httpx.Response(200, json=TARJETA_CORE)]
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert core.llamadas[0]["json"]["fecha_emision"] == "2026-01-16"
+    assert r.status_code == 201
+    assert r.json()["message"].startswith("Emision ya procesada antes")
+    assert r.json()["data"]["fecha_emision"] == "2026-01-15"
 
 
 def test_emision_cuenta_de_otro_titular(client, core):
