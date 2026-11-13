@@ -152,7 +152,7 @@ services:
         - CMD
         - python
         - -c
-        - import urllib.request as u; u.urlopen("http://127.0.0.1:8002/health", timeout=3)
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8002/ready", timeout=3)
 
   # ── SOL: solicitud de crédito, con Captación y Evaluación simuladas ─────
   sol:
