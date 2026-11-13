@@ -28,7 +28,12 @@ la llave sale siempre el mismo id de tarjeta (UUIDv5), que se envia a COREDB:
 
 - Repetir la emision con la misma llave y los mismos datos devuelve la tarjeta ya emitida (201, con el
   mensaje de emision ya procesada) y no emite otra. Sirve para reintentar si se pierde la respuesta.
-- La misma llave con otro cliente, BIN o fechas responde 409 `ERR-TAR-IDEMPOTENCIA`.
+- La misma llave con otra cuenta (aunque sea del mismo cliente), otro cliente u otro BIN responde 409
+  `ERR-TAR-IDEMPOTENCIA`. Tambien si cambian los ultimos cuatro digitos o las fechas que se enviaron; si
+  se omiten, vale lo que se uso en la primera emision (la fecha por omision cambia de un dia a otro).
+  La cuenta que se compara es la principal, que COREDB devuelve en `num_cuenta`.
+- Si la primera emision falla por una regla de negocio (por ejemplo `ERR-TAR-001`), no se emitio nada:
+  la misma llave sirve para reintentar.
 - La pantalla `/tarjetas` conserva la llave mientras no se edite el formulario, asi un doble clic no
   emite dos tarjetas.
 
@@ -41,6 +46,10 @@ la llave sale siempre el mismo id de tarjeta (UUIDv5), que se envia a COREDB:
   emision (RN-TAR-003), y cada tarjeta se devuelve tambien con `vencimiento_mm_aa` y
   `numero_enmascarado`.
 - El bloqueo exige un motivo, que queda en el historial de la tarjeta.
+- **BIN:** un BIN por tipo de tarjeta (`tarjetas.bin_tarjeta` guarda el tipo). Es una decision de
+  integracion, no de la fuente del modulo (issue #34, pregunta 7). `004499` es `FISICA` y existe solo en
+  los datos de desarrollo; la base de produccion no trae ningun BIN. Los BIN reales son un pendiente del
+  emisor. Mientras no haya un BIN `VIRTUAL`, el modulo emite solo tarjetas fisicas.
 - El desbloqueo (de BLOQUEADA a ACTIVA) lo rechaza COREDB: es de Seguridad.
 
 ## Respuestas (ITIL-02)
@@ -61,7 +70,7 @@ Error: `{success:false, status_code, error_code, message, details, metadata}`. 4
 | Identificador que no es UUID | ERR-TAR-ID-INVALIDO | 400 |
 | Emision sin X-Idempotency-Key | ERR-TAR-HEADER-REQUERIDO | 400 |
 | X-Idempotency-Key que no es UUIDv4 | ERR-TAR-HEADER-INVALIDO | 400 |
-| Misma llave con otros datos | ERR-TAR-IDEMPOTENCIA | 409 |
+| Misma llave con otra cuenta u otros datos | ERR-TAR-IDEMPOTENCIA | 409 |
 | COREDB caido | ERR-COR-NO-DISPONIBLE | 503 |
 | COREDB no responde | ERR-TAR-TIMEOUT-CORE | 504 |
 

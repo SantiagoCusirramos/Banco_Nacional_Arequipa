@@ -117,7 +117,7 @@ rama `main`, y es una divergencia de esta rama.
 Cada procedimiento público es atómico aunque se llame sin una transacción, registra
 su propio evento de auditoría y exige un canal. La API se conecta con el rol `bna_api`,
 que ejecuta esos procedimientos y lee solo las tablas que usa, con la tarjeta por
-`tarjetas.v_tarjeta_api`, sin `pan_token`; no lee credenciales de tarjeta ni datos
+`tarjetas.v_tarjeta_api`, sin `pan_token` y con la cuenta principal; no lee credenciales de tarjeta ni datos
 biométricos. Ninguna cuenta desplegada tiene `bna_app`, que conserva sus permisos para
 las pruebas de la matriz y para los módulos que aún no tengan procedimientos.
 `cambiar_estado_tarjeta` rechaza todo desbloqueo y el origen `SEGURIDAD`:

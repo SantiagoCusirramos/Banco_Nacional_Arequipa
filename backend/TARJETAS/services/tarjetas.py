@@ -51,6 +51,8 @@ def _misma_emision(tarjeta: dict, datos: EmisionIn) -> bool:
     # Solo se comparan los datos que fija quien llama: la fecha por omisión cambia de un día a otro.
     return (
         tarjeta["cod_cliente"] == datos.cod_cliente.upper()
+        # COREDB devuelve la cuenta principal, la de la emisión. Sin ella no se da por repetida.
+        and tarjeta.get("num_cuenta") == datos.num_cuenta
         and tarjeta["bin"] == datos.bin
         and (datos.ultimos4 is None or tarjeta["ultimos4"] == datos.ultimos4)
         and (datos.fecha_emision is None or tarjeta["fecha_emision"] == datos.fecha_emision.isoformat())

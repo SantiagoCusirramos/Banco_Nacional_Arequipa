@@ -48,6 +48,10 @@ class TarjetaRespuesta(BaseModel):
     fecha_vencimiento: date
     estado_tarjeta: str
     cod_cliente: str
+    num_cuenta: str | None = Field(
+        default=None,
+        description="La cuenta principal de la tarjeta, la de su emisión. Null si no tiene.",
+    )
 
 
 def _obtener(db: Session, id_tarjeta: uuid.UUID) -> Tarjeta:
