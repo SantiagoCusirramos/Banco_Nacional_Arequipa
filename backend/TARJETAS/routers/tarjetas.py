@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Request
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Path, Request
 
 from TARJETAS.core_client import CoreClient
 from TARJETAS.dependencies import autorizacion, correlation_id, get_core_client, idempotency_key
@@ -8,13 +10,16 @@ from TARJETAS.services import tarjetas as svc
 
 router = APIRouter(prefix="/api/v1/tarjetas", tags=["Tarjetas"])
 
+# El mismo formato que exige COREDB: un código inválido se rechaza aquí, sin llamarlo.
+CodCliente = Annotated[str, Path(min_length=1, max_length=12, pattern=r"^[A-Za-z0-9]+$")]
+
 
 def _salida(tarjeta: dict) -> dict:
     return TarjetaOut(**tarjeta).model_dump(mode="json")
 
 
 @router.get("/cliente/{cod_cliente}")
-def tarjetas_del_cliente(request: Request, cod_cliente: str, core: CoreClient = Depends(get_core_client),
+def tarjetas_del_cliente(request: Request, cod_cliente: CodCliente, core: CoreClient = Depends(get_core_client),
                          cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
     tarjetas = [_salida(t) for t in svc.tarjetas_del_cliente(core, cod_cliente, cid, token)]
     return exito(request, tarjetas)

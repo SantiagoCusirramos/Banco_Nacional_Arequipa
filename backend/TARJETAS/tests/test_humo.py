@@ -38,3 +38,12 @@ def test_humo_todas_las_respuestas_traen_envelope(client, core):
     assert {"success", "status_code", "message", "data", "metadata"} <= ok.keys()
     mal = client.get("/api/v1/no-existe").json()
     assert {"success", "status_code", "error_code", "message", "details", "metadata"} <= mal.keys()
+
+
+def test_spec_publicada_al_dia():
+    """openapi.json es la especificación que leen los módulos que usan TARJETAS (CONTRATO.md)."""
+    from TARJETAS.scripts.exporta_openapi import ARCHIVO, especificacion
+
+    assert ARCHIVO.read_text(encoding="utf-8") == especificacion(), (
+        "openapi.json está desactualizado: desde backend/, python -m TARJETAS.scripts.exporta_openapi"
+    )

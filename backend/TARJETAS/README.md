@@ -89,3 +89,6 @@ python -m pytest TARJETAS/tests
 ```
 
 Con Docker, `./bna up` lo levanta en http://127.0.0.1:8002/docs.
+
+La especificacion publicada es `openapi.json`; se regenera desde `backend/` con
+`python -m TARJETAS.scripts.exporta_openapi`, y una prueba falla si queda desactualizada.
