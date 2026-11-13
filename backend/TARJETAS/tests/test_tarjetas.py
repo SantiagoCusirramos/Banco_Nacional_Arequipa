@@ -234,6 +234,14 @@ def test_emision_cuenta_de_otro_titular(client, core):
     assert r.json()["error_code"] == "ERR-TAR-001"
 
 
+def test_emision_sobre_cuenta_ajena_400(client, core):
+    core.respuesta = error_core(422, "BNA-TARJETA", "BNA-TARJETA: el cliente no es titular de la cuenta")
+    r = client.post(f"{BASE}/emision", json=EMISION, headers=HEADERS_EMISION)
+    assert r.status_code == 400
+    assert r.json()["error_code"] == "ERR-TAR-CUENTA-INVALIDA"
+    assert "no es titular" in r.json()["message"]
+
+
 def test_bloqueo_envia_estado_y_motivo(client, core):
     core.respuesta = httpx.Response(200, json={**TARJETA_CORE, "estado_tarjeta": "BLOQUEADA"})
     r = client.post(f"{BASE}/{ID}/bloqueo", json={"motivo": "Robo reportado"}, headers=AUTH)
