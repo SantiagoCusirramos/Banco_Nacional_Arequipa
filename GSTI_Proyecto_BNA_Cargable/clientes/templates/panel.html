@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BNA · Módulo de Clientes</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%273%27 fill=%27%230b5d4b%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static-base/base.css">
+  <link rel="stylesheet" href="/static/panel.css">
+</head>
+<body>
+  <header class="top"><div class="inner">
+    <div><h1>Banco Nacional de Arequipa · Módulo de Clientes</h1><div class="sub">Registro y validación de identidad</div></div>
+    <div class="spacer"></div>
+    <span class="estado" title="Mini-Bus de Servicios"><i class="punto" id="st-bus"></i>Bus</span>
+    <span class="estado" title="Core simulado (visto desde el Bus)"><i class="punto" id="st-core"></i>Core</span>
+    <span class="estado" title="RENIEC simulado (conexión directa)"><i class="punto" id="st-reniec"></i>RENIEC</span>
+    <a class="estado" href="/docs" style="color:inherit;text-decoration:none">Swagger ↗</a>
+  </div></header>
+
+  <main class="container">
+    <nav class="tabs" role="tablist">
+      <button class="tab activa" data-tab="registro" role="tab">Solicitudes de registro</button>
+      <button class="tab" data-tab="validacion" role="tab">Solicitudes de validación</button>
+      <button class="tab" data-tab="lab" role="tab">Laboratorio de pruebas</button>
+    </nav>
+
+    <!-- A. Solicitudes de registro -->
+    <section id="tab-registro" class="card">
+      <h2>Solicitudes de registro <span class="badge info" id="n-registro">0</span></h2>
+      <p class="muted small">Datos leídos del Core (MySQL) a través del Bus. Clientes no guarda copia.</p>
+      <div class="actions" style="margin:0 0 .8rem">
+        <button class="btn btn-ghost btn-sm" data-recargar="registro">Recargar</button>
+        <select class="orden" data-orden="registro" style="width:auto"><option value="recientes">Más recientes primero</option><option value="antiguas">Más antiguas primero</option></select>
+        <label style="display:flex;gap:.35rem;align-items:center;margin:0"><input type="checkbox" class="auto" data-auto="registro" style="width:auto"> Actualizar cada 5 s</label>
+      </div>
+      <div class="tabla-wrap"><table class="tabla"><thead><tr><th>Módulo de origen</th><th>Tipo de documento</th><th>Número de documento</th><th>Fecha y hora</th><th>Resultado</th></tr></thead>
+        <tbody id="filas-registro"><tr><td colspan="5" class="vacio">Cargando…</td></tr></tbody></table></div>
+    </section>
+
+    <!-- B. Solicitudes de validación -->
+    <section id="tab-validacion" class="card panel-oculto">
+      <h2>Solicitudes de validación <span class="badge info" id="n-validacion">0</span></h2>
+      <p class="muted small">Documento, facial y huella. Datos leídos del Core a través del Bus.</p>
+      <div class="actions" style="margin:0 0 .8rem">
+        <button class="btn btn-ghost btn-sm" data-recargar="validacion">Recargar</button>
+        <select class="orden" data-orden="validacion" style="width:auto"><option value="recientes">Más recientes primero</option><option value="antiguas">Más antiguas primero</option></select>
+        <label style="display:flex;gap:.35rem;align-items:center;margin:0"><input type="checkbox" class="auto" data-auto="validacion" style="width:auto"> Actualizar cada 5 s</label>
+      </div>
+      <div class="tabla-wrap"><table class="tabla"><thead><tr><th>Módulo de origen</th><th>Tipo de documento</th><th>Número de documento</th><th>Tipo de validación</th><th>Fecha y hora</th><th>Resultado</th></tr></thead>
+        <tbody id="filas-validacion"><tr><td colspan="6" class="vacio">Cargando…</td></tr></tbody></table></div>
+    </section>
+
+    <!-- C. Laboratorio -->
+    <div id="tab-lab" class="panel-oculto">
+      <div class="aviso">Cada prueba simula a <strong>otro módulo del banco</strong>: la petición entra por el <strong>Mini-Bus</strong> → Clientes → (RENIEC) → Bus → Core. En producción, el módulo de origen se deduciría de la autenticación de servicio, no de un campo libre.</div>
+
+      <div class="grid cols-2">
+        <!-- Prueba 1 -->
+        <section class="card">
+          <h2>1 · Registrar cliente</h2>
+          <form id="f-registrar" autocomplete="off" novalidate>
+            <div class="fields">
+              <div class="full"><label>Caso de prueba</label><select data-caso="registrar"><option value="">— Cargar un caso de ejemplo —</option></select></div>
+              <div><label>Módulo de origen</label><select name="modulo_origen" class="sel-modulo">{% for m in modulos %}<option>{{ m }}</option>{% endfor %}</select></div>
+              <div><label>Tipo de documento</label><select name="tipo_documento"><option>DNI</option><option>PASAPORTE</option><option>PTP</option></select></div>
+              <div><label>Número de documento</label><input name="numero_documento"></div>
+              <div><label>Fecha de nacimiento</label><input name="fecha_nacimiento" type="date"></div>
+              <div><label>Nombres</label><input name="nombres"></div>
+              <div><label>Apellidos</label><input name="apellidos"></div>
+              <div><label>Ingreso mensual</label><input name="ingreso_mensual" type="number" step="0.01"></div>
+              <div><label>Teléfono</label><input name="telefono"></div>
+              <div class="full"><label>Dirección</label><input name="direccion"></div>
+              <div class="full"><label>Correo</label><input name="correo" type="text"></div>
+            </div>
+            <div class="actions"><button class="btn btn-primary" type="submit">Registrar cliente</button></div>
+          </form>
+        </section>
+
+        <div>
+          <!-- Prueba 2 -->
+          <section class="card">
+            <h2>2 · Validar por documento</h2>
+            <form id="f-documento" autocomplete="off" novalidate>
+              <div class="fields">
+                <div class="full"><label>Caso de prueba</label><select data-caso="documento"><option value="">— Cargar un caso de ejemplo —</option></select></div>
+                <div><label>Módulo de origen</label><select name="modulo_origen" class="sel-modulo">{% for m in modulos %}<option>{{ m }}</option>{% endfor %}</select></div>
+                <div><label>Tipo de documento</label><select name="tipo_documento"><option>DNI</option><option>PASAPORTE</option><option>PTP</option></select></div>
+                <div><label>Número de documento</label><input name="numero_documento"></div>
+                <div><label>Fecha de nacimiento</label><input name="fecha_nacimiento" type="date"></div>
+              </div>
+              <div class="actions"><button class="btn btn-primary" type="submit">Validar documento</button></div>
+            </form>
+          </section>
+
+          <!-- Prueba 3 -->
+          <section class="card">
+            <h2>3 · Validar biometría</h2>
+            <form id="f-biometria" autocomplete="off" novalidate>
+              <div class="fields">
+                <div class="full"><label>Caso de prueba</label><select data-caso="biometria"><option value="">— Cargar un caso de ejemplo —</option></select></div>
+                <div><label>Módulo de origen</label><select name="modulo_origen" class="sel-modulo">{% for m in modulos %}<option>{{ m }}</option>{% endfor %}</select></div>
+                <div><label>Número de DNI</label><input name="numero_documento" inputmode="numeric" maxlength="8"></div>
+                <div><label>Tipo de biometría</label><select name="tipo_biometria" id="bio-tipo"><option>FACIAL</option><option>HUELLA</option></select></div>
+                <div><label>Formato</label><input name="formato" id="bio-formato" readonly></div>
+                <div class="full"><label>Plantilla (JSON: lista de números para FACIAL, cadena Base64 para HUELLA)</label>
+                  <textarea id="bio-template" placeholder='[0.12, -0.35, ...]   o   "AQIDBAUG..."'></textarea></div>
+                <div class="full"><label>…o suba una imagen JPG/PNG y se convertirá automáticamente a plantilla</label>
+                  <input type="file" id="bio-archivo" accept="image/png,image/jpeg">
+                  <div class="small muted" id="bio-estado" style="margin-top:.3rem">Sin imagen convertida.</div></div>
+              </div>
+              <div class="actions"><button class="btn btn-primary" type="submit">Validar biometría</button><button class="btn btn-ghost btn-sm" type="button" id="bio-limpiar">Limpiar plantilla</button></div>
+            </form>
+          </section>
+        </div>
+      </div>
+
+      <!-- Consola -->
+      <section class="consola" aria-live="polite">
+        <header>
+          <span class="titulo">Consola de respuestas</span>
+          <span class="badge" id="c-ruta">—</span>
+          <span class="badge" id="c-http">HTTP —</span>
+          <span class="badge" id="c-estado">Sin ejecutar</span>
+          <span class="small" id="c-ms"></span>
+          <span class="small" style="opacity:.7;margin-left:auto">Interfaz → Mini-Bus → Clientes → RENIEC → Mini-Bus → Core</span>
+        </header>
+        <div class="cols">
+          <div class="col"><div class="rotulo">Petición enviada al Bus (plantillas ocultas)</div><pre id="c-peticion">—</pre></div>
+          <div class="col"><div class="rotulo">Respuesta recibida</div><pre id="c-respuesta">—</pre></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div class="toasts" id="toasts"></div>
+  <script src="/static/panel.js"></script>
+</body>
+</html>

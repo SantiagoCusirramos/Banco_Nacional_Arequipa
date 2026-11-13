@@ -1,0 +1,7 @@
+/* Ajustes propios del panel de Clientes (la base está en /static-base/base.css) */
+.consola { margin-top: 0; }
+#c-ruta { background: #243447; color: #cfe0f2; font-family: var(--mono); }
+#c-http.ok { background: #14532d; color: #bbf7d0; } #c-http.err { background: #7f1d1d; color: #fecaca; }
+#c-estado.ok { background: #14532d; color: #bbf7d0; } #c-estado.err { background: #7f1d1d; color: #fecaca; }
+.card form .fields input[readonly] { background: #f3f5f8; color: var(--muted); }
+td .badge { max-width: 380px; overflow: hidden; text-overflow: ellipsis; }

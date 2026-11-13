@@ -1,0 +1,108 @@
+# Entorno LOCAL del módulo de Clientes del BNA.   Levantar:  docker compose up -d --build
+# Requiere un archivo .env (ver .env.example o ejecute: python scripts/generar_env.py)
+name: bna-clientes
+
+# Configuración biométrica: DEBE ser idéntica en RENIEC (registra/compara) y Clientes (laboratorio).
+x-config-biometria: &config-biometria
+  FACE_DETECTOR_BACKEND: ${FACE_DETECTOR_BACKEND:-opencv}
+  FACE_COSINE_DISTANCE_THRESHOLD: ${FACE_COSINE_DISTANCE_THRESHOLD:-0.68}
+  FINGERPRINT_PPI: ${FINGERPRINT_PPI:-500}
+  FINGERPRINT_MIN_QUALITY: ${FINGERPRINT_MIN_QUALITY:-0.0}
+  FINGERPRINT_MIN_MINUTIAE: ${FINGERPRINT_MIN_MINUTIAE:-15}
+  FINGERPRINT_MIN_NFIQ2: ${FINGERPRINT_MIN_NFIQ2:-35}
+  FINGERPRINT_MIN_RELIABILITY: ${FINGERPRINT_MIN_RELIABILITY:-0.25}
+  FINGERPRINT_MATCH_THRESHOLD: ${FINGERPRINT_MATCH_THRESHOLD:-50}
+  MAX_IMAGE_MB: ${MAX_IMAGE_MB:-5}
+
+services:
+  # ---------------------------------------------------------------- MySQL del Core (servicio interno)
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Falta MYSQL_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-bna_core}
+      MYSQL_USER: ${MYSQL_USER:-bna}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Falta MYSQL_PASSWORD en .env}
+    # Ajustes para consumir poca memoria
+    command: ["--performance-schema=OFF", "--innodb-buffer-pool-size=64M", "--max-connections=40", "--character-set-server=utf8mb4"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+  # ---------------------------------------------------------------- Core simulado (interno)
+  core:
+    build: {context: ., dockerfile: core-simulado/Dockerfile}
+    image: ${DOCKERHUB_USER:-edmaster1214}/bna-core:${BNA_TAG:-latest}
+    platform: ${BNA_PLATFORM:-linux/amd64}
+    restart: unless-stopped
+    depends_on:
+      mysql: {condition: service_healthy}
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-bna}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-bna_core}?charset=utf8mb4
+      CORE_TOKEN: ${CORE_TOKEN:?Falta CORE_TOKEN en .env}
+    expose: ["8000"]
+
+  # ---------------------------------------------------------------- Mini-Bus (interno)
+  bus:
+    build: {context: ., dockerfile: mini-bus/Dockerfile}
+    image: ${DOCKERHUB_USER:-edmaster1214}/bna-bus:${BNA_TAG:-latest}
+    platform: ${BNA_PLATFORM:-linux/amd64}
+    restart: unless-stopped
+    depends_on:
+      core: {condition: service_healthy}
+    environment:
+      BUS_TOKEN: ${BUS_TOKEN:?Falta BUS_TOKEN en .env}
+      CLIENTES_URL: http://clientes:8000
+      CLIENTES_TOKEN: ${CLIENTES_TOKEN:?Falta CLIENTES_TOKEN en .env}
+      CORE_URL: http://core:8000
+      CORE_TOKEN: ${CORE_TOKEN}
+    expose: ["8000"]
+
+  # ---------------------------------------------------------------- RENIEC simulado (externo al banco)
+  reniec:
+    build: {context: ., dockerfile: reniec/Dockerfile}
+    image: ${DOCKERHUB_USER:-edmaster1214}/bna-reniec:${BNA_TAG:-latest}
+    platform: ${BNA_PLATFORM:-linux/amd64}   # nbis-py solo publica ruedas para Linux x86_64
+    restart: unless-stopped
+    environment:
+      <<: *config-biometria
+      RENIEC_SERVICE_TOKEN: ${RENIEC_SERVICE_TOKEN:?Falta RENIEC_SERVICE_TOKEN en .env}
+      RENIEC_ADMIN_USER: ${RENIEC_ADMIN_USER:-admin}
+      RENIEC_ADMIN_PASSWORD: ${RENIEC_ADMIN_PASSWORD:?Falta RENIEC_ADMIN_PASSWORD en .env}
+      RENIEC_DB_PATH: /data/reniec.db
+      PRECARGAR_MODELO_FACIAL: ${PRECARGAR_MODELO_FACIAL:-false}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:${PUERTO_RENIEC:-8002}:8000"   # interfaz administrativa de RENIEC
+    volumes:
+      - reniec_data:/data
+
+  # ---------------------------------------------------------------- Módulo de Clientes
+  clientes:
+    build: {context: ., dockerfile: clientes/Dockerfile}
+    image: ${DOCKERHUB_USER:-edmaster1214}/bna-clientes:${BNA_TAG:-latest}
+    platform: ${BNA_PLATFORM:-linux/amd64}
+    restart: unless-stopped
+    depends_on:
+      bus: {condition: service_healthy}
+      reniec: {condition: service_healthy}
+    environment:
+      <<: *config-biometria
+      BUS_URL: http://bus:8000
+      BUS_TOKEN: ${BUS_TOKEN}
+      RENIEC_URL: http://reniec:8000
+      RENIEC_SERVICE_TOKEN: ${RENIEC_SERVICE_TOKEN}
+      CLIENTES_TOKEN: ${CLIENTES_TOKEN}
+      CLIENTES_PANEL_USER: ${CLIENTES_PANEL_USER:-panel}
+      CLIENTES_PANEL_PASSWORD: ${CLIENTES_PANEL_PASSWORD:?Falta CLIENTES_PANEL_PASSWORD en .env}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:${PUERTO_CLIENTES:-8001}:8000"   # panel y API del módulo de Clientes
+
+volumes:
+  mysql_data:
+  reniec_data:

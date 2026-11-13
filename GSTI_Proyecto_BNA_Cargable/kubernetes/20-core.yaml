@@ -1,0 +1,41 @@
+# Core simulado: servicio INTERNO. Crea las tablas al arrancar (espera a MySQL hasta 90 s).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core
+  namespace: "2022251091"
+  labels: {app: core, app.kubernetes.io/part-of: bna-clientes}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: core}}
+  template:
+    metadata: {labels: {app: core}}
+    spec:
+      containers:
+        - name: core
+          image: edmaster1214/bna-core:latest
+          imagePullPolicy: Always
+          ports: [{containerPort: 8000}]
+          env:
+            - {name: MYSQL_DATABASE, valueFrom: {configMapKeyRef: {name: bna-config, key: MYSQL_DATABASE}}}
+            - {name: MYSQL_USER, valueFrom: {configMapKeyRef: {name: bna-config, key: MYSQL_USER}}}
+            - {name: MYSQL_PASSWORD, valueFrom: {secretKeyRef: {name: bna-secretos, key: MYSQL_PASSWORD}}}
+            - {name: DATABASE_URL, value: "mysql+pymysql://$(MYSQL_USER):$(MYSQL_PASSWORD)@mysql:3306/$(MYSQL_DATABASE)?charset=utf8mb4"}
+            - {name: CORE_TOKEN, valueFrom: {secretKeyRef: {name: bna-secretos, key: CORE_TOKEN}}}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 300m, memory: 256Mi}
+          readinessProbe: {httpGet: {path: /salud, port: 8000}, initialDelaySeconds: 10, periodSeconds: 10, failureThreshold: 12}
+          livenessProbe: {httpGet: {path: /salud, port: 8000}, initialDelaySeconds: 120, periodSeconds: 20, failureThreshold: 3}
+          securityContext: {runAsNonRoot: true, runAsUser: 10001, allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: core
+  namespace: "2022251091"
+  labels: {app: core}
+spec:
+  type: ClusterIP
+  selector: {app: core}
+  ports: [{port: 8000, targetPort: 8000}]
