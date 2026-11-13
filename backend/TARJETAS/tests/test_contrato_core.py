@@ -25,7 +25,8 @@ class Captura:
 
 def test_emision_cumple_esquema_de_coredb():
     c = Captura()
-    svc.emitir(c, EmisionIn(cod_cliente="CLI1", num_cuenta="111"), "corr", "Bearer x")
+    svc.emitir(c, EmisionIn(cod_cliente="CLI1", num_cuenta="111"), "550e8400-e29b-41d4-a716-446655440000",
+               "corr", "Bearer x")
     TarjetaEmitir(**c.payload)
 
 

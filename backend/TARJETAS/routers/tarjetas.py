@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends, Request
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Path, Request
 
 from TARJETAS.core_client import CoreClient
-from TARJETAS.dependencies import autorizacion, correlation_id, get_core_client
+from TARJETAS.dependencies import autorizacion, correlation_id, get_core_client, idempotency_key
 from TARJETAS.respuestas import exito
 from TARJETAS.schemas.tarjetas import BloqueoIn, EmisionIn, EstadoIn, TarjetaOut
 from TARJETAS.services import tarjetas as svc
 
 router = APIRouter(prefix="/api/v1/tarjetas", tags=["Tarjetas"])
+
+# El mismo formato que exige COREDB: un código inválido se rechaza aquí, sin llamarlo.
+CodCliente = Annotated[str, Path(min_length=1, max_length=12, pattern=r"^[A-Za-z0-9]+$")]
 
 
 def _salida(tarjeta: dict) -> dict:
@@ -14,7 +19,7 @@ def _salida(tarjeta: dict) -> dict:
 
 
 @router.get("/cliente/{cod_cliente}")
-def tarjetas_del_cliente(request: Request, cod_cliente: str, core: CoreClient = Depends(get_core_client),
+def tarjetas_del_cliente(request: Request, cod_cliente: CodCliente, core: CoreClient = Depends(get_core_client),
                          cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
     tarjetas = [_salida(t) for t in svc.tarjetas_del_cliente(core, cod_cliente, cid, token)]
     return exito(request, tarjetas)
@@ -22,9 +27,14 @@ def tarjetas_del_cliente(request: Request, cod_cliente: str, core: CoreClient = 
 
 @router.post("/emision", status_code=201)
 def emitir(request: Request, datos: EmisionIn, core: CoreClient = Depends(get_core_client),
-           cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
-    tarjeta = _salida(svc.emitir(core, datos, cid, token))
-    return exito(request, tarjeta, 201, "Tarjeta emitida, pendiente de activación")
+           cid: str = Depends(correlation_id), token: str = Depends(autorizacion),
+           key: str = Depends(idempotency_key)):
+    tarjeta, repetida = svc.emitir(core, datos, key, cid, token)
+    if repetida:
+        mensaje = "Emision ya procesada antes (idempotencia), se devuelve la tarjeta original"
+    else:
+        mensaje = "Tarjeta emitida, pendiente de activación"
+    return exito(request, _salida(tarjeta), 201, mensaje)
 
 
 @router.get("/{id_tarjeta}")

@@ -399,3 +399,22 @@ CALL prueba.rechaza('X244', 'Extensión', 'bna_api', 'bna_api no puede: borrar p
 
 CALL prueba.rechaza('X245', 'Extensión', 'bna_api', 'bna_api no puede: escribir en cuentas.titularidad',
   JSON_ARRAY("INSERT INTO cuentas.titularidad (cod_cliente, num_cuenta) VALUES ('C003', 'CTA-PEN-1')"), 'denied', 'privilegio');
+
+-- ---------------------------------------------------------------------
+-- v1.3: la cuenta principal de una tarjeta (idempotencia de la emisión, issue #52)
+-- ---------------------------------------------------------------------
+CALL prueba.verifica('X246', 'Extensión', 'Consultas', 'La vista de tarjetas tiene exactamente las columnas acordadas',
+  JSON_ARRAY("SET @columnas = (SELECT GROUP_CONCAT(column_name ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'tarjetas' AND table_name = 'v_tarjeta_api')"),
+  "SELECT @columnas = 'id_tarjeta,bin,ultimos4,fecha_emision,fecha_vencimiento,estado_tarjeta,cod_cliente,num_cuenta'",
+  'id_tarjeta,bin,ultimos4,fecha_emision,fecha_vencimiento,estado_tarjeta,cod_cliente,num_cuenta', "SELECT @columnas", 'vista');
+
+CALL prueba.verifica('X247', 'Extensión', 'Consultas', 'bna_api lee la cuenta principal de una tarjeta: una fila por tarjeta, NULL si no tiene cuenta',
+  JSON_ARRAY("SET @principal = (SELECT GROUP_CONCAT(IFNULL(num_cuenta, 'NULL')) FROM tarjetas.v_tarjeta_api WHERE id_tarjeta = UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'))",
+             "SET @sin_cuenta = (SELECT GROUP_CONCAT(IFNULL(num_cuenta, 'NULL')) FROM tarjetas.v_tarjeta_api WHERE id_tarjeta = UUID_TO_BIN('a0000000-0000-4000-8000-000000000003'))"),
+  "SELECT @principal = 'CTA-PEN-1' AND @sin_cuenta = 'NULL'",
+  'CTA-PEN-1 y NULL', "SELECT CONCAT_WS(' ', @principal, @sin_cuenta)", 'privilegio');
+
+CALL prueba.verifica('X248', 'Extensión', 'Consultas', 'Una tarjeta emitida por el procedimiento muestra su cuenta en la vista',
+  JSON_ARRAY("CALL tarjetas.emitir_tarjeta(UUID_TO_BIN('a0000000-0000-4000-8000-000000000248'), 'tok-0248', '455788', '0248', CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 4 YEAR), 'C002', 'CTA-PEN-2', 'pruebas')"),
+  "SELECT num_cuenta = 'CTA-PEN-2' FROM tarjetas.v_tarjeta_api WHERE id_tarjeta = UUID_TO_BIN('a0000000-0000-4000-8000-000000000248')",
+  'CTA-PEN-2', "SELECT IFNULL(num_cuenta, 'NULL') FROM tarjetas.v_tarjeta_api WHERE id_tarjeta = UUID_TO_BIN('a0000000-0000-4000-8000-000000000248')", 'procedimiento');

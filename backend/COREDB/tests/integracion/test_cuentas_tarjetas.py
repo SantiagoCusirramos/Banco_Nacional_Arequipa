@@ -14,10 +14,11 @@ def cliente(autorizacion):
     return TestClient(app, raise_server_exceptions=False, headers=autorizacion)
 
 
-def emitir(cliente, cuenta, cod_cliente="C001"):
+def emitir(cliente, cuenta, cod_cliente="C001", **extra):
     return cliente.post(
         "/coredb/tarjetas",
         json={
+            **extra,
             "pan_token": uuid.uuid4().hex,
             "bin": "004499",
             "ultimos4": "1234",
@@ -86,6 +87,37 @@ def test_titular_inexistente_no_deja_cuenta(cliente, datos_base, consulta):
 
 def test_cuenta_inexistente_404(cliente, datos_base):
     assert cliente.get("/coredb/cuentas/NO-EXISTE").status_code == 404
+
+
+def test_emitir_con_un_id_propio(cliente, abrir_cuenta):
+    id_tarjeta = str(uuid.uuid4())
+    respuesta = emitir(cliente, abrir_cuenta(), id_tarjeta=id_tarjeta)
+    assert respuesta.status_code == 201, respuesta.text
+    assert respuesta.json()["id_tarjeta"] == id_tarjeta
+
+
+def test_el_mismo_id_no_emite_dos_tarjetas(cliente, abrir_cuenta, consulta):
+    """Así repite TARJETAS una emisión sin duplicarla: el id sale de su llave de idempotencia."""
+    cuenta, id_tarjeta = abrir_cuenta(), str(uuid.uuid4())
+    assert emitir(cliente, cuenta, id_tarjeta=id_tarjeta).status_code == 201
+    repetida = emitir(cliente, cuenta, id_tarjeta=id_tarjeta)
+    assert repetida.status_code == 409
+    assert repetida.json()["error"]["code"] == "REGISTRO_DUPLICADO"
+    assert consulta(
+        "SELECT COUNT(*) n FROM tarjetas.tarjeta_cuenta WHERE num_cuenta=%s", cuenta
+    )[0]["n"] == 1
+
+
+def test_la_tarjeta_muestra_su_cuenta_principal(cliente, abrir_cuenta):
+    """TARJETAS la compara al repetir una emisión: la misma llave con otra cuenta es un 409."""
+    cuenta = abrir_cuenta()
+    emitida = emitir(cliente, cuenta)
+    assert emitida.status_code == 201, emitida.text
+    assert emitida.json()["num_cuenta"] == cuenta
+    id_tarjeta = emitida.json()["id_tarjeta"]
+    assert cliente.get(f"/coredb/tarjetas/{id_tarjeta}").json()["num_cuenta"] == cuenta
+    del_cliente = cliente.get("/coredb/tarjetas", params={"cod_cliente": "C001"}).json()
+    assert [t["num_cuenta"] for t in del_cliente if t["id_tarjeta"] == id_tarjeta] == [cuenta]
 
 
 def test_emitir_y_cambiar_estado_por_historial(cliente, abrir_cuenta, consulta):

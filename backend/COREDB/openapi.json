@@ -1119,6 +1119,19 @@
             "title": "Fecha Vencimiento",
             "type": "string"
           },
+          "id_tarjeta": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opcional. Con el mismo id, una segunda emisión responde 409 en lugar de emitir otra tarjeta: así la repite sin duplicarla quien deriva el id de su llave de idempotencia.",
+            "title": "Id Tarjeta"
+          },
           "num_cuenta": {
             "maxLength": 20,
             "title": "Num Cuenta",
@@ -1176,6 +1189,18 @@
             "format": "uuid",
             "title": "Id Tarjeta",
             "type": "string"
+          },
+          "num_cuenta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La cuenta principal de la tarjeta, la de su emisión. Null si no tiene.",
+            "title": "Num Cuenta"
           },
           "ultimos4": {
             "title": "Ultimos4",
