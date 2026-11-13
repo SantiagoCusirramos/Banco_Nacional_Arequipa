@@ -178,7 +178,7 @@ def crear_solicitud(
     monto_solicitado: Decimal,
     moneda: str,
     plazo_meses: int,
-    destino_credito: str | None = None,
+    destino_credito: str,
     id_asesor: str | None = None,
     id_agencia: str | None = None,
     id_caso: str | None = None,
@@ -245,7 +245,7 @@ def crear_solicitud(
                 numero_documento=f.get("numero_documento"),
                 nombre_completo=f["nombre_completo"],
                 telefono=f.get("telefono"),
-                ingreso_mensual=D(f["ingreso_mensual"]) if f.get("ingreso_mensual") else None,
+                ingreso_mensual=D(f.get("ingreso_mensual") or 0),
                 tipo_fiador=f.get("tipo_fiador", "PERSONAL"),
             )
         )
@@ -256,7 +256,7 @@ def crear_solicitud(
                 id_solicitud=solicitud.id_solicitud,
                 tipo_garantia=g.get("tipo_garantia", "SIN_GARANTIA"),
                 descripcion=g.get("descripcion"),
-                valor_tasacion=D(g["valor_tasacion"]) if g.get("valor_tasacion") else None,
+                valor_tasacion=D(g.get("valor_tasacion") or 0),
                 entidad_registro=g.get("entidad_registro"),
                 partida_registral=g.get("partida_registral"),
                 fecha_tasacion=g.get("fecha_tasacion"),
@@ -374,7 +374,7 @@ def evaluar_credito(
     solicitud = db.get(SolSolicitud, id_solicitud)
     if solicitud is None:
         raise NotFoundError("SOLICITUD_NO_ENCONTRADA", f"Solicitud {id_solicitud} no existe.")
-    if solicitud.estado_solicitud not in ("REGISTRADA", "EN_EVALUACION", "OBSERVADO"):
+    if solicitud.estado_solicitud not in ("REGISTRADA", "EN_EVALUACION"):
         raise ValidationError(
             "SOLICITUD_NO_EVALUABLE",
             f"Solicitud en estado {solicitud.estado_solicitud} no puede evaluarse de nuevo.",
@@ -398,9 +398,7 @@ def evaluar_credito(
                 id_cliente=solicitud.id_cliente,
                 ingresos_mensuales=ingresos,
                 egresos_mensuales=D(situacion.get("egresos_mensuales", 0)),
-                patrimonio=(
-                    D(situacion["patrimonio"]) if situacion.get("patrimonio") is not None else None
-                ),
+                patrimonio=D(situacion.get("patrimonio") or 0),
                 cuota_otros_creditos=otros,
                 ratio_capacidad=None,
                 fecha_declaracion=datetime.now(),
@@ -454,9 +452,8 @@ def evaluar_credito(
     if resultado_final == "APROBADO" and puntaje < 50:
         resultado_final = "OBSERVADO"
 
-    monto_max = (
-        solicitud.monto_solicitado if resultado_final != "RECHAZADO" else None
-    )
+    # La columna es NOT NULL DEFAULT 0: un rechazo no sugiere monto.
+    monto_max = solicitud.monto_solicitado if resultado_final != "RECHAZADO" else CERO
     evaluacion = EvaEvaluacion(
         id_evaluacion=new_uuid7(),
         id_solicitud=id_solicitud,
@@ -509,22 +506,30 @@ def aprobar_credito(
     *,
     id_solicitud: str,
     decision: str = "APROBAR",
-    id_analista: str | None = None,
+    id_analista: str | None,
     monto_aprobado: Decimal | None = None,
     plazo_aprobado: int | None = None,
     observacion: str | None = None,
     actor: str = "sistema",
     correlation_id: str | None = None,
 ) -> tuple[SolSolicitud, EvaDecisionAnalista]:
-    if decision not in ("APROBAR", "RECHAZAR", "OBSERVAR", "DERIVAR"):
+    # OBSERVADO es un resultado de la evaluación, no una decisión del analista
+    # (diccionario de Evaluación, DECISION_ANALISTA: APROBADO | RECHAZADO).
+    if decision not in ("APROBAR", "RECHAZAR", "DERIVAR"):
         raise ValidationError(
             "DECISION_INVALIDO",
-            "Decisión admitida: APROBAR, RECHAZAR, OBSERVAR o DERIVAR.",
+            "Decisión admitida: APROBAR, RECHAZAR o DERIVAR.",
+        )
+    # eva_decision_analista.id_analista es NOT NULL y apunta a empleado.
+    if not id_analista:
+        raise ValidationError(
+            "ANALISTA_REQUERIDO",
+            "Solo un usuario con empleado asociado puede decidir una solicitud.",
         )
     solicitud = db.get(SolSolicitud, id_solicitud)
     if solicitud is None:
         raise NotFoundError("SOLICITUD_NO_ENCONTRADA", f"Solicitud {id_solicitud} no existe.")
-    if solicitud.estado_solicitud not in ("REGISTRADA", "EN_EVALUACION", "OBSERVADO"):
+    if solicitud.estado_solicitud not in ("REGISTRADA", "EN_EVALUACION"):
         raise ValidationError(
             "SOLICITUD_NO_DECIDIBLE",
             f"Solicitud en estado {solicitud.estado_solicitud} no admite decisión.",
@@ -545,7 +550,6 @@ def aprobar_credito(
     nuevo_estado = {
         "APROBAR": "APROBADA",
         "RECHAZAR": "RECHAZADA",
-        "OBSERVAR": "OBSERVADO",
         "DERIVAR": "EN_EVALUACION",
     }[decision]
 

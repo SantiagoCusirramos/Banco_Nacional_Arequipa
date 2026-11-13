@@ -12,17 +12,17 @@ from CORE.schemas.common import CoreModel
 class FiadorInput(CoreModel):
     id_cliente: str | None = None
     cod_tipo_documento: str | None = None
-    numero_documento: str | None = None
+    numero_documento: str = Field(max_length=20)
     nombre_completo: str
     telefono: str | None = None
-    ingreso_mensual: Decimal | None = None
+    ingreso_mensual: Decimal = Decimal("0")
     tipo_fiador: str = "PERSONAL"
 
 
 class GarantiaInput(CoreModel):
     tipo_garantia: str = "SIN_GARANTIA"
-    descripcion: str | None = None
-    valor_tasacion: Decimal | None = None
+    descripcion: str = Field(max_length=200)
+    valor_tasacion: Decimal = Decimal("0")
     entidad_registro: str | None = None
     partida_registral: str | None = None
     fecha_tasacion: date | None = None
@@ -34,7 +34,7 @@ class SolicitudCrear(CoreModel):
     monto_solicitado: Decimal = Field(gt=0)
     moneda: str = "PEN"
     plazo_meses: int = Field(gt=0)
-    destino_credito: str | None = Field(default=None, max_length=120)
+    destino_credito: str = Field(max_length=120)
     id_asesor: str | None = None
     id_agencia: str | None = None
     id_caso: str | None = None
@@ -47,7 +47,7 @@ class SolicitudCrear(CoreModel):
 class SituacionFinancieraInput(CoreModel):
     ingresos_mensuales: Decimal = Field(ge=0)
     egresos_mensuales: Decimal = Field(ge=0)
-    patrimonio: Decimal | None = None
+    patrimonio: Decimal = Decimal("0")
     cuota_otros_creditos: Decimal = Field(default=Decimal("0"), ge=0)
 
 
@@ -70,7 +70,8 @@ class EvaluacionRespuesta(CoreModel):
 
 
 class DecisionPedir(CoreModel):
-    decision: str = "APROBAR"
+    decision: str = "APROBAR"  # APROBAR | RECHAZAR | DERIVAR
+    # Se ignora: el analista es el empleado del usuario del token.
     id_analista: str | None = None
     monto_aprobado: Decimal | None = None
     plazo_aprobado: int | None = None

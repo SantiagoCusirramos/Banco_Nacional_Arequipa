@@ -36,7 +36,7 @@ class SolSolicitud(Base):
     monto_solicitado: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     moneda: Mapped[str] = mapped_column(String(3), ForeignKey("moneda.cod_moneda"))
     plazo_meses: Mapped[int] = mapped_column()
-    destino_credito: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    destino_credito: Mapped[str] = mapped_column(String(120))
     estado_solicitud: Mapped[str] = mapped_column(String(18), default="REGISTRADA")
     fecha_registro: Mapped[datetime] = mapped_column(DateTime(3))
 
@@ -54,12 +54,10 @@ class SolFiador(Base):
     cod_tipo_documento: Mapped[str | None] = mapped_column(
         String(10), ForeignKey("tipo_documento.cod_tipo_documento"), nullable=True
     )
-    numero_documento: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    numero_documento: Mapped[str] = mapped_column(String(20))
     nombre_completo: Mapped[str] = mapped_column(String(140))
     telefono: Mapped[str | None] = mapped_column(String(15), nullable=True)
-    ingreso_mensual: Mapped[Decimal | None] = mapped_column(
-        Numeric(15, 2), nullable=True
-    )
+    ingreso_mensual: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     tipo_fiador: Mapped[str] = mapped_column(String(15))
 
 
@@ -71,10 +69,8 @@ class SolGarantia(Base):
         String(36), ForeignKey("sol_solicitud.id_solicitud")
     )
     tipo_garantia: Mapped[str] = mapped_column(String(18))
-    descripcion: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    valor_tasacion: Mapped[Decimal | None] = mapped_column(
-        Numeric(15, 2), nullable=True
-    )
+    descripcion: Mapped[str] = mapped_column(String(200))
+    valor_tasacion: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     entidad_registro: Mapped[str | None] = mapped_column(String(100), nullable=True)
     partida_registral: Mapped[str | None] = mapped_column(String(40), nullable=True)
     fecha_tasacion: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -140,7 +136,7 @@ class EvaRegla(Base):
     operador: Mapped[str] = mapped_column(String(10))  # MAYOR|MENOR|IGUAL|ENTRE|EXCLUYE
     valor_min: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
     valor_max: Mapped[Decimal | None] = mapped_column(Numeric(15, 4), nullable=True)
-    resultado: Mapped[str] = mapped_column(String(10))  # APROBAR|OBSERVAR|RECHAZAR
+    resultado: Mapped[str] = mapped_column(String(10))  # APROBAR|OBSERVAR|RECHAZAR (de la regla)
     peso: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("1"))
     activa: Mapped[bool] = mapped_column(default=True)
 
@@ -155,7 +151,7 @@ class EvaSituacionFinanciera(Base):
     id_cliente: Mapped[str] = mapped_column(String(36), ForeignKey("cliente.id_cliente"))
     ingresos_mensuales: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     egresos_mensuales: Mapped[Decimal] = mapped_column(Numeric(15, 2))
-    patrimonio: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    patrimonio: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     cuota_otros_creditos: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     ratio_capacidad: Mapped[Decimal | None] = mapped_column(
         Numeric(9, 4), nullable=True
@@ -172,9 +168,7 @@ class EvaEvaluacion(Base):
     )
     puntaje: Mapped[int] = mapped_column()
     resultado: Mapped[str] = mapped_column(String(12))
-    monto_maximo_sugerido: Mapped[Decimal | None] = mapped_column(
-        Numeric(15, 2), nullable=True
-    )
+    monto_maximo_sugerido: Mapped[Decimal] = mapped_column(Numeric(15, 2))
     nivel_riesgo: Mapped[str] = mapped_column(String(12))
     detalle_reglas: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     fecha_evaluacion: Mapped[datetime] = mapped_column(DateTime(3))
@@ -184,11 +178,11 @@ class EvaDecisionAnalista(Base):
     __tablename__ = "eva_decision_analista"
 
     id_decision: Mapped[str] = mapped_column(String(36), primary_key=True)
-    id_evaluacion: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("eva_evaluacion.id_evaluacion"), nullable=True
+    id_evaluacion: Mapped[str] = mapped_column(
+        String(36), ForeignKey("eva_evaluacion.id_evaluacion")
     )
-    id_analista: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("empleado.id_empleado"), nullable=True
+    id_analista: Mapped[str] = mapped_column(
+        String(36), ForeignKey("empleado.id_empleado")
     )
     decision: Mapped[str] = mapped_column(String(12))
     monto_aprobado: Mapped[Decimal | None] = mapped_column(

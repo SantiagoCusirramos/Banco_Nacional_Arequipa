@@ -57,6 +57,8 @@ trap limpiar EXIT
 trap 'exit 130' INT TERM
 correr "Imágenes" docker compose build -q
 correr "CORE legado" en_backend
+correr "CORE legado contra MySQL" \
+  env CORE_IMAGEN_PRUEBAS=bna/backend:local backend/CORE/scripts/pruebas_integracion.sh
 correr "CUENTAS" en_backend CUENTAS/tests
 correr "TARJETAS" en_backend TARJETAS/tests
 correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests

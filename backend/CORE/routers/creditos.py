@@ -4,7 +4,7 @@ CONSULTAR_DEUDA.
 
 Exigen token y permiso. El actor sale siempre del token: el campo `actor` del
 cuerpo se ignora. En una decisión también se ignora `id_analista`: es el
-empleado del usuario que decide, si tiene uno.
+empleado del usuario que decide, y sin él la decisión responde 422.
 """
 
 from fastapi import APIRouter, Depends, Query, status

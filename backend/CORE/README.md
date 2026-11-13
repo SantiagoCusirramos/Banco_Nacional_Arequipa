@@ -132,9 +132,13 @@ de créditos, concurrencia de movimientos, autenticación y JWT, token y
 permiso en cada ruta (`test_rutas_protegidas.py`), configuración, utilidades
 (UUIDv7, Decimal, hashing), excepciones de negocio, catálogo RBAC y smoke de
 montaje de la app.
-`CORE/tests/integracion/test_real_mysql.py` prueba la autenticación contra
-un MySQL real; se omite salvo que `BNA_INTEGRACION_MYSQL=1` (ver
-[`AUTENTICACION.md`](AUTENTICACION.md)).
+`CORE/tests/integracion/` corre contra un MySQL real con el esquema `bna`:
+`test_real_mysql.py` (autenticación) y `test_creditos_mysql.py` (ciclo de
+crédito por HTTP: ENUM y NOT NULL que SQLite no aplica, issue #19). Se omiten
+salvo que `BNA_INTEGRACION_MYSQL=1`. `CORE/scripts/pruebas_integracion.sh`
+levanta solo `db-aux` en un proyecto propio con claves nuevas, las corre en la
+imagen `bna/backend:local` y lo elimina todo al terminar; `./bna test` lo
+ejecuta como suite "CORE legado contra MySQL".
 
 ## Pendientes conocidos
 
@@ -146,5 +150,5 @@ un MySQL real; se omite salvo que `BNA_INTEGRACION_MYSQL=1` (ver
    desembolso (RGN-12 completo) — requiere decisión de dónde vive el
    canal de desembolso (CORE vs módulo Desembolso).
 3. Tests end-to-end con MySQL (Docker) sobre el esquema unificado, fuera
-   de autenticación: `CORE/tests/integracion/test_real_mysql.py` solo cubre
-   ese flujo.
+   de autenticación y créditos: `CORE/tests/integracion/` solo cubre esos
+   dos flujos.

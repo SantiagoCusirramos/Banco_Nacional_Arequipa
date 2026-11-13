@@ -118,6 +118,7 @@ def _nueva_solicitud(db, monto="10000.00", plazo=12):
     return crear_solicitud(
         db, id_cliente=CLIENTE, id_producto_credito=PRODUCTO,
         monto_solicitado=Decimal(monto), moneda="PEN", plazo_meses=plazo,
+        destino_credito="Capital de trabajo",
     )
 
 
@@ -191,6 +192,28 @@ def test_ratio_exacto_en_la_frontera_activa_una_sola_regla(db):
     assert ev.detalle_reglas["variables"]["ratio_capacidad"] == "0.8000"
     ratio = [r for r in _reglas_que_coinciden(ev) if r.startswith("RATIO_")]
     assert len(ratio) == 1
+
+
+def test_observar_no_es_una_decision_del_analista(db):
+    """Issue #19: OBSERVADO es un resultado de la evaluación, no un estado de la
+    solicitud ni una decisión del analista (DECISION_ANALISTA: APROBADO | RECHAZADO)."""
+    sol = _nueva_solicitud(db)
+    _evaluar(db, sol, ingresos="10000")
+    with pytest.raises(ValidationError) as e:
+        aprobar_credito(db, id_solicitud=sol.id_solicitud, decision="OBSERVAR", id_analista="a1")
+    assert e.value.code == "DECISION_INVALIDO"
+    assert sol.estado_solicitud == "EN_EVALUACION"
+
+
+@pytest.mark.parametrize("id_analista", [None, ""])
+def test_decidir_sin_analista_responde_422(db, id_analista):
+    """Issue #19: eva_decision_analista.id_analista es NOT NULL."""
+    sol = _nueva_solicitud(db)
+    _evaluar(db, sol, ingresos="10000")
+    with pytest.raises(ValidationError) as e:
+        aprobar_credito(db, id_solicitud=sol.id_solicitud, decision="APROBAR", id_analista=id_analista)
+    assert (e.value.code, e.value.status_code) == ("ANALISTA_REQUERIDO", 422)
+    assert db.scalars(select(m.EvaDecisionAnalista)).first() is None
 
 
 @pytest.mark.xfail(strict=True, reason="H-A3: ingresos 0 se tratan como ratio 0, el mejor caso (doc §3.3)")

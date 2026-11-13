@@ -31,10 +31,8 @@
 stateDiagram-v2
     [*] --> REGISTRADA: crear_solicitud()
     REGISTRADA --> EN_EVALUACION: evaluar_credito()\n(cualquier resultado)
-    OBSERVADO --> EN_EVALUACION: evaluar_credito()
     EN_EVALUACION --> APROBADA: aprobar_credito(APROBAR)
     EN_EVALUACION --> RECHAZADA: aprobar_credito(RECHAZAR)
-    EN_EVALUACION --> OBSERVADO: aprobar_credito(OBSERVAR)
     EN_EVALUACION --> EN_EVALUACION: aprobar_credito(DERIVAR)
     APROBADA --> [*]: hueco: no hay desembolso (§4.5)
     RECHAZADA --> [*]
@@ -43,10 +41,12 @@ stateDiagram-v2
 | Paso | Función | Qué valida | Qué escribe | Estado final de la solicitud |
 |---|---|---|---|---|
 | CREAR_SOLICITUD_CREDITO | `crear_solicitud()` | Cliente existe; producto activo; monto > 0; plazo dentro del rango del producto | `sol_solicitud`, `sol_historial_estado`, `sol_fiador`, `sol_garantia`, `sol_calendario_version` (SIMULADO), `sol_cuota_calendario`, `auditoria_evento` | REGISTRADA |
-| EVALUAR_CREDITO | `evaluar_credito()` | Solicitud en REGISTRADA, EN_EVALUACION u OBSERVADO; existe situación financiera (en el payload o en tabla) | `eva_situacion_financiera` (si viene en el payload), `eva_evaluacion`, `sol_historial_estado`, `auditoria_evento` | **EN_EVALUACION, sea cual sea el resultado** |
-| APROBAR_CREDITO | `aprobar_credito()` | Decisión ∈ {APROBAR, RECHAZAR, OBSERVAR, DERIVAR}; existe al menos una evaluación | `eva_decision_analista`, `sol_historial_estado`, `auditoria_evento` | APROBADA / RECHAZADA / OBSERVADO / EN_EVALUACION |
+| EVALUAR_CREDITO | `evaluar_credito()` | Solicitud en REGISTRADA o EN_EVALUACION; existe situación financiera (en el payload o en tabla) | `eva_situacion_financiera` (si viene en el payload), `eva_evaluacion`, `sol_historial_estado`, `auditoria_evento` | **EN_EVALUACION, sea cual sea el resultado** |
+| APROBAR_CREDITO | `aprobar_credito()` | Decisión ∈ {APROBAR, RECHAZAR, DERIVAR}; usuario con empleado; existe al menos una evaluación | `eva_decision_analista`, `sol_historial_estado`, `auditoria_evento` | APROBADA / RECHAZADA / EN_EVALUACION |
 
 Observación: el resultado de la evaluación (APROBADO, OBSERVADO, RECHAZADO) queda en `eva_evaluacion`, pero **no cambia el estado de la solicitud**. Esto explica el hallazgo H-B1 (§4.1).
+
+OBSERVADO no es un estado de la solicitud ni una decisión del analista (issue #19). En el diccionario de Evaluación (`Modelo_Relacional_y_Diccionario_de_datos.pdf`) es un resultado de `EVALUACION` que deriva el caso a revisión manual, y `DECISION_ANALISTA.decision` solo admite APROBADO o RECHAZADO. El diccionario de Solicitud enumera REGISTRADA, EN EVALUACIÓN, APROBADA y RECHAZADA. Por eso los ENUM de `sol_solicitud` y `sol_historial_estado` no lo incluyen y `OBSERVAR` responde 422. DERIVAR tampoco figura en ese dominio; se conserva porque no viola el esquema (pregunta abierta).
 
 ---
 
@@ -166,7 +166,7 @@ Opciones: bloquearlo, o permitirlo solo con justificación obligatoria y un nive
 
 Resuelto en parte. `/core/creditos` exige token y el permiso `APROBAR_CREDITO` (ver `AUTH_JWT.md`): el actor de la bitácora es el usuario del token, e `id_analista` es su empleado (`usuario_sistema.id_empleado`), no el que venga en el cuerpo.
 
-Queda abierto: `id_analista` sigue siendo opcional. Un usuario sin empleado asociado puede decidir, y en ese caso solo la bitácora dice quién aprobó. Falta decidir si aprobar exige un usuario con empleado.
+Desde el issue #19, decidir exige un usuario con empleado asociado: `eva_decision_analista.id_analista` es NOT NULL con FK a `empleado`, y `DECISION_ANALISTA.id_analista` es obligatorio en el diccionario de Evaluación. Sin empleado la API responde 422 `ANALISTA_REQUERIDO` (antes, 500 en MySQL). El usuario `admin.bna` de la carga inicial tiene empleado; `auditor.bna` no, pero tampoco tiene el permiso.
 
 ### 4.3 H-B3 — El monto aprobado no tiene tope
 

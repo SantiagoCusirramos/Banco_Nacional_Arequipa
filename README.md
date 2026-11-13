@@ -118,7 +118,7 @@ Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecu
 ./bna test
 ```
 
-Corre, en contenedores, las suites del CORE legado, CUENTAS, TARJETAS, SOL, Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
+Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, SOL, Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
 
 Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
 
