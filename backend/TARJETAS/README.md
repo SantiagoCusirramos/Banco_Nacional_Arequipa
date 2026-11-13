@@ -17,6 +17,7 @@ Los modulos que lo usan (Cajero ATM, Home Banking, Billetera Digital) tienen su 
 | POST | /api/v1/tarjetas/{id_tarjeta}/bloqueo | POST /coredb/tarjetas/{id}/estado |
 | POST | /api/v1/tarjetas/{id_tarjeta}/estado | POST /coredb/tarjetas/{id}/estado |
 | GET | /health | - |
+| GET | /ready | GET /coredb/salud (503 si COREDB no responde) |
 
 Todas exigen `Authorization: Bearer <token>` de COREDB, que se reenvia: COREDB valida el token y el
 permiso (`VER_TARJETA`, `CREAR_TARJETA`, `BLOQUEAR_TARJETA`). `X-Correlation-ID` es opcional.
