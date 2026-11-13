@@ -7,7 +7,7 @@
 ## 1. Convenciones
 
 - **URL base:** configurable, por ejemplo `TARJETAS_BASE_URL=http://127.0.0.1:8002`. Dentro del producto (`./bna up`) es `http://tarjetas:8002`. Cuando exista el Bus de Servicios apuntará al Bus. Todas las rutas empiezan con `/api/v1/tarjetas`.
-- **Autenticación:** `Authorization: Bearer <token>` de COREDB en todas las rutas salvo `/health` (sección 2). TARJETAS no valida el token: lo reenvía y COREDB decide.
+- **Autenticación:** `Authorization: Bearer <token>` de COREDB en todas las rutas salvo `/health` y `/ready` (sección 2). `/ready` responde 200 si COREDB contesta y 503 si no; sirve para saber si TARJETAS puede atender, sin token. TARJETAS no valida el token: lo reenvía y COREDB decide.
 - **Correlación:** `X-Correlation-ID` es opcional. Si es un UUID, llega igual a COREDB y a su bitácora; si no lo es, TARJETAS genera uno para COREDB. El identificador de la respuesta va en `metadata.uuid_transaccion` y en la cabecera `X-Idempotency-Key`.
 - **Idempotencia:** la emisión exige `X-Idempotency-Key` (UUIDv4). Las consultas y los cambios de estado no la necesitan: repetir un bloqueo deja la tarjeta bloqueada.
 - **Cuerpos JSON estrictos:** un campo desconocido se rechaza con 400 `ERR-VALIDACION-ESQUEMA`, sin devolver su valor.
