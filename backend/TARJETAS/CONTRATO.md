@@ -108,7 +108,7 @@ Cabecera obligatoria: `X-Idempotency-Key: <UUIDv4>`.
 ```
 
 - Obligatorios: `cod_cliente` y `num_cuenta`, una cuenta en la que el cliente es titular.
-- `bin`: `004499` si no se envía, el único del catálogo (tarjeta física).
+- `bin`: `004499` si no se envía. Es un BIN de desarrollo, de tarjeta física; hay un BIN por tipo de tarjeta y los reales son un pendiente del emisor (issue #34, pregunta 7).
 - Sin fechas, la tarjeta se emite hoy y vence en cuatro años. El vencimiento debe ser posterior a la emisión (RN-TAR-003).
 - `ultimos4`: los últimos cuatro dígitos del PAN, si ya se conocen. **El PAN nunca se envía**: un campo `pan` se rechaza.
 - La tarjeta nace `PENDIENTE_ACTIVACION` y vinculada a la cuenta; se activa con 4.5.
@@ -121,9 +121,9 @@ Cabecera obligatoria: `X-Idempotency-Key: <UUIDv4>`.
 | 400 | `ERR-VALIDACION-ESQUEMA` | Un campo falta, sobra o no tiene el formato; o el vencimiento no es posterior a la emisión |
 | 400 | `ERR-TAR-001` | El cliente no está ACTIVO |
 | 400 | `ERR-TAR-CUENTA-INVALIDA` | El cliente no es titular de la cuenta, o la cuenta está cancelada |
-| 409 | `ERR-TAR-IDEMPOTENCIA` | La llave ya se usó para emitir otra tarjeta (otro cliente, BIN o fechas) |
+| 409 | `ERR-TAR-IDEMPOTENCIA` | La llave ya se usó para emitir otra tarjeta: otra cuenta (aunque sea del mismo cliente), otro cliente, otro BIN, u otros últimos cuatro dígitos o fechas enviados |
 
-Si la respuesta se pierde (504, corte de red), se repite la llamada **con la misma llave**.
+Si la respuesta se pierde (504, corte de red), se repite la llamada **con la misma llave** y los mismos datos. Si se omiten `ultimos4` o las fechas, vale lo de la primera emisión. Si la emisión falló por una regla (400), no se emitió nada y la misma llave sirve para reintentar.
 
 ### 4.4 Bloquear: `POST /api/v1/tarjetas/{id_tarjeta}/bloqueo`
 
