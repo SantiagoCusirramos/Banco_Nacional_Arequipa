@@ -11,6 +11,7 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas y solicitud de crédito | En uso |
 | SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas | Laboratorio: base propia, sin conexión con el CORE |
 | Seguridad | `backend/seguridad` | Prototipo de login, topes, auditoría encadenada e incidentes | Laboratorio: SQLite, sin conexión con el CORE |
+| COBRANZA | `backend/COBRANZA` | Pago de cuotas de crédito: activación del crédito, pagos fraccionados, mora registrada, conciliación. Cobra por CUENTAS | Laboratorio: base propia en `db-aux`; el cobro va por CUENTAS y COREDB |
 | CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene los créditos, que COREDB todavía no ofrece | Opcional: ningún servicio lo llama |
 
 Lo que no está: el módulo Clientes (en revisión en el PR #25) y el Bus de Servicios, que no existe todavía. Los servicios se llaman entre sí directamente dentro de la red de Docker.
@@ -19,7 +20,7 @@ Lo que no está: el módulo Clientes (en revisión en el PR #25) y el Bus de Ser
 
 - Docker con Compose 2.20 o superior, en marcha (`docker compose version`, `docker info`).
 - Git y bash. En Windows, Git Bash o WSL2.
-- Libres en la máquina: los puertos 3000, 3307, 8001, 8002, 8011, 8012 y 8013, y unos 4 GB de disco para las imágenes.
+- Libres en la máquina: los puertos 3000, 3307, 8001, 8002, 8011, 8012, 8013 y 8014, y unos 4 GB de disco para las imágenes.
 
 No hace falta Python, Node ni MySQL: todo corre en contenedores.
 
@@ -51,6 +52,8 @@ flowchart LR
   coredb --> db[("db: base integrada, MySQL 8.4 :3307")]
   sol --> aux[("db-aux: bna_sol_mvp y bna legada")]
   seg["Seguridad :8013"] --> sq[("SQLite en un volumen")]
+  cob["COBRANZA :8014"] -->|"cobro de cuotas"| cta
+  cob --> aux
   leg["CORE legado :8000 (perfil legado)"] -.-> aux
 ```
 
@@ -70,6 +73,7 @@ flowchart LR
 | TARJETAS | http://127.0.0.1:8002/docs | El mismo token de COREDB | [`backend/TARJETAS/README.md`](backend/TARJETAS/README.md) |
 | SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
 | Seguridad | http://127.0.0.1:8013 | No trae usuarios: se crean con una orden | [`backend/seguridad/README.md`](backend/seguridad/README.md) |
+| COBRANZA | http://127.0.0.1:8014/docs | Claves `COBRANZA_API_KEY_*` de `.env` en `X-API-Key` | [`backend/COBRANZA/README.md`](backend/COBRANZA/README.md) |
 | MySQL de la base integrada | `127.0.0.1:3307` | `root` y `CORE_DB_ROOT_PASSWORD` | [`database/README.md`](database/README.md) |
 | CORE legado (opcional) | http://127.0.0.1:8000/docs | Token de `POST /core/auth/login` | [`backend/CORE/README.md`](backend/CORE/README.md) |
 
@@ -104,6 +108,7 @@ Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo 
 | `SOL_INITIAL_PASSWORD` | Clave inicial de las cuatro cuentas de demostración de SOL |
 | `SEGURIDAD_SECRET_KEY` | Clave del módulo de Seguridad |
 | `AUX_DB_ROOT_PASSWORD`, `SOL_DB_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base auxiliar y CORE legado |
+| `COBRANZA_DB_PASSWORD`, `COBRANZA_API_KEY_*` | Base de Cobranza en `db-aux` y las claves `X-API-Key` de sus roles |
 | `BNA_PUERTO_*` | Puerto de cada servicio en esta máquina |
 
 - Para usar otro puerto, cambiar su `BNA_PUERTO_*` en `.env` y volver a ejecutar `./bna up`.
@@ -118,7 +123,7 @@ Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecu
 ./bna test
 ```
 
-Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, SOL, Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
+Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, COBRANZA, SOL, Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
 
 Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
 
@@ -169,6 +174,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 │   ├── TARJETAS/      Módulo de tarjetas de débito
 │   ├── SOL/           Solicitud de crédito
 │   ├── seguridad/     Prototipo de Seguridad
+│   ├── COBRANZA/      Cobranza de cuotas de crédito
 │   ├── CORE/          CORE legado
 │   └── Infraestructura - BD/   Esquema `bna` del CORE legado
 ├── frontend/          Next.js

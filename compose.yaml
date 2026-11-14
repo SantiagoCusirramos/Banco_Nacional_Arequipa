@@ -186,6 +186,61 @@ services:
       db-aux:
         condition: service_healthy
 
+  # ── COBRANZA: cobro de cuotas de crédito (laboratorio) ─────────────────
+  # Base propia en db-aux, como SOL. Cobra la cuota por CUENTAS real (CR-INT-07)
+  # con su usuario de servicio de COREDB; Desembolso y Home Banking la llaman
+  # con su clave X-API-Key (rol INTEGRACION_BUS). Ver backend/COBRANZA/README.md.
+  cobranza:
+    <<: *backend
+    command: uvicorn COBRANZA.main:app --host 0.0.0.0 --port 8014
+    environment:
+      DATABASE_URL: mysql://cobranza_user:${COBRANZA_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}@db-aux:3306/bna_cobranza
+      CUENTAS_MODO: BNA
+      CUENTAS_URL: http://cuentas:8001/api/v1/cuentas
+      COREDB_URL: http://coredb:8012
+      COBRANZA_SVC_ARCHIVO: /datos/servicio.json
+      API_KEY_COBRANZA_LEER: ${COBRANZA_API_KEY_LEER:?Falta en .env. Ejecute ./bna up}
+      API_KEY_COBRANZA_EJECUTAR: ${COBRANZA_API_KEY_EJECUTAR:?Falta en .env. Ejecute ./bna up}
+      API_KEY_INTEGRACION_BUS: ${COBRANZA_API_KEY_INTEGRACION:?Falta en .env. Ejecute ./bna up}
+    volumes:
+      - cobranza-datos:/datos:ro
+    depends_on:
+      cobranza-init:
+        condition: service_completed_successfully
+      cuentas:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_COBRANZA:-8014}:8014"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8014/salud", timeout=3)
+
+  # Crea su base en db-aux y su usuario de servicio en COREDB, y termina.
+  # No borra datos; renueva el secreto solo si el guardado ya no sirve.
+  cobranza-init:
+    <<: *backend
+    command: sh -c "python -m COBRANZA.scripts.preparar_base && python -m COBRANZA.scripts.preparar_servicio"
+    environment:
+      AUX_DB_ROOT_PASSWORD: ${AUX_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      COBRANZA_DB_PASSWORD: ${COBRANZA_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      COREDB_URL: http://coredb:8012
+      BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
+      BNA_ADMIN_PASSWORD: ${BNA_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      COBRANZA_SVC_ARCHIVO: /datos/servicio.json
+    volumes:
+      - cobranza-datos:/datos
+    depends_on:
+      db-aux:
+        condition: service_healthy
+      coredb:
+        condition: service_healthy
+      coredb-init:
+        condition: service_completed_successfully
+
   # ── Seguridad: prototipo sobre SQLite ───────────────────────────────────
   seguridad:
     image: bna/seguridad:local
@@ -287,3 +342,4 @@ volumes:
   core-db-datos:
   db-aux-datos:
   seguridad-datos:
+  cobranza-datos:

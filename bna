@@ -111,6 +111,7 @@ resumen() {
   TARJETAS          http://127.0.0.1:$(valor BNA_PUERTO_TARJETAS)/docs
   SOL               http://127.0.0.1:$(valor BNA_PUERTO_SOL)/docs
   Seguridad         http://127.0.0.1:$(valor BNA_PUERTO_SEGURIDAD)
+  Cobranza          http://127.0.0.1:$(valor BNA_PUERTO_COBRANZA)/docs
   MySQL (CORE)      127.0.0.1:$(valor BNA_PUERTO_DB)
 
   Administrador de COREDB: usuario $(valor BNA_ADMIN_USUARIO); su contraseña está en
