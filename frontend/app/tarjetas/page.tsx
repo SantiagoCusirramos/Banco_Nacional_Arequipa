@@ -391,6 +391,7 @@ export default function TarjetasPage() {
                     {tarjetas.map((t) => (
                       <li key={t.id_tarjeta} className="tj-item">
                         <Plastico numero={t.numero_enmascarado} titular={t.cod_cliente} vence={t.vencimiento_mm_aa} estado={t.estado_tarjeta} />
+                        <p className="tj-cuenta">Cuenta {t.num_cuenta ?? "sin vincular"}</p>
                         <div className="tj-item-actions">
                           <button className="sol-button secondary" type="button" onClick={() => mostrar(t)}>
                             <Icono nombre="ojo" tamano={16} />
@@ -440,6 +441,7 @@ export default function TarjetasPage() {
                     <dl className="tj-datos">
                       <div><dt>Estado</dt><dd><EstadoTarjeta estado={tarjetaActual.estado_tarjeta} /></dd></div>
                       <div><dt>Cliente</dt><dd>{tarjetaActual.cod_cliente}</dd></div>
+                      <div><dt>Cuenta vinculada</dt><dd>{tarjetaActual.num_cuenta ?? "Sin vincular"}</dd></div>
                       <div><dt>Emisión</dt><dd>{tarjetaActual.fecha_emision}</dd></div>
                       <div><dt>Vencimiento</dt><dd>{tarjetaActual.vencimiento_mm_aa} ({tarjetaActual.fecha_vencimiento})</dd></div>
                       <div><dt>BIN</dt><dd>{tarjetaActual.bin}</dd></div>

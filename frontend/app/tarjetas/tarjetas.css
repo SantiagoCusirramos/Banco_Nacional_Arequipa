@@ -16,6 +16,13 @@
   gap: 14px;
 }
 
+.tj-cuenta {
+  margin: -4px 2px 0;
+  color: var(--sol-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .tj-item-actions {
   display: flex;
   gap: 8px;

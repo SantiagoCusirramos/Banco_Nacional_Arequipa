@@ -18,7 +18,7 @@ const sobre = (data: unknown) => ({ data: { success: true, status_code: 200, dat
 const TARJETA = {
   id_tarjeta: "7e570001-0000-4000-8000-000000000001", bin: "004499", ultimos4: "0001",
   fecha_emision: "2026-01-15", fecha_vencimiento: "2030-01-31", estado_tarjeta: "ACTIVA", cod_cliente: "CLI000000001",
-  numero_enmascarado: "0044 99** **** 0001", vencimiento_mm_aa: "01/30",
+  num_cuenta: "10100000000001" as string | null, numero_enmascarado: "0044 99** **** 0001", vencimiento_mm_aa: "01/30",
 };
 const OTRA = {
   ...TARJETA, id_tarjeta: "7e570001-0000-4000-8000-000000000002", ultimos4: "0002",
@@ -183,5 +183,17 @@ describe("Página del módulo Tarjetas", () => {
     const aviso = await screen.findByRole("alert");
     expect(aviso).toHaveTextContent("Tu sesión no está iniciada o ya venció.");
     expect(screen.queryByText("El token venció.")).not.toBeInTheDocument();
+  });
+
+  it("TJ-12 Muestra la cuenta vinculada en la lista y en el detalle", async () => {
+    get.mockResolvedValue(sobre([TARJETA, { ...OTRA, num_cuenta: null }]));
+    render(<TarjetasPage />);
+    escribir(screen.getByLabelText("Código del cliente"), "CLI000000001");
+    await userEvent.click(screen.getByRole("button", { name: "Ver tarjetas" }));
+    const tarjetas = await screen.findAllByRole("listitem");
+    expect(within(tarjetas[0]).getByText("Cuenta 10100000000001")).toBeInTheDocument();
+    expect(within(tarjetas[1]).getByText("Cuenta sin vincular")).toBeInTheDocument();
+    await userEvent.click(within(tarjetas[0]).getByRole("button", { name: "Ver detalle" }));
+    expect(screen.getByText("Cuenta vinculada").nextSibling).toHaveTextContent("10100000000001");
   });
 });

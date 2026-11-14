@@ -9,6 +9,8 @@ export interface Tarjeta {
   fecha_vencimiento: string;
   estado_tarjeta: string;
   cod_cliente: string;
+  /** La cuenta principal, la de su emisión. */
+  num_cuenta: string | null;
   numero_enmascarado: string;
   vencimiento_mm_aa: string;
 }
