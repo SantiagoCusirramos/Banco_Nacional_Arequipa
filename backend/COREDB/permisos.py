@@ -44,6 +44,9 @@ PERMISOS: dict[str, frozenset[str]] = {
     "SERVICIO:CLIENTES": frozenset({
         "VER_CLIENTE", "CREAR_CLIENTE", "MODIFICAR_CLIENTE", VALIDAR_IDENTIDAD,
     }),
+    # Cobranza cobra la cuota debitando la cuenta de ahorros por CUENTAS (CR-INT-07, RN-COB-007)
+    # y consulta los movimientos de esa cuenta para resolver un pago sin confirmar (RF-COB-011).
+    "SERVICIO:COBRANZA": frozenset({"VER_CUENTA", "REGISTRAR_MOVIMIENTO"}),
 }
 
 

@@ -157,6 +157,7 @@ def test_permisos_de_los_roles():
     assert "VALIDAR_IDENTIDAD" in permisos.PERMISOS["ASESOR"]
     assert permisos.PERMISOS["SERVICIO:CLIENTES"] == {
         "VER_CLIENTE", "CREAR_CLIENTE", "MODIFICAR_CLIENTE", "VALIDAR_IDENTIDAD"}
+    assert permisos.PERMISOS["SERVICIO:COBRANZA"] == {"VER_CUENTA", "REGISTRAR_MOVIMIENTO"}
     assert all(acciones <= permisos.ACCIONES for acciones in permisos.PERMISOS.values())
 
 

@@ -1,0 +1,1481 @@
+{
+  "info": {
+    "_postman_id": "88df6e07-ef19-44a3-9d02-c4019aa492d0",
+    "name": "Cobranza BNA",
+    "description": "Coleccion de pruebas de la API de Cobranza (Linea de Creditos, BNA). Organizada por interfaz, en el mismo orden que el guion del video del README. Cada request cita la RF/RN que demuestra en su descripcion y trae al menos un test que verifica el codigo HTTP y un campo clave de la respuesta. Pensada para correr contra una instancia standalone de Cobranza (CUENTAS_URL vacio, Cuentas simulado en memoria).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "CR-INT-06 (Desembolso -> Cobranza)",
+      "item": [
+        {
+          "name": "1. Activar obligacion (RN-COB-001, RF-COB-001)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = Date.now();",
+                  "pm.environment.set('codCredito', 'CR-PM-' + t);",
+                  "pm.environment.set('idCliente', 'CLI-PM-' + t);",
+                  "pm.environment.set('idSolicitud', 'SOL-PM-' + t);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('estadoCredito AL_DIA', () => pm.expect(j.estadoCredito).to.eql('AL_DIA'));",
+                  "pm.test('tiene 1 cuota PENDIENTE', () => pm.expect(j.cuotas[0].estadoCuota).to.eql('PENDIENTE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-06/obligaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-06",
+                "obligaciones"
+              ]
+            },
+            "description": "CR-INT-06: Desembolso activa el credito y entrega su calendario de cuotas. Requiere rol INTEGRACION_BUS. Demuestra RF-COB-001 / RN-COB-001.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCredito\": \"{{codCredito}}\",\n  \"idCliente\": \"{{idCliente}}\",\n  \"idSolicitud\": \"{{idSolicitud}}\",\n  \"montoAprobado\": 1000.0,\n  \"moneda\": \"PEN\",\n  \"fechaDesembolso\": \"2026-10-05T10:00:00\",\n  \"calendarioPagos\": [\n    {\n      \"numeroCuota\": 1,\n      \"fechaVencimiento\": \"2026-11-05\",\n      \"montoCuota\": 1000.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2. Duplicado: credito ya activado (RN-COB-001)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('regla RN-COB-001', () => pm.expect(pm.response.json().regla).to.eql('RN-COB-001'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-06/obligaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-06",
+                "obligaciones"
+              ]
+            },
+            "description": "Reenviar el mismo codCredito debe rechazarse: un credito no se activa dos veces (RN-COB-001).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCredito\": \"{{codCredito}}\",\n  \"idCliente\": \"{{idCliente}}\",\n  \"idSolicitud\": \"{{idSolicitud}}\",\n  \"montoAprobado\": 1000.0,\n  \"moneda\": \"PEN\",\n  \"fechaDesembolso\": \"2026-10-05T10:00:00\",\n  \"calendarioPagos\": [\n    {\n      \"numeroCuota\": 1,\n      \"fechaVencimiento\": \"2026-11-05\",\n      \"montoCuota\": 1000.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3. Sin X-API-Key (401, I-04)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin clave', () => pm.response.to.have.status(401));",
+                  "pm.test('regla AUTENTICACION', () => pm.expect(pm.response.json().regla).to.eql('AUTENTICACION'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-06/obligaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-06",
+                "obligaciones"
+              ]
+            },
+            "description": "Sin header X-API-Key, cualquier endpoint (salvo /salud) responde 401 (I-04).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCredito\": \"CR-NOEXISTE\",\n  \"idCliente\": \"CLI-X\",\n  \"idSolicitud\": \"SOL-X\",\n  \"montoAprobado\": 100.0,\n  \"moneda\": \"PEN\",\n  \"fechaDesembolso\": \"2026-10-05T10:00:00\",\n  \"calendarioPagos\": [\n    {\n      \"numeroCuota\": 1,\n      \"fechaVencimiento\": \"2026-11-05\",\n      \"montoCuota\": 100.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4. Rol insuficiente: COBRANZA_LEER (403, I-04)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 rol insuficiente', () => pm.response.to.have.status(403));",
+                  "pm.test('regla AUTORIZACION', () => pm.expect(pm.response.json().regla).to.eql('AUTORIZACION'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-06/obligaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-06",
+                "obligaciones"
+              ]
+            },
+            "description": "CR-INT-06 exige el rol INTEGRACION_BUS; una clave de COBRANZA_LEER debe ser rechazada (403).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCredito\": \"CR-NOEXISTE\",\n  \"idCliente\": \"CLI-X\",\n  \"idSolicitud\": \"SOL-X\",\n  \"montoAprobado\": 100.0,\n  \"moneda\": \"PEN\",\n  \"fechaDesembolso\": \"2026-10-05T10:00:00\",\n  \"calendarioPagos\": [\n    {\n      \"numeroCuota\": 1,\n      \"fechaVencimiento\": \"2026-11-05\",\n      \"montoCuota\": 100.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "CR-INT-08 (Home Banking -> Cobranza)",
+      "item": [
+        {
+          "name": "5. Pago parcial (RN-COB-003/004/006)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refPago1', 'OP-PM-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('CONFIRMADO', () => pm.expect(j.estado).to.eql('CONFIRMADO'));",
+                  "pm.test('saldo baja a 850', () => pm.expect(j.aplicacion.saldoPendienteCuota).to.eql(850));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "{{tokenSeguridad}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "CR-INT-08: Home Banking paga parte de la cuota 1. Requiere INTEGRACION_BUS y X-Token-Seguridad (RF-COB-004). Demuestra RN-COB-003/004 (pago fraccionado) y RN-COB-006.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idCliente}}\",\n  \"codCredito\": \"{{codCredito}}\",\n  \"montoPago\": 150.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refPago1}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "6. Duplicado: idempotencia (RN-INT-CR-006)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('idempotente true', () => pm.expect(pm.response.json().idempotente).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "{{tokenSeguridad}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "La misma referenciaTransaccion no debe generar un segundo pago (RN-INT-CR-006 / INC-02).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idCliente}}\",\n  \"codCredito\": \"{{codCredito}}\",\n  \"montoPago\": 150.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refPago1}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "7. Excedente (RN-COB-011)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refExcedente', 'OP-PM-EXC-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 Unprocessable', () => pm.response.to.have.status(422));",
+                  "pm.test('regla RN-COB-011', () => pm.expect(pm.response.json().regla).to.eql('RN-COB-011'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "{{tokenSeguridad}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "Un monto mayor al saldo adeudado de la cuota se rechaza (RN-COB-011 = RF-COB-017); el tratamiento del excedente esta pendiente del Comite.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idCliente}}\",\n  \"codCredito\": \"{{codCredito}}\",\n  \"montoPago\": 9999.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refExcedente}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "8. Fondos insuficientes (RN-COB-009)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refRechazo', 'OP-PM-RECH-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('RECHAZADO', () => pm.expect(pm.response.json().estado).to.eql('RECHAZADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "{{tokenSeguridad}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "cuentaOrigen \"SIN-FONDOS\" simula el rechazo de Cuentas: el pago queda RECHAZADO y la cuota no cambia (RN-COB-009, la cuota no se cierra sin confirmacion).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idCliente}}\",\n  \"codCredito\": \"{{codCredito}}\",\n  \"montoPago\": 50.0,\n  \"cuentaOrigen\": \"SIN-FONDOS\",\n  \"referenciaTransaccion\": \"{{refRechazo}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "9. Sin X-Token-Seguridad (401, RF-COB-004)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refSinToken', 'OP-PM-ST-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin token', () => pm.response.to.have.status(401));",
+                  "pm.test('regla RF-COB-004', () => pm.expect(pm.response.json().regla).to.eql('RF-COB-004'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "CR-INT-08 exige X-Token-Seguridad (RF-COB-004, PROPUESTA pendiente del Comite).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idCliente}}\",\n  \"codCredito\": \"{{codCredito}}\",\n  \"montoPago\": 10.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refSinToken}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "10. Token invalido (401, RF-COB-004)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refTokenInvalido', 'OP-PM-TI-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 token invalido', () => pm.response.to.have.status(401));",
+                  "pm.test('regla RF-COB-004', () => pm.expect(pm.response.json().regla).to.eql('RF-COB-004'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "TOKEN-INVALIDO",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "TOKEN-INVALIDO se rechaza (RF-COB-004).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idCliente}}\",\n  \"codCredito\": \"{{codCredito}}\",\n  \"montoPago\": 10.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refTokenInvalido}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Consultas",
+      "item": [
+        {
+          "name": "11. Credito con cuotas y saldo (RF-COB-002)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('tiene codCredito', () => pm.expect(pm.response.json().codCredito).to.eql(pm.environment.get('codCredito')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/creditos/{{codCredito}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "{{codCredito}}"
+              ]
+            },
+            "description": "GET /creditos/{cod}: saldo y cronograma del credito (RF-COB-002 por codCredito)."
+          },
+          "response": []
+        },
+        {
+          "name": "12. Cronograma de cuotas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('es un arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/creditos/{{codCredito}}/cuotas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "{{codCredito}}",
+                "cuotas"
+              ]
+            },
+            "description": "GET .../cuotas: solo el arreglo de cuotas."
+          },
+          "response": []
+        },
+        {
+          "name": "13. Monto a pagar desglosado (RF-COB-003)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('tiene totalAPagar', () => pm.expect(pm.response.json()).to.have.property('totalAPagar'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/creditos/{{codCredito}}/monto-a-pagar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "{{codCredito}}",
+                "monto-a-pagar"
+              ]
+            },
+            "description": "GET .../monto-a-pagar: proxima cuota pendiente desglosada en capital + mora (RF-COB-003)."
+          },
+          "response": []
+        },
+        {
+          "name": "14. Historial de pagos del credito",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('al menos 1 pago', () => pm.expect(pm.response.json().length).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/creditos/{{codCredito}}/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "{{codCredito}}",
+                "pagos"
+              ]
+            },
+            "description": "GET .../pagos: historial de pagos de un credito."
+          },
+          "response": []
+        },
+        {
+          "name": "15. Creditos por cliente (RF-COB-002/012)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('incluye el credito de prueba', () => pm.expect(pm.response.json().some(c => c.codCredito === pm.environment.get('codCredito'))).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clientes/{{idCliente}}/creditos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clientes",
+                "{{idCliente}}",
+                "creditos"
+              ]
+            },
+            "description": "GET /clientes/{idCliente}/creditos: consulta por idCliente, no solo por codCredito (RF-COB-002/012)."
+          },
+          "response": []
+        },
+        {
+          "name": "16. Pagos por cliente (RF-COB-002/012)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/clientes/{{idCliente}}/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clientes",
+                "{{idCliente}}",
+                "pagos"
+              ]
+            },
+            "description": "GET /clientes/{idCliente}/pagos: historial de pagos por idCliente."
+          },
+          "response": []
+        },
+        {
+          "name": "17. Comprobante de pago (RF-COB-008/013)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('tiene montoAplicadoCapital', () => pm.expect(j).to.have.property('montoAplicadoCapital'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pagos/{{refPago1}}/comprobante",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pagos",
+                "{{refPago1}}",
+                "comprobante"
+              ]
+            },
+            "description": "GET /pagos/{ref}/comprobante: muestra el desglose mora/capital del pago (RF-COB-008/013)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Mora",
+      "item": [
+        {
+          "name": "18. Mora rechazada: cuota aun no vencio (RN-COB-010)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 cuota no vencida', () => pm.response.to.have.status(422));",
+                  "pm.test('regla RN-COB-010', () => pm.expect(pm.response.json().regla).to.eql('RN-COB-010'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyEjecutar}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/creditos/{{codCredito}}/cuotas/1/mora",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "{{codCredito}}",
+                "cuotas",
+                "1",
+                "mora"
+              ]
+            },
+            "description": "RN-COB-010: la mora solo se acepta si la cuota ya vencio. Sin fechaReferencia, 'hoy' es anterior al vencimiento de la cuota 1 (2026-11-05) -> 422.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diasAtraso\": 5,\n  \"montoCalculado\": 20.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "19. Mora aceptada con fechaReferencia (RN-COB-010)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('moraPendienteCuota 20', () => pm.expect(pm.response.json().moraPendienteCuota).to.eql(20));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyEjecutar}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/creditos/{{codCredito}}/cuotas/1/mora?fechaReferencia=2026-11-10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "{{codCredito}}",
+                "cuotas",
+                "1",
+                "mora"
+              ],
+              "query": [
+                {
+                  "key": "fechaReferencia",
+                  "value": "2026-11-10"
+                }
+              ]
+            },
+            "description": "fechaReferencia opcional simula una fecha posterior al vencimiento, para poder demostrar RN-COB-010 sin esperar la fecha real.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diasAtraso\": 5,\n  \"montoCalculado\": 20.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "20. Historial de mora de la cuota",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('1 registro vigente', () => pm.expect(pm.response.json().filter(m => m.vigente).length).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/creditos/{{codCredito}}/cuotas/1/mora",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "creditos",
+                "{{codCredito}}",
+                "cuotas",
+                "1",
+                "mora"
+              ]
+            },
+            "description": "GET .../mora: historial completo (campo vigente) de la mora recibida para esa cuota."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pendientes y conciliacion",
+      "item": [
+        {
+          "name": "21. Pago sin respuesta de Cuentas (INC-01)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refPendiente', 'OP-PM-PEND-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('PENDIENTE', () => pm.expect(pm.response.json().estado).to.eql('PENDIENTE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "{{tokenSeguridad}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "cuentaOrigen \"SIN-RESPUESTA\" simula que Cuentas no responde: el pago queda PENDIENTE (INC-01), sin cerrar la cuota (RN-COB-009).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idCliente}}\",\n  \"codCredito\": \"{{codCredito}}\",\n  \"montoPago\": 100.0,\n  \"cuentaOrigen\": \"SIN-RESPUESTA\",\n  \"referenciaTransaccion\": \"{{refPendiente}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "22. Pagos pendientes con antiguedad (RF-COB-011/INC-01)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const refs = pm.response.json().map(p => p.referenciaTransaccion);",
+                  "pm.test('incluye el pago pendiente', () => pm.expect(refs).to.include(pm.environment.get('refPendiente')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pagos/pendientes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pagos",
+                "pendientes"
+              ]
+            },
+            "description": "GET /pagos/pendientes: pagos PENDIENTE con su antiguedad en horas (RF-COB-011, INC-01)."
+          },
+          "response": []
+        },
+        {
+          "name": "23. Resolver pago pendiente (RF-COB-011, RN-COB-009)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('CONFIRMADO', () => pm.expect(pm.response.json().estado).to.eql('CONFIRMADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyEjecutar}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pagos/{{refPendiente}}/resolver",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pagos",
+                "{{refPendiente}}",
+                "resolver"
+              ]
+            },
+            "description": "POST /pagos/{ref}/resolver: consulta a Cuentas por idOperacion y nunca repite el cargo (RN-COB-009). Aqui Cuentas confirma al consultar de nuevo."
+          },
+          "response": []
+        },
+        {
+          "name": "24. Conciliacion del dia (RF-COB-018)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('tiene totalCobrado y totalAplicado', () => { pm.expect(j).to.have.property('totalCobrado'); pm.expect(j).to.have.property('totalAplicado'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/conciliacion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "conciliacion"
+              ]
+            },
+            "description": "GET /conciliacion: total cobrado vs aplicado del dia, con el detalle de pendientes/rechazados/REQUIERE_REVISION (RF-COB-018)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Seguridad y roles",
+      "item": [
+        {
+          "name": "25. Clave invalida (401, I-04)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 clave invalida', () => pm.response.to.have.status(401));",
+                  "pm.test('regla AUTENTICACION', () => pm.expect(pm.response.json().regla).to.eql('AUTENTICACION'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "no-existe-esta-clave",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auditoria",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auditoria"
+              ]
+            },
+            "description": "Una X-API-Key que no coincide con ningun rol responde 401 (I-04)."
+          },
+          "response": []
+        },
+        {
+          "name": "26. Rechazo de token 1/3 (RF-COB-004)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = Date.now();",
+                  "pm.environment.set('idClienteBloqueo', 'CLB-' + t);",
+                  "pm.environment.set('refBloqueo1', 'OP-BLQ1-' + t);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 token invalido', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "TOKEN-INVALIDO",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "Primer rechazo de X-Token-Seguridad para un cliente nuevo (para el escenario de bloqueo).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idClienteBloqueo}}\",\n  \"codCredito\": \"CR-NOEXISTE\",\n  \"montoPago\": 10.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refBloqueo1}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "27. Rechazo de token 2/3 (RF-COB-004)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refBloqueo2', 'OP-PM-BLOQ-2-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 token invalido', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "TOKEN-INVALIDO",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "Segundo rechazo consecutivo del mismo cliente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idClienteBloqueo}}\",\n  \"codCredito\": \"CR-NOEXISTE\",\n  \"montoPago\": 10.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refBloqueo2}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "28. Rechazo de token 3/3: dispara el bloqueo (RF-COB-004)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refBloqueo3', 'OP-PM-BLOQ-3-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 y queda bloqueado', () => pm.response.to.have.status(401));",
+                  "pm.test('mensaje menciona bloqueado', () => pm.expect(pm.response.json().detalle.toLowerCase()).to.include('bloqueado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "TOKEN-INVALIDO",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "Tercer rechazo consecutivo: a partir de aqui el cliente queda bloqueado temporalmente.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idClienteBloqueo}}\",\n  \"codCredito\": \"CR-NOEXISTE\",\n  \"montoPago\": 10.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refBloqueo3}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "29. Token valido pero sigue bloqueado (RF-COB-004)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('refBloqueo4', 'OP-PM-BLOQ-4-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sigue bloqueado', () => pm.response.to.have.status(401));",
+                  "pm.test('mensaje menciona bloqueado', () => pm.expect(pm.response.json().detalle.toLowerCase()).to.include('bloqueado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyBus}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Token-Seguridad",
+                "value": "{{tokenSeguridad}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cr-int-08/pagos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cr-int-08",
+                "pagos"
+              ]
+            },
+            "description": "Un token VALIDO no basta mientras el bloqueo temporal este activo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codCliente\": \"{{idClienteBloqueo}}\",\n  \"codCredito\": \"CR-NOEXISTE\",\n  \"montoPago\": 10.0,\n  \"cuentaOrigen\": \"AH-001-123456\",\n  \"referenciaTransaccion\": \"{{refBloqueo4}}\",\n  \"idCanal\": \"HB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Metricas",
+      "item": [
+        {
+          "name": "30. Metricas I-05: fallas, pendientes y p95",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('tiene tasaFallasOperacion', () => pm.expect(j).to.have.property('tasaFallasOperacion'));",
+                  "pm.test('tiene pagosPendientes', () => pm.expect(j).to.have.property('pagosPendientes'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKeyLeer}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/metricas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metricas"
+              ]
+            },
+            "description": "GET /metricas: tasa de fallas de operacion, pagos pendientes y p95 de POST /cr-int-08/pagos, sin metas numericas (I-05)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
