@@ -47,6 +47,8 @@ class TarjetaOut(BaseModel):
     fecha_vencimiento: date
     estado_tarjeta: str
     cod_cliente: str
+    # La cuenta principal, la de la emisión; null si COREDB no la tiene
+    num_cuenta: str | None = None
 
     @computed_field
     @property
