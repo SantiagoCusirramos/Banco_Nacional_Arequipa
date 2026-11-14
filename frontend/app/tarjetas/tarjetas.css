@@ -107,6 +107,10 @@
   align-items: start;
   padding: 0 24px 24px;
 }
+/* En una columna (tablet o teléfono) la vista previa no pasa del tamaño de una tarjeta real en pantalla. */
+.tj-vista-previa .tj-plastico {
+  max-width: 340px;
+}
 .tj-vista-previa > p {
   color: var(--sol-muted);
   font-size: 11px;
