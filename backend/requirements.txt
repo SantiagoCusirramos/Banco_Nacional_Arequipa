@@ -35,3 +35,8 @@ httpx==0.27.2                      # También sirve como cliente de test con Tes
 
 # ── Variables de entorno ────────────────────────────────────
 python-dotenv==1.0.1
+
+# ── Zonas horarias ─────────────────────────────────────────
+# ZoneInfo("America/Lima") también en imágenes sin la base IANA del sistema
+# (las pruebas de EVALUACION usan el código de SOL, que la necesita).
+tzdata>=2025.1
