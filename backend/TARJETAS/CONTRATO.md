@@ -34,6 +34,7 @@
   "fecha_vencimiento": "2030-01-31",
   "estado_tarjeta": "ACTIVA",
   "cod_cliente": "CLI000000001",
+  "num_cuenta": "10100000000001",
   "numero_enmascarado": "0044 99** **** 0001",
   "vencimiento_mm_aa": "01/30"
 }

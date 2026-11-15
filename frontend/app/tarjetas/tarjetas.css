@@ -16,6 +16,13 @@
   gap: 14px;
 }
 
+.tj-cuenta {
+  margin: -4px 2px 0;
+  color: var(--sol-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .tj-item-actions {
   display: flex;
   gap: 8px;
@@ -26,92 +33,45 @@
   padding: 8px 12px;
 }
 
-/* La tarjeta física, con la proporción ISO/IEC 7810 ID-1 (85.6 x 54 mm). */
+/* La tarjeta impresa usa bank-card de globals.css, como la del inicio; aquí solo lo propio. */
 .tj-plastico {
+  min-height: 200px;
   position: relative;
-  aspect-ratio: 85.6 / 54;
-  border-radius: 12px;
-  padding: 18px 20px;
-  color: white;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  background: linear-gradient(135deg, #15324f 0%, #1d4a6b 55%, #0f766e 100%);
-  box-shadow: 0 10px 24px #15324f2e;
-}
-.tj-plastico::after {
-  content: "";
-  position: absolute;
-  width: 220px;
-  height: 220px;
-  right: -70px;
-  top: -90px;
-  border-radius: 50%;
-  background: #ffffff12;
 }
 .tj-plastico.apagada {
-  background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
-  box-shadow: 0 10px 24px #37415124;
+  background: linear-gradient(130deg, #3f4752, #6b7280);
 }
 .tj-plastico.grande {
-  max-width: 400px;
-  padding: 24px 26px;
+  max-width: 420px;
+  min-height: 240px;
 }
-.tj-plastico-top,
-.tj-plastico-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  position: relative;
-  z-index: 1;
+.tj-punto {
+  display: inline-block;
+  vertical-align: middle;
+  margin: -3px 0 0 5px;
 }
-.tj-marca {
-  font-weight: 700;
-  letter-spacing: 1px;
-  font-size: 16px;
-}
-.tj-marca small {
-  display: block;
-  font-weight: 400;
-  font-size: 9px;
-  letter-spacing: 1.4px;
-  opacity: 0.75;
-}
-.tj-chip {
-  position: relative;
-  z-index: 1;
-}
-.tj-numero {
-  position: relative;
-  z-index: 1;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 17px;
-  letter-spacing: 2px;
-  text-shadow: 0 1px 1px #0003;
-}
-.tj-plastico.grande .tj-numero {
-  font-size: 21px;
-}
-.tj-dato small {
-  display: block;
+/* sol.css agranda los <small>: se devuelven al tamaño de la tarjeta del inicio. */
+.tj-plastico .bank-card-bottom small {
   font-size: 8px;
-  letter-spacing: 1.4px;
-  opacity: 0.7;
 }
-.tj-dato strong {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 1px;
+.tj-plastico .bank-card-bottom strong {
+  font-size: 11px;
 }
-.tj-estado {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
+.tj-tipo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 18px;
 }
-.tj-estado .sol-badge {
+.tj-tipo .bank-card-type {
+  margin: 0;
+}
+.tj-tipo .sol-badge {
   box-shadow: 0 1px 2px #0002;
+}
+.tj-plastico .bank-card-number {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 .tj-detalle {
@@ -146,6 +106,10 @@
   gap: 32px;
   align-items: start;
   padding: 0 24px 24px;
+}
+/* En una columna (tablet o teléfono) la vista previa no pasa del tamaño de una tarjeta real en pantalla. */
+.tj-vista-previa .tj-plastico {
+  max-width: 340px;
 }
 .tj-vista-previa > p {
   color: var(--sol-muted);
