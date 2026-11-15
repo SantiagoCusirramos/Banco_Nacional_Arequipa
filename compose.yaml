@@ -186,6 +186,48 @@ services:
       db-aux:
         condition: service_healthy
 
+  # ── EVALUACIÓN: evaluación crediticia (Línea de Créditos) ───────────────
+  # Base propia en db-aux, como SOL. Recibe el expediente de SOL (CR-INT-02) y ofrece la
+  # aprobación a Desembolso (CR-INT-04). El personal entra con su token de COREDB, que valida
+  # COREDB. Mientras SOL siga en modo SIMULADO, EVALUACION_SOL_URL queda vacía y los
+  # resultados para SOL (CR-INT-03) esperan. Ver backend/EVALUACION/README.md.
+  evaluacion:
+    <<: *backend
+    command: uvicorn EVALUACION.main:app --host 0.0.0.0 --port 8015
+    environment:
+      EVALUACION_DATABASE_URL: mysql+pymysql://evaluacion_user:${EVALUACION_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}@db-aux:3306/bna_evaluacion?charset=utf8mb4
+      COREDB_URL: http://coredb:8012
+      EVALUACION_TOKEN_SOL: ${EVALUACION_TOKEN_SOL:?Falta en .env. Ejecute ./bna up}
+      EVALUACION_SOL_TOKEN_RESULTADOS: ${EVALUACION_SOL_TOKEN_RESULTADOS:?Falta en .env. Ejecute ./bna up}
+      EVALUACION_SOL_URL: ${EVALUACION_SOL_URL:-}
+      EVALUACION_VIGENCIA_DIAS: ${EVALUACION_VIGENCIA_DIAS:-30}
+    depends_on:
+      evaluacion-init:
+        condition: service_completed_successfully
+      coredb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_EVALUACION:-8015}:8015"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8015/salud", timeout=3)
+
+  # Crea la base de Evaluación en db-aux, con sus triggers y su usuario de permisos
+  # mínimos, y termina. Es idempotente: no borra datos.
+  evaluacion-init:
+    <<: *backend
+    command: python -m EVALUACION.scripts.preparar_base
+    environment:
+      AUX_DB_ROOT_PASSWORD: ${AUX_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      EVALUACION_DB_PASSWORD: ${EVALUACION_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    depends_on:
+      db-aux:
+        condition: service_healthy
+
   # ── Seguridad: prototipo sobre SQLite ───────────────────────────────────
   seguridad:
     image: bna/seguridad:local
@@ -222,6 +264,7 @@ services:
       TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
       SOL_GATEWAY_URL: http://sol:8011/gateway/sol
       SOL_COOKIE_SECURE: "false"
+      EVALUACION_GATEWAY_URL: http://evaluacion:8015/eva/v1
     depends_on:
       coredb:
         condition: service_healthy
@@ -230,6 +273,8 @@ services:
       tarjetas:
         condition: service_healthy
       sol:
+        condition: service_healthy
+      evaluacion:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BNA_PUERTO_FRONTEND:-3000}:3000"
