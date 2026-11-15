@@ -93,30 +93,38 @@ function EstadoTarjeta({ estado }: { estado: string }) {
 
 function Chip() {
   return (
-    <svg className="tj-chip" width="38" height="28" viewBox="0 0 38 28" aria-hidden="true">
-      <rect x="0.5" y="0.5" width="37" height="27" rx="5" fill="#d9b765" stroke="#b8963f" />
-      <path d="M0 10h12m14 0h12M0 18h12m14 0h12M12 0v28m14-28v28M12 14h14" stroke="#a5843a" strokeWidth="1" fill="none" />
+    <svg width="36" height="27" viewBox="0 0 38 28" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="37" height="27" rx="5" fill="#d9d4b8" stroke="#bdb795" />
+      <path d="M0 10h12m14 0h12M0 18h12m14 0h12M12 0v28m14-28v28M12 14h14" stroke="#a9a283" strokeWidth="1" fill="none" />
     </svg>
   );
 }
 
-/** La tarjeta como se ve impresa: número enmascarado, titular y vencimiento MM/AA. */
+/** La tarjeta como se ve impresa, con los mismos estilos que la del inicio (bank-card de
+ * globals.css): número enmascarado, titular y vencimiento MM/AA. */
 function Plastico({ numero, titular, vence, estado, grande = false }:
   { numero: string; titular: string; vence: string; estado?: string; grande?: boolean }) {
   const apagada = estado !== undefined && FUERA_DE_USO.has(estado);
   return (
-    <div className={`tj-plastico ${apagada ? "apagada" : ""} ${grande ? "grande" : ""}`}>
-      {estado && <div className="tj-estado"><EstadoTarjeta estado={estado} /></div>}
-      <div className="tj-plastico-top">
-        <div className="tj-marca">BNA<small>DÉBITO</small></div>
+    <article className={`bank-card tj-plastico ${apagada ? "apagada" : ""} ${grande ? "grande" : ""}`}>
+      <div className="bank-card-top">
+        <span className="bank-card-brand">
+          BNA
+          <svg className="tj-punto" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="#e6b765" /></svg>
+        </span>
+        <Chip />
       </div>
-      <Chip />
-      <div className="tj-numero">{numero}</div>
-      <div className="tj-plastico-bottom">
-        <div className="tj-dato"><small>TITULAR</small><strong>{titular || "CÓDIGO DEL CLIENTE"}</strong></div>
-        <div className="tj-dato"><small>VENCE</small><strong>{vence}</strong></div>
+      <div className="tj-tipo">
+        <p className="bank-card-type">VISA · DÉBITO</p>
+        {estado && <EstadoTarjeta estado={estado} />}
       </div>
-    </div>
+      <div className="bank-card-number">{numero}</div>
+      <div className="bank-card-bottom">
+        <span><small>TITULAR</small><strong>{titular || "CÓDIGO DEL CLIENTE"}</strong></span>
+        <span><small>VENCE</small><strong>{vence}</strong></span>
+        <span className="visa">VISA</span>
+      </div>
+    </article>
   );
 }
 
@@ -391,6 +399,7 @@ export default function TarjetasPage() {
                     {tarjetas.map((t) => (
                       <li key={t.id_tarjeta} className="tj-item">
                         <Plastico numero={t.numero_enmascarado} titular={t.cod_cliente} vence={t.vencimiento_mm_aa} estado={t.estado_tarjeta} />
+                        <p className="tj-cuenta">Cuenta {t.num_cuenta ?? "sin vincular"}</p>
                         <div className="tj-item-actions">
                           <button className="sol-button secondary" type="button" onClick={() => mostrar(t)}>
                             <Icono nombre="ojo" tamano={16} />
@@ -440,6 +449,7 @@ export default function TarjetasPage() {
                     <dl className="tj-datos">
                       <div><dt>Estado</dt><dd><EstadoTarjeta estado={tarjetaActual.estado_tarjeta} /></dd></div>
                       <div><dt>Cliente</dt><dd>{tarjetaActual.cod_cliente}</dd></div>
+                      <div><dt>Cuenta vinculada</dt><dd>{tarjetaActual.num_cuenta ?? "Sin vincular"}</dd></div>
                       <div><dt>Emisión</dt><dd>{tarjetaActual.fecha_emision}</dd></div>
                       <div><dt>Vencimiento</dt><dd>{tarjetaActual.vencimiento_mm_aa} ({tarjetaActual.fecha_vencimiento})</dd></div>
                       <div><dt>BIN</dt><dd>{tarjetaActual.bin}</dd></div>
