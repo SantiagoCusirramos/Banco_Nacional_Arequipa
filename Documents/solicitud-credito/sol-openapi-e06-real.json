@@ -1,0 +1,3325 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "BNA · Solicitud de Crédito MVP",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "summary": "Ready",
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sol/integrations/evaluation-results": {
+      "post": {
+        "summary": "Evaluation Result",
+        "operationId": "evaluation_result_sol_integrations_evaluation_results_post",
+        "security": [
+          {
+            "EVACallback": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Idempotency-Key"
+            }
+          },
+          {
+            "name": "X-Correlation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationResult"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationReceiptResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/sol/auth/login": {
+      "post": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Login",
+        "operationId": "login_sol_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sol/auth/me": {
+      "get": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Me",
+        "operationId": "me_sol_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ]
+      }
+    },
+    "/sol/auth/logout": {
+      "post": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_sol_auth_logout_post",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/sol/policy": {
+      "get": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Get Policy",
+        "operationId": "get_policy_sol_policy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ]
+      }
+    },
+    "/sol/clients": {
+      "get": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Clients",
+        "operationId": "clients_sol_clients_get",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "default": "",
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ClientResponse"
+                  },
+                  "title": "Response Clients Sol Clients Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/sol/applications": {
+      "get": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Applications",
+        "operationId": "applications_sol_applications_get",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationPageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Create",
+        "operationId": "create_sol_applications_post",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailResponse-Output"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/sol/admin/users/{username}/disable": {
+      "post": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Disable User",
+        "operationId": "disable_user_sol_admin_users__username__disable_post",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Username"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisableUser"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisableUserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/sol/ops/metrics": {
+      "get": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Get Metrics",
+        "operationId": "get_metrics_sol_ops_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ]
+      }
+    },
+    "/sol/ops/pending": {
+      "get": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Pending",
+        "operationId": "pending_sol_ops_pending_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ]
+      }
+    },
+    "/sol/preview": {
+      "post": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Preview",
+        "operationId": "preview_sol_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse-Output"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ]
+      }
+    },
+    "/sol/applications/{identifier}": {
+      "get": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Get Application",
+        "operationId": "get_application_sol_applications__identifier__get",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailResponse-Output"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Edit",
+        "operationId": "edit_sol_applications__identifier__put",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailResponse-Output"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/sol/applications/{identifier}/send": {
+      "post": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Send",
+        "operationId": "send_sol_applications__identifier__send_post",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          },
+          {
+            "name": "X-Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 80,
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailResponse-Output"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "202": {
+            "description": "Reserva durable pendiente; no es acuse EVA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailResponse-Input"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sol/applications/{identifier}/revise": {
+      "post": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Revise",
+        "operationId": "revise_sol_applications__identifier__revise_post",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailResponse-Output"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/sol/applications/{identifier}/demo-result": {
+      "post": {
+        "tags": [
+          "SOL interno"
+        ],
+        "summary": "Result",
+        "operationId": "result_sol_applications__identifier__demo_result_post",
+        "security": [
+          {
+            "SOLSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifier"
+            }
+          },
+          {
+            "name": "X-Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 80,
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResultInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailResponse-Output"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApplicationInput": {
+        "properties": {
+          "id_cliente": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Id Cliente"
+          },
+          "monto_solicitado": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto Solicitado"
+          },
+          "moneda": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Moneda"
+          },
+          "plazo_meses": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazo Meses"
+          },
+          "destino_credito": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 5,
+            "title": "Destino Credito"
+          },
+          "fecha_base": {
+            "type": "string",
+            "format": "date",
+            "title": "Fecha Base"
+          },
+          "pago_doble": {
+            "type": "boolean",
+            "title": "Pago Doble",
+            "default": false
+          },
+          "garantias": {
+            "items": {
+              "$ref": "#/components/schemas/Guarantee"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Garantias"
+          },
+          "fiadores": {
+            "items": {
+              "type": "string",
+              "maxLength": 36,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Fiadores"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id_cliente",
+          "monto_solicitado",
+          "moneda",
+          "plazo_meses",
+          "destino_credito",
+          "fecha_base"
+        ],
+        "title": "ApplicationInput"
+      },
+      "ApplicationPageResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SummaryResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "estados": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Estados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset",
+          "estados"
+        ],
+        "title": "ApplicationPageResponse"
+      },
+      "AuditCountResponse": {
+        "properties": {
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "cantidad": {
+            "type": "integer",
+            "title": "Cantidad"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado",
+          "cantidad"
+        ],
+        "title": "AuditCountResponse"
+      },
+      "CalendarResponse": {
+        "properties": {
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "cuotas": {
+            "items": {
+              "$ref": "#/components/schemas/InstallmentResponse"
+            },
+            "type": "array",
+            "title": "Cuotas"
+          },
+          "cuota_referencial": {
+            "type": "string",
+            "title": "Cuota Referencial"
+          },
+          "intereses_totales": {
+            "type": "string",
+            "title": "Intereses Totales"
+          },
+          "total_pagar": {
+            "type": "string",
+            "title": "Total Pagar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "estado",
+          "cuotas",
+          "cuota_referencial",
+          "intereses_totales",
+          "total_pagar"
+        ],
+        "title": "CalendarResponse"
+      },
+      "ClientResponse": {
+        "properties": {
+          "id_cliente": {
+            "type": "string",
+            "title": "Id Cliente"
+          },
+          "numero_documento": {
+            "type": "string",
+            "title": "Numero Documento"
+          },
+          "nombres": {
+            "type": "string",
+            "title": "Nombres"
+          },
+          "apellido_paterno": {
+            "type": "string",
+            "title": "Apellido Paterno"
+          },
+          "apellido_materno": {
+            "type": "string",
+            "title": "Apellido Materno"
+          },
+          "estado_cliente": {
+            "type": "string",
+            "title": "Estado Cliente"
+          },
+          "id_caso": {
+            "type": "string",
+            "title": "Id Caso"
+          },
+          "id_verificacion": {
+            "type": "string",
+            "title": "Id Verificacion"
+          },
+          "fecha_verificacion": {
+            "type": "string",
+            "title": "Fecha Verificacion"
+          },
+          "vigente_hasta": {
+            "type": "string",
+            "title": "Vigente Hasta"
+          },
+          "estado_habilitante": {
+            "type": "string",
+            "title": "Estado Habilitante"
+          },
+          "version_contrato": {
+            "type": "string",
+            "title": "Version Contrato"
+          },
+          "cod_tipo_documento": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cod Tipo Documento"
+          },
+          "simulado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_cliente",
+          "numero_documento",
+          "nombres",
+          "apellido_paterno",
+          "apellido_materno",
+          "estado_cliente",
+          "id_caso",
+          "id_verificacion",
+          "fecha_verificacion",
+          "vigente_hasta",
+          "estado_habilitante",
+          "version_contrato"
+        ],
+        "title": "ClientResponse"
+      },
+      "ConditionsResponse": {
+        "properties": {
+          "id_cliente": {
+            "type": "string",
+            "title": "Id Cliente"
+          },
+          "monto_solicitado": {
+            "type": "string",
+            "title": "Monto Solicitado"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "plazo_meses": {
+            "type": "integer",
+            "title": "Plazo Meses"
+          },
+          "destino_credito": {
+            "type": "string",
+            "title": "Destino Credito"
+          },
+          "fecha_base": {
+            "type": "string",
+            "title": "Fecha Base"
+          },
+          "pago_doble": {
+            "type": "boolean",
+            "title": "Pago Doble"
+          },
+          "garantias": {
+            "items": {
+              "$ref": "#/components/schemas/GuaranteeResponse"
+            },
+            "type": "array",
+            "title": "Garantias"
+          },
+          "id_producto_credito": {
+            "type": "string",
+            "title": "Id Producto Credito"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_cliente",
+          "monto_solicitado",
+          "moneda",
+          "plazo_meses",
+          "destino_credito",
+          "fecha_base",
+          "pago_doble",
+          "garantias",
+          "id_producto_credito"
+        ],
+        "title": "ConditionsResponse"
+      },
+      "DeliveryResponse": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "id_operacion": {
+            "type": "string",
+            "title": "Id Operacion"
+          },
+          "acuse": {
+            "type": "string",
+            "title": "Acuse"
+          },
+          "estado_transporte": {
+            "type": "string",
+            "title": "Estado Transporte"
+          },
+          "id_evaluacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Evaluacion"
+          },
+          "ronda": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ronda"
+          },
+          "fecha": {
+            "type": "string",
+            "title": "Fecha"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "id_operacion",
+          "acuse",
+          "estado_transporte",
+          "id_evaluacion",
+          "ronda",
+          "fecha"
+        ],
+        "title": "DeliveryResponse"
+      },
+      "DetailResponse-Input": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "cliente_nombre": {
+            "type": "string",
+            "title": "Cliente Nombre"
+          },
+          "documento": {
+            "type": "string",
+            "title": "Documento"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "plazo": {
+            "type": "integer",
+            "title": "Plazo"
+          },
+          "actualizado": {
+            "type": "string",
+            "title": "Actualizado"
+          },
+          "versiones": {
+            "items": {
+              "$ref": "#/components/schemas/VersionResponse-Input"
+            },
+            "type": "array",
+            "title": "Versiones"
+          },
+          "eventos": {
+            "items": {
+              "$ref": "#/components/schemas/EventResponse"
+            },
+            "type": "array",
+            "title": "Eventos"
+          },
+          "resultados": {
+            "items": {
+              "$ref": "#/components/schemas/OutcomeResponse"
+            },
+            "type": "array",
+            "title": "Resultados"
+          },
+          "envios": {
+            "items": {
+              "$ref": "#/components/schemas/DeliveryResponse"
+            },
+            "type": "array",
+            "title": "Envios"
+          },
+          "pendiente_envio": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pendiente Envio"
+          },
+          "idOperacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idoperacion"
+          },
+          "reintento_reconocido": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reintento Reconocido"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "codigo",
+          "estado",
+          "version",
+          "revision",
+          "cliente_nombre",
+          "documento",
+          "monto",
+          "moneda",
+          "plazo",
+          "actualizado",
+          "versiones",
+          "eventos",
+          "resultados",
+          "envios"
+        ],
+        "title": "DetailResponse"
+      },
+      "DetailResponse-Output": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "cliente_nombre": {
+            "type": "string",
+            "title": "Cliente Nombre"
+          },
+          "documento": {
+            "type": "string",
+            "title": "Documento"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "plazo": {
+            "type": "integer",
+            "title": "Plazo"
+          },
+          "actualizado": {
+            "type": "string",
+            "title": "Actualizado"
+          },
+          "versiones": {
+            "items": {
+              "$ref": "#/components/schemas/VersionResponse-Output"
+            },
+            "type": "array",
+            "title": "Versiones"
+          },
+          "eventos": {
+            "items": {
+              "$ref": "#/components/schemas/EventResponse"
+            },
+            "type": "array",
+            "title": "Eventos"
+          },
+          "resultados": {
+            "items": {
+              "$ref": "#/components/schemas/OutcomeResponse"
+            },
+            "type": "array",
+            "title": "Resultados"
+          },
+          "envios": {
+            "items": {
+              "$ref": "#/components/schemas/DeliveryResponse"
+            },
+            "type": "array",
+            "title": "Envios"
+          },
+          "pendiente_envio": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pendiente Envio"
+          },
+          "idOperacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idoperacion"
+          },
+          "reintento_reconocido": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reintento Reconocido"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "codigo",
+          "estado",
+          "version",
+          "revision",
+          "cliente_nombre",
+          "documento",
+          "monto",
+          "moneda",
+          "plazo",
+          "actualizado",
+          "versiones",
+          "eventos",
+          "resultados",
+          "envios"
+        ],
+        "title": "DetailResponse"
+      },
+      "DisableUser": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 5,
+            "title": "Motivo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "motivo"
+        ],
+        "title": "DisableUser"
+      },
+      "DisableUserResponse": {
+        "properties": {
+          "usuario": {
+            "type": "string",
+            "title": "Usuario"
+          },
+          "activo": {
+            "type": "boolean",
+            "title": "Activo"
+          },
+          "sesiones_revocadas": {
+            "type": "integer",
+            "title": "Sesiones Revocadas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "usuario",
+          "activo",
+          "sesiones_revocadas"
+        ],
+        "title": "DisableUserResponse"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationIssue"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse"
+      },
+      "EvaluationReceiptResponse": {
+        "properties": {
+          "recibido": {
+            "type": "boolean",
+            "title": "Recibido"
+          },
+          "idOperacion": {
+            "type": "string",
+            "title": "Idoperacion"
+          },
+          "estado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado"
+          },
+          "reintento_reconocido": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reintento Reconocido"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recibido",
+          "idOperacion"
+        ],
+        "title": "EvaluationReceiptResponse"
+      },
+      "EvaluationResult": {
+        "properties": {
+          "idSolicitud": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Idsolicitud"
+          },
+          "versionSolicitud": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Versionsolicitud"
+          },
+          "idEvaluacion": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Idevaluacion"
+          },
+          "ronda": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Ronda"
+          },
+          "idOperacion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{8,80}$",
+            "title": "Idoperacion"
+          },
+          "idCorrelacion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+            "title": "Idcorrelacion"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APROBADO",
+              "OBSERVADO",
+              "RECHAZADO"
+            ],
+            "title": "Decision"
+          },
+          "observaciones": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 5,
+            "title": "Observaciones"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "idEvaluacion",
+          "ronda",
+          "idOperacion",
+          "idCorrelacion",
+          "decision",
+          "observaciones"
+        ],
+        "title": "EvaluationResult",
+        "description": "CR-INT-03 propuesto: la ronda pertenece a EVA, no al número de versión."
+      },
+      "EventResponse": {
+        "properties": {
+          "accion": {
+            "type": "string",
+            "title": "Accion"
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "estado_anterior": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Anterior"
+          },
+          "estado_nuevo": {
+            "type": "string",
+            "title": "Estado Nuevo"
+          },
+          "fecha": {
+            "type": "string",
+            "title": "Fecha"
+          },
+          "correlacion": {
+            "type": "string",
+            "title": "Correlacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accion",
+          "actor",
+          "version",
+          "estado_anterior",
+          "estado_nuevo",
+          "fecha",
+          "correlacion"
+        ],
+        "title": "EventResponse"
+      },
+      "Guarantee": {
+        "properties": {
+          "tipo_garantia": {
+            "type": "string",
+            "enum": [
+              "PERSONAL",
+              "HIPOTECARIA",
+              "VEHICULAR",
+              "MOBILIARIA",
+              "FONDOS"
+            ],
+            "title": "Tipo Garantia"
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 5,
+            "title": "Descripcion"
+          },
+          "valor_tasacion": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Valor Tasacion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tipo_garantia",
+          "descripcion",
+          "valor_tasacion"
+        ],
+        "title": "Guarantee"
+      },
+      "GuaranteeResponse": {
+        "properties": {
+          "tipo_garantia": {
+            "type": "string",
+            "title": "Tipo Garantia"
+          },
+          "descripcion": {
+            "type": "string",
+            "title": "Descripcion"
+          },
+          "valor_tasacion": {
+            "type": "string",
+            "title": "Valor Tasacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo_garantia",
+          "descripcion",
+          "valor_tasacion"
+        ],
+        "title": "GuaranteeResponse"
+      },
+      "GuarantorResponse": {
+        "properties": {
+          "id_cliente": {
+            "type": "string",
+            "title": "Id Cliente"
+          },
+          "identidad": {
+            "$ref": "#/components/schemas/ClientResponse"
+          },
+          "validacion": {
+            "type": "string",
+            "title": "Validacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_cliente",
+          "identidad",
+          "validacion"
+        ],
+        "title": "GuarantorResponse"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "modulo": {
+            "type": "string",
+            "title": "Modulo"
+          },
+          "integracion": {
+            "type": "string",
+            "title": "Integracion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "modulo",
+          "integracion"
+        ],
+        "title": "HealthResponse"
+      },
+      "InstallmentResponse": {
+        "properties": {
+          "numero_cuota": {
+            "type": "integer",
+            "title": "Numero Cuota"
+          },
+          "fecha_vencimiento": {
+            "type": "string",
+            "title": "Fecha Vencimiento"
+          },
+          "saldo_inicial": {
+            "type": "string",
+            "title": "Saldo Inicial"
+          },
+          "amortizacion": {
+            "type": "string",
+            "title": "Amortizacion"
+          },
+          "interes": {
+            "type": "string",
+            "title": "Interes"
+          },
+          "cuota_total": {
+            "type": "string",
+            "title": "Cuota Total"
+          },
+          "saldo_final": {
+            "type": "string",
+            "title": "Saldo Final"
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero_cuota",
+          "fecha_vencimiento",
+          "saldo_inicial",
+          "amortizacion",
+          "interes",
+          "cuota_total",
+          "saldo_final"
+        ],
+        "title": "InstallmentResponse"
+      },
+      "Login": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Login"
+      },
+      "LoginResponse": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "usuario"
+        ],
+        "title": "LoginResponse"
+      },
+      "MetricResponse": {
+        "properties": {
+          "operacion": {
+            "type": "string",
+            "title": "Operacion"
+          },
+          "muestras": {
+            "type": "integer",
+            "title": "Muestras"
+          },
+          "p95_ms": {
+            "type": "number",
+            "title": "P95 Ms"
+          },
+          "errores_5xx_acumulados": {
+            "type": "integer",
+            "title": "Errores 5Xx Acumulados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operacion",
+          "muestras",
+          "p95_ms",
+          "errores_5xx_acumulados"
+        ],
+        "title": "MetricResponse"
+      },
+      "MetricsResponse": {
+        "properties": {
+          "alcance": {
+            "type": "string",
+            "title": "Alcance"
+          },
+          "unidad": {
+            "type": "string",
+            "title": "Unidad"
+          },
+          "operaciones": {
+            "items": {
+              "$ref": "#/components/schemas/MetricResponse"
+            },
+            "type": "array",
+            "title": "Operaciones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alcance",
+          "unidad",
+          "operaciones"
+        ],
+        "title": "MetricsResponse"
+      },
+      "OkResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "OkResponse"
+      },
+      "OutcomeResponse": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "observaciones": {
+            "type": "string",
+            "title": "Observaciones"
+          },
+          "fecha": {
+            "type": "string",
+            "title": "Fecha"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "decision",
+          "observaciones",
+          "fecha"
+        ],
+        "title": "OutcomeResponse"
+      },
+      "PendingResponse": {
+        "properties": {
+          "envios": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Envios"
+          },
+          "auditoria": {
+            "items": {
+              "$ref": "#/components/schemas/AuditCountResponse"
+            },
+            "type": "array",
+            "title": "Auditoria"
+          }
+        },
+        "type": "object",
+        "required": [
+          "envios",
+          "auditoria"
+        ],
+        "title": "PendingResponse"
+      },
+      "Policy-Input": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "estado_aprobacion": {
+            "type": "string",
+            "title": "Estado Aprobacion"
+          },
+          "producto_id": {
+            "type": "string",
+            "title": "Producto Id"
+          },
+          "producto_nombre": {
+            "type": "string",
+            "title": "Producto Nombre"
+          },
+          "monedas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Monedas"
+          },
+          "monto_minimo": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto Minimo"
+          },
+          "monto_maximo": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto Maximo"
+          },
+          "plazo_minimo_meses": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Plazo Minimo Meses"
+          },
+          "plazo_maximo_meses": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazo Maximo Meses"
+          },
+          "tea": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Tea"
+          },
+          "amortizacion": {
+            "type": "string",
+            "title": "Amortizacion"
+          },
+          "dias_por_periodo": {
+            "type": "integer",
+            "maximum": 366.0,
+            "minimum": 1.0,
+            "title": "Dias Por Periodo"
+          },
+          "redondeo": {
+            "type": "string",
+            "title": "Redondeo"
+          },
+          "pago_doble_habilitado": {
+            "type": "boolean",
+            "title": "Pago Doble Habilitado"
+          },
+          "cargos_adicionales": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Cargos Adicionales"
+          },
+          "origen_tasa_plazo": {
+            "type": "string",
+            "title": "Origen Tasa Plazo"
+          },
+          "origen_montos": {
+            "type": "string",
+            "title": "Origen Montos"
+          },
+          "nota": {
+            "type": "string",
+            "title": "Nota"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "estado_aprobacion",
+          "producto_id",
+          "producto_nombre",
+          "monedas",
+          "monto_minimo",
+          "monto_maximo",
+          "plazo_minimo_meses",
+          "plazo_maximo_meses",
+          "tea",
+          "amortizacion",
+          "dias_por_periodo",
+          "redondeo",
+          "pago_doble_habilitado",
+          "cargos_adicionales",
+          "origen_tasa_plazo",
+          "origen_montos",
+          "nota"
+        ],
+        "title": "Policy"
+      },
+      "Policy-Output": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "estado_aprobacion": {
+            "type": "string",
+            "title": "Estado Aprobacion"
+          },
+          "producto_id": {
+            "type": "string",
+            "title": "Producto Id"
+          },
+          "producto_nombre": {
+            "type": "string",
+            "title": "Producto Nombre"
+          },
+          "monedas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Monedas"
+          },
+          "monto_minimo": {
+            "type": "string",
+            "title": "Monto Minimo"
+          },
+          "monto_maximo": {
+            "type": "string",
+            "title": "Monto Maximo"
+          },
+          "plazo_minimo_meses": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Plazo Minimo Meses"
+          },
+          "plazo_maximo_meses": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazo Maximo Meses"
+          },
+          "tea": {
+            "type": "string",
+            "title": "Tea"
+          },
+          "amortizacion": {
+            "type": "string",
+            "title": "Amortizacion"
+          },
+          "dias_por_periodo": {
+            "type": "integer",
+            "maximum": 366.0,
+            "minimum": 1.0,
+            "title": "Dias Por Periodo"
+          },
+          "redondeo": {
+            "type": "string",
+            "title": "Redondeo"
+          },
+          "pago_doble_habilitado": {
+            "type": "boolean",
+            "title": "Pago Doble Habilitado"
+          },
+          "cargos_adicionales": {
+            "type": "string",
+            "title": "Cargos Adicionales"
+          },
+          "origen_tasa_plazo": {
+            "type": "string",
+            "title": "Origen Tasa Plazo"
+          },
+          "origen_montos": {
+            "type": "string",
+            "title": "Origen Montos"
+          },
+          "nota": {
+            "type": "string",
+            "title": "Nota"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "estado_aprobacion",
+          "producto_id",
+          "producto_nombre",
+          "monedas",
+          "monto_minimo",
+          "monto_maximo",
+          "plazo_minimo_meses",
+          "plazo_maximo_meses",
+          "tea",
+          "amortizacion",
+          "dias_por_periodo",
+          "redondeo",
+          "pago_doble_habilitado",
+          "cargos_adicionales",
+          "origen_tasa_plazo",
+          "origen_montos",
+          "nota"
+        ],
+        "title": "Policy"
+      },
+      "PolicyResponse": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "estado_aprobacion": {
+            "type": "string",
+            "title": "Estado Aprobacion"
+          },
+          "producto_id": {
+            "type": "string",
+            "title": "Producto Id"
+          },
+          "producto_nombre": {
+            "type": "string",
+            "title": "Producto Nombre"
+          },
+          "monedas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Monedas"
+          },
+          "monto_minimo": {
+            "type": "string",
+            "title": "Monto Minimo"
+          },
+          "monto_maximo": {
+            "type": "string",
+            "title": "Monto Maximo"
+          },
+          "plazo_minimo_meses": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Plazo Minimo Meses"
+          },
+          "plazo_maximo_meses": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazo Maximo Meses"
+          },
+          "tea": {
+            "type": "string",
+            "title": "Tea"
+          },
+          "amortizacion": {
+            "type": "string",
+            "title": "Amortizacion"
+          },
+          "dias_por_periodo": {
+            "type": "integer",
+            "maximum": 366.0,
+            "minimum": 1.0,
+            "title": "Dias Por Periodo"
+          },
+          "redondeo": {
+            "type": "string",
+            "title": "Redondeo"
+          },
+          "pago_doble_habilitado": {
+            "type": "boolean",
+            "title": "Pago Doble Habilitado"
+          },
+          "cargos_adicionales": {
+            "type": "string",
+            "title": "Cargos Adicionales"
+          },
+          "origen_tasa_plazo": {
+            "type": "string",
+            "title": "Origen Tasa Plazo"
+          },
+          "origen_montos": {
+            "type": "string",
+            "title": "Origen Montos"
+          },
+          "nota": {
+            "type": "string",
+            "title": "Nota"
+          },
+          "integracion": {
+            "type": "string",
+            "title": "Integracion"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "estado_aprobacion",
+          "producto_id",
+          "producto_nombre",
+          "monedas",
+          "monto_minimo",
+          "monto_maximo",
+          "plazo_minimo_meses",
+          "plazo_maximo_meses",
+          "tea",
+          "amortizacion",
+          "dias_por_periodo",
+          "redondeo",
+          "pago_doble_habilitado",
+          "cargos_adicionales",
+          "origen_tasa_plazo",
+          "origen_montos",
+          "nota",
+          "integracion"
+        ],
+        "title": "PolicyResponse"
+      },
+      "ReadyResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "base": {
+            "type": "string",
+            "title": "Base"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "base"
+        ],
+        "title": "ReadyResponse"
+      },
+      "ResultInput": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APROBADO",
+              "OBSERVADO",
+              "RECHAZADO"
+            ],
+            "title": "Decision"
+          },
+          "observaciones": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 5,
+            "title": "Observaciones"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "decision",
+          "observaciones"
+        ],
+        "title": "ResultInput"
+      },
+      "RevisionInput": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "title": "RevisionInput"
+      },
+      "SnapshotResponse-Input": {
+        "properties": {
+          "cliente": {
+            "$ref": "#/components/schemas/ClientResponse"
+          },
+          "condiciones": {
+            "$ref": "#/components/schemas/ConditionsResponse"
+          },
+          "fiadores": {
+            "items": {
+              "$ref": "#/components/schemas/GuarantorResponse"
+            },
+            "type": "array",
+            "title": "Fiadores"
+          },
+          "politica": {
+            "$ref": "#/components/schemas/Policy-Input"
+          },
+          "calendario": {
+            "$ref": "#/components/schemas/CalendarResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente",
+          "condiciones",
+          "fiadores",
+          "politica",
+          "calendario"
+        ],
+        "title": "SnapshotResponse"
+      },
+      "SnapshotResponse-Output": {
+        "properties": {
+          "cliente": {
+            "$ref": "#/components/schemas/ClientResponse"
+          },
+          "condiciones": {
+            "$ref": "#/components/schemas/ConditionsResponse"
+          },
+          "fiadores": {
+            "items": {
+              "$ref": "#/components/schemas/GuarantorResponse"
+            },
+            "type": "array",
+            "title": "Fiadores"
+          },
+          "politica": {
+            "$ref": "#/components/schemas/Policy-Output"
+          },
+          "calendario": {
+            "$ref": "#/components/schemas/CalendarResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente",
+          "condiciones",
+          "fiadores",
+          "politica",
+          "calendario"
+        ],
+        "title": "SnapshotResponse"
+      },
+      "SummaryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "cliente_nombre": {
+            "type": "string",
+            "title": "Cliente Nombre"
+          },
+          "documento": {
+            "type": "string",
+            "title": "Documento"
+          },
+          "monto": {
+            "type": "string",
+            "title": "Monto"
+          },
+          "moneda": {
+            "type": "string",
+            "title": "Moneda"
+          },
+          "plazo": {
+            "type": "integer",
+            "title": "Plazo"
+          },
+          "actualizado": {
+            "type": "string",
+            "title": "Actualizado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "codigo",
+          "estado",
+          "version",
+          "revision",
+          "cliente_nombre",
+          "documento",
+          "monto",
+          "moneda",
+          "plazo",
+          "actualizado"
+        ],
+        "title": "SummaryResponse"
+      },
+      "UserResponse": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "rol": {
+            "type": "string",
+            "title": "Rol"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "nombre",
+          "rol"
+        ],
+        "title": "UserResponse"
+      },
+      "ValidationIssue": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Loc"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Msg"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationIssue"
+      },
+      "VersionResponse-Input": {
+        "properties": {
+          "numero": {
+            "type": "integer",
+            "title": "Numero"
+          },
+          "congelada": {
+            "type": "boolean",
+            "title": "Congelada"
+          },
+          "expediente": {
+            "$ref": "#/components/schemas/SnapshotResponse-Input"
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero",
+          "congelada",
+          "expediente"
+        ],
+        "title": "VersionResponse"
+      },
+      "VersionResponse-Output": {
+        "properties": {
+          "numero": {
+            "type": "integer",
+            "title": "Numero"
+          },
+          "congelada": {
+            "type": "boolean",
+            "title": "Congelada"
+          },
+          "expediente": {
+            "$ref": "#/components/schemas/SnapshotResponse-Output"
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero",
+          "congelada",
+          "expediente"
+        ],
+        "title": "VersionResponse"
+      }
+    },
+    "securitySchemes": {
+      "EVACallback": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "SOLSession": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

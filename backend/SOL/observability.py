@@ -16,6 +16,20 @@ LOG.setLevel(logging.INFO)
 SAFE_ID = re.compile(r"[A-Za-z0-9._:-]{1,100}\Z")
 
 
+class AccessLogPrivacy(logging.Filter):
+    """El access log nativo Uvicorn tampoco debe exportar consultas sensibles."""
+
+    def filter(self, record):
+        # Formato de uvicorn 0.30.6: cliente, método, target, versión, estado.
+        if not isinstance(record.args, tuple) or len(record.args) != 5:
+            return False
+        client, method, target, version, status = record.args
+        if not isinstance(target, str):
+            return False
+        record.args = (client, method, target.split("?", 1)[0], version, status)
+        return True
+
+
 def valid_id(value):
     return bool(value and SAFE_ID.fullmatch(value))
 
