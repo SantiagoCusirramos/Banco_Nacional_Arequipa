@@ -160,3 +160,24 @@ class Tarjeta(Base):
     cod_cliente: Mapped[str] = mapped_column(String(12))
     # La cuenta principal (tarjetas.tarjeta_cuenta), NULL si no tiene.
     num_cuenta: Mapped[str | None] = mapped_column(String(20))
+
+
+class Autorizacion(Base):
+    # La vista no incluye la IP de origen ni el nivel de riesgo.
+    __tablename__ = "v_autorizacion_api"
+    __table_args__ = {"schema": "tarjetas"}
+
+    uuid_autorizacion: Mapped[uuid.UUID] = mapped_column(UuidBinario, primary_key=True)
+    id_tarjeta: Mapped[uuid.UUID] = mapped_column(UuidBinario)
+    num_cuenta: Mapped[str] = mapped_column(String(20))
+    id_canal: Mapped[str | None] = mapped_column(String(5))
+    id_terminal: Mapped[str | None] = mapped_column(String(30))
+    tipo_operacion: Mapped[str] = mapped_column(String(25))
+    monto: Mapped[Decimal] = mapped_column(Numeric(15, 2))
+    estado_autorizacion: Mapped[str] = mapped_column(String(25))
+    codigo_respuesta: Mapped[str | None] = mapped_column(String(4))
+    motivo_rechazo: Mapped[str | None] = mapped_column(String(255))
+    # El movimiento de la operación, cuando ya se contabilizó.
+    uuid_transaccion: Mapped[uuid.UUID | None] = mapped_column(UuidBinario)
+    fecha_hora: Mapped[datetime] = mapped_column(FechaUtc)
+    fecha_actualizacion: Mapped[datetime] = mapped_column(FechaUtc)

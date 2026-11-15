@@ -100,6 +100,26 @@ Las rutas que usa el módulo Clientes, y el personal, están descritas en
 
 El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM.md`.
 
+## Autorizaciones de tarjeta
+
+Desde `bd-v1.4-mysql`, por los procedimientos de la base; las reglas las aplica la base.
+
+| Ruta | Permiso | Qué hace |
+|---|---|---|
+| `POST /coredb/autorizaciones` | `REGISTRAR_MOVIMIENTO` | Autoriza una operación con tarjeta o registra su rechazo |
+| `GET /coredb/autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Una autorización |
+| `POST /coredb/autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Extorna una autorización sin movimiento |
+
+- El `uuid_autorizacion` lo genera quien llama. Repetirlo con los mismos datos devuelve la
+  autorización ya registrada sin volver a retener el saldo; con otros datos, 409
+  `BNA-IDEMPOTENCIA`.
+- Una regla que no se cumple responde 201 con la autorización `RECHAZADA` y su código ISO
+  8583 (`51` sin fondos, `54` vencida, `57` no permitida, `61` excede el tope, `62`
+  restringida). El motivo no trae montos ni saldos. Se indica el canal o la terminal, uno
+  de los dos.
+- El extorno libera el saldo retenido y el tope del día. Repetirlo responde lo mismo; una
+  autorización rechazada o ya contabilizada responde 409 `BNA-EXTORNO`.
+
 ## Consultas
 
 | Ruta | Permiso | Qué devuelve |
