@@ -48,7 +48,7 @@ def nuevo_id(prefijo):
 def registrar_evento(db, id_entidad, tipo, usuario="sistema", modulo="COBRANZA", resultado="EXITOSO"):
     """RN-CR-GEN-004 / CR-INT-10: trazabilidad de cada cambio de estado (registro local).
     usuarioOperador se toma del rol (X-API-Key) que hizo la llamada HTTP cuando aplica; resultado es el
-    campo de CR-INT-10 que faltaba en el diccionario de Fase II (ver CLAUDE.md)."""
+    campo de CR-INT-10 que faltaba en el diccionario de Fase II."""
     db.ejecutar(
         "INSERT INTO EVENTO_AUDITORIA (idEvento, idEntidad, tipoEvento, `timestamp`, moduloEmisor, "
         "usuarioOperador, resultado) VALUES (%s, %s, %s, %s, %s, %s, %s)",
@@ -255,7 +255,7 @@ def registrar_pago(db, d, cuentas, seguridad, token_seguridad, usuario="HOME BAN
     """CR-INT-08 (Home Banking a Cobranza). Aplica RN-COB-001/002/003/004/006/009/011/012 y RN-INT-CR-006.
     RF-COB-004 (PROPUESTA, pendiente del Comite): valida X-Token-Seguridad con el validador de Seguridad
     simulado antes que cualquier otra cosa; tras 3 rechazos seguidos para el mismo cliente, sus pagos
-    quedan bloqueados temporalmente (ver app/seguridad.py)."""
+    quedan bloqueados temporalmente (ver COBRANZA/seguridad.py)."""
     ok_seg, motivo_seg = seguridad.validar(d["codCliente"], token_seguridad)
     if not ok_seg:
         registrar_evento(db, d["codCliente"], "TOKEN_SEGURIDAD_RECHAZADO", usuario=usuario, resultado="RECHAZADO")

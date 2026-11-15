@@ -20,7 +20,7 @@ def pago(**cambios):
 
 
 class PruebasValidacionLongitud(unittest.TestCase):
-    """Los Field(max_length=...) de app/main.py deben coincidir con el esquema de BD,
+    """Los Field(max_length=...) de COBRANZA/main.py deben coincidir con el esquema de BD,
     para que un dato demasiado largo se rechace con 422 (ValidationError) y no con un error de MySQL."""
 
     def test_codCredito_demasiado_largo_es_rechazado(self):

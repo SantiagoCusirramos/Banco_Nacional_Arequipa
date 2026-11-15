@@ -40,9 +40,10 @@ def main():
     conexion = _conectar(host, root)
     with conexion.cursor() as cur:
         cur.execute(f"CREATE DATABASE IF NOT EXISTS `{BASE}` CHARACTER SET utf8mb4")
-        cur.execute(f"CREATE USER IF NOT EXISTS '{USUARIO}'@'%' IDENTIFIED BY %s", (clave,))
+        # Con parámetros, PyMySQL formatea la consulta con %: el host '%' se escribe '%%'.
+        cur.execute(f"CREATE USER IF NOT EXISTS '{USUARIO}'@'%%' IDENTIFIED BY %s", (clave,))
         # Si .env cambió la clave, se alinea: el usuario solo existe para Cobranza.
-        cur.execute(f"ALTER USER '{USUARIO}'@'%' IDENTIFIED BY %s", (clave,))
+        cur.execute(f"ALTER USER '{USUARIO}'@'%%' IDENTIFIED BY %s", (clave,))
         cur.execute(f"GRANT ALL PRIVILEGES ON `{BASE}`.* TO '{USUARIO}'@'%'")
     conexion.close()
     print(f"Base {BASE} y usuario {USUARIO} listos.")

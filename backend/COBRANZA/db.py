@@ -157,8 +157,7 @@ DDL = [
 
 
 # Columnas agregadas despues de la creacion inicial del esquema. CREATE TABLE IF NOT EXISTS no las
-# agrega a una tabla que ya existia sin ellas, asi que en MySQL se migran aparte (ver CLAUDE.md,
-# seccion "Cambios respecto al diccionario de datos de Fase II").
+# agrega a una tabla que ya existia sin ellas, asi que en MySQL se migran aparte en crear_esquema().
 COLUMNAS_NUEVAS = [
     ("CUOTA", "moraPendiente", "DECIMAL(14,2) NOT NULL DEFAULT 0.00"),
     ("PAGO", "montoMora", "DECIMAL(14,2) NOT NULL DEFAULT 0.00"),

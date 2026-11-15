@@ -2,6 +2,7 @@
 codigo (ver .env.example). Roles: COBRANZA_LEER (consultas, auditoria, conciliacion, metricas),
 COBRANZA_EJECUTAR (mora, recalcular-estado, resolver pagos) e INTEGRACION_BUS (CR-INT-06/CR-INT-08).
 Sin clave -> 401. Clave valida pero rol sin permiso -> 403. /salud queda libre."""
+import hmac
 import os
 
 from fastapi import Security
@@ -21,7 +22,7 @@ def _claves_por_rol():
 
 def _rol_de_la_clave(clave):
     for rol, valor in _claves_por_rol().items():
-        if valor and clave == valor:
+        if valor and clave and hmac.compare_digest(clave.encode(), valor.encode()):
             return rol
     return None
 

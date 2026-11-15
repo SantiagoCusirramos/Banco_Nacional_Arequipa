@@ -1,6 +1,6 @@
 """Validador de Seguridad para CR-INT-08 (RF-COB-004). PROPUESTA pendiente del Comite de Creditos:
 Cobranza no implementa antifraude real, solo simula el token de Seguridad (clase aparte, igual que
-app/cuentas.py), tal como se documenta en CLAUDE.md."""
+COBRANZA/cuentas.py)."""
 import os
 import time
 
