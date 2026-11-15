@@ -44,6 +44,9 @@ PERMISOS: dict[str, frozenset[str]] = {
     "SERVICIO:CLIENTES": frozenset({
         "VER_CLIENTE", "CREAR_CLIENTE", "MODIFICAR_CLIENTE", VALIDAR_IDENTIDAD,
     }),
+    # Desembolso abona el crédito en la cuenta de ahorros del titular por CUENTAS (CR-INT-05) y
+    # consulta sus cuentas y movimientos para elegir la cuenta y resolver un abono sin confirmar.
+    "SERVICIO:DESEMBOLSO": frozenset({"VER_CUENTA", "REGISTRAR_MOVIMIENTO"}),
 }
 
 
