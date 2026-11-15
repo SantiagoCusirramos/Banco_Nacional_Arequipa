@@ -10,7 +10,7 @@ Swagger: http://127.0.0.1:8014/docs (botón **Authorize** con una de sus claves)
 |---|---|---|---|
 | CR-INT-06 | Desembolso → Cobranza | `POST /cr-int-06/obligaciones` | Lista para que Desembolso la llame. Mientras no exista, se llama a mano o con la prueba de integración |
 | CR-INT-07 | Cobranza → CUENTAS | `POST /api/v1/cuentas/retiro` de CUENTAS | **Real**: debita la cuenta de ahorros por CUENTAS, que registra el movimiento en COREDB |
-| CR-INT-08 | Home Banking → Cobranza | `POST /cr-int-08/pagos` | Lista para que el frontend o Home Banking la llamen |
+| CR-INT-08 | Home Banking → Cobranza | `POST /cr-int-08/pagos` | **En uso**: la pantalla "Pagar cuota" del frontend (`frontend/app/pagar-cuota`) la llama por su puente `/api/cobranza` |
 | CR-INT-10 | Cobranza → Seguridad/Auditoría | `GET /auditoria` | Local: los eventos quedan en la tabla `EVENTO_AUDITORIA` de Cobranza |
 
 Desembolso y Home Banking entran con la clave del rol `INTEGRACION_BUS` (`COBRANZA_API_KEY_INTEGRACION` en `.env`). Las consultas usan `COBRANZA_LEER` y las acciones de operación `COBRANZA_EJECUTAR`.

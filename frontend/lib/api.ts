@@ -40,6 +40,16 @@ export const apiTarjetas = axios.create({
 });
 apiTarjetas.interceptors.request.use(conToken);
 
+// COBRANZA por el puente de Next (/api/cobranza): el puente exige esta sesión (el token
+// solo prueba que hay sesión iniciada) y agrega la X-API-Key del rol que corresponda, que
+// nunca llega al navegador.
+export const apiCobranza = axios.create({
+  baseURL: "/api/cobranza",
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000,
+});
+apiCobranza.interceptors.request.use(conToken);
+
 const OPERACIONES = ["/deposito", "/retiro", "/transferencia"];
 
 /** Cabeceras que CUENTAS exige en toda operación que mueve dinero. */

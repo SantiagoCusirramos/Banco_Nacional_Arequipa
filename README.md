@@ -8,7 +8,7 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | COREDB | `backend/COREDB` | La API del CORE. Es el único servicio que se conecta a la base integrada | En uso |
 | CUENTAS | `backend/CUENTAS` | Cuentas de ahorro: apertura, depósito, retiro, transferencia y consultas. No tiene base propia: llama a COREDB | En uso |
 | TARJETAS | `backend/TARJETAS` | Tarjetas de débito: emisión, consulta, bloqueo y cambio de estado. No tiene base propia: llama a COREDB | En uso |
-| Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas y solicitud de crédito | En uso |
+| Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas, pago de cuotas y solicitud de crédito | En uso |
 | SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas | Laboratorio: base propia, sin conexión con el CORE |
 | Seguridad | `backend/seguridad` | Prototipo de login, topes, auditoría encadenada e incidentes | Laboratorio: SQLite, sin conexión con el CORE |
 | COBRANZA | `backend/COBRANZA` | Pago de cuotas de crédito: activación del crédito, pagos fraccionados, mora registrada, conciliación. Cobra por CUENTAS | Laboratorio: base propia en `db-aux`; el cobro va por CUENTAS y COREDB |
@@ -47,17 +47,18 @@ flowchart LR
   fe -->|"/api/cuenta"| cta["CUENTAS :8001"]
   fe -->|"/api/tarjeta"| tar["TARJETAS :8002"]
   fe -->|"/api/solicitud-credito"| sol["SOL :8011"]
+  fe -->|"/api/cobranza"| cob["COBRANZA :8014"]
   cta --> coredb
   tar --> coredb
   coredb --> db[("db: base integrada, MySQL 8.4 :3307")]
   sol --> aux[("db-aux: bna_sol_mvp y bna legada")]
   seg["Seguridad :8013"] --> sq[("SQLite en un volumen")]
-  cob["COBRANZA :8014"] -->|"cobro de cuotas"| cta
+  cob -->|"cobro de cuotas"| cta
   cob --> aux
   leg["CORE legado :8000 (perfil legado)"] -.-> aux
 ```
 
-- El navegador solo habla con el frontend. Sus rutas `/api/core`, `/api/cuenta`, `/api/tarjeta` y `/api/solicitud-credito` reenvían cada petición desde el servidor de Next.js, así que el navegador nunca conoce la dirección de un servicio.
+- El navegador solo habla con el frontend. Sus rutas `/api/core`, `/api/cuenta`, `/api/tarjeta`, `/api/solicitud-credito` y `/api/cobranza` reenvían cada petición desde el servidor de Next.js, así que el navegador nunca conoce la dirección de un servicio.
 - COREDB es la única entrada a la base integrada, y escribe en ella solo por procedimientos almacenados.
 - `db-aux` es otro MySQL, con la base de SOL (`bna_sol_mvp`) y el esquema `bna` del CORE legado. La base integrada no recibe esquemas ni usuarios ajenos.
 - Todos los puertos se publican solo en `127.0.0.1`.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import type { Usuario } from "@/lib/auth";
 import { CrearCuenta } from "./CrearCuenta";
 import { ModificarCuenta } from "./ModificarCuenta";
@@ -78,6 +79,8 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
     { id: "movimientos", label: "Movimientos", icon: "↕" },
     { id: "tarjetas", label: "Tarjetas", icon: "▰" },
   ];
+  // A diferencia de los demás, no es una pestaña simulada: lleva al módulo Cobranza real.
+  const navExterno = { href: "/pagar-cuota", label: "Pagar cuota", icon: "⎘" };
 
   return (
     <main className="app-shell">
@@ -94,6 +97,9 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
               {item.id === "movimientos" && <span className="nav-dot" />}
             </button>
           ))}
+          <Link className="nav-item" href={navExterno.href}>
+            <span className="nav-icon">{navExterno.icon}</span>{navExterno.label}
+          </Link>
         </nav>
         <div className="sidebar-bottom">
           <div className="help-card"><span className="help-icon">?</span><strong>¿Necesitas ayuda?</strong><p>Estamos aquí para ayudarte con tus operaciones.</p><button onClick={() => setNotice("Centro de ayuda: esta vista es una demostración académica.")}>Ir al centro de ayuda <span>↗</span></button></div>

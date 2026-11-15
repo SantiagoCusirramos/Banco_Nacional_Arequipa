@@ -277,6 +277,9 @@ services:
       TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
       SOL_GATEWAY_URL: http://sol:8011/gateway/sol
       SOL_COOKIE_SECURE: "false"
+      COBRANZA_URL: http://cobranza:8014
+      COBRANZA_API_KEY_LEER: ${COBRANZA_API_KEY_LEER:?Falta en .env. Ejecute ./bna up}
+      COBRANZA_API_KEY_INTEGRACION: ${COBRANZA_API_KEY_INTEGRACION:?Falta en .env. Ejecute ./bna up}
     depends_on:
       coredb:
         condition: service_healthy
@@ -285,6 +288,8 @@ services:
       tarjetas:
         condition: service_healthy
       sol:
+        condition: service_healthy
+      cobranza:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BNA_PUERTO_FRONTEND:-3000}:3000"
