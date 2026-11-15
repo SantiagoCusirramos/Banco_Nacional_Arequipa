@@ -40,6 +40,14 @@ export const apiTarjetas = axios.create({
 });
 apiTarjetas.interceptors.request.use(conToken);
 
+// EVALUACIÓN por el puente de Next (/api/evaluacion), que reenvía el token de COREDB.
+export const apiEvaluacion = axios.create({
+  baseURL: "/api/evaluacion",
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000,
+});
+apiEvaluacion.interceptors.request.use(conToken);
+
 const OPERACIONES = ["/deposito", "/retiro", "/transferencia"];
 
 /** Cabeceras que CUENTAS exige en toda operación que mueve dinero. */
