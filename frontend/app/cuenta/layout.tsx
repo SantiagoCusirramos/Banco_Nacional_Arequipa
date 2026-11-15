@@ -4,7 +4,7 @@ import "../solicitud-credito/sol.css";
 export const metadata: Metadata = {
   title: "Módulo de Cuentas · BNA",
   description:
-    "Gestión y apertura de cuentas de ahorros del Banco Nacional de Arequipa (Integrado con COREDB).",
+    "Gestión y apertura de cuentas de ahorros del Banco Nacional de Arequipa.",
 };
 
 export default function CuentaLayout({ children }: { children: React.ReactNode }) {
