@@ -1,0 +1,13 @@
+/* Pantallas de Desembolso: los colores marca-* están en el @theme de app/globals.css. */
+.desembolso .tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .desembolso .no-imprimir {
+    display: none !important;
+  }
+  .desembolso {
+    background: white !important;
+  }
+}
