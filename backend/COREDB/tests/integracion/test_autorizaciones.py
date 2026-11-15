@@ -1,4 +1,4 @@
-"""Autorizaciones y extornos de tarjeta contra la base (bd-v1.4)."""
+"""Autorizaciones, extornos y credenciales de tarjeta contra la base (bd-v1.4)."""
 
 import uuid
 from decimal import Decimal
@@ -143,6 +143,68 @@ def test_extornar_una_rechazada_409(cliente, tarjeta_activa):
 
 def test_ver_una_autorizacion_que_no_existe_404(cliente, datos_base):
     assert cliente.get(f"/coredb/autorizaciones/{uuid.uuid4()}").status_code == 404
+
+
+def registrar_pin(cliente, id_tarjeta, valor="4821", tipo="PIN_ATM"):
+    return cliente.put(f"/coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}", json={"valor": valor})
+
+
+def validar(cliente, id_tarjeta, valor, tipo="PIN_ATM", **canal):
+    return cliente.post(
+        f"/coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion",
+        json={"valor": valor, **(canal or {"id_terminal": "DEV-ATM-01"})},
+    )
+
+
+def test_un_pin_registrado_se_valida(cliente, tarjeta_activa, consulta):
+    id_tarjeta, _ = tarjeta_activa()
+    assert registrar_pin(cliente, id_tarjeta).status_code == 204
+    respuesta = validar(cliente, id_tarjeta, "4821")
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json() == {"resultado": "EXITOSO", "intentos_restantes": 3}
+    # La base guarda solo el hash con su sal.
+    fila = consulta(
+        "SELECT hash_credencial h, sal s FROM tarjetas.credencial WHERE id_tarjeta=UUID_TO_BIN(%s)", id_tarjeta
+    )[0]
+    assert "4821" not in fila["h"] + fila["s"]
+
+
+def test_el_tercer_pin_equivocado_bloquea_la_tarjeta(cliente, tarjeta_activa):
+    id_tarjeta, _ = tarjeta_activa()
+    registrar_pin(cliente, id_tarjeta)
+    restantes = [validar(cliente, id_tarjeta, "0000").json()["intentos_restantes"] for _ in range(3)]
+    assert restantes == [2, 1, 0]
+    assert cliente.get(f"/coredb/tarjetas/{id_tarjeta}").json()["estado_tarjeta"] == "BLOQUEADA"
+    respuesta = validar(cliente, id_tarjeta, "4821")
+    assert respuesta.status_code == 422
+    assert respuesta.json()["error"]["code"] == "ERR-TAR-003"
+
+
+def test_un_pin_de_otra_longitud_422_sin_repetirlo(cliente, tarjeta_activa):
+    id_tarjeta, _ = tarjeta_activa()
+    respuesta = registrar_pin(cliente, id_tarjeta, valor="482190")
+    assert respuesta.status_code == 422
+    assert respuesta.json()["error"]["code"] == "BNA-CREDENCIAL"
+    assert "482190" not in respuesta.text
+
+
+def test_la_clave_web_se_valida_por_home_banking(cliente, tarjeta_activa):
+    id_tarjeta, _ = tarjeta_activa()
+    assert registrar_pin(cliente, id_tarjeta, valor="615243", tipo="CLAVE_WEB").status_code == 204
+    respuesta = validar(cliente, id_tarjeta, "615243", tipo="CLAVE_WEB", id_canal="HB")
+    assert respuesta.json()["resultado"] == "EXITOSO"
+
+
+def test_un_tipo_de_credencial_desconocido_422(cliente, tarjeta_activa):
+    id_tarjeta, _ = tarjeta_activa()
+    assert registrar_pin(cliente, id_tarjeta, tipo="BIOMETRIA").status_code == 422
+
+
+def test_validar_sin_credencial_422(cliente, tarjeta_activa):
+    id_tarjeta, _ = tarjeta_activa()
+    respuesta = validar(cliente, id_tarjeta, "4821")
+    assert respuesta.status_code == 422
+    assert respuesta.json()["error"]["code"] == "BNA-CREDENCIAL"
 
 
 def test_un_auditor_no_autoriza(sesion_de, tarjeta_activa):

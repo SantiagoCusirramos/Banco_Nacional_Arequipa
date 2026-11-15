@@ -100,7 +100,7 @@ Las rutas que usa el módulo Clientes, y el personal, están descritas en
 
 El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM.md`.
 
-## Autorizaciones de tarjeta
+## Autorizaciones y credenciales de tarjeta
 
 Desde `bd-v1.4-mysql`, por los procedimientos de la base; las reglas las aplica la base.
 
@@ -109,6 +109,8 @@ Desde `bd-v1.4-mysql`, por los procedimientos de la base; las reglas las aplica 
 | `POST /coredb/autorizaciones` | `REGISTRAR_MOVIMIENTO` | Autoriza una operación con tarjeta o registra su rechazo |
 | `GET /coredb/autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Una autorización |
 | `POST /coredb/autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Extorna una autorización sin movimiento |
+| `PUT /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}` | `CREAR_TARJETA` | Asigna o cambia el `PIN_ATM` o la `CLAVE_WEB` |
+| `POST /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion` | `REGISTRAR_MOVIMIENTO` | Valida el PIN o la clave web |
 
 - El `uuid_autorizacion` lo genera quien llama. Repetirlo con los mismos datos devuelve la
   autorización ya registrada sin volver a retener el saldo; con otros datos, 409
@@ -119,6 +121,9 @@ Desde `bd-v1.4-mysql`, por los procedimientos de la base; las reglas las aplica 
   de los dos.
 - El extorno libera el saldo retenido y el tope del día. Repetirlo responde lo mismo; una
   autorización rechazada o ya contabilizada responde 409 `BNA-EXTORNO`.
+- Un PIN equivocado responde 200 con `FALLIDO` y los intentos que quedan; el tercero
+  seguido bloquea la tarjeta. Con la tarjeta no operativa responde 422 `ERR-TAR-003` sin
+  registrar el intento. El valor no se devuelve, no se registra y no aparece en los errores.
 
 ## Consultas
 

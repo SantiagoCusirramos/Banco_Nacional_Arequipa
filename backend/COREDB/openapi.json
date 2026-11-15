@@ -568,6 +568,24 @@
         "title": "ClienteRespuesta",
         "type": "object"
       },
+      "CredencialRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "valor": {
+            "format": "password",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Valor",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "valor"
+        ],
+        "title": "CredencialRegistrar",
+        "type": "object"
+      },
       "CredencialRespuesta": {
         "properties": {
           "secreto": {
@@ -584,6 +602,62 @@
           "secreto"
         ],
         "title": "CredencialRespuesta",
+        "type": "object"
+      },
+      "CredencialValidar": {
+        "additionalProperties": false,
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "id_canal": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "id_terminal": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Terminal"
+          },
+          "valor": {
+            "format": "password",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Valor",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "valor"
+        ],
+        "title": "CredencialValidar",
         "type": "object"
       },
       "CuentaAbrir": {
@@ -1815,6 +1889,29 @@
           "resultado"
         ],
         "title": "ValidacionRegistrar",
+        "type": "object"
+      },
+      "ValidacionRespuesta": {
+        "properties": {
+          "intentos_restantes": {
+            "description": "Al llegar a 0 la tarjeta queda BLOQUEADA (RN-TAR-004).",
+            "title": "Intentos Restantes",
+            "type": "integer"
+          },
+          "resultado": {
+            "enum": [
+              "EXITOSO",
+              "FALLIDO"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resultado",
+          "intentos_restantes"
+        ],
+        "title": "ValidacionRespuesta",
         "type": "object"
       },
       "ValidationError": {
@@ -3371,6 +3468,129 @@
           }
         ],
         "summary": "Ver",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}": {
+      "put": {
+        "description": "Asigna o cambia el PIN o la clave web y reinicia los intentos fallidos. La base guarda\nsolo su hash con una sal propia.",
+        "operationId": "registrar_credencial_coredb_tarjetas__id_tarjeta__credenciales__tipo__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tipo",
+            "required": true,
+            "schema": {
+              "enum": [
+                "PIN_ATM",
+                "CLAVE_WEB"
+              ],
+              "title": "Tipo",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredencialRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "BNA-CREDENCIAL, BNA-TARJETA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Credencial",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion": {
+      "post": {
+        "description": "Compara el valor dentro de la base y registra el intento. Un valor equivocado responde\n200 con FALLIDO; el tercero seguido bloquea la tarjeta. Con la tarjeta no operativa se\nrechaza (422 ERR-TAR-003) sin registrar el intento.",
+        "operationId": "validar_credencial_coredb_tarjetas__id_tarjeta__credenciales__tipo__validacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tipo",
+            "required": true,
+            "schema": {
+              "enum": [
+                "PIN_ATM",
+                "CLAVE_WEB"
+              ],
+              "title": "Tipo",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredencialValidar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "BNA-CREDENCIAL, ERR-TAR-003"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Validar Credencial",
         "tags": [
           "tarjetas"
         ]
