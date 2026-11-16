@@ -351,3 +351,8 @@ CALL prueba.verifica('X377', 'Extensión', 'Credenciales', 'La clave web de seis
   JSON_ARRAY("CALL tarjetas.registrar_credencial(@t1, 'CLAVE_WEB', '615243', 'pruebas')",
              "CALL tarjetas.validar_credencial(@t1, 'CLAVE_WEB', '615243', 'HB', NULL, '10.0.0.8', NULL, 'pruebas', @r, @i)"),
   "SELECT @r = 'EXITOSO' AND @i = 3", 'EXITOSO', "SELECT @r", 'procedimiento');
+
+-- Empleados (v1.6): solo la API registra empleados.
+CALL prueba.rechaza('X397', 'Extensión', 'Empleados', 'bna_app no puede registrar empleados (solo bna_api)',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN(UUID()), 'EMP-X397', 'E', 'ANALISTA', 'AQP01', NULL, 'pruebas')"),
+  'denied', 'privilegio');

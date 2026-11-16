@@ -2998,3 +2998,82 @@ GRANT SELECT ON creditos.v_mora_api TO bna_api;
 GRANT SELECT ON creditos.v_evento_credito_api TO bna_api;
 GRANT SELECT ON creditos.v_conciliacion_cobranza TO bna_api;
 GRANT SELECT ON creditos.v_conciliacion_diaria TO bna_api;
+
+-- ---------------------------------------------------------------------
+-- 13. Empleados (v1.6)
+-- ---------------------------------------------------------------------
+-- Un administrador registra empleados por la API, sin el administrador de la base, y los
+-- liga a su usuario: así un ANALISTA puede quedar registrado (creditos.registrar_analista)
+-- y decidir. Sigue el patrón de la sección 8 y se concede solo a bna_api; bna_admin lo
+-- ejecuta por su privilegio sobre core.*. El evento guarda el código y el cargo, no el
+-- nombre; los mensajes de error no repiten ningún valor de entrada.
+
+DELIMITER //
+
+-- p_id_usuario es opcional: una persona activa o no, sin empleado. El empleado nace activo.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.registrar_empleado(
+    IN p_id BINARY(16), IN p_codigo VARCHAR(20), IN p_nombre VARCHAR(100), IN p_cargo VARCHAR(30),
+    IN p_id_agencia VARCHAR(10), IN p_id_usuario BINARY(16), IN p_actor VARCHAR(40))
+    COMMENT 'Registra un empleado y, si se indica, lo liga a un usuario del sistema.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_codigo VARCHAR(20) DEFAULT TRIM(p_codigo);
+    DECLARE v_nombre VARCHAR(100) DEFAULT TRIM(p_nombre);
+    DECLARE v_cargo VARCHAR(30) DEFAULT UPPER(TRIM(p_cargo));
+    DECLARE v_rol VARCHAR(15);
+    DECLARE v_empleado BINARY(16);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF coalesce(v_codigo, '') = '' OR coalesce(v_nombre, '') = '' OR coalesce(v_cargo, '') = '' THEN
+            CALL core.fallar('BNA-EMPLEADO-DATOS: faltan el código, el nombre o el cargo');
+        END IF;
+        IF p_id_agencia IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM core.agencia WHERE id_agencia = p_id_agencia) THEN
+            CALL core.fallar('BNA-AGENCIA: la agencia no existe');
+        END IF;
+        IF EXISTS (SELECT 1 FROM core.empleado WHERE codigo_empleado = v_codigo FOR SHARE) THEN
+            CALL core.fallar('BNA-EMPLEADO-DUPLICADO: el código de empleado ya existe');
+        END IF;
+        IF p_id_usuario IS NOT NULL THEN
+            SELECT rol, id_empleado INTO v_rol, v_empleado
+              FROM core.usuario_sistema WHERE id_usuario = p_id_usuario FOR UPDATE;
+            IF v_rol IS NULL THEN
+                CALL core.fallar('BNA-USUARIO: el usuario no existe');
+            END IF;
+            IF v_rol = 'SERVICIO' THEN
+                CALL core.fallar('BNA-USUARIO-EMPLEADO: un usuario de servicio no se liga a un empleado');
+            END IF;
+            IF v_empleado IS NOT NULL THEN
+                CALL core.fallar('BNA-USUARIO-EMPLEADO: el usuario ya está ligado a un empleado');
+            END IF;
+        END IF;
+        INSERT INTO core.empleado (id_empleado, codigo_empleado, nombre_completo, cargo, id_agencia, activo)
+        VALUES (p_id, v_codigo, v_nombre, v_cargo, p_id_agencia, TRUE);
+        IF p_id_usuario IS NOT NULL THEN
+            UPDATE core.usuario_sistema SET id_empleado = p_id WHERE id_usuario = p_id_usuario;
+        END IF;
+        CALL core.registrar_evento('CORE', 'empleado', BIN_TO_UUID(p_id), 'REGISTRAR_EMPLEADO', p_actor, NULL,
+                                   JSON_OBJECT('codigo_empleado', v_codigo, 'cargo', v_cargo,
+                                               'id_usuario', IF(p_id_usuario IS NULL, NULL, BIN_TO_UUID(p_id_usuario))));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+DELIMITER ;
+
+GRANT EXECUTE ON PROCEDURE core.registrar_empleado TO bna_api;
