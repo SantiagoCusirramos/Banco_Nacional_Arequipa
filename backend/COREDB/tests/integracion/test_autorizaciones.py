@@ -1,4 +1,4 @@
-"""Autorizaciones, extornos y credenciales de tarjeta contra la base (bd-v1.4)."""
+"""Autorizaciones, extornos y credenciales de tarjeta contra la base (bd-v1.5)."""
 
 import uuid
 from decimal import Decimal

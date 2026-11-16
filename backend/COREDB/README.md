@@ -102,7 +102,7 @@ El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM
 
 ## Autorizaciones y credenciales de tarjeta
 
-Desde `bd-v1.4-mysql`, por los procedimientos de la base; las reglas las aplica la base.
+Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica la base.
 
 | Ruta | Permiso | Qué hace |
 |---|---|---|

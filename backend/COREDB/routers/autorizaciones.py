@@ -1,4 +1,4 @@
-"""Autorizaciones de operaciones con tarjeta y su extorno (bd-v1.4).
+"""Autorizaciones de operaciones con tarjeta y su extorno (bd-v1.5).
 
 Las reglas (tarjeta operativa y vigente, canal, saldo, tope diario, cajero) las aplica la
 base. Una regla que no se cumple no es un error de la petición: la autorización queda
