@@ -12,7 +12,7 @@ import logging
 from time import perf_counter
 from sqlalchemy import delete, func, text
 from .clock import business_today
-from .integrations import Integrations, CLIENT_FIELDS
+from .integrations import Integrations, project_identity
 from .operations import maintenance, process_delivery, security_event
 from .observability import AccessLogPrivacy, Metrics, log, valid_id
 from contextlib import asynccontextmanager
@@ -281,7 +281,7 @@ def create_app(settings=None, transport=None):
             ).limit(50)))
             records = [row.snapshot for row in records]
         # Todos los roles reciben solo identidad y habilitación, nunca contacto/DOB.
-        return [{k: r[k] for k in CLIENT_FIELDS if k in r} for r in records]
+        return [project_identity(r) for r in records]
 
     @router.get("/applications", response_model=ApplicationPageResponse, responses=http_errors(401, 422, 503))
     def applications(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),

@@ -1,0 +1,90 @@
+{
+  "name": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}",
+  "services": {
+    "audit-lab": {
+      "profiles": [
+        "audit-sim"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/sol:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements-sol.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/audit-server.env"
+      ],
+      "environment": {
+        "LAB_AUDIT_SIM_AUTHORIZATION": "${LAB_AUDIT_SIM_AUTHORIZATION:-NO}"
+      },
+      "command": [
+        "python",
+        "lab/guard.py",
+        "--audit",
+        "--",
+        "uvicorn",
+        "SOL.simulator:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8020",
+        "--no-access-log"
+      ],
+      "networks": [
+        "integration"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8020/openapi.json\", timeout=3)"
+        ],
+        "interval": "5s",
+        "timeout": "4s",
+        "retries": 20
+      }
+    },
+    "sol": {
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/sol.env",
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/audit-client.env"
+      ],
+      "environment": {
+        "SOL_AUDIT_BASE_URL": "http://audit-lab:8020",
+        "SOL_AUDIT_PATH": "/security/events",
+        "LAB_AUDIT_SIM_AUTHORIZATION": "${LAB_AUDIT_SIM_AUTHORIZATION:-NO}"
+      },
+      "command": [
+        "python",
+        "lab/guard.py",
+        "--audit",
+        "--",
+        "uvicorn",
+        "SOL.app:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8011",
+        "--no-access-log"
+      ],
+      "depends_on": {
+        "audit-lab": {
+          "condition": "service_healthy"
+        }
+      }
+    }
+  }
+}

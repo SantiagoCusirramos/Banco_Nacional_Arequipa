@@ -1,0 +1,8 @@
+FROM mysql:8.4@sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70
+ARG DATOS_DEV=0
+COPY conf/mysql/bna.cnf /etc/mysql/conf.d/bna.cnf
+COPY sql/bna_core.sql /docker-entrypoint-initdb.d/01_bna_core.sql
+COPY sql/bna_extension.sql /docker-entrypoint-initdb.d/02_bna_extension.sql
+COPY conf/mysql/crear_usuarios.sh /docker-entrypoint-initdb.d/03_crear_usuarios.sh
+COPY sql/bna_datos_dev.sql /docker-entrypoint-initdb.d/04_bna_datos_dev.sql
+RUN chmod 644 /etc/mysql/conf.d/bna.cnf /docker-entrypoint-initdb.d/* && if [ "$DATOS_DEV" != "1" ]; then rm /docker-entrypoint-initdb.d/04_bna_datos_dev.sql; fi

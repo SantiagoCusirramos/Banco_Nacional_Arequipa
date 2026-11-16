@@ -1,0 +1,635 @@
+{
+  "name": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}",
+  "services": {
+    "mysql-core": {
+      "profiles": [
+        "lab"
+      ],
+      "environment": {
+        "LAB_ALLOW_DDL": "${LAB_ALLOW_DDL:-NO}"
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/mysql-core.env"
+      ],
+      "entrypoint": [
+        "sh",
+        "-ec",
+        "test \"$$LAB_ALLOW_DDL\" = YES_ISOLATED_LAB || { echo \"DDL laboratorio no autorizado\" >&2; exit 78; }; exec /usr/local/bin/docker-entrypoint.sh \"$$@\"",
+        "--"
+      ],
+      "command": [
+        "mysqld"
+      ],
+      "tmpfs": [
+        "/var/lib/mysql:rw,nosuid,size=1536m",
+        "/var/run/mysqld:rw,nosuid,size=16m"
+      ],
+      "networks": [
+        "core-data"
+      ],
+      "restart": "no",
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql --protocol=socket -uroot -Nse \"SELECT 1\" >/dev/null 2>&1"
+        ],
+        "interval": "5s",
+        "timeout": "4s",
+        "retries": 60,
+        "start_period": "30s"
+      },
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/mysql-core:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/core",
+        "args": {
+          "DATOS_DEV": "${LAB_DATOS_DEV:-0}"
+        }
+      }
+    },
+    "mysql-modulos": {
+      "profiles": [
+        "lab"
+      ],
+      "environment": {
+        "LAB_ALLOW_DDL": "${LAB_ALLOW_DDL:-NO}"
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/mysql-modulos.env"
+      ],
+      "entrypoint": [
+        "sh",
+        "-ec",
+        "test \"$$LAB_ALLOW_DDL\" = YES_ISOLATED_LAB || { echo \"DDL laboratorio no autorizado\" >&2; exit 78; }; exec /usr/local/bin/docker-entrypoint.sh \"$$@\"",
+        "--"
+      ],
+      "command": [
+        "mysqld"
+      ],
+      "tmpfs": [
+        "/var/lib/mysql:rw,nosuid,size=1536m",
+        "/var/run/mysqld:rw,nosuid,size=16m"
+      ],
+      "networks": [
+        "module-data"
+      ],
+      "restart": "no",
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql --protocol=socket -uroot -Nse \"SELECT 1\" >/dev/null 2>&1"
+        ],
+        "interval": "5s",
+        "timeout": "4s",
+        "retries": 60,
+        "start_period": "30s"
+      },
+      "image": "mysql:8.4@sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70"
+    },
+    "coredb-init": {
+      "profiles": [
+        "lab"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/coredb:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements-coredb.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/coredb-init.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "LAB_ALLOW_DDL": "${LAB_ALLOW_DDL:-NO}"
+      },
+      "command": [
+        "python",
+        "lab/guard.py",
+        "--ddl",
+        "--",
+        "python",
+        "-m",
+        "COREDB.scripts.crear_administrador",
+        "--username",
+        "admin-lab",
+        "--nombre",
+        "Administrador laboratorio sintetico",
+        "--si-falta"
+      ],
+      "networks": [
+        "core-data"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "mysql-core": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "coredb": {
+      "profiles": [
+        "lab"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/coredb:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements-coredb.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/coredb.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "command": [
+        "uvicorn",
+        "COREDB.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8012",
+        "--no-access-log"
+      ],
+      "networks": [
+        "core-data",
+        "integration"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "coredb-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8012/coredb/salud\", timeout=3)"
+        ],
+        "interval": "5s",
+        "timeout": "4s",
+        "retries": 30,
+        "start_period": "10s"
+      }
+    },
+    "captacion-init": {
+      "profiles": [
+        "lab"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/providers:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/cap-init.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "LAB_ALLOW_DDL": "${LAB_ALLOW_DDL:-NO}"
+      },
+      "command": [
+        "python",
+        "lab/guard.py",
+        "--ddl",
+        "--",
+        "python",
+        "-m",
+        "CAPTACION.manage",
+        "init"
+      ],
+      "networks": [
+        "module-data",
+        "integration"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "mysql-modulos": {
+          "condition": "service_healthy"
+        },
+        "coredb": {
+          "condition": "service_healthy"
+        }
+      },
+      "volumes": [
+        "cap-secrets:/datos"
+      ]
+    },
+    "captacion": {
+      "profiles": [
+        "lab"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/providers:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/cap.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "command": [
+        "uvicorn",
+        "CAPTACION.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8014",
+        "--no-access-log"
+      ],
+      "networks": [
+        "module-data",
+        "integration"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "captacion-init": {
+          "condition": "service_completed_successfully"
+        },
+        "coredb": {
+          "condition": "service_healthy"
+        }
+      },
+      "volumes": [
+        "cap-secrets:/datos:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8014/ready\", timeout=3)"
+        ],
+        "interval": "5s",
+        "timeout": "4s",
+        "retries": 30,
+        "start_period": "10s"
+      }
+    },
+    "sol-bootstrap": {
+      "profiles": [
+        "lab"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/sol:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements-sol.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/sol-bootstrap.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "LAB_ALLOW_DDL": "${LAB_ALLOW_DDL:-NO}"
+      },
+      "command": [
+        "python",
+        "lab/guard.py",
+        "--ddl",
+        "--",
+        "python",
+        "lab/bootstrap_sol.py"
+      ],
+      "networks": [
+        "module-data"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "mysql-modulos": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "sol-init": {
+      "profiles": [
+        "lab"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/sol:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements-sol.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/sol-init.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "LAB_ALLOW_DDL": "${LAB_ALLOW_DDL:-NO}"
+      },
+      "command": [
+        "python",
+        "lab/guard.py",
+        "--ddl",
+        "--",
+        "python",
+        "-m",
+        "SOL.manage",
+        "init"
+      ],
+      "networks": [
+        "module-data"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "sol-bootstrap": {
+          "condition": "service_completed_successfully"
+        }
+      }
+    },
+    "sol": {
+      "profiles": [
+        "flow"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/sol:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements-sol.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/sol.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "command": [
+        "uvicorn",
+        "SOL.app:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8011",
+        "--no-access-log"
+      ],
+      "networks": [
+        "module-data",
+        "integration"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "sol-init": {
+          "condition": "service_completed_successfully"
+        },
+        "captacion": {
+          "condition": "service_healthy"
+        },
+        "evaluacion": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8011/health\", timeout=3)"
+        ],
+        "interval": "5s",
+        "timeout": "4s",
+        "retries": 30,
+        "start_period": "10s"
+      }
+    },
+    "evaluacion-init": {
+      "profiles": [
+        "lab"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/providers:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/eva-init.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "LAB_ALLOW_DDL": "${LAB_ALLOW_DDL:-NO}"
+      },
+      "command": [
+        "python",
+        "lab/guard.py",
+        "--ddl",
+        "--",
+        "python",
+        "-m",
+        "EVALUACION.scripts.preparar_base"
+      ],
+      "networks": [
+        "module-data"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "mysql-modulos": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "evaluacion": {
+      "profiles": [
+        "lab"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/providers:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements.txt"
+        }
+      },
+      "env_file": [
+        "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/runtime/eva.env"
+      ],
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "command": [
+        "uvicorn",
+        "EVALUACION.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8015",
+        "--no-access-log"
+      ],
+      "networks": [
+        "module-data",
+        "integration"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no",
+      "depends_on": {
+        "evaluacion-init": {
+          "condition": "service_completed_successfully"
+        },
+        "coredb": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8015/salud\", timeout=3)"
+        ],
+        "interval": "5s",
+        "timeout": "4s",
+        "retries": 30,
+        "start_period": "10s"
+      }
+    },
+    "http-runner": {
+      "profiles": [
+        "tools"
+      ],
+      "image": "bna-sol-cap-eva-lab-${LAB_RUN_ID:?Defina identificador exclusivo}/sol:lab",
+      "build": {
+        "context": "${LAB_ROOT:?Ejecute prepare.py fuera del repositorio}/sources/api",
+        "args": {
+          "REQUISITOS": "requirements-sol.txt"
+        }
+      },
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "command": [
+        "python",
+        "lab/http_probe.py"
+      ],
+      "networks": [
+        "integration"
+      ],
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,size=64m"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "restart": "no"
+    }
+  },
+  "networks": {
+    "core-data": {
+      "internal": true
+    },
+    "module-data": {
+      "internal": true
+    },
+    "integration": {
+      "internal": true
+    }
+  },
+  "volumes": {
+    "cap-secrets": {}
+  }
+}

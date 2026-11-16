@@ -89,7 +89,7 @@ class ClientResponse(BaseModel):
     numero_documento: str
     nombres: str
     apellido_paterno: str
-    apellido_materno: str
+    apellido_materno: str = ""
     estado_cliente: str
     id_caso: str
     id_verificacion: str
