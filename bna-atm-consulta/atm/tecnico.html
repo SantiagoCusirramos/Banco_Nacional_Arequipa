@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BNA · Panel técnico</title>
+<style>
+@font-face{font-family:"Bricolage";src:url("fuentes/bricolage.woff2") format("woff2");font-weight:200 800;font-display:swap}
+@font-face{font-family:"PlexMono";src:url("fuentes/plexmono-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"PlexMono";src:url("fuentes/plexmono-500.woff2") format("woff2");font-weight:500;font-display:swap}
+:root{
+  --suelo:#F1F7FB; --carcasa:#FFFFFF; --borde:#D3E6F2; --niebla:#E8F4FB;
+  --tinta:#27425C; --suave:#6C8AA3; --acento:#2A74A3;
+  --sans:"Bricolage",system-ui,sans-serif; --mono:"PlexMono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--suelo);color:var(--tinta);font:16px/1.45 var(--sans)}
+main{max-width:560px;margin:0 auto;padding:18px 16px 40px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0;font-size:20px;font-weight:650;letter-spacing:-.01em}
+.sub{margin:2px 0 0;font:12px var(--mono);color:var(--suave)}
+.panel{background:var(--niebla);border:1px solid var(--borde);color:#3A566F;border-radius:18px;padding:14px 16px 16px;font:12px/1.7 var(--mono)}
+.panel.blanco{background:var(--carcasa)}
+.panel h3{margin:0 0 8px;font:500 11px var(--mono);letter-spacing:.1em;color:#6C8AA3;text-transform:uppercase}
+.panel .nota{margin:0 0 10px;color:#5B7B96;font:12px/1.5 var(--sans)}
+#log{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}
+#log .t{color:#8AA5BB}.ok{color:#2F8F7A}.no{color:#BE5A6E}
+details{margin-top:10px;font:12px var(--mono)}
+summary{cursor:pointer;color:#6C8AA3}
+details pre{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;color:#3A566F;font:11.5px/1.6 var(--mono);max-height:240px;overflow:auto}
+.conex{margin-top:12px;font:11px var(--mono);color:#6C8AA3}
+.conex input{width:100%;margin-top:4px;background:#fff;border:1px solid var(--borde);border-radius:10px;color:var(--tinta);padding:7px 9px;font:12px var(--mono)}
+.f{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0}
+.f b{font-weight:500;color:var(--acento);min-width:30px}
+.f span{background:var(--niebla);border-radius:6px;padding:0 7px}
+.prueba{background:#FFF8EC;border:1px dashed #E3C98F;color:#6E5A2C}
+.prueba h3{color:#6E5A2C}
+.prueba label{display:block;margin:4px 0}
+.prueba select,.prueba button{font:12px var(--mono);border:1px solid #E3C98F;border-radius:8px;background:#fff;color:#6E5A2C;padding:4px 8px;margin:3px 6px 3px 0;cursor:pointer}
+.sin-conexion{color:#BE5A6E}
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>Panel técnico</h1>
+    <p class="sub">Ventana del operador · el cliente no ve nada de esto</p>
+  </div>
+
+  <section class="panel">
+    <h3>Registro del canal</h3>
+    <p class="nota">Cada paso entre el cajero, el Bus de Servicios, Cuentas y Tarjetas, con sus tiempos.</p>
+    <div id="log"><span class="t">sin movimientos</span></div>
+    <details><summary>mensajes (solicitud y respuesta)</summary><pre id="mensajes">—</pre></details>
+    <details><summary>registro de operaciones del cajero</summary><pre id="regop">—</pre></details>
+    <div class="conex"><label for="url">Bus de servicios (dirección)</label>
+      <input id="url" type="url" value="http://localhost:8001"></div>
+  </section>
+
+  <section class="panel blanco">
+    <h3>Bandejas de billetes</h3>
+    <p class="nota">Efectivo que el cajero tiene dentro. Lo carga el banco; el cliente nunca lo ve.</p>
+    <div id="bandejas">—</div>
+    <div id="pend" style="margin-top:6px">pendientes: 0</div>
+  </section>
+
+  <section class="panel prueba" id="prueba" hidden>
+    <h3>Modo de prueba · solo local</h3>
+    <p class="nota">Provoca fallas a propósito para mostrar cómo responde el sistema.</p>
+    <label>Dispensador
+      <select id="selDisp"><option value="normal">funciona</option><option value="atasco">atasco</option><option value="sin_respuesta">no responde</option></select></label>
+    <label><input type="checkbox" id="chkPerder"> el Bus pierde la respuesta del retiro</label>
+    <button id="btnRepo" type="button">Reponer billetes</button>
+    <button id="btnAgot" type="button">Agotar billetes grandes</button>
+    <button id="btnConc" type="button">Conciliar pendientes</button>
+    <button id="btnDesb" type="button">Desbloquear tarjetas</button>
+    <div id="aviso"></div>
+  </section>
+  <p class="sub" id="sinPruebas" hidden>El modo de prueba no está activo. Inicia con <b>python3 iniciar.py pruebas</b>.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+const post = (ruta, cuerpo) => fetch(ruta, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo || {})});
+
+/* ---- direccion del Bus (la lee el cajero) ---- */
+try{ $('url').value = localStorage.getItem('bnaBus') || $('url').value; }catch(e){}
+$('url').addEventListener('change', () => { try{ localStorage.setItem('bnaBus', $('url').value.trim()); }catch(e){} });
+
+/* ---- registro en vivo desde la ventana del cajero ---- */
+function pintar(l){
+  const log = $('log');
+  if(log.firstElementChild && log.firstElementChild.classList.contains('t') && log.children.length === 1) log.replaceChildren();
+  const d = el('div'); d.append(el('span','t', l.h + '  '), el('span', l.cls, l.txt)); log.append(d);
+  log.scrollTop = log.scrollHeight;
+}
+const canal = ('BroadcastChannel' in window) ? new BroadcastChannel('bna-atm') : null;
+if(canal){
+  canal.onmessage = e => {
+    const m = e.data || {};
+    if(m.t === 'linea') pintar(m.l);
+    else if(m.t === 'msgs') $('mensajes').textContent = m.msgs || '—';
+    else if(m.t === 'historial'){
+      $('log').replaceChildren(); (m.h.lineas || []).forEach(pintar);
+      if(m.h.msgs) $('mensajes').textContent = m.h.msgs;
+    }
+  };
+  canal.postMessage({t:'hola'});
+}
+
+/* ---- estado del cajero (cada 2 s) ---- */
+async function refrescar(){
+  try{
+    const e = await (await fetch('/api/estado', {cache:'no-store'})).json();
+    const caja = $('bandejas'); caja.replaceChildren();
+    Object.keys(e.bandejas).forEach(m => {
+      const f = el('div','f'); f.append(el('b',null,m));
+      Object.keys(e.bandejas[m]).sort((a,b) => b - a).forEach(den => f.append(el('span',null,den + '×' + e.bandejas[m][den])));
+      caja.append(f);
+    });
+    $('pend').textContent = 'pendientes: ' + e.pendientes.length;
+    const reg = await (await fetch('/api/registro?n=8', {cache:'no-store'})).json();
+    $('regop').textContent = reg.length ? reg.map(x => [x.ts.slice(11), x.tipo, x.estado, x.correlationId.slice(0,8)].join('  ')).join('\n') : '—';
+  }catch(err){ $('bandejas').textContent = 'sin conexión con el servidor del cajero'; $('bandejas').className = 'sin-conexion'; return; }
+  $('bandejas').className = '';
+}
+
+/* ---- modo de prueba ---- */
+function aviso(txt, ok){ const a = $('aviso'); a.textContent = txt; a.className = ok ? 'ok' : 'no'; setTimeout(() => { a.textContent = ''; }, 3500); }
+async function configurar(){
+  try{
+    const c = await (await fetch('/api/config', {cache:'no-store'})).json();
+    if(!c.pruebas){ $('sinPruebas').hidden = false; return; }
+    $('prueba').hidden = false;
+    const enviar = () => post('/api/pruebas', {dispensador:$('selDisp').value, perderRespuestaBus:$('chkPerder').checked});
+    $('selDisp').onchange = enviar; $('chkPerder').onchange = enviar;
+    $('btnRepo').onclick = async () => { await post('/api/reponer'); aviso('billetes repuestos', true); refrescar(); };
+    $('btnAgot').onclick = async () => { await post('/api/pruebas', {bandejas:{PEN:{200:0,100:0,50:0,20:0,10:3},USD:{100:0,50:0,20:0,10:3}}}); aviso('billetes grandes agotados', true); refrescar(); };
+    $('btnConc').onclick = async () => { await post('/api/conciliar'); aviso('conciliación ejecutada', true); refrescar(); };
+    $('btnDesb').onclick = async () => { const r = await post('/api/desbloquear'); aviso(r.ok ? 'tarjetas desbloqueadas' : 'no se pudo desbloquear', r.ok); };
+  }catch(e){ /* sin servidor del cajero */ }
+}
+configurar(); refrescar(); setInterval(refrescar, 2000);
+</script>
+</body>
+</html>
