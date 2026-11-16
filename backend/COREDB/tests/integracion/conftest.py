@@ -83,7 +83,7 @@ def datos_base(admin):
 def abrir_cuenta(datos_base):
     from COREDB.database import get_session_factory, llamar
 
-    def _abrir(moneda="PEN"):
+    def _abrir(moneda="PEN", titular="C001"):
         import uuid
 
         sufijo = uuid.uuid4().int % 10**16
@@ -91,7 +91,7 @@ def abrir_cuenta(datos_base):
         with get_session_factory()() as db:
             llamar(
                 db, "cuentas.abrir_cuenta",
-                num_cuenta, f"{sufijo:020d}", moneda, "INDIVIDUAL", "AQP01", '["C001"]', "pruebas",
+                num_cuenta, f"{sufijo:020d}", moneda, "INDIVIDUAL", "AQP01", f'["{titular}"]', "pruebas",
             )
             db.commit()
         return num_cuenta
