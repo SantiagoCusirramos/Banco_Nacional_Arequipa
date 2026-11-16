@@ -7,8 +7,8 @@ Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
 saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
 COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
-módulo TARJETAS y todo por los puentes del frontend, que es el camino que sigue el
-navegador.
+módulo TARJETAS (con un retiro autorizado y extornado) y todo por los puentes
+del frontend, que es el camino que sigue el navegador.
 """
 
 import json
@@ -36,8 +36,14 @@ SERVICIOS = {
 # Solo si se levantó con el perfil `legado`.
 if os.environ.get("E2E_CORE_LEGADO"):
     SERVICIOS["CORE legado"] = (os.environ["E2E_CORE_LEGADO"] + "/health", {})
+# Intentos de la primera consulta a cada servicio. En Kubernetes un pod recién listo
+# puede tardar un momento en recibir tráfico de su Service (`./bna k8s-smoke` pide 5).
+INTENTOS = max(1, int(os.environ.get("E2E_INTENTOS", "1")))
+ESPERA = float(os.environ.get("E2E_ESPERA", "2"))
 USUARIO = os.environ.get("BNA_ADMIN_USUARIO", "admin")
 PASSWORD = os.environ.get("BNA_ADMIN_PASSWORD", "")
+SOL_USUARIO = "asesor.bna"  # usuario sembrado por SOL (backend/SOL/seed.py)
+SOL_PASSWORD = os.environ.get("SOL_INITIAL_PASSWORD", "")
 AGENCIA = "AQP01"
 CANAL = "HB"
 
@@ -69,6 +75,45 @@ def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
         return estado, texto
 
 
+def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
+    """Como el navegador ante el proxy de SOL del frontend: Origin y cookie, sin token.
+    Devuelve (estado, cuerpo JSON o texto, Set-Cookie)."""
+    peticion = urllib.request.Request(f"{FRONTEND}/api/solicitud-credito/{ruta}", method=metodo,
+                                      data=json.dumps(cuerpo).encode() if cuerpo is not None else None)
+    peticion.add_header("Content-Type", "application/json")
+    if metodo != "GET":
+        peticion.add_header("Origin", origen)
+    if cookie:
+        peticion.add_header("Cookie", cookie)
+    try:
+        with urllib.request.urlopen(peticion, timeout=15) as respuesta:
+            estado, texto, galleta = respuesta.status, respuesta.read().decode(), respuesta.headers.get("Set-Cookie", "")
+    except urllib.error.HTTPError as error:
+        estado, texto, galleta = error.code, error.read().decode(), error.headers.get("Set-Cookie", "")
+    except (urllib.error.URLError, OSError) as error:
+        raise Fallo(f"{metodo} {ruta} por el proxy de SOL: sin respuesta ({error})") from error
+    try:
+        return estado, json.loads(texto), galleta
+    except ValueError:
+        return estado, texto, galleta
+
+
+def sano(nombre, url, cabeceras):
+    """Exige un 200; reintenta INTENTOS veces si no hay respuesta o no es 200."""
+    for intento in range(1, INTENTOS + 1):
+        try:
+            estado, _ = pedir("GET", url, cabeceras=cabeceras)
+            error = None if estado == 200 else f"{nombre} no está sano: {url} respondió {estado}"
+        except Fallo as fallo:
+            error = str(fallo)
+        if error is None:
+            return
+        if intento < INTENTOS:
+            print(f"  ..  {error}; nuevo intento en {ESPERA:g} s", flush=True)
+            time.sleep(ESPERA)
+    raise Fallo(error)
+
+
 def exigir(condicion, mensaje):
     if not condicion:
         raise Fallo(mensaje)
@@ -88,8 +133,7 @@ def flujo():
     exigir(PASSWORD, "Falta BNA_ADMIN_PASSWORD")
 
     for nombre, (url, cabeceras) in SERVICIOS.items():
-        estado, _ = pedir("GET", url, cabeceras=cabeceras)
-        exigir(estado == 200, f"{nombre} no está sano: {url} respondió {estado}")
+        sano(nombre, url, cabeceras)
         paso(f"{nombre} responde")
 
     estado, _ = pedir("GET", COREDB + "/coredb/auth/me")
@@ -245,6 +289,35 @@ def flujo():
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "ACTIVA",
            f"Activación por TARJETAS: {estado} {respuesta}")
+    # Un retiro en el cajero de desarrollo: se autoriza y retiene el saldo, la misma llave no
+    # lo retiene dos veces y el extorno lo libera (RN-ATM-003).
+    coredb("POST", "/coredb/movimientos", 201, {
+        "num_cuenta": cuenta_tarjeta, "tipo": "DEPOSITO", "monto": "100.00",
+        "glosa": "Depósito para el retiro con tarjeta", "id_canal": CANAL,
+        "idempotency_key": str(uuid.uuid4()),
+    }, token)
+    retiro = {"num_cuenta": cuenta_tarjeta, "tipo_operacion": "RETIRO", "monto": "40.00",
+              "id_terminal": "DEV-ATM-01"}
+    llave_retiro = {"X-Idempotency-Key": str(uuid.uuid4())}
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/autorizaciones", retiro, token, cabeceras=llave_retiro)
+    exigir(estado == 201 and respuesta["data"]["aprobada"] is True
+           and respuesta["data"]["codigo_respuesta"] == "00",
+           f"Autorización del retiro por TARJETAS: {estado} {respuesta}")
+    autorizacion = respuesta["data"]["uuid_autorizacion"]
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/autorizaciones", retiro, token, cabeceras=llave_retiro)
+    exigir(estado == 201 and respuesta["data"]["uuid_autorizacion"] == autorizacion,
+           f"Repetir la autorización con la misma llave debía devolver la misma: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 60.0, f"La autorización debía retener 40.00 una sola vez: disponible {disponible}")
+    estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/extorno",
+                              {"motivo": "Prueba del flujo"}, token)
+    exigir(estado == 200 and respuesta["data"]["estado_autorizacion"] == "EXTORNADA"
+           and respuesta["data"]["codigo_respuesta"] == "EXT",
+           f"Extorno por TARJETAS: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 100.0, f"El extorno debía liberar el saldo retenido: disponible {disponible}")
+    paso(f"TARJETAS: retiro de 40.00 en el cajero DEV-ATM-01 autorizado (00) y retenido una sola vez "
+         "con la misma llave, y extornado (saldo liberado)")
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
            f"Bloqueo por TARJETAS: {estado} {respuesta}")
@@ -271,6 +344,27 @@ def flujo():
     estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
     exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
     paso("frontend: sus puentes llegan a COREDB, a CUENTAS y a TARJETAS con el token del usuario")
+
+    # ── SOL por el proxy del frontend: escribir exige el Origin del propio frontend ──
+    exigir(SOL_PASSWORD, "Falta SOL_INITIAL_PASSWORD para entrar a SOL por el frontend")
+    credenciales = {"username": SOL_USUARIO, "password": SOL_PASSWORD}
+    estado, respuesta, _ = pedir_navegador("POST", "auth/login", credenciales, origen="http://otro.example")
+    exigir(estado == 403, f"El proxy de SOL debía rechazar otro origen: {estado} {respuesta}")
+    estado, respuesta, galleta = pedir_navegador("POST", "auth/login", credenciales)
+    exigir(estado == 200 and respuesta.get("usuario", {}).get("rol") == "ASESOR" and "token" not in respuesta,
+           f"Login de SOL por el proxy del frontend: {estado} {respuesta}")
+    exigir(galleta.startswith("bna_sol_session=") and "httponly" in galleta.lower(),
+           "El login de SOL debía dejar la sesión en una cookie HttpOnly")
+    sesion = galleta.split(";", 1)[0]
+    estado, respuesta, _ = pedir_navegador("GET", "policy", cookie=sesion)
+    exigir(estado == 200 and respuesta.get("integracion") == "SIMULADO",
+           f"Política de SOL con la cookie de sesión: {estado} {respuesta}")
+    estado, respuesta, _ = pedir_navegador("POST", "auth/logout", {}, cookie=sesion)
+    exigir(estado == 200, f"Cierre de sesión de SOL por el proxy: {estado} {respuesta}")
+    estado, _, _ = pedir_navegador("GET", "policy", cookie=sesion)
+    exigir(estado == 401, f"La sesión de SOL debía quedar revocada tras cerrar: respondió {estado}")
+    paso("frontend: SOL por su proxy, con login desde el origen del frontend (otro origen, 403), "
+         "sesión en cookie HttpOnly, consulta y cierre de sesión")
 
 
 if __name__ == "__main__":

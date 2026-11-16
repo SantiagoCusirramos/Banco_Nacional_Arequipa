@@ -1,0 +1,9 @@
+{
+  "checks": 4,
+  "resultados": [
+    "query_ausente_access_logs",
+    "clave_token_ausentes_logs",
+    "sesion_persistente_reinicio_sol",
+    "expediente_inmutable_reinicio_sol"
+  ]
+}

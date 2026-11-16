@@ -5,11 +5,14 @@ import Link from "next/link";
 import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
 import {
-  BINES, ESTADOS_PEDIBLES, cambiarEstado, emitirTarjeta, mensajeDeError, tarjetasDeCliente, verTarjeta,
-  type EstadoPedible, type Tarjeta,
+  BINES, CANALES, CODIGOS_RESPUESTA, DIGITOS_CLAVE, ESTADOS_PEDIBLES, OPERACIONES, TIPOS_CLAVE,
+  autorizarOperacion, cambiarEstado, emitirTarjeta, extornarAutorizacion, mensajeDeError, registrarClave,
+  tarjetasDeCliente, validarClave, verTarjeta,
+  type Autorizacion, type Canal, type EstadoPedible, type Operacion, type Tarjeta, type TipoClave,
+  type Validacion,
 } from "@/lib/tarjetas";
 
-type Pestana = "cliente" | "consulta" | "emision" | "estado";
+type Pestana = "cliente" | "consulta" | "emision" | "estado" | "operacion" | "claves";
 type Aviso = { text: string; error: boolean };
 
 const enCuatroAnios = () => {
@@ -60,6 +63,20 @@ function Icono({ nombre, tamano = 18 }: { nombre: string; tamano?: number }) {
       </>
     ),
     cerrar: <path d="M18 6 6 18M6 6l12 12" />,
+    billete: (
+      <>
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <circle cx="12" cy="12" r="2.5" />
+        <path d="M6 12h.01M18 12h.01" />
+      </>
+    ),
+    llave: (
+      <>
+        <circle cx="7.5" cy="15.5" r="4.5" />
+        <path d="m10.7 12.3 9.3-9.3M16 7l3 3M14 9l2 2" />
+      </>
+    ),
+    deshacer: <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
     salir: <path d="M9 3H3v18h6M12 12h9m-4-4 4 4-4 4" />,
   };
   return (
@@ -93,30 +110,38 @@ function EstadoTarjeta({ estado }: { estado: string }) {
 
 function Chip() {
   return (
-    <svg className="tj-chip" width="38" height="28" viewBox="0 0 38 28" aria-hidden="true">
-      <rect x="0.5" y="0.5" width="37" height="27" rx="5" fill="#d9b765" stroke="#b8963f" />
-      <path d="M0 10h12m14 0h12M0 18h12m14 0h12M12 0v28m14-28v28M12 14h14" stroke="#a5843a" strokeWidth="1" fill="none" />
+    <svg width="36" height="27" viewBox="0 0 38 28" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="37" height="27" rx="5" fill="#d9d4b8" stroke="#bdb795" />
+      <path d="M0 10h12m14 0h12M0 18h12m14 0h12M12 0v28m14-28v28M12 14h14" stroke="#a9a283" strokeWidth="1" fill="none" />
     </svg>
   );
 }
 
-/** La tarjeta como se ve impresa: número enmascarado, titular y vencimiento MM/AA. */
+/** La tarjeta como se ve impresa, con los mismos estilos que la del inicio (bank-card de
+ * globals.css): número enmascarado, titular y vencimiento MM/AA. */
 function Plastico({ numero, titular, vence, estado, grande = false }:
   { numero: string; titular: string; vence: string; estado?: string; grande?: boolean }) {
   const apagada = estado !== undefined && FUERA_DE_USO.has(estado);
   return (
-    <div className={`tj-plastico ${apagada ? "apagada" : ""} ${grande ? "grande" : ""}`}>
-      {estado && <div className="tj-estado"><EstadoTarjeta estado={estado} /></div>}
-      <div className="tj-plastico-top">
-        <div className="tj-marca">BNA<small>DÉBITO</small></div>
+    <article className={`bank-card tj-plastico ${apagada ? "apagada" : ""} ${grande ? "grande" : ""}`}>
+      <div className="bank-card-top">
+        <span className="bank-card-brand">
+          BNA
+          <svg className="tj-punto" width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="#e6b765" /></svg>
+        </span>
+        <Chip />
       </div>
-      <Chip />
-      <div className="tj-numero">{numero}</div>
-      <div className="tj-plastico-bottom">
-        <div className="tj-dato"><small>TITULAR</small><strong>{titular || "CÓDIGO DEL CLIENTE"}</strong></div>
-        <div className="tj-dato"><small>VENCE</small><strong>{vence}</strong></div>
+      <div className="tj-tipo">
+        <p className="bank-card-type">VISA · DÉBITO</p>
+        {estado && <EstadoTarjeta estado={estado} />}
       </div>
-    </div>
+      <div className="bank-card-number">{numero}</div>
+      <div className="bank-card-bottom">
+        <span><small>TITULAR</small><strong>{titular || "CÓDIGO DEL CLIENTE"}</strong></span>
+        <span><small>VENCE</small><strong>{vence}</strong></span>
+        <span className="visa">VISA</span>
+      </div>
+    </article>
   );
 }
 
@@ -187,6 +212,28 @@ export default function TarjetasPage() {
   const [estado, setEstado] = useState<EstadoPedible>("BLOQUEADA");
   const [motivo, setMotivo] = useState("");
 
+  // Autorización de un débito
+  const [idOperacion, setIdOperacion] = useState("");
+  const [cuentaOperacion, setCuentaOperacion] = useState("");
+  const [tipoOperacion, setTipoOperacion] = useState<Operacion>("RETIRO");
+  const [canal, setCanal] = useState<Canal>("ATM");
+  const [monto, setMonto] = useState("");
+  const [autorizacion, setAutorizacion] = useState<Autorizacion | null>(null);
+  const [motivoExtorno, setMotivoExtorno] = useState("");
+  // Como en la emisión: la llave se mantiene al repetir el mismo envío y cambia al editar.
+  const [llaveOperacion, setLlaveOperacion] = useState(() => crypto.randomUUID());
+  const editarOperacion = <T,>(cambiar: (valor: T) => void) => (valor: T) => {
+    cambiar(valor);
+    setLlaveOperacion(crypto.randomUUID());
+  };
+
+  // Claves de la tarjeta. El valor solo vive en el campo y se borra al enviarlo.
+  const [idClave, setIdClave] = useState("");
+  const [tipoClave, setTipoClave] = useState<TipoClave>("PIN_ATM");
+  const [clave, setClave] = useState("");
+  const [canalClave, setCanalClave] = useState<Canal>("ATM");
+  const [validacion, setValidacion] = useState<Validacion | null>(null);
+
   // Ejecuta una llamada mostrando el avance y, si falla, el mensaje del servicio.
   async function ejecutar(accion: () => Promise<void>, alFallar?: () => void) {
     setLoading(true);
@@ -211,6 +258,20 @@ export default function TarjetasPage() {
     setTarjetaActual(tarjeta);
     setIdConsulta(tarjeta.id_tarjeta);
     setTab("consulta");
+  }
+
+  function prepararOperacion(tarjeta: Tarjeta) {
+    setIdOperacion(tarjeta.id_tarjeta);
+    setCuentaOperacion(tarjeta.num_cuenta ?? "");
+    setAutorizacion(null);
+    setLlaveOperacion(crypto.randomUUID());
+    irA("operacion");
+  }
+
+  function prepararClaves(tarjeta: Tarjeta) {
+    setIdClave(tarjeta.id_tarjeta);
+    setValidacion(null);
+    irA("claves");
   }
 
   function prepararCambio(tarjeta: Tarjeta, nuevo: EstadoPedible = "BLOQUEADA") {
@@ -260,12 +321,60 @@ export default function TarjetasPage() {
     });
   }
 
+  function autorizar(e: React.FormEvent) {
+    e.preventDefault();
+    const id = idOperacion.trim();
+    if (!id) return;
+    void ejecutar(async () => {
+      const resultado = await autorizarOperacion(id, {
+        num_cuenta: cuentaOperacion.trim(), tipo_operacion: tipoOperacion, monto, id_canal: canal,
+      }, llaveOperacion);
+      setAutorizacion(resultado);
+      setMotivoExtorno("");
+      setLlaveOperacion(crypto.randomUUID());
+    }, () => setAutorizacion(null));
+  }
+
+  function extornar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!autorizacion) return;
+    void ejecutar(async () => {
+      setAutorizacion(await extornarAutorizacion(autorizacion.uuid_autorizacion, motivoExtorno.trim()));
+      setNotice({ text: "Operación extornada: el monto volvió al saldo disponible.", error: false });
+    });
+  }
+
+  function guardarClave(e: React.FormEvent) {
+    e.preventDefault();
+    const id = idClave.trim();
+    if (!id) return;
+    const valor = clave;
+    setClave("");
+    void ejecutar(async () => {
+      await registrarClave(id, tipoClave, valor);
+      setValidacion(null);
+      const nombre = tipoClave === "PIN_ATM" ? "PIN registrado" : "Clave web registrada";
+      setNotice({ text: `${nombre}. Los intentos fallidos volvieron a cero.`, error: false });
+    });
+  }
+
+  function comprobarClave() {
+    const id = idClave.trim();
+    if (!id || !clave) return;
+    const valor = clave;
+    setClave("");
+    void ejecutar(async () => setValidacion(await validarClave(id, tipoClave, valor, canalClave)), () => setValidacion(null));
+  }
+
   const navegacion: { id: Pestana; etiqueta: string; icono: string }[] = [
     { id: "cliente", etiqueta: "Tarjetas del cliente", icono: "tarjeta" },
     { id: "consulta", etiqueta: "Consultar tarjeta", icono: "buscar" },
     { id: "emision", etiqueta: "Emitir tarjeta", icono: "mas" },
     { id: "estado", etiqueta: "Bloqueos y estados", icono: "candado" },
+    { id: "operacion", etiqueta: "Autorizar operación", icono: "billete" },
+    { id: "claves", etiqueta: "Claves de la tarjeta", icono: "llave" },
   ];
+  const digitos = DIGITOS_CLAVE[tipoClave];
   const vencePrevia = vencimiento ? `${vencimiento.slice(5, 7)}/${vencimiento.slice(2, 4)}` : "MM/AA";
 
   return (
@@ -391,6 +500,7 @@ export default function TarjetasPage() {
                     {tarjetas.map((t) => (
                       <li key={t.id_tarjeta} className="tj-item">
                         <Plastico numero={t.numero_enmascarado} titular={t.cod_cliente} vence={t.vencimiento_mm_aa} estado={t.estado_tarjeta} />
+                        <p className="tj-cuenta">Cuenta {t.num_cuenta ?? "sin vincular"}</p>
                         <div className="tj-item-actions">
                           <button className="sol-button secondary" type="button" onClick={() => mostrar(t)}>
                             <Icono nombre="ojo" tamano={16} />
@@ -440,6 +550,7 @@ export default function TarjetasPage() {
                     <dl className="tj-datos">
                       <div><dt>Estado</dt><dd><EstadoTarjeta estado={tarjetaActual.estado_tarjeta} /></dd></div>
                       <div><dt>Cliente</dt><dd>{tarjetaActual.cod_cliente}</dd></div>
+                      <div><dt>Cuenta vinculada</dt><dd>{tarjetaActual.num_cuenta ?? "Sin vincular"}</dd></div>
                       <div><dt>Emisión</dt><dd>{tarjetaActual.fecha_emision}</dd></div>
                       <div><dt>Vencimiento</dt><dd>{tarjetaActual.vencimiento_mm_aa} ({tarjetaActual.fecha_vencimiento})</dd></div>
                       <div><dt>BIN</dt><dd>{tarjetaActual.bin}</dd></div>
@@ -453,10 +564,20 @@ export default function TarjetasPage() {
                         </button>
                       )}
                       {tarjetaActual.estado_tarjeta === "ACTIVA" && (
-                        <button className="sol-button secondary" type="button" onClick={() => prepararCambio(tarjetaActual)}>
-                          <Icono nombre="candado" tamano={16} />
-                          Bloquear
-                        </button>
+                        <>
+                          <button className="sol-button primary" type="button" onClick={() => prepararOperacion(tarjetaActual)}>
+                            <Icono nombre="billete" tamano={16} />
+                            Autorizar
+                          </button>
+                          <button className="sol-button secondary" type="button" onClick={() => prepararClaves(tarjetaActual)}>
+                            <Icono nombre="llave" tamano={16} />
+                            Claves
+                          </button>
+                          <button className="sol-button secondary" type="button" onClick={() => prepararCambio(tarjetaActual)}>
+                            <Icono nombre="candado" tamano={16} />
+                            Bloquear
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -545,6 +666,150 @@ export default function TarjetasPage() {
               <div className="tj-nota">
                 <Icono nombre="escudo" />
                 <span>El desbloqueo (de BLOQUEADA a ACTIVA) lo hace el módulo de Seguridad y aquí se rechaza. ANULADA cancela la tarjeta de forma definitiva.</span>
+              </div>
+            </section>
+          )}
+          {tab === "operacion" && (
+            <section className="sol-card">
+              <div className="sol-card-title">
+                <div>
+                  <h2>Autorizar una operación</h2>
+                  <p>Aprueba o rechaza un débito con la tarjeta antes de contabilizarlo. Si se aprueba, el monto queda retenido del saldo disponible.</p>
+                </div>
+              </div>
+              <form onSubmit={autorizar} className="sol-form-grid" style={{ padding: "0 24px 24px" }}>
+                <div className="sol-field">
+                  <label htmlFor="op-id">Identificador de la tarjeta</label>
+                  <input id="op-id" value={idOperacion} onChange={(e) => editarOperacion(setIdOperacion)(e.target.value)} required />
+                </div>
+                <div className="sol-field">
+                  <label htmlFor="op-cuenta">Cuenta a debitar</label>
+                  <input id="op-cuenta" value={cuentaOperacion} onChange={(e) => editarOperacion(setCuentaOperacion)(e.target.value)} required maxLength={20} />
+                </div>
+                <div className="sol-field">
+                  <label htmlFor="op-tipo">Operación</label>
+                  <select id="op-tipo" value={tipoOperacion} onChange={(e) => editarOperacion(setTipoOperacion)(e.target.value as Operacion)}>
+                    {OPERACIONES.map((o) => <option key={o} value={o}>{o.replace("_", " ")}</option>)}
+                  </select>
+                </div>
+                <div className="sol-field">
+                  <label htmlFor="op-canal">Canal</label>
+                  <select id="op-canal" value={canal} onChange={(e) => editarOperacion(setCanal)(e.target.value as Canal)}>
+                    {CANALES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="sol-field">
+                  <label htmlFor="op-monto">Monto</label>
+                  <input id="op-monto" value={monto} onChange={(e) => editarOperacion(setMonto)(e.target.value)} required
+                    inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" placeholder="150.00" />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <button className="sol-button primary" type="submit" disabled={loading}>
+                    <Icono nombre="billete" />
+                    {loading ? "Autorizando..." : "Autorizar"}
+                  </button>
+                </div>
+              </form>
+              {autorizacion && (
+                <div className={`tj-resultado ${autorizacion.aprobada ? "ok" : autorizacion.estado_autorizacion === "EXTORNADA" ? "neutro" : "mal"}`} role="status" aria-label="Resultado de la autorización">
+                  <div className="tj-resultado-cabecera">
+                    <span className="tj-codigo">{autorizacion.codigo_respuesta}</span>
+                    <div>
+                      <strong>{autorizacion.estado_autorizacion}</strong>
+                      <small>{CODIGOS_RESPUESTA[autorizacion.codigo_respuesta ?? ""] ?? autorizacion.motivo_rechazo}</small>
+                    </div>
+                    <b className="tj-monto">S/ {autorizacion.monto}</b>
+                  </div>
+                  <dl className="tj-datos">
+                    <div><dt>Operación</dt><dd>{autorizacion.tipo_operacion.replace("_", " ")} por {autorizacion.id_canal ?? autorizacion.id_terminal}</dd></div>
+                    <div><dt>Cuenta</dt><dd>{autorizacion.num_cuenta}</dd></div>
+                    {autorizacion.motivo_rechazo && <div><dt>Motivo</dt><dd>{autorizacion.motivo_rechazo}</dd></div>}
+                    <div><dt>Autorización</dt><dd style={{ fontSize: "12px" }}>{autorizacion.uuid_autorizacion}</dd></div>
+                  </dl>
+                  {autorizacion.aprobada && (
+                    <form onSubmit={extornar} className="tj-extorno">
+                      <div className="sol-field">
+                        <label htmlFor="op-extorno">Motivo del extorno</label>
+                        <input id="op-extorno" value={motivoExtorno} onChange={(e) => setMotivoExtorno(e.target.value)} required minLength={3} maxLength={255}
+                          placeholder="Por ejemplo: el cajero no entregó el efectivo" />
+                      </div>
+                      <button className="sol-button secondary" type="submit" disabled={loading}>
+                        <Icono nombre="deshacer" tamano={16} />
+                        Extornar
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+              <div className="tj-nota">
+                <Icono nombre="escudo" />
+                <span>La base aplica las reglas: tarjeta activa y vigente, saldo disponible, tope diario del canal (RN-TOP-001) y, en cajero, que la cuenta no sea mancomunada. Un rechazo también queda registrado.</span>
+              </div>
+            </section>
+          )}
+
+          {tab === "claves" && (
+            <section className="sol-card">
+              <div className="sol-card-title">
+                <div>
+                  <h2>Claves de la tarjeta</h2>
+                  <p>Asigna o comprueba el PIN del cajero o la clave web. Al tercer intento fallido seguido la tarjeta se bloquea.</p>
+                </div>
+              </div>
+              <form onSubmit={guardarClave} className="sol-form-grid" style={{ padding: "0 24px 24px" }}>
+                <div className="sol-field">
+                  <label htmlFor="clave-id">Identificador de la tarjeta</label>
+                  <input id="clave-id" value={idClave} onChange={(e) => setIdClave(e.target.value)} required />
+                </div>
+                <div className="sol-field">
+                  <label htmlFor="clave-tipo">Clave</label>
+                  <select id="clave-tipo" value={tipoClave} onChange={(e) => { setTipoClave(e.target.value as TipoClave); setClave(""); setValidacion(null); }}>
+                    {TIPOS_CLAVE.map((t) => <option key={t} value={t}>{t === "PIN_ATM" ? "PIN del cajero (4 dígitos)" : "Clave web (6 dígitos)"}</option>)}
+                  </select>
+                </div>
+                <div className="sol-field">
+                  <label htmlFor="clave-valor">Valor</label>
+                  <input id="clave-valor" type="password" autoComplete="off" inputMode="numeric" value={clave}
+                    onChange={(e) => setClave(e.target.value.replace(/\D/g, "").slice(0, digitos))}
+                    required minLength={digitos} maxLength={digitos} pattern={`[0-9]{${digitos}}`} />
+                </div>
+                <div className="sol-field">
+                  <label htmlFor="clave-canal">Canal para comprobar</label>
+                  <select id="clave-canal" value={canalClave} onChange={(e) => setCanalClave(e.target.value as Canal)}>
+                    {CANALES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="tj-item-actions" style={{ gridColumn: "1 / -1", maxWidth: "420px" }}>
+                  <button className="sol-button primary" type="submit" disabled={loading}>
+                    <Icono nombre="llave" />
+                    Asignar
+                  </button>
+                  <button className="sol-button secondary" type="button" disabled={loading || clave.length !== digitos} onClick={comprobarClave}>
+                    <Icono nombre="activa" />
+                    Comprobar
+                  </button>
+                </div>
+              </form>
+              {validacion && (
+                <div className={`tj-resultado ${validacion.resultado === "EXITOSO" ? "ok" : "mal"}`} role="status" aria-label="Resultado de la validación">
+                  <div className="tj-resultado-cabecera">
+                    <span className="tj-intentos" aria-label={`${validacion.intentos_restantes} de 3 intentos`}>
+                      {[0, 1, 2].map((i) => <i key={i} className={i < validacion.intentos_restantes ? "lleno" : ""} />)}
+                    </span>
+                    <div>
+                      <strong>{validacion.resultado === "EXITOSO" ? "Clave correcta" : "Clave incorrecta"}</strong>
+                      <small>
+                        {validacion.intentos_restantes === 0
+                          ? "Tercer intento fallido: la tarjeta quedó bloqueada."
+                          : `Quedan ${validacion.intentos_restantes} de 3 intentos.`}
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="tj-nota">
+                <Icono nombre="escudo" />
+                <span>La clave no se guarda en esta pantalla ni se muestra: la base solo conserva su hash con una sal propia y la compara por dentro.</span>
               </div>
             </section>
           )}

@@ -300,7 +300,7 @@ def test_identidad_verificada_de_un_cliente_bloqueado(cliente, servicio):
 
 
 def test_verificar_un_documento_exige_validar_identidad(cliente, sesion_de, autorizacion):
-    for encabezados in (sesion_de("OPERADOR")[0], autorizacion):
+    for encabezados in (sesion_de("AUDITOR")[0], autorizacion):
         respuesta = verificar(cliente, encabezados, datos(), True)
         assert respuesta.status_code == 403
         assert respuesta.json()["error"]["code"] == "PERMISO_DENEGADO"

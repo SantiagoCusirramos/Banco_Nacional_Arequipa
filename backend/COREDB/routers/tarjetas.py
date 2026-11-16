@@ -1,14 +1,16 @@
 import uuid
 from datetime import date
+from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, Query, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from sqlalchemy.orm import Session
 
 from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session, llamar
 from COREDB.errores import ErrorCoreDb
 from COREDB.models import EquivalenciaCatalogo, Tarjeta
+from COREDB.routers.autorizaciones import ip_origen
 from COREDB.services import clientes
 from COREDB.transacciones import con_reintentos
 
@@ -51,6 +53,36 @@ class TarjetaRespuesta(BaseModel):
     num_cuenta: str | None = Field(
         default=None,
         description="La cuenta principal de la tarjeta, la de su emisión. Null si no tiene.",
+    )
+
+
+TipoCredencial = Literal["PIN_ATM", "CLAVE_WEB"]
+
+
+class CredencialRegistrar(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # La base exige 4 dígitos al PIN y 6 a la clave web (RN-TAR-001) y lo rechaza sin
+    # repetir el valor. Nunca se devuelve ni se registra.
+    valor: SecretStr = Field(min_length=1, max_length=64)
+
+
+class CredencialValidar(CredencialRegistrar):
+    id_canal: str | None = Field(default=None, min_length=1, max_length=5)
+    id_terminal: str | None = Field(default=None, min_length=1, max_length=30)
+    correlation_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _canal_o_terminal(self):
+        if (self.id_canal is None) == (self.id_terminal is None):
+            raise ValueError("Se indica el canal o la terminal, uno de los dos.")
+        return self
+
+
+class ValidacionRespuesta(BaseModel):
+    resultado: Literal["EXITOSO", "FALLIDO"]
+    intentos_restantes: int = Field(
+        description="Al llegar a 0 la tarjeta queda BLOQUEADA (RN-TAR-004).",
     )
 
 
@@ -143,3 +175,54 @@ def cambiar_estado(
     )
     db.refresh(tarjeta)
     return tarjeta
+
+
+@router.put("/{id_tarjeta}/credenciales/{tipo}", status_code=status.HTTP_204_NO_CONTENT,
+            response_class=Response, responses={422: {"description": "BNA-CREDENCIAL, BNA-TARJETA"}})
+def registrar_credencial(
+    id_tarjeta: uuid.UUID,
+    tipo: TipoCredencial,
+    datos: CredencialRegistrar,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("CREAR_TARJETA")),
+):
+    """Asigna o cambia el PIN o la clave web y reinicia los intentos fallidos. La base guarda
+    solo su hash con una sal propia."""
+    _obtener(db, id_tarjeta)
+    con_reintentos(
+        db,
+        lambda: llamar(
+            db, "tarjetas.registrar_credencial",
+            id_tarjeta, tipo, datos.valor.get_secret_value(), actor.usuario,
+        ),
+        nombre="registrar_credencial",
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{id_tarjeta}/credenciales/{tipo}/validacion", response_model=ValidacionRespuesta,
+             responses={422: {"description": "BNA-CREDENCIAL, ERR-TAR-003"}})
+def validar_credencial(
+    id_tarjeta: uuid.UUID,
+    tipo: TipoCredencial,
+    datos: CredencialValidar,
+    request: Request,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
+):
+    """Compara el valor dentro de la base y registra el intento. Un valor equivocado responde
+    200 con FALLIDO; el tercero seguido bloquea la tarjeta. Con la tarjeta no operativa se
+    rechaza (422 ERR-TAR-003) sin registrar el intento."""
+    _obtener(db, id_tarjeta)
+    resultado, restantes = con_reintentos(
+        db,
+        lambda: llamar(
+            db, "tarjetas.validar_credencial",
+            id_tarjeta, tipo, datos.valor.get_secret_value(), datos.id_canal, datos.id_terminal,
+            ip_origen(request), datos.correlation_id, actor.usuario,
+            salidas=2,
+        ),
+        nombre="validar_credencial",
+    )
+    return ValidacionRespuesta(resultado=resultado, intentos_restantes=restantes)
+

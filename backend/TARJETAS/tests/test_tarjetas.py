@@ -97,6 +97,18 @@ def test_ver_tarjeta(client, core):
     assert core.llamadas[0]["ruta"] == f"/coredb/tarjetas/{ID}"
 
 
+def test_la_tarjeta_trae_su_cuenta_vinculada(client, core):
+    core.respuesta = httpx.Response(200, json=TARJETA_CORE)
+    assert client.get(f"{BASE}/{ID}", headers=AUTH).json()["data"]["num_cuenta"] == "10100000000001"
+
+
+def test_tarjeta_sin_cuenta_vinculada_trae_null(client, core):
+    sin_cuenta = {k: v for k, v in TARJETA_CORE.items() if k != "num_cuenta"}
+    core.respuesta = httpx.Response(200, json=[sin_cuenta])
+    r = client.get(f"{BASE}/cliente/CLI000000001", headers=AUTH)
+    assert r.json()["data"][0]["num_cuenta"] is None
+
+
 def test_id_que_no_es_uuid_400_sin_llamar_a_core(client, core):
     r = client.get(f"{BASE}/no-es-uuid", headers=AUTH)
     assert r.status_code == 400
