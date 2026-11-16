@@ -54,3 +54,9 @@ CALL prueba.verifica('X207', 'Extensión', 'Clientes', 'bna_admin ejecuta los pr
              "CALL clientes.registrar_cliente('DNI', '71000207', 'Prueba', 'Ficticio', NULL, 'c207@example.com', '961000207', 'v1', 'OBSERVADO', UUID_TO_BIN(UUID()), 'pruebas', @c)"),
   "SELECT @k IS NOT NULL AND (SELECT COUNT(*) FROM clientes.cliente WHERE cod_cliente = @c) = 1",
   'catálogos y cliente', "SELECT @c", 'privilegio');
+
+-- v1.4: bna_admin ejecuta los procedimientos de créditos por su privilegio sobre creditos.*.
+CALL prueba.verifica('X342', 'Extensión', 'Créditos', 'bna_admin ejecuta los procedimientos de créditos',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000342', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.catalogos_credito(@cat)"),
+  "SELECT @r = 1 AND JSON_LENGTH(@cat, '$.estados_solicitud') = 5", 'ronda 1 y catálogos', "SELECT @r", 'procedimiento');
