@@ -1,231 +1,135 @@
-"""Del expediente a la aprobación: situación financiera, regla, decisión del analista y CR-INT-04."""
-from datetime import datetime, timedelta, timezone
+"""Expediente → evaluación → decisión contra COREDB y la base integrada reales.
 
-import pytest
-
-from EVALUACION.comun import utc_ahora
-from EVALUACION.tests.ayudas import aprobada, cabeceras, nuevo_sobre, recibir, registrar_situacion
-
-
-def _detalle(api, id_evaluacion, token="tok-analista"):
-    return api.get(f"/eva/v1/evaluaciones/{id_evaluacion}", headers=cabeceras(token)).json()
+El analista trabaja con su propio token de COREDB, que Evaluación reenvía: la regla la corre
+COREDB (umbrales de `creditos.regla_evaluacion`) y el historial registra a la persona.
+Con 15000.00 a 12 meses y riesgo BUENO: ingreso 5000.00 aprueba (71.43 %), 4000.00 queda
+OBSERVADO (89.29 %) y 3000.00 rechaza (119.05 %).
+"""
+from EVALUACION.tests.ayudas import (analista_registrado, cabeceras, coredb, decidir, detalle, evaluar, nuevo_sobre,
+                                     persona, recibir)
 
 
-def _decidir(api, id_evaluacion, decision, observaciones="Revisado con el sustento del cliente.",
-             token="tok-analista"):
-    version = _detalle(api, id_evaluacion)["version"]
-    return api.post(f"/eva/v1/evaluaciones/{id_evaluacion}/decision", headers=cabeceras(token),
-                    json={"decision": decision, "observaciones": observaciones, "version": version})
+def _recibida(api, cliente):
+    sobre = nuevo_sobre(cliente)
+    acuse = recibir(api, sobre)
+    assert acuse.status_code == 201, acuse.text
+    return sobre["idSolicitud"], acuse.json()["idEvaluacion"]
 
 
-def _ahora_iso():
-    return datetime.now(timezone.utc).isoformat()
-
-
-# ---------------------------------------------------------------------- Evaluación
-def test_aprobado_por_la_regla_crea_la_aprobacion(api):
-    acuse = recibir(api, nuevo_sobre()).json()
-    d = registrar_situacion(api, acuse["idEvaluacion"], "5000.00").json()
-    assert d["estado"] == "APROBADO" and d["decididoPor"] == "MOTOR"
-    assert d["motor"] == {"resultado": "APROBADO", "score": 850, "limite": "21000.00", "ratio": "0.7143",
-                          "regla": "RN-EVA-002-P · demo v1"}
-    assert d["situacionFinanciera"]["registradoPor"] == "ana.analista"
-    a = d["aprobacion"]
-    assert a["estado"] == "VIGENTE" and a["version"] == 1
-    assert a["codCredito"].startswith("CRE-") and len(a["codCredito"]) <= 20
-    assert (a["montoAprobado"], a["moneda"], a["plazoMeses"], a["tasaTea"]) == ("15000.00", "PEN", 12, "0.2200")
-    vigencia = datetime.fromisoformat(a["vigenteHasta"]) - datetime.now(timezone.utc)
-    assert timedelta(days=29, hours=23) < vigencia <= timedelta(days=30)
-    assert d["envioSol"]["decision"] == "APROBADO" and d["envioSol"]["estado"] == "PENDIENTE"
-    eventos = [h["evento"] for h in d["historial"]]
-    assert eventos == ["EXPEDIENTE_RECIBIDO", "SITUACION_REGISTRADA", "RESULTADO_MOTOR", "APROBACION_CREADA",
-                       "RESULTADO_POR_ENTREGAR"]
-
-
-def test_el_calendario_es_el_de_sol_sin_cambios(api):
-    sobre = nuevo_sobre(monto="12000.00", plazo_meses=18)
-    acuse = recibir(api, sobre).json()
-    d = registrar_situacion(api, acuse["idEvaluacion"], "5000.00").json()
-    apr = api.get(f"/eva/v1/aprobaciones/{d['aprobacion']['idAprobacion']}", headers=cabeceras("tok-desembolso")).json()
-    de_sol = sobre["expediente"]["calendario"]
-    campos = ("numero_cuota", "fecha_vencimiento", "saldo_inicial", "amortizacion", "interes", "cuota_total", "saldo_final")
-    nuestros = ("numeroCuota", "fechaVencimiento", "saldoInicial", "amortizacion", "interes", "cuotaTotal", "saldoFinal")
-    assert [tuple(q[k] for k in nuestros) for q in apr["calendario"]["cuotas"]] == \
-           [tuple(q[k] for k in campos) for q in de_sol["cuotas"]]
-    assert (apr["calendario"]["totalPagar"], apr["calendario"]["interesesTotales"], apr["calendario"]["estado"]) == \
-           (de_sol["total_pagar"], de_sol["intereses_totales"], de_sol["estado"])
-    assert apr["calendario"]["origen"] == "SOL" and apr["calendario"]["politica"] == "SOL-DEMO-2026-01"
-
-
-def test_rechazado_por_la_regla(api):
-    acuse = recibir(api, nuevo_sobre()).json()
-    d = registrar_situacion(api, acuse["idEvaluacion"], "3000.00").json()
-    assert d["estado"] == "RECHAZADO" and d["aprobacion"] is None
-    assert d["envioSol"]["decision"] == "RECHAZADO"
-    assert d["motivo"].startswith("Rechazado por la regla RN-EVA-002-P")
-
-
-def test_la_zona_gris_la_decide_el_analista(api):
-    acuse = recibir(api, nuevo_sobre()).json()
-    d = registrar_situacion(api, acuse["idEvaluacion"], "4000.00").json()
-    assert d["estado"] == "EN_REVISION" and d["aprobacion"] is None and d["envioSol"] is None
-    r = _decidir(api, acuse["idEvaluacion"], "APROBADO", token="tok-analista-2")
+def test_aprobada_por_la_regla(api, analista, cliente):
+    token, username = analista
+    id_solicitud, id_evaluacion = _recibida(api, cliente)
+    r = evaluar(api, token, id_solicitud, "5000.00")
     assert r.status_code == 200, r.text
-    d = r.json()
-    assert d["estado"] == "APROBADO" and d["decididoPor"] == "beto.analista"
-    assert d["aprobacion"]["aprobadaPor"] == "beto.analista"
-    assert d["envioSol"]["decision"] == "APROBADO"
+    resultado = r.json()
+    assert (resultado["resultado"], resultado["estadoSolicitud"], resultado["regla"]) == ("APROBADO", "APROBADA", "R-A")
+    assert resultado["idEvaluacion"] == id_evaluacion        # el id que SOL recibió en el acuse
+    assert (resultado["score"], resultado["limite"], resultado["ratio"]) == (850, "21000.00", "0.7143")
+    d = detalle(api, token, id_solicitud)
+    assert d["estado"] == "APROBADA" and d["historial"][-1]["actor"] == username
+    [evaluacion] = d["evaluaciones"]
+    assert (evaluacion["ingresoMensual"], evaluacion["deudaMensual"]) == ("5000.00", "0.00")
+    aprobaciones = api.get("/eva/v1/aprobaciones", params={"idSolicitud": id_solicitud}, headers=cabeceras(token))
+    assert aprobaciones.status_code == 200
+    [aprobacion] = aprobaciones.json()
+    assert aprobacion["idEvaluacion"] == id_evaluacion and aprobacion["monto"] == "15000.00"
 
 
-def test_observar_pide_a_sol_que_corrija(api):
-    acuse = recibir(api, nuevo_sobre()).json()
-    registrar_situacion(api, acuse["idEvaluacion"], "4000.00")
-    d = _decidir(api, acuse["idEvaluacion"], "OBSERVADO", "Precisar el destino declarado.").json()
-    assert d["estado"] == "OBSERVADO" and d["aprobacion"] is None
-    assert d["envioSol"]["decision"] == "OBSERVADO"
-    assert d["motivo"] == "Precisar el destino declarado."
+def test_rechazada_por_la_regla(api, analista, cliente):
+    id_solicitud, _ = _recibida(api, cliente)
+    r = evaluar(api, analista[0], id_solicitud, "3000.00")
+    assert (r.json()["resultado"], r.json()["estadoSolicitud"]) == ("RECHAZADO", "RECHAZADA")
+    assert api.get("/eva/v1/aprobaciones", params={"idSolicitud": id_solicitud},
+                   headers=cabeceras(analista[0])).json() == []
 
 
-def test_la_situacion_debe_estar_verificada(api):
-    acuse = recibir(api, nuevo_sobre()).json()
-    r = registrar_situacion(api, acuse["idEvaluacion"], "5000.00", verificada=False)
+def test_observada_la_decide_el_analista(api, analista, cliente):
+    token, username = analista
+    id_solicitud, id_evaluacion = _recibida(api, cliente)
+    r = evaluar(api, token, id_solicitud, "4000.00")
+    assert (r.json()["resultado"], r.json()["estadoSolicitud"]) == ("OBSERVADO", "EN_EVALUACION")
+    decision = decidir(api, token, id_evaluacion, "APROBADO")
+    assert decision.status_code == 200, decision.text
+    assert decision.json()["estadoSolicitud"] == "APROBADA"
+    d = detalle(api, token, id_solicitud)
+    [evaluacion] = d["evaluaciones"]
+    assert (evaluacion["resultadoRegla"], evaluacion["decision"], evaluacion["resultado"]) == (
+        "OBSERVADO", "APROBADO", "APROBADO")
+    assert evaluacion["comentario"] == "Sustento revisado con el cliente."
+    assert d["historial"][-1]["actor"] == username
+    # Una sola vez.
+    otra = decidir(api, token, id_evaluacion, "RECHAZADO")
+    assert otra.status_code == 422 and otra.json()["error"]["code"] == "EVALUACION_NO_ADMITIDA"
+
+
+def test_observada_y_rechazada_por_el_analista(api, analista, cliente):
+    id_solicitud, id_evaluacion = _recibida(api, cliente)
+    evaluar(api, analista[0], id_solicitud, "4000.00")
+    r = decidir(api, analista[0], id_evaluacion, "RECHAZADO", "Ingresos sin sustento suficiente.")
+    assert r.status_code == 200 and r.json()["estadoSolicitud"] == "RECHAZADA"
+
+
+def test_el_analista_no_observa_t1(api, analista, cliente):
+    """Por omisión del equipo (T1) la decisión es APROBADO o RECHAZADO: no vuelve a SOL."""
+    id_solicitud, id_evaluacion = _recibida(api, cliente)
+    evaluar(api, analista[0], id_solicitud, "4000.00")
+    r = decidir(api, analista[0], id_evaluacion, "OBSERVADO")
+    assert r.status_code == 422
+    assert detalle(api, analista[0], id_solicitud)["estado"] == "EN_EVALUACION"
+
+
+def test_decidir_exige_un_analista_registrado(api, admin, cliente):
+    token, _ = persona(admin, "ANALISTA")        # sin empleado ni registro como analista
+    id_solicitud, id_evaluacion = _recibida(api, cliente)
+    assert evaluar(api, token, id_solicitud, "4000.00").status_code == 200
+    r = decidir(api, token, id_evaluacion, "APROBADO")
+    assert r.status_code == 422 and r.json()["error"]["code"] == "ANALISTA_REQUERIDO"
+
+
+def test_la_situacion_debe_estar_verificada(api, analista, cliente):
+    id_solicitud, _ = _recibida(api, cliente)
+    r = evaluar(api, analista[0], id_solicitud, "5000.00", verificada=False)
     assert r.status_code == 422 and r.json()["error"]["code"] == "SITUACION_NO_VERIFICADA"
-    assert _detalle(api, acuse["idEvaluacion"])["estado"] == "PENDIENTE"
+    assert detalle(api, analista[0], id_solicitud)["evaluaciones"] == []
 
 
-def test_la_situacion_se_registra_una_sola_vez(api):
-    acuse = recibir(api, nuevo_sobre()).json()
-    registrar_situacion(api, acuse["idEvaluacion"], "4000.00")
-    r = registrar_situacion(api, acuse["idEvaluacion"], "5000.00")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "EVALUACION_NO_PENDIENTE"
+def test_una_ronda_se_evalua_una_vez(api, analista, cliente):
+    id_solicitud, _ = _recibida(api, cliente)
+    evaluar(api, analista[0], id_solicitud, "4000.00")
+    r = evaluar(api, analista[0], id_solicitud, "5000.00")
+    assert r.status_code == 422 and r.json()["error"]["code"] == "EVALUACION_NO_ADMITIDA"
 
 
-def test_version_desactualizada(api):
-    acuse = recibir(api, nuevo_sobre()).json()
-    r = registrar_situacion(api, acuse["idEvaluacion"], "5000.00", version=99)
-    assert r.status_code == 409 and r.json()["error"]["code"] == "VERSION_DESACTUALIZADA"
+def test_revocar_una_aprobacion(api, analista, cliente):
+    token = analista[0]
+    id_solicitud, _ = _recibida(api, cliente)
+    evaluar(api, token, id_solicitud, "5000.00")
+    r = api.post(f"/eva/v1/solicitudes/{id_solicitud}/revocacion", headers=cabeceras(token),
+                 json={"motivo": "El cliente desistió del crédito."})
+    assert r.status_code == 200, r.text
+    assert r.json()["estadoSolicitud"] == "RECHAZADA"
+    assert api.get("/eva/v1/aprobaciones", params={"idSolicitud": id_solicitud}, headers=cabeceras(token)).json() == []
+    d = detalle(api, token, id_solicitud)
+    assert d["historial"][-1]["motivo"] == "El cliente desistió del crédito."
 
 
-def test_solo_se_decide_un_caso_en_revision(api):
-    acuse = recibir(api, nuevo_sobre()).json()
-    r = _decidir(api, acuse["idEvaluacion"], "APROBADO")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "EVALUACION_NO_EN_REVISION"
+def test_bandeja_catalogo_y_no_encontrada(api, analista, cliente):
+    token = analista[0]
+    id_solicitud, _ = _recibida(api, cliente)
+    bandeja = api.get("/eva/v1/solicitudes", params={"codCliente": cliente}, headers=cabeceras(token))
+    assert bandeja.status_code == 200
+    assert [s["idSolicitud"] for s in bandeja.json()] == [id_solicitud]
+    assert "nombres" not in bandeja.text and "70000001" not in bandeja.text   # sin datos personales
+    catalogo = api.get("/eva/v1/catalogo", headers=cabeceras(token)).json()
+    assert catalogo["vigenciaAprobacionDias"] == 30
+    r = api.get("/eva/v1/solicitudes/00000000-0000-4000-8000-000000000000", headers=cabeceras(token))
+    assert r.status_code == 404 and r.json()["error"]["code"] == "SOLICITUD_NO_ENCONTRADA"
+    assert api.get("/eva/v1/solicitudes/no-es-un-uuid", headers=cabeceras(token)).status_code == 422
 
 
-def test_bandeja_con_filtros(api):
-    a = recibir(api, nuevo_sobre()).json()
-    recibir(api, nuevo_sobre(id_cliente="CLI000000002", numero_documento="70000002", nombres="Lucía",
-                             apellido_paterno="Torres", apellido_materno="Mamani"))
-    registrar_situacion(api, a["idEvaluacion"], "4000.00")
-    bandeja = api.get("/eva/v1/evaluaciones", headers=cabeceras("tok-auditor")).json()
-    assert bandeja["conteos"] == {"PENDIENTE": 1, "EN_REVISION": 1}
-    assert {e["cliente"]["numeroDocumento"] for e in bandeja["items"]} == {"****0001", "****0002"}
-    en_revision = api.get("/eva/v1/evaluaciones", params={"estado": "EN_REVISION"}, headers=cabeceras("tok-analista"))
-    assert [e["idEvaluacion"] for e in en_revision.json()["items"]] == [a["idEvaluacion"]]
-    por_nombre = api.get("/eva/v1/evaluaciones", params={"buscar": "Torres"}, headers=cabeceras("tok-analista"))
-    assert [e["cliente"]["nombre"] for e in por_nombre.json()["items"]] == ["Lucía Torres Mamani"]
-
-
-# ---------------------------------------------------------------------- CR-INT-04
-def test_desembolso_busca_por_documento_o_credito(api):
-    a = aprobada(api)["aprobacion"]
-    por_documento = api.get("/eva/v1/aprobaciones", params={"numeroDocumento": "70000001"},
-                            headers=cabeceras("tok-desembolso")).json()["items"]
-    assert [x["idAprobacion"] for x in por_documento] == [a["idAprobacion"]]
-    assert por_documento[0]["numeroDocumento"] == "70000001"     # Desembolso lo necesita completo
-    assert "cuotas" not in por_documento[0]["calendario"]        # la lista no repite el calendario
-    por_credito = api.get("/eva/v1/aprobaciones", params={"codCredito": a["codCredito"]},
-                          headers=cabeceras("tok-desembolso")).json()["items"]
-    assert [x["idAprobacion"] for x in por_credito] == [a["idAprobacion"]]
-    sin_filtro = api.get("/eva/v1/aprobaciones", headers=cabeceras("tok-desembolso"))
-    assert sin_filtro.status_code == 422 and sin_filtro.json()["error"]["code"] == "FILTRO_REQUERIDO"
-    del_auditor = api.get("/eva/v1/aprobaciones", params={"codCredito": a["codCredito"]},
-                          headers=cabeceras("tok-auditor")).json()["items"][0]
-    assert del_auditor["numeroDocumento"] == "****0001"
-    assert api.get("/eva/v1/aprobaciones/APR-0000-000000", headers=cabeceras("tok-desembolso")).status_code == 404
-
-
-def test_registrar_el_desembolso_es_idempotente(api):
-    a = aprobada(api)["aprobacion"]
-    ruta = f"/eva/v1/aprobaciones/{a['idAprobacion']}/desembolso"
-    cuerpo = {"version": a["version"], "codigoOrden": "DES-2026-000001", "fechaDesembolso": _ahora_iso()}
-    primero = api.post(ruta, json=cuerpo, headers=cabeceras("tok-desembolso"))
-    assert primero.status_code == 200, primero.text
-    marcada = primero.json()
-    assert marcada["estado"] == "DESEMBOLSADA" and marcada["version"] == 2
-    assert marcada["desembolso"]["codigoOrden"] == "DES-2026-000001"
-    assert marcada["desembolso"]["registradoPor"] == "svc-desembolso"
-    repetido = api.post(ruta, json=cuerpo, headers=cabeceras("tok-desembolso"))
-    assert repetido.status_code == 200 and repetido.json() == marcada
-    otra_orden = api.post(ruta, json={**cuerpo, "codigoOrden": "DES-2026-000002"}, headers=cabeceras("tok-desembolso"))
-    assert otra_orden.status_code == 409 and otra_orden.json()["error"]["code"] == "APROBACION_YA_DESEMBOLSADA"
-    revocar = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/revocacion", headers=cabeceras("tok-analista"),
-                       json={"motivo": "Ya no corresponde el crédito.", "version": 2})
-    assert revocar.status_code == 409 and revocar.json()["error"]["code"] == "APROBACION_NO_VIGENTE"
-
-
-def test_el_desembolso_compara_la_version(api):
-    a = aprobada(api)["aprobacion"]
-    r = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/desembolso", headers=cabeceras("tok-desembolso"),
-                 json={"version": 7, "codigoOrden": "DES-2026-000001", "fechaDesembolso": _ahora_iso()})
-    assert r.status_code == 409 and r.json()["error"] == {
-        "code": "VERSION_DESACTUALIZADA", "message": r.json()["error"]["message"], "details": {"version": 1}}
-
-
-def test_una_aprobacion_revocada_no_se_desembolsa(api):
-    a = aprobada(api)["aprobacion"]
-    revocada = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/revocacion", headers=cabeceras("tok-analista"),
-                        json={"motivo": "El cliente desistió del crédito.", "version": 1})
-    assert revocada.status_code == 200 and revocada.json()["estado"] == "REVOCADA"
-    assert revocada.json()["revocacion"]["revocadaPor"] == "ana.analista"
-    r = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/desembolso", headers=cabeceras("tok-desembolso"),
-                 json={"version": 2, "codigoOrden": "DES-2026-000001", "fechaDesembolso": _ahora_iso()})
-    assert r.status_code == 409 and r.json()["error"]["code"] == "APROBACION_REVOCADA"
-
-
-def test_una_fecha_de_desembolso_futura_se_rechaza(api):
-    a = aprobada(api)["aprobacion"]
-    futura = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
-    r = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/desembolso", headers=cabeceras("tok-desembolso"),
-                 json={"version": 1, "codigoOrden": "DES-2026-000001", "fechaDesembolso": futura})
-    assert r.status_code == 422 and r.json()["error"]["code"] == "FECHA_FUTURA"
-    sin_zona = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/desembolso", headers=cabeceras("tok-desembolso"),
-                        json={"version": 1, "codigoOrden": "DES-2026-000001", "fechaDesembolso": "2026-11-15T10:00:00"})
-    assert sin_zona.status_code == 422
-
-
-@pytest.fixture
-def reloj(monkeypatch):
-    """Adelanta el reloj de Evaluación: reloj(31) es "dentro de 31 días" y devuelve esa fecha con zona."""
-    inicio = utc_ahora()
-
-    def mover(dias: int) -> datetime:
-        monkeypatch.setattr("EVALUACION.servicio.utc_ahora", lambda: inicio + timedelta(days=dias))
-        return (inicio + timedelta(days=dias)).replace(tzinfo=timezone.utc)
-
-    return mover
-
-
-def test_una_aprobacion_vencida(api, reloj):
-    a = aprobada(api)["aprobacion"]                     # vigente 30 días
-    dentro_de_31 = reloj(31)
-    consultada = api.get(f"/eva/v1/aprobaciones/{a['idAprobacion']}", headers=cabeceras("tok-desembolso")).json()
-    assert consultada["estado"] == "VENCIDA"
-    vencidas = api.get("/eva/v1/aprobaciones", params={"codCredito": a["codCredito"], "estado": "VENCIDA"},
-                       headers=cabeceras("tok-desembolso")).json()["items"]
-    assert len(vencidas) == 1
-    r = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/desembolso", headers=cabeceras("tok-desembolso"),
-                 json={"version": 1, "codigoOrden": "DES-2026-000001", "fechaDesembolso": dentro_de_31.isoformat()})
-    assert r.status_code == 409 and r.json()["error"]["code"] == "APROBACION_VENCIDA"
-    revocar = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/revocacion", headers=cabeceras("tok-analista"),
-                       json={"motivo": "Ya no corresponde el crédito.", "version": 1})
-    assert revocar.status_code == 409 and revocar.json()["error"]["code"] == "APROBACION_VENCIDA"
-
-
-def test_un_desembolso_dentro_de_la_vigencia_se_acepta_aunque_se_informe_tarde(api, reloj):
-    a = aprobada(api)["aprobacion"]
-    confirmada = reloj(1)          # Desembolso confirmó la orden al día siguiente, con la aprobación vigente...
-    reloj(31)                      # ...y lo informa cuando ya venció (la entrega se reintentó).
-    r = api.post(f"/eva/v1/aprobaciones/{a['idAprobacion']}/desembolso", headers=cabeceras("tok-desembolso"),
-                 json={"version": 1, "codigoOrden": "DES-2026-000001", "fechaDesembolso": confirmada.isoformat()})
-    assert r.status_code == 200 and r.json()["estado"] == "DESEMBOLSADA"
+def test_dos_analistas_ven_lo_mismo(api, admin, analista, cliente):
+    otro, _ = analista_registrado(admin)
+    id_solicitud, _ = _recibida(api, cliente)
+    evaluar(api, analista[0], id_solicitud, "5000.00")
+    assert detalle(api, otro, id_solicitud)["estado"] == "APROBADA"
+    assert coredb("GET", f"/coredb/creditos/solicitudes/{id_solicitud}", admin, 200).json()["estado"] == "APROBADA"
