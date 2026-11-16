@@ -556,3 +556,164 @@ CALL clientes.cambiar_estado_cliente('CX218', 'BLOQUEADO', 'x', 'pruebas', @a);
 CALL core.crear_usuario_servicio(UUID_TO_BIN(UUID()), 'svc-x233', 'S', 'CLIENTES', 'h', 'BCRYPT', 'v2', 'pruebas');
 CALL core.registrar_login($SRV, $(uuid_v11 cd));
 SQL
+
+# --- v1.4: créditos. El estado de partida se confirma con los ayudantes de
+# arnes_creditos.sql en autocommit; cada caso falla con las escrituras hechas.
+# caso_msg ID DESCRIPCION PATRON CONDICION < sentencias: además del estado, el primer
+# error debe cumplir PATRON.
+caso_msg() {
+  local id="$1" desc="$2" patron="$3" cond="$4" salida obtenido error ok=0
+  salida="$("${CLIENTE:-api_}" --force 2>&1 || true)"
+  obtenido="$(root_ -N -e "SELECT coalesce(($cond), 0)" 2>&1 || true)"
+  error="$(echo "$salida" | grep -m1 ERROR | cut -c1-120 | tr -d "'")"
+  [ "$obtenido" = 1 ] && echo "$error" | grep -qE "$patron" && ok=1
+  registrar "$id" bna_api_user Extensión 'Sin transacción' "$desc" procedimiento "1; $patron" "$obtenido; $error" "$ok"
+}
+sol() { echo "UUID_TO_BIN('33000000-0000-4000-8000-000000000$1')"; }
+orden_de() { echo "(SELECT id_orden FROM creditos.v_orden_api WHERE id_solicitud = $(sol "$1"))"; }
+credito_de() { echo "(SELECT cod_credito FROM creditos.v_credito_api WHERE id_solicitud = $(sol "$1"))"; }
+saldo() { root_ -N -e "SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = '$1'"; }
+root_ <<'SQL'
+INSERT INTO cuentas.cuenta_ahorro (num_cuenta, cci, moneda, regimen, estado_cuenta, id_agencia) VALUES
+  ('CR-PEN-1C', '00219100000000000105', 'PEN', 'INDIVIDUAL', 'ACTIVA', 'AQP01');
+INSERT INTO cuentas.titularidad (cod_cliente, num_cuenta) VALUES ('C001', 'CR-PEN-1C');
+SQL
+api_ > "$OUT/creditos-preparacion.log" 2>&1 <<'SQL' || true
+CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000344', 'C001', 3000, 3, 1, NULL, @r, @e);
+CALL prueba.cr_validada('33000000-0000-4000-8000-000000000345', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o);
+CALL prueba.cr_credito('33000000-0000-4000-8000-000000000346', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @c);
+CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000348', 'C001', 3000, 3, NULL, @e);
+CALL prueba.cr_validada('33000000-0000-4000-8000-000000000349', 'C001', '70000001', 'CR-PEN-1C', 3000, 3, @o);
+CALL prueba.cr_credito('33000000-0000-4000-8000-000000000352', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @c);
+CALL prueba.cr_validada('33000000-0000-4000-8000-000000000353', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o);
+CALL prueba.cr_credito('33000000-0000-4000-8000-000000000354', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @c);
+CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000355', 'C001', 3000, 3, NULL, @e);
+SQL
+
+caso X343 'registrar_solicitud no deja la solicitud, su calendario ni la recepción si falla el evento (C1)' \
+  "SELECT (SELECT COUNT(*) FROM creditos.solicitud_credito WHERE id_solicitud = $(sol 343)) = 0
+      AND (SELECT COUNT(*) FROM creditos.calendario_pago WHERE id_solicitud = $(sol 343)) = 0" <<SQL
+CALL prueba.cr_calendario(3000, 3, CURRENT_DATE + INTERVAL 30 DAY, @c);
+CALL creditos.registrar_solicitud($(sol 343), 1, 'C001', 3000, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @c, REPEAT('a', 64), NULL, UUID_TO_BIN(UUID()), @r, @e, @rep);
+SQL
+caso X344 'evaluar_solicitud no deja la evaluación ni cambia el estado si falla el evento (C1)' \
+  "SELECT (SELECT COUNT(*) FROM creditos.evaluacion WHERE id_solicitud = $(sol 344)) = 0
+      AND (SELECT estado_solicitud FROM creditos.solicitud_credito WHERE id_solicitud = $(sol 344)) = 'EN_EVALUACION'
+      AND (SELECT COUNT(*) FROM creditos.situacion_financiera s WHERE NOT EXISTS (SELECT 1 FROM creditos.evaluacion e WHERE e.id_consulta = s.id_consulta)) = 0" <<SQL
+CALL creditos.evaluar_solicitud($(sol 344), 1, 20000, 0, 850, 30000, NULL, UUID_TO_BIN(UUID()), @e, @res, @regla);
+SQL
+s="$(saldo CTA-PEN-1)"
+caso X345 'confirmar_orden no deja abono, crédito ni calendario OFICIAL si falla después del movimiento (C1)' \
+  "SELECT (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = $s
+      AND (SELECT estado_orden FROM creditos.orden_desembolso WHERE id_orden = $(orden_de 345)) = 'VALIDADA'
+      AND (SELECT COUNT(*) FROM creditos.credito WHERE id_orden = $(orden_de 345)) = 0
+      AND (SELECT COUNT(*) FROM creditos.calendario_pago WHERE id_solicitud = $(sol 345) AND tipo_calendario = 'OFICIAL') = 0
+      AND (SELECT estado_solicitud FROM creditos.solicitud_credito WHERE id_solicitud = $(sol 345)) = 'APROBADA'" <<SQL
+SET @o = $(orden_de 345);
+CALL creditos.confirmar_orden(@o, NULL, UUID_TO_BIN(UUID()), @cod, @abono, @rep);
+SQL
+s="$(saldo CTA-PEN-1)"
+caso X346 'registrar_pago_cuota no deja pago, débito ni aplicación si falla el evento (C1)' \
+  "SELECT (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = $s
+      AND (SELECT COUNT(*) FROM creditos.pago WHERE referencia_transaccion = 'REF-X346') = 0
+      AND (SELECT SUM(saldo_pendiente) FROM creditos.v_cuota_api WHERE cod_credito = $(credito_de 346)) = 3030" <<SQL
+SET @cod = $(credito_de 346);
+CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 500, 'REF-X346', 'VEN', REPEAT('a', 64), NULL, UUID_TO_BIN(UUID()), @p, @e, @a, @m, @r);
+SQL
+caso X347 'registrar_pago_cuota deshace solo lo suyo dentro de una transacción (N2)' \
+  "SELECT $(quedo p347) AND (SELECT COUNT(*) FROM creditos.pago WHERE referencia_transaccion = 'REF-X347') = 0" <<SQL
+$(previo p347)
+SET @cod = $(credito_de 346);
+CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 500, 'REF-X347', 'VEN', REPEAT('a', 64), NULL, UUID_TO_BIN(UUID()), @p, @e, @a, @m, @r);
+COMMIT;
+SQL
+root_ -e "UPDATE creditos.evaluacion SET fecha_evaluacion = UTC_TIMESTAMP(6) - INTERVAL 31 DAY WHERE id_solicitud = $(sol 348)"
+caso_msg X348 'Una aprobación de hace más de 30 días ya no admite órdenes ni figura como vigente' '^ERROR.*BNA-APROBACION' \
+  "SELECT (SELECT COUNT(*) FROM creditos.orden_desembolso o JOIN creditos.evaluacion e ON e.id_evaluacion = o.id_evaluacion WHERE e.id_solicitud = $(sol 348)) = 0
+      AND (SELECT COUNT(*) FROM creditos.v_aprobacion_api WHERE id_solicitud = $(sol 348)) = 0" <<SQL
+CALL creditos.preparar_orden(creditos.fn_id_evaluacion($(sol 348), 1), 'CTA-PEN-1', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep);
+SQL
+root_ -e "UPDATE cuentas.cuenta_ahorro SET estado_cuenta = 'BLOQUEADA' WHERE num_cuenta = 'CR-PEN-1C'"
+caso_msg X349 'Una cuenta bloqueada después de validar impide confirmar, sin movimiento' '^ERROR.*BNA-CUENTA-DESTINO' \
+  "SELECT (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CR-PEN-1C') = 0
+      AND (SELECT estado_orden FROM creditos.orden_desembolso WHERE id_orden = $(orden_de 349)) = 'VALIDADA'" <<SQL
+SET @o = $(orden_de 349);
+CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod, @abono, @rep);
+SQL
+CLIENTE=app_ caso X350 'bna_app no ejecuta los procedimientos de créditos (v1.4)' \
+  "SELECT (SELECT COUNT(*) FROM creditos.solicitud_credito WHERE id_solicitud = $(sol 350)) = 0
+      AND (SELECT estado_orden FROM creditos.orden_desembolso WHERE id_orden = $(orden_de 345)) = 'VALIDADA'
+      AND (SELECT COUNT(*) FROM creditos.pago WHERE referencia_transaccion = 'REF-X350') = 0" <<SQL
+CALL creditos.registrar_solicitud($(sol 350), 1, 'C001', 3000, 'PEN', 3, FALSE, 'FRANCES', 0.2200, JSON_ARRAY(), REPEAT('a', 64), 'pruebas', UUID_TO_BIN(UUID()), @r, @e, @rep);
+SET @o = (SELECT id_orden FROM creditos.orden_desembolso o JOIN creditos.evaluacion e ON e.id_evaluacion = o.id_evaluacion WHERE e.id_solicitud = $(sol 345));
+CALL creditos.confirmar_orden(@o, 'pruebas', UUID_TO_BIN(UUID()), @cod, @abono, @rep);
+CALL creditos.registrar_pago_cuota('CR-0001', 'CTA-PEN-1', 10, 'REF-X350', 'VEN', REPEAT('a', 64), 'pruebas', UUID_TO_BIN(UUID()), @p, @e, @a, @m, @r);
+SQL
+deadlock_procedimiento X351 registrar_solicitud "SELECT COUNT(*) = 0 FROM creditos.solicitud_credito WHERE id_solicitud = $(sol 351)" \
+  "CALL prueba.cr_calendario(3000, 3, CURRENT_DATE + INTERVAL 30 DAY, @c); CALL creditos.registrar_solicitud($(sol 351), 1, 'C001', 3000, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @c, REPEAT('a', 64), 'pruebas', UUID_TO_BIN(UUID()), @r, @e, @rep);"
+
+# X352: un deadlock dentro del débito de un pago (en core.registrar_asiento) atraviesa el
+# savepoint interno del cobro: llega a quien llama como 1213 y no deja nada. W bloquea
+# la moneda y luego pide el crédito, que V ya tiene.
+cod352="$(root_ -N -e "SELECT $(credito_de 352)" 2>/dev/null || true)"
+s="$(saldo CTA-PEN-1)"
+root_ > "$OUT/X352-w.log" 2>&1 <<SQL &
+START TRANSACTION;
+INSERT INTO core.tipo_cambio
+WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 500)
+SELECT 'USD', 'PEN', '2000-01-01' + INTERVAL i DAY, 1 FROM n;
+SELECT cod_moneda FROM core.moneda WHERE cod_moneda = 'PEN' FOR UPDATE;
+DO SLEEP(2);
+SELECT cod_credito FROM creditos.credito WHERE cod_credito = '$cod352' FOR UPDATE;
+ROLLBACK;
+SQL
+w=$!
+sleep 1
+salida="$(api_ --force 2>&1 <<SQL || true
+CALL creditos.registrar_pago_cuota('$cod352', 'CTA-PEN-1', 100, 'REF-X352', 'VEN', REPEAT('a', 64), 'pruebas', UUID_TO_BIN(UUID()), @p, @e, @a, @m, @r);
+SQL
+)"
+wait "$w" || true
+echo "$salida" > "$OUT/X352-v.log"
+obtenido="$(root_ -N -e "SELECT (SELECT COUNT(*) FROM creditos.pago WHERE referencia_transaccion = 'REF-X352') = 0
+                             AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = $s")"
+ok=0; echo "$salida" | grep -q '^ERROR 1213' && [ "$obtenido" = 1 ] && ok=1
+registrar X352 bna_api_user Extensión 'Deadlock' 'El deadlock en el débito de un pago llega a quien llama y no deja pago ni débito (R3)' \
+  procedimiento 'ERROR 1213' "$obtenido; $(echo "$salida" | grep -m1 ERROR | cut -c1-120 | tr -d "'")" "$ok"
+
+# X353-X355: dos peticiones simultáneas con la misma operación. A espera 2 s antes de
+# confirmar; B, un segundo después, espera el bloqueo y recibe el resultado de A como
+# repetido, sin error. COND (1) describe el estado final.
+# simultaneo ID DESCRIPCION SQL_A SQL_B COND OBTENIDO_SQL
+simultaneo() {
+  local id="$1" desc="$2" sql_a="$3" sql_b="$4" cond="$5" obt="$6" ok=0 b
+  printf 'START TRANSACTION;\n%s\nDO SLEEP(2);\nCOMMIT;\n' "$sql_a" | api_ > "$OUT/$id-a.log" 2>&1 &
+  local a=$!
+  sleep 1
+  b="$(printf 'START TRANSACTION;\n%s\nSELECT CONCAT(\x27repetido=\x27, @rep);\nCOMMIT;\n' "$sql_b" | api_ -N 2>&1 || true)"
+  wait "$a" || true
+  echo "$b" > "$OUT/$id-b.log"
+  if [ "$(root_ -N -e "$cond")" = 1 ] && echo "$b" | grep -q 'repetido=1' && ! grep -q ERROR "$OUT/$id-a.log"; then ok=1; fi
+  registrar "$id" bna_api_user Concurrencia 'Extensión v1.4' "$desc" procedimiento \
+    'una sola operación; la segunda, repetida' "$(root_ -N -e "$obt"); segunda: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+}
+o353="SET @o = $(orden_de 353);"
+simultaneo X353 'Dos confirmaciones simultáneas de una orden abonan una sola vez' \
+  "$o353 CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod, @abono, @rep);" \
+  "$o353 CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod, @abono, @rep);" \
+  "SELECT COUNT(*) = 1 FROM cuentas.movimiento m JOIN creditos.orden_desembolso o ON m.glosa LIKE CONCAT('%', o.codigo_orden, '%') WHERE o.id_orden = $(orden_de 353)" \
+  "SELECT CONCAT('abonos: ', COUNT(*)) FROM cuentas.movimiento m JOIN creditos.orden_desembolso o ON m.glosa LIKE CONCAT('%', o.codigo_orden, '%') WHERE o.id_orden = $(orden_de 353)"
+c354="SET @cod = $(credito_de 354);"
+simultaneo X354 'Dos pagos simultáneos con la misma referencia debitan una sola vez' \
+  "$c354 CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 100, 'REF-X354', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p, @e, @a, @m, @rep);" \
+  "$c354 CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 100, 'REF-X354', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p, @e, @a, @m, @rep);" \
+  "SELECT (SELECT COUNT(*) FROM creditos.pago WHERE referencia_transaccion = 'REF-X354') = 1 AND (SELECT COUNT(*) FROM cuentas.movimiento WHERE glosa LIKE '%REF-X354%') = 1" \
+  "SELECT CONCAT('pagos: ', (SELECT COUNT(*) FROM creditos.pago WHERE referencia_transaccion = 'REF-X354'), ', débitos: ', (SELECT COUNT(*) FROM cuentas.movimiento WHERE glosa LIKE '%REF-X354%'))"
+p355="CALL creditos.preparar_orden(creditos.fn_id_evaluacion($(sol 355), 1), 'CTA-PEN-1', 'VEN', NULL, UUID_TO_BIN('35500000-0000-4000-8000-000000000355'), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep);"
+simultaneo X355 'Dos preparaciones simultáneas con la misma llave dejan una sola orden' "$p355" "$p355" \
+  "SELECT COUNT(*) = 1 FROM creditos.orden_desembolso WHERE id_evaluacion = creditos.fn_id_evaluacion($(sol 355), 1)" \
+  "SELECT CONCAT('órdenes: ', COUNT(*)) FROM creditos.orden_desembolso WHERE id_evaluacion = creditos.fn_id_evaluacion($(sol 355), 1)"
+
+evento="$(root_ -N -e "SELECT COUNT(*) FROM information_schema.events WHERE event_schema = 'creditos' AND event_name = 'ev_actualizar_vencimientos' AND status = 'ENABLED' AND interval_value = '1' AND interval_field = 'DAY'")"
+registrar X356 root Extensión 'Vencimientos' 'El evento diario de vencimientos de créditos existe y está activo' trigger 1 "$evento" \
+  "$([ "$evento" = 1 ] && echo 1 || echo 0)"
