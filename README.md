@@ -67,7 +67,7 @@ flowchart LR
 
 - El navegador solo habla con el frontend. Sus rutas `/api/core`, `/api/cuenta`, `/api/tarjeta`, `/api/captacion`, `/api/solicitud-credito`, `/api/evaluacion` y `/api/desembolso` reenvían cada petición desde el servidor de Next.js, así que el navegador nunca conoce la dirección de un servicio.
 - COREDB es la única entrada a la base integrada, y escribe en ella solo por procedimientos almacenados.
-- `db-aux` es otro MySQL, con la base de SOL (`bna_sol_mvp`), la de CAPTACION (`bna_captacion`) y el esquema `bna` del CORE legado. La base integrada no recibe esquemas ni usuarios ajenos.
+- `db-aux` es otro MySQL, con la base de SOL (`bna_sol_mvp`) y el esquema `bna` del CORE legado. La base integrada no recibe esquemas ni usuarios ajenos.
 - Todos los puertos se publican solo en `127.0.0.1`.
 
 ## Servicios y puertos
@@ -121,7 +121,7 @@ Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo 
 | `AUX_DB_ROOT_PASSWORD`, `SOL_DB_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base auxiliar y CORE legado |
 | `EVALUACION_COREDB_SECRETO`, `EVALUACION_TOKEN_SOL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | Secreto del usuario de servicio de Evaluación en COREDB y los tokens de CR-INT-02 y CR-INT-03 con SOL |
 | `DESEMBOLSO_COREDB_SECRETO` | Secreto del usuario de servicio de Desembolso en COREDB |
-| `CAP_DB_PASSWORD`, `CAP_SOL_TOKEN`, `CAP_OTP_CLAVE` | CAPTACION: su base en db-aux, el token con el que SOL consulta las referencias y la clave de los OTP |
+| `CAPTACION_COREDB_SECRETO`, `CAP_SOL_TOKEN`, `CAP_OTP_CLAVE` | CAPTACION: secreto de su usuario de servicio en COREDB, el token con el que SOL consulta las referencias y la clave de los OTP |
 | `BNA_PUERTO_*` | Puerto de cada servicio en esta máquina |
 
 - Para usar otro puerto, cambiar su `BNA_PUERTO_*` en `.env` y volver a ejecutar `./bna up`.

@@ -43,13 +43,8 @@ x-captacion: &captacion
   pull_policy: never
   environment: &captacion-entorno
     CORE_BASE_URL: http://coredb:8012
-    CAP_DB_HOST: db-aux
-    CAP_DB_PORT: "3306"
-    CAP_DB_USER: cap_user
-    CAP_DB_NAME: bna_captacion
-    CAP_DB_PASSWORD: ${CAP_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
     CAP_CORE_USUARIO: svc-captacion
-    CAP_CORE_SECRETO_ARCHIVO: /datos/coredb_secreto
+    CAP_CORE_SECRETO: ${CAPTACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
 
 x-sonda: &sonda
   interval: 5s
@@ -120,12 +115,15 @@ services:
         python -m COREDB.scripts.crear_servicio --modulo EVALUACION --username svc-evaluacion --nombre Evaluación
         && CORE_DB_SERVICIO_SECRETO="$$DESEMBOLSO_COREDB_SECRETO"
         python -m COREDB.scripts.crear_servicio --modulo DESEMBOLSO --username svc-desembolso --nombre Desembolso
+        && CORE_DB_SERVICIO_SECRETO="$$CAPTACION_COREDB_SECRETO"
+        python -m COREDB.scripts.crear_servicio --modulo CLIENTES --username svc-captacion --nombre "Captación de clientes"
     environment:
       <<: *coredb-entorno
       BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
       CORE_DB_ADMIN_INICIAL_PASSWORD: ${BNA_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
       EVALUACION_COREDB_SECRETO: ${EVALUACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       DESEMBOLSO_COREDB_SECRETO: ${DESEMBOLSO_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+      CAPTACION_COREDB_SECRETO: ${CAPTACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
     depends_on:
       db:
         condition: service_healthy
@@ -175,7 +173,9 @@ services:
 
   # ── CAPTACION: captación de clientes, sobre COREDB ──────────────────────
   # Verifica la identidad del solicitante, lo registra como cliente en COREDB y
-  # publica la referencia que consulta SOL (CR-INT-01). Su base propia está en db-aux.
+  # publica la referencia que consulta SOL (CR-INT-01). No tiene base propia: el
+  # expediente vive en la base integrada y se trabaja por COREDB. Su usuario de
+  # servicio (svc-captacion, módulo CLIENTES) lo crea coredb-init.
   captacion:
     <<: *captacion
     command: uvicorn CAPTACION.main:app --host 0.0.0.0 --port 8017
@@ -185,10 +185,8 @@ services:
       CAP_OTP_CLAVE: ${CAP_OTP_CLAVE:?Falta en .env. Ejecute ./bna up}
       # Sin proveedor de SMS ni de correo: el código OTP vuelve en la respuesta.
       CAP_OTP_SIMULADO: "true"
-    volumes:
-      - captacion-datos:/datos:ro
     depends_on:
-      captacion-init:
+      coredb-init:
         condition: service_completed_successfully
       coredb:
         condition: service_healthy
@@ -201,26 +199,6 @@ services:
         - python
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8017/ready", timeout=3)
-
-  # Crea la base de CAPTACION en db-aux y sus tablas, y con el administrador de
-  # COREDB crea o renueva su usuario de servicio (módulo CLIENTES). No borra datos.
-  captacion-init:
-    <<: *captacion
-    command: python -m CAPTACION.manage init
-    environment:
-      <<: *captacion-entorno
-      AUX_DB_ROOT_PASSWORD: ${AUX_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
-      BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
-      BNA_ADMIN_PASSWORD: ${BNA_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
-    volumes:
-      - captacion-datos:/datos
-    depends_on:
-      db-aux:
-        condition: service_healthy
-      coredb:
-        condition: service_healthy
-      coredb-init:
-        condition: service_completed_successfully
 
   # ── SOL: solicitud de crédito, con Captación y Evaluación simuladas ─────
   sol:
@@ -399,7 +377,7 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8000/health", timeout=3)
 
-  # ── Base auxiliar: `bna` legada, `bna_sol_mvp` de SOL y `bna_captacion` ──
+  # ── Base auxiliar: `bna` legada y `bna_sol_mvp` de SOL ────────────────
   # Aparte de la base integrada, que no recibe esquemas ni usuarios ajenos.
   db-aux:
     image: bna/db-aux:local
@@ -421,4 +399,3 @@ volumes:
   core-db-datos:
   db-aux-datos:
   seguridad-datos:
-  captacion-datos:

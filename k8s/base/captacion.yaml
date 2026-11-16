@@ -1,6 +1,6 @@
-# CAPTACION: captación de clientes, sobre COREDB. Su base propia (bna_captacion) está
-# en db-aux; la credencial de su usuario de servicio en COREDB la escribe el
-# contenedor de arranque en un volumen del pod, que solo vive con el pod.
+# CAPTACION: captación de clientes, sobre COREDB. No tiene base propia: el expediente
+# vive en la base integrada y se trabaja por COREDB. Su usuario de servicio
+# (svc-captacion, módulo CLIENTES) lo crea el arranque de COREDB con el secreto del Secret.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,51 +19,28 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         seccompProfile: { type: RuntimeDefault }
-      volumes:
-        - name: datos
-          emptyDir: { medium: Memory, sizeLimit: 1Mi }
       initContainers:
-        - name: esperar-dependencias
+        # COREDB crea svc-captacion antes de arrancar: cuando responde, el usuario ya existe.
+        - name: esperar-coredb
           image: bna/backend:local
           command:
             - python
             - -c
             - |
-              import socket, sys, time
-              for destino in (("db-aux", 3306), ("coredb", 8012)):
-                  for _ in range(150):
-                      try:
-                          socket.create_connection(destino, 2).close()
-                          break
-                      except OSError:
-                          time.sleep(2)
-                  else:
-                      sys.exit(f"{destino[0]} no respondió a tiempo.")
-          resources: &recursos-arranque
+              import sys, time, urllib.request as u
+              for _ in range(150):
+                  try:
+                      u.urlopen("http://coredb:8012/coredb/salud", timeout=2)
+                      sys.exit(0)
+                  except OSError:
+                      time.sleep(2)
+              sys.exit("COREDB no respondió a tiempo.")
+          resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 500m, memory: 256Mi }
           securityContext: &contenedor-seguro
             allowPrivilegeEscalation: false
             capabilities: { drop: [ALL] }
-        # Crea la base y las tablas, y crea o renueva el usuario de servicio en COREDB.
-        - name: preparar
-          image: bna/backend:local
-          command: [python, -m, CAPTACION.manage, init]
-          envFrom:
-            - configMapRef: { name: bna-configuracion }
-          env:
-            - name: CAP_DB_PASSWORD
-              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_DB_PASSWORD } }
-            - name: AUX_DB_ROOT_PASSWORD
-              valueFrom: { secretKeyRef: { name: bna-secretos, key: AUX_DB_ROOT_PASSWORD } }
-            - name: BNA_ADMIN_USUARIO
-              valueFrom: { secretKeyRef: { name: bna-secretos, key: BNA_ADMIN_USUARIO } }
-            - name: BNA_ADMIN_PASSWORD
-              valueFrom: { secretKeyRef: { name: bna-secretos, key: BNA_ADMIN_PASSWORD } }
-          volumeMounts:
-            - { name: datos, mountPath: /datos }
-          resources: *recursos-arranque
-          securityContext: *contenedor-seguro
       containers:
         - name: captacion
           image: bna/backend:local
@@ -71,14 +48,12 @@ spec:
           envFrom:
             - configMapRef: { name: bna-configuracion }
           env:
-            - name: CAP_DB_PASSWORD
-              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_DB_PASSWORD } }
+            - name: CAP_CORE_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAPTACION_COREDB_SECRETO } }
             - name: CAP_SOL_TOKEN
               valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_SOL_TOKEN } }
             - name: CAP_OTP_CLAVE
               valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_OTP_CLAVE } }
-          volumeMounts:
-            - { name: datos, mountPath: /datos, readOnly: true }
           ports:
             - { name: http, containerPort: 8017 }
           startupProbe:

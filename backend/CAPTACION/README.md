@@ -9,8 +9,13 @@ Módulo de Captación de Clientes. Lleva a una persona desde que pide un product
    restrictivas y PEP; validaciones manuales para la debida diligencia.
 4. **Centrales de riesgo** (SBS, Infocorp, Sentinel, Equifax) y **perfil** de riesgo de 0 a 1000.
 5. **Habilitación**: registra al cliente en **COREDB** como `HABILITADO` (o reutiliza el cliente
-   activo que ya tenga ese documento), le anota las verificaciones de celular y correo, y deja la
-   **referencia vigente** que consulta **Solicitud de Crédito** (contrato CR-INT-01).
+   activo que ya tenga ese documento), lo liga al caso y deja la **referencia vigente** que
+   consulta **Solicitud de Crédito** (contrato CR-INT-01). La base le anota las verificaciones de
+   celular y correo.
+
+**No tiene base propia**: el expediente vive en la base integrada, en las tablas de extensión
+`clientes.*_captacion` (desde `bd-v1.7-mysql`), y se trabaja por `/coredb/captacion`. La base
+guarda cada paso, aplica las reglas del expediente y recalcula el estado.
 
 Puerto **8017**. Pantalla del asesor: **http://localhost:3000/captacion**.
 
@@ -19,28 +24,31 @@ Puerto **8017**. Pantalla del asesor: **http://localhost:3000/captacion**.
 ```mermaid
 flowchart LR
   ase["Asesor en /captacion"] --> fe["frontend /api/captacion"] --> cap["CAPTACION :8017"]
-  cap -->|"token del asesor: GET /coredb/auth/me"| coredb["COREDB :8012"]
-  cap -->|"usuario de servicio: alta, validaciones, consulta"| coredb
-  cap --> aux[("db-aux: bna_captacion")]
+  cap -->|"token del asesor: /coredb/auth/me y /coredb/captacion"| coredb["COREDB :8012"]
+  cap -->|"usuario de servicio: alta del cliente, vínculo, referencias"| coredb
+  coredb --> db[("base integrada: clientes.*_captacion")]
   sol["SOL :8011"] -.->|"CR-INT-01: GET /cap/references (cuando haya Bus)"| cap
 ```
 
 | Con | Cómo | Qué |
 |---|---|---|
-| **COREDB / Clientes** | Usuario de servicio `svc-captacion` (rol SERVICIO, módulo CLIENTES) | `POST /coredb/clientes/validaciones/documento` (¿ya es cliente?), `POST /coredb/clientes` (alta HABILITADA), `POST /coredb/clientes/{cod}/validaciones` (CELULAR, CORREO), `GET /coredb/clientes/{cod}` |
-| **COREDB / sesión** | Token JWT del asesor | `GET /coredb/auth/me`: quién es y sus permisos. Leer exige `VER_CLIENTE`; trabajar un caso, `CREAR_CLIENTE` (ASESOR y ADMINISTRADOR) |
+| **COREDB / expediente** | Token JWT del asesor | `GET /coredb/auth/me` (quién es y sus permisos) y `/coredb/captacion/...`: solicitante, caso, consentimientos, OTP, validaciones, centrales, perfil, estado y habilitación. Leer exige `VER_CLIENTE`; trabajar un caso, `CREAR_CLIENTE` (ASESOR y ADMINISTRADOR). Cada paso queda a nombre del asesor en la bitácora de la base |
+| **COREDB / Clientes** | Usuario de servicio `svc-captacion` (rol SERVICIO, módulo CLIENTES) | `POST /coredb/clientes/validaciones/documento` (¿ya es cliente?), `POST /coredb/clientes` (alta HABILITADA), `POST /coredb/captacion/casos/{id}/cliente` (lo liga al caso), `GET /coredb/clientes/{cod}` y las lecturas de las referencias |
 | **Solicitud de Crédito** | Token de servicio `CAP_SOL_TOKEN` | `GET /cap/references?search=&limit=50` y `GET /cap/references/{idCliente}`, con la forma exacta que espera `backend/SOL/integrations.py` |
-| **Base propia** | `cap_user` sobre `bna_captacion` en db-aux | El expediente: solicitantes, casos, consentimientos, OTP, validaciones, consultas, perfiles y bitácora. **No** escribe en la base integrada: el cliente vive en COREDB |
 
 - **Por qué un usuario de servicio del módulo CLIENTES.** COREDB solo acepta un cliente
   `HABILITADO` de ese usuario (punto R-01 de [`CONTRATO_CLIENTES.md`](../COREDB/CONTRATO_CLIENTES.md)), y
   la base integrada no tiene un módulo `CAPTACION` en `core.modulo`: la captación forma parte del
-  dominio de Clientes (`clientes.verificacion_captacion`). Si el equipo decide otra cosa, solo
-  cambia `CAP_CORE_USUARIO` y el módulo con el que se crea (`CAPTACION/manage.py`).
-- **El usuario de servicio lo crea el arranque**: `captacion-init` inicia sesión con el
-  administrador de COREDB, crea `svc-captacion` por `POST /coredb/usuarios/servicios` (o renueva su
-  secreto si ya existe) y lo escribe en un volumen que solo lee CAPTACION. Es el procedimiento de la
-  sección 2 de `CONTRATO_CLIENTES.md`. Ningún secreto queda en el repositorio.
+  dominio de Clientes (`clientes.verificacion_captacion`). Por lo mismo, los eventos del expediente
+  van al módulo CLIENTES. Si el equipo decide otra cosa, cambia `CAP_CORE_USUARIO` y el módulo con
+  el que lo crea el arranque de COREDB.
+- **El usuario de servicio lo crea el arranque de COREDB** (`coredb-init` en compose, el contenedor
+  `servicio-captacion` en Kubernetes) con `COREDB.scripts.crear_servicio` y el secreto
+  `CAPTACION_COREDB_SECRETO` de `.env`, como los de Evaluación y Desembolso. Ningún secreto queda en
+  el repositorio.
+- **El OTP**: CAPTACION genera el código y calcula su HMAC con `CAP_OTP_CLAVE` y el id del OTP;
+  COREDB solo recibe el HMAC, lo compara, cuenta los intentos y lo vence según
+  `clientes.tipo_contacto` (SMS: 5 minutos; correo: 10; 3 intentos).
 - **SOL hoy sigue en modo SIMULADO**: para pasar a REAL necesita además Evaluación, Seguridad y el
   Bus. Mientras tanto, la prueba `tests/test_contrato_sol.py` usa **el adaptador real de SOL, sin
   cambios**, contra CAPTACION: SOL acepta la referencia de un cliente habilitado y rechaza una
@@ -80,14 +88,14 @@ Base `/api/v1/captacion`, con respuestas ITIL-02 (`success`, `data`, `metadata`;
 | POST | `/casos` | Abre el caso (un solo caso abierto por solicitante: 409 `ERR-CAP-CASO-ABIERTO`) |
 | GET | `/casos?estado=` · `/casos/{id}` | Bandeja y expediente completo, con `faltantes` |
 | POST | `/casos/{id}/consentimientos` | Consentimientos |
-| POST | `/casos/{id}/otp` · `/casos/{id}/otp/verificar` | Código OTP (HMAC-SHA256, 5 min, 3 intentos) |
-| POST | `/casos/{id}/validaciones` · `/casos/{id}/validaciones/manual` | Identidad |
+| POST | `/casos/{id}/otp` · `/casos/{id}/otp/verificar` | Código OTP (HMAC-SHA256; SMS 5 min, correo 10 min, 3 intentos) |
+| POST | `/casos/{id}/validaciones` · `/casos/{id}/validaciones/manual` | Identidad. Si un proveedor rechaza, el caso se cierra y los siguientes no se consultan |
 | POST | `/casos/{id}/consultas-riesgo` · `/casos/{id}/perfil` | Centrales y perfil |
 | POST | `/casos/{id}/estado` | `OBSERVAR`, `LEVANTAR_OBSERVACION`, `RECHAZAR`, `REVOCAR`, con motivo |
 | POST | `/casos/{id}/habilitar` | Cliente en COREDB y referencia vigente. Se puede repetir sin duplicar |
 | GET | `/casos/{id}/referencia` | La referencia que verá SOL |
 | GET | `/cap/references` · `/cap/references/{idCliente}` | CR-INT-01, solo con `CAP_SOL_TOKEN` |
-| GET | `/health` · `/ready` | `/ready` comprueba la base propia, COREDB y la credencial de servicio |
+| GET | `/health` · `/ready` | `/ready` comprueba COREDB y la credencial de servicio |
 
 ## Proveedores simulados
 
@@ -107,26 +115,26 @@ están contratados: `proveedores.py` responde de forma determinista, y la refere
 | Variable | Para qué |
 |---|---|
 | `CORE_BASE_URL` | COREDB (`http://coredb:8012`) |
-| `CAP_DB_HOST`, `CAP_DB_PORT`, `CAP_DB_USER`, `CAP_DB_PASSWORD`, `CAP_DB_NAME` | Base propia en db-aux |
-| `CAP_CORE_USUARIO`, `CAP_CORE_SECRETO_ARCHIVO` (o `CAP_CORE_SECRETO`) | Usuario de servicio en COREDB |
+| `CAP_CORE_USUARIO`, `CAP_CORE_SECRETO` | Usuario de servicio en COREDB (`svc-captacion`; el secreto es `CAPTACION_COREDB_SECRETO` de `.env`) |
 | `CAP_SOL_TOKEN` | Token de SOL para CR-INT-01 (32 caracteres o más) |
 | `CAP_OTP_CLAVE`, `CAP_OTP_SIMULADO` | HMAC de los OTP; devolver el código en laboratorio |
 | `CAP_VIGENCIA_DIAS`, `CAP_VERSION_TERMINOS` | Vigencia de la habilitación (30) y versión de los términos (`v1`) |
 
-En el producto, `./bna up` genera las claves en `.env` y levanta `captacion-init` y `captacion`.
+En el producto, `./bna up` genera las claves en `.env`; `coredb-init` crea el usuario de servicio y luego arranca `captacion`.
 
 ## Pruebas
 
 ```bash
-cd backend
-python -m pytest -q CAPTACION/tests                      # SQLite en memoria, COREDB falso
-CAP_TEST_DB_URL="mysql+pymysql://cap_user:...@127.0.0.1:3306/bna_captacion" \
-  python -m pytest -q CAPTACION/tests                    # lo mismo contra MySQL
+backend/CAPTACION/scripts/pruebas_integracion.sh
 ```
 
-`./bna test` corre además, en las imágenes de cada módulo:
-- `test_contrato_core.py` en la de COREDB: lo que CAPTACION envía cumple sus esquemas reales.
-- `test_contrato_sol.py` en la de SOL: el adaptador real de SOL acepta las referencias.
+Levanta una base integrada y un COREDB nuevos en contenedores, crea el administrador y
+`svc-captacion` con los scripts de arranque de COREDB, corre la suite contra ellos y, en la imagen
+de SOL, `test_contrato_sol.py`: el adaptador real de SOL acepta las referencias. Al terminar borra
+los contenedores y sus volúmenes. Sin COREDB (`CAPTACION_TEST_COREDB`) solo corren las pruebas de
+lógica (`test_logica.py`).
+
+`./bna test` corre lo mismo y además:
 - El flujo de `./bna smoke`, que capta y habilita a un cliente en el producto levantado y comprueba
   el cliente en COREDB, la referencia CR-INT-01 y el puente del frontend.
 
