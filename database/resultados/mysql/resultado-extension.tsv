@@ -47,6 +47,27 @@ X65	bna_app_user	Ventanilla no tiene tope automático: transferencia de 15000 (C
 X66	bna_app_user	Ventanilla opera en USD sin tope automático (C2)	pasa
 X67	bna_app_user	Un crédito por AGE no depende del tope (C2)	pasa
 X68	bna_app_user	Una autorización por HB en USD se rechaza como en el movimiento (C2)	pasa
+X357	bna_app_user	Un retiro en cajero dentro del tope se autoriza y retiene el saldo	pasa
+X358	bna_app_user	Repetir el uuid con los mismos datos no vuelve a retener el saldo	pasa
+X359	bna_app_user	El mismo uuid con otro monto se rechaza	pasa
+X360	bna_app_user	Sin saldo queda RECHAZADA con 51 y el saldo no cambia	pasa
+X361	bna_app_user	Sobre el tope del cajero queda RECHAZADA con 61, sin montos en el motivo	pasa
+X362	bna_app_user	Con la tarjeta bloqueada queda RECHAZADA con 62	pasa
+X363	bna_app_user	Una cuenta mancomunada conjunta en cajero queda RECHAZADA con 57 (RN-ATM-005)	pasa
+X364	bna_app_user	Una tarjeta no autoriza en una cuenta que no opera	pasa
+X365	bna_app_user	Un monto de cero se rechaza	pasa
+X366	bna_app_user	El extorno libera el saldo retenido y el tope del día (RN-ATM-003)	pasa
+X367	bna_app_user	Repetir el extorno no cambia nada y deja un solo evento	pasa
+X368	bna_app_user	No se extorna una autorización que no existe	pasa
+X369	bna_app_user	No se extorna una autorización rechazada	pasa
+X370	bna_app_user	No se extorna una operación que ya tiene su movimiento	pasa
+X371	bna_app_user	Un PIN registrado se valida y no queda en claro	pasa
+X372	bna_app_user	Un PIN equivocado registra el intento FALLIDO y descuenta uno	pasa
+X373	bna_app_user	El tercer PIN equivocado bloquea la tarjeta (RN-TAR-004)	pasa
+X374	bna_app_user	Con la tarjeta bloqueada no se valida el PIN ni se registra el intento	pasa
+X375	bna_app_user	Un PIN de cinco dígitos se rechaza sin mostrarlo (RN-TAR-001)	pasa
+X376	bna_app_user	Cambiar el PIN reemplaza el anterior y reinicia los intentos	pasa
+X377	bna_app_user	La clave web de seis dígitos se valida por Home Banking	pasa
 X110	bna_api_user	bna_api no puede: SELECT tarjetas.credencial	pasa
 X111	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_token	pasa
 X112	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_coordenada	pasa
@@ -235,6 +256,10 @@ X338	bna_api_user	bna_api no puede: verificar_aprobacion	pasa
 X339	bna_api_user	bna_api no puede: INSERT en creditos.numerador_orden	pasa
 X340	bna_api_user	bna_api no puede: escribir por la vista de créditos	pasa
 X341	bna_api_user	bna_api no puede: UPDATE de creditos.cuota	pasa
+X378	bna_api_user	bna_api autoriza por el procedimiento y lee la autorización en su vista	pasa
+X379	bna_api_user	bna_api no puede: INSERT en autorizacion	pasa
+X380	bna_api_user	bna_api no puede: formato_credencial	pasa
+X381	bna_api_user	bna_api registra y valida un PIN sin leer las credenciales	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
@@ -339,3 +364,7 @@ X353	bna_api_user	Dos confirmaciones simultáneas de una orden abonan una sola v
 X354	bna_api_user	Dos pagos simultáneos con la misma referencia debitan una sola vez	pasa
 X355	bna_api_user	Dos preparaciones simultáneas con la misma llave dejan una sola orden	pasa
 X356	root	El evento diario de vencimientos de créditos existe y está activo	pasa
+X382	bna_api_user	Una autorización en autocommit queda AUTORIZADA y retiene el saldo (v1.5)	pasa
+X383	bna_api_user	Un rechazo en autocommit deja la autorización RECHAZADA (v1.5)	pasa
+X384	bna_api_user	Un PIN equivocado en autocommit deja el intento FALLIDO (v1.5)	pasa
+X385	bna_api_user	Una autorización que falla a mitad no deja la fila ni retiene el saldo (v1.5)	pasa

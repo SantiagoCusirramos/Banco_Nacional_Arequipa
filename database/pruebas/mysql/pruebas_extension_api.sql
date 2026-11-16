@@ -948,3 +948,21 @@ CALL prueba.rechaza('X340', 'Extensión', 'bna_api', 'bna_api no puede: escribir
 
 CALL prueba.rechaza('X341', 'Extensión', 'bna_api', 'bna_api no puede: UPDATE de creditos.cuota',
   JSON_ARRAY("UPDATE creditos.cuota SET saldo_pendiente = 0"), 'denied', 'privilegio');
+
+-- Autorizaciones y credenciales de tarjeta (v1.5), con el rol de la API.
+CALL prueba.verifica('X378', 'Extensión', 'bna_api', 'bna_api autoriza por el procedimiento y lee la autorización en su vista',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000001'), UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'CTA-PEN-2', 'VEN', NULL, 'RETIRO', 10, NULL, 'pruebas', @e, @c)"),
+  "SELECT @e = 'AUTORIZADA' AND (SELECT estado_autorizacion FROM tarjetas.v_autorizacion_api WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000001')) = 'AUTORIZADA' AND (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'tarjetas' AND table_name = 'v_autorizacion_api' AND column_name IN ('ip_origen', 'nivel_riesgo')) = 0",
+  'AUTORIZADA y legible en v_autorizacion_api', "SELECT @e", 'privilegio');
+
+CALL prueba.rechaza('X379', 'Extensión', 'bna_api', 'bna_api no puede: INSERT en autorizacion',
+  JSON_ARRAY("INSERT INTO tarjetas.autorizacion (tipo_operacion, monto, estado_autorizacion, id_canal, id_tarjeta, num_cuenta) VALUES ('RETIRO', 1, 'AUTORIZADA', 'VEN', UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'CTA-PEN-2')"),
+  'denied', 'privilegio');
+
+CALL prueba.rechaza('X380', 'Extensión', 'bna_api', 'bna_api no puede: formato_credencial',
+  JSON_ARRAY("CALL tarjetas.formato_credencial('PIN_ATM', '1234')"), 'denied', 'privilegio');
+
+CALL prueba.verifica('X381', 'Extensión', 'bna_api', 'bna_api registra y valida un PIN sin leer las credenciales',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'PIN_ATM', '2468', 'pruebas')",
+             "CALL tarjetas.validar_credencial(UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'PIN_ATM', '2468', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)"),
+  "SELECT @r = 'EXITOSO' AND @i = 3", 'EXITOSO', "SELECT @r", 'privilegio');
