@@ -1,43 +1,64 @@
-"""CR-INT-03: entrega a SOL el resultado final de cada evaluación, al menos una vez.
+"""CR-INT-03: devuelve a SOL el resultado final de cada evaluación, sin estado propio.
+
+Evaluación no guarda nada: cada ciclo lee de COREDB, con su usuario de servicio, las
+solicitudes de los últimos `envio_ventana_dias` días con un resultado final (APROBADO o
+RECHAZADO, por la regla o por el analista) y se lo envía a SOL. El `idOperacion` y el cuerpo
+salen solo del resultado, así que repetir el envío manda exactamente el mismo mensaje y SOL lo
+reconoce sin duplicarlo (`reintento_reconocido`). Un OBSERVADO de la regla no se envía: espera
+la decisión del analista (por omisión del equipo, T1, no vuelve a SOL como pedido de corrección).
 
 Sigue el contrato de SOL (Documents/solicitud-credito/CONTRATOS_HTTP_V2.md): POST
 /sol/integrations/evaluation-results con su token de resultados, X-Idempotency-Key igual a
-idOperacion y X-Correlation-ID igual a idCorrelacion. SOL reconoce sin duplicar un mensaje
-idéntico repetido, y responde 409 si recibe el resultado antes de conciliar su acuse: entonces
-se reintenta. Un envío se reserva unos segundos antes de llamar, así que varios procesos pueden
-trabajar a la vez sin enviar lo mismo dos veces en paralelo.
-
-Mientras SOL siga en modo SIMULADO no hay a quién entregar: sin EVALUACION_SOL_URL los
-resultados quedan PENDIENTE y se entregan cuando se configure.
+idOperacion y X-Correlation-ID igual a idCorrelacion. Mientras SOL siga en modo SIMULADO
+(`EVALUACION_SOL_URL` vacía) no hay a quién entregar y el ciclo no corre.
 """
 from __future__ import annotations
 
 import json
 import logging
 import threading
-from datetime import timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
 
-from .comun import utc_ahora
+from .comun import ErrorEva
 from .config import Config
-from .servicio import _historial, _leer_json
+from .coredb import ClienteCoreDb
 
 log = logging.getLogger("evaluacion.envios")
 
 RUTA_RESULTADOS = "/sol/integrations/evaluation-results"
+# Espacio de nombres propio para los idOperacion de CR-INT-03 (uuid5).
+ESPACIO_CR_INT_03 = uuid.UUID("6f1d3c2a-8b4e-5f70-9a1c-2e3d4b5c6a7f")
+ESTADOS_CON_RESULTADO = ("APROBADA", "RECHAZADA", "DESEMBOLSADA")
+LIMITE_BANDEJA = 200
+
+
+def id_operacion(id_evaluacion: str, decision: str) -> str:
+    return str(uuid.uuid5(ESPACIO_CR_INT_03, f"CR-INT-03:{id_evaluacion}:{decision}"))
+
+
+def resultado_para_sol(detalle: dict) -> dict | None:
+    """El mensaje CR-INT-03 de una solicitud, o None si su ronda vigente no tiene resultado final."""
+    ultima = next((e for e in detalle.get("evaluaciones", []) if e.get("esUltima")), None)
+    if ultima is None or ultima["resultado"] not in ("APROBADO", "RECHAZADO"):
+        return None
+    decision = ultima["resultado"]
+    if ultima.get("decision"):
+        observaciones = ultima.get("comentario") or f"Decisión del analista: {decision}."
+    else:
+        observaciones = f"{decision.capitalize()} por la regla {ultima['regla']} (RN-EVA-002-P)."
+    operacion = id_operacion(ultima["idEvaluacion"], decision)
+    return {"idSolicitud": detalle["idSolicitud"], "versionSolicitud": detalle["versionSolicitud"],
+            "idEvaluacion": ultima["idEvaluacion"], "ronda": ultima["ronda"], "idOperacion": operacion,
+            "idCorrelacion": operacion, "decision": decision, "observaciones": observaciones}
 
 
 class DespachadorResultados:
-    RESERVA_SEG = 60
-    ESPERA_MAXIMA_SEG = 300
-    MAXIMO_CONFLICTOS = 20
-
-    def __init__(self, engine: Engine, config: Config, transporte: httpx.BaseTransport | None = None):
-        self._engine = engine
+    def __init__(self, config: Config, coredb: ClienteCoreDb, transporte: httpx.BaseTransport | None = None):
         self._config = config
+        self._coredb = coredb
         self._http = httpx.Client(base_url=config.sol_url or "http://sol.invalid", timeout=config.timeout_seg,
                                   transport=transporte, follow_redirects=False, trust_env=False)
 
@@ -48,65 +69,46 @@ class DespachadorResultados:
     def configurado(self) -> bool:
         return bool(self._config.sol_url and self._config.sol_token_resultados)
 
-    def ciclo(self, limite: int = 10) -> int:
-        """Entrega los resultados que tocan. Devuelve cuántos quedaron ENTREGADO."""
+    def resultados(self) -> list[dict]:
+        """Los mensajes CR-INT-03 de las solicitudes recientes con resultado final."""
+        desde = datetime.now(timezone.utc) - timedelta(days=self._config.envio_ventana_dias)
+        mensajes = []
+        for estado in ESTADOS_CON_RESULTADO:
+            _, bandeja = self._coredb.como_servicio(
+                "GET", "/coredb/creditos/solicitudes", params={"estado": estado, "limite": LIMITE_BANDEJA})
+            for s in bandeja:
+                creada = datetime.fromisoformat(s["fechaCreacion"].replace("Z", "+00:00"))
+                if (creada if creada.tzinfo else creada.replace(tzinfo=timezone.utc)) < desde:
+                    continue
+                _, detalle = self._coredb.como_servicio("GET", f"/coredb/creditos/solicitudes/{s['idSolicitud']}")
+                mensaje = resultado_para_sol(detalle)
+                if mensaje is not None:
+                    mensajes.append(mensaje)
+        return mensajes
+
+    def ciclo(self) -> int:
+        """Envía los resultados recientes. Devuelve cuántos aceptó SOL (nuevos o reconocidos)."""
         if not self.configurado:
             return 0
-        ahora = utc_ahora()
-        with self._engine.begin() as c:
-            filas = c.execute(text(
-                "SELECT id_operacion, id_evaluacion, contenido, intentos FROM eva_envio "
-                "WHERE estado = 'PENDIENTE' AND siguiente_intento <= :ahora ORDER BY creado_en LIMIT :limite "
-                "FOR UPDATE SKIP LOCKED"), {"ahora": ahora, "limite": limite}).all()
-            for f in filas:
-                c.execute(text("UPDATE eva_envio SET siguiente_intento = :hasta WHERE id_operacion = :op"),
-                          {"hasta": ahora + timedelta(seconds=self.RESERVA_SEG), "op": f.id_operacion})
-        return sum(self._entregar(f) for f in filas)
+        return sum(self._entregar(m) for m in self.resultados())
 
-    def _entregar(self, fila) -> int:
-        contenido = _leer_json(fila.contenido)
-        intentos = fila.intentos + 1
+    def _entregar(self, mensaje: dict) -> int:
         try:
-            r = self._http.post(RUTA_RESULTADOS, content=json.dumps(contenido, ensure_ascii=False).encode(),
+            r = self._http.post(RUTA_RESULTADOS, content=json.dumps(mensaje, ensure_ascii=False).encode(),
                                 headers={"Authorization": f"Bearer {self._config.sol_token_resultados}",
                                          "Content-Type": "application/json",
-                                         "X-Idempotency-Key": contenido["idOperacion"],
-                                         "X-Correlation-ID": contenido["idCorrelacion"]})
+                                         "X-Idempotency-Key": mensaje["idOperacion"],
+                                         "X-Correlation-ID": mensaje["idCorrelacion"]})
         except httpx.HTTPError as exc:
-            self._reprogramar(fila, intentos, f"SIN_RESPUESTA: {type(exc).__name__}")
+            log.warning("Resultado %s sin entregar a SOL (%s); se reintenta en el próximo ciclo",
+                        mensaje["idOperacion"], type(exc).__name__)
             return 0
         if r.is_success:
-            self._terminar(fila, intentos, "ENTREGADO", None)
             return 1
-        if r.status_code in (408, 429) or r.status_code >= 500:
-            self._reprogramar(fila, intentos, f"HTTP_{r.status_code}")
-        elif r.status_code == 409 and intentos < self.MAXIMO_CONFLICTOS:
-            # SOL todavía no concilia el acuse de esta ronda: el contrato pide reintentar.
-            self._reprogramar(fila, intentos, "HTTP_409: SOL aún no concilia el acuse")
-        else:
-            # Credencial o contrato: hace falta revisarlo; se reintenta a mano desde la pantalla.
-            self._terminar(fila, intentos, "ERROR", f"HTTP_{r.status_code}")
+        # 409: SOL aún no concilia el acuse o ya cerró la solicitud; 5xx: no disponible. El próximo
+        # ciclo lo intenta otra vez, mientras la solicitud esté dentro de la ventana.
+        log.warning("SOL respondió %s al resultado %s", r.status_code, mensaje["idOperacion"])
         return 0
-
-    def _reprogramar(self, fila, intentos: int, error: str) -> None:
-        espera = min(10 * 2 ** (intentos - 1), self.ESPERA_MAXIMA_SEG)
-        with self._engine.begin() as c:
-            c.execute(text("UPDATE eva_envio SET intentos = :intentos, ultimo_error = :error, "
-                           "siguiente_intento = :siguiente WHERE id_operacion = :op AND estado = 'PENDIENTE'"),
-                      {"intentos": intentos, "error": error[:200],
-                       "siguiente": utc_ahora() + timedelta(seconds=espera), "op": fila.id_operacion})
-        log.warning("Resultado %s sin entregar a SOL (%s); nuevo intento en %s s", fila.id_operacion, error, espera)
-
-    def _terminar(self, fila, intentos: int, estado: str, error: str | None) -> None:
-        ahora = utc_ahora()
-        with self._engine.begin() as c:
-            c.execute(text("UPDATE eva_envio SET estado = :estado, intentos = :intentos, ultimo_error = :error, "
-                           "entregado_en = :entregado WHERE id_operacion = :op AND estado = 'PENDIENTE'"),
-                      {"estado": estado, "intentos": intentos, "error": error,
-                       "entregado": ahora if estado == "ENTREGADO" else None, "op": fila.id_operacion})
-            _historial(c, "RESULTADO_ENTREGADO" if estado == "ENTREGADO" else "RESULTADO_CON_ERROR", "SISTEMA",
-                       evaluacion=fila.id_evaluacion,
-                       detalle={"idOperacion": fila.id_operacion, "intentos": intentos, "error": error})
 
 
 class Trabajador(threading.Thread):
@@ -122,6 +124,8 @@ class Trabajador(threading.Thread):
         while not self._parar.wait(self._intervalo):
             try:
                 self._despachador.ciclo()
+            except ErrorEva as exc:
+                log.warning("Ciclo de resultados a SOL sin COREDB: %s", exc.codigo)
             except Exception:  # noqa: BLE001 - un ciclo fallido no debe detener los siguientes
                 log.exception("Falló un ciclo de entrega de resultados a SOL")
 

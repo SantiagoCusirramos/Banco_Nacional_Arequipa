@@ -1,76 +1,44 @@
-"""Quién entra a qué: personal con el token de COREDB, Desembolso con su usuario de servicio y SOL con el suyo."""
-import httpx
+"""Quién entra a las rutas del personal: COREDB valida el token y Evaluación lo reenvía."""
 import pytest
-from fastapi.testclient import TestClient
 
-from EVALUACION.main import crear_app
-from EVALUACION.tests.ayudas import TOKEN_SOL, aprobada, cabeceras, construir_contexto
+from EVALUACION.tests.ayudas import (SERVICIO_SECRETO, SERVICIO_USUARIO, cabeceras, evaluar, login, nuevo_sobre,
+                                     persona, recibir)
 
-
-@pytest.fixture
-def casos(api):
-    """Una evaluación aprobada; devuelve (id_evaluacion, id_aprobacion)."""
-    d = aprobada(api)
-    return d["idEvaluacion"], d["aprobacion"]["idAprobacion"]
+RUTAS_LECTURA = ["/eva/v1/solicitudes", "/eva/v1/aprobaciones", "/eva/v1/catalogo", "/eva/v1/resultados-sol"]
 
 
-def test_sin_token_o_con_uno_invalido(api):
-    sin_token = api.get("/eva/v1/evaluaciones")
-    assert sin_token.status_code == 401 and sin_token.json()["error"]["code"] == "TOKEN_REQUERIDO"
-    invalido = api.get("/eva/v1/evaluaciones", headers=cabeceras("token-que-coredb-no-conoce"))
-    assert invalido.status_code == 401 and invalido.json()["error"]["code"] == "SESION_INVALIDA"
-    # El token de SOL no es una sesión de COREDB.
-    assert api.get("/eva/v1/evaluaciones", headers=cabeceras(TOKEN_SOL)).status_code == 401
+def test_sin_token_o_con_token_invalido(api):
+    for ruta in RUTAS_LECTURA:
+        r = api.get(ruta)
+        assert r.status_code == 401 and r.json()["error"]["code"] == "TOKEN_REQUERIDO"
+    r = api.get("/eva/v1/solicitudes", headers=cabeceras("token-que-no-firmo-coredb"))
+    assert r.status_code == 401 and r.json()["error"]["code"] == "SESION_INVALIDA"
 
 
-@pytest.mark.parametrize(("token", "lee", "evalua", "decide", "audita"), [
-    ("tok-analista", True, True, True, False),
-    ("tok-auditor", True, False, False, True),
-    ("tok-admin", True, True, True, True),
-    ("tok-operador", False, False, False, False),
-    ("tok-desembolso", False, False, False, False),
-])
-def test_permisos_del_personal(api, casos, token, lee, evalua, decide, audita):
-    id_evaluacion, id_aprobacion = casos
-    esperado = lambda permitido: 200 if permitido else 403  # noqa: E731
-    assert api.get("/eva/v1/evaluaciones", headers=cabeceras(token)).status_code == esperado(lee)
-    assert api.get(f"/eva/v1/evaluaciones/{id_evaluacion}", headers=cabeceras(token)).status_code == esperado(lee)
-    assert api.get("/eva/v1/historial", headers=cabeceras(token)).status_code == esperado(audita or decide)
-    # Ya tiene situación registrada: quien puede evaluar recibe 409, quien no, 403.
-    situacion = api.post(f"/eva/v1/evaluaciones/{id_evaluacion}/situacion-financiera", headers=cabeceras(token),
-                         json={"ingresoMensual": "5000.00", "deudaMensual": "0.00", "riesgo": "BUENO",
-                               "verificada": True, "version": 1})
-    assert situacion.status_code == (409 if evalua else 403)
-    revocar = api.post(f"/eva/v1/aprobaciones/{id_aprobacion}/revocacion", headers=cabeceras(token),
-                       json={"motivo": "Prueba de permisos del rol.", "version": 99})
-    assert revocar.status_code == (409 if decide else 403)
+def test_el_usuario_de_servicio_no_entra_a_las_rutas_del_personal(api):
+    token = login(SERVICIO_USUARIO, SERVICIO_SECRETO)
+    for ruta in RUTAS_LECTURA:
+        r = api.get(ruta, headers=cabeceras(token))
+        assert r.status_code == 403 and r.json()["error"]["code"] == "PERMISO_DENEGADO"
 
 
-def test_cr_int_04_es_de_desembolso(api, casos):
-    _, id_aprobacion = casos
-    ruta = f"/eva/v1/aprobaciones/{id_aprobacion}"
-    assert api.get(ruta, headers=cabeceras("tok-desembolso")).status_code == 200
-    assert api.get(ruta, headers=cabeceras("tok-analista")).status_code == 200
-    assert api.get(ruta, headers=cabeceras("tok-cobranza")).status_code == 403
-    assert api.get(ruta, headers=cabeceras("tok-operador")).status_code == 403
-    cuerpo = {"version": 1, "codigoOrden": "DES-2026-000001", "fechaDesembolso": "2026-01-01T10:00:00-05:00"}
-    for token in ("tok-analista", "tok-admin", "tok-cobranza"):
-        assert api.post(f"{ruta}/desembolso", json=cuerpo, headers=cabeceras(token)).status_code == 403
+@pytest.mark.parametrize("rol", ["AUDITOR", "OPERADOR", "ASESOR"])
+def test_lectura_sin_evaluar(api, admin, cliente, rol):
+    token, _ = persona(admin, rol)
+    sobre = nuevo_sobre(cliente)
+    recibir(api, sobre)
+    assert api.get(f"/eva/v1/solicitudes/{sobre['idSolicitud']}", headers=cabeceras(token)).status_code == 200
+    r = evaluar(api, token, sobre["idSolicitud"], "5000.00")
+    assert r.status_code == 403 and r.json()["error"]["code"] == "PERMISO_DENEGADO"
+    r = api.post(f"/eva/v1/solicitudes/{sobre['idSolicitud']}/revocacion", headers=cabeceras(token),
+                 json={"motivo": "Motivo de una revocación."})
+    assert r.status_code == 403
 
 
-def test_si_coredb_no_responde(base_de_datos, root, sol):
-    def caido(peticion: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("COREDB apagado", request=peticion)
-
-    contexto = construir_contexto(base_de_datos, sol, coredb=caido)
-    with TestClient(crear_app(contexto=contexto)) as api:
-        r = api.get("/eva/v1/evaluaciones", headers=cabeceras("tok-analista"))
-        assert r.status_code == 503 and r.json()["error"]["code"] == "COREDB_NO_DISPONIBLE"
-        assert api.get("/salud").status_code == 200    # la salud no depende de COREDB
-
-
-def test_la_correlacion_vuelve_en_la_respuesta(api):
-    r = api.get("/eva/v1/evaluaciones", headers={**cabeceras("tok-analista"), "X-Correlation-ID": "traza-123"})
-    assert r.headers["X-Correlation-ID"] == "traza-123"
-    invalida = api.get("/salud", headers={"X-Correlation-ID": "con espacios no vale"})
-    assert invalida.headers["X-Correlation-ID"] != "con espacios no vale"
+def test_campos_desconocidos_se_rechazan(api, analista, cliente):
+    sobre = nuevo_sobre(cliente)
+    recibir(api, sobre)
+    r = api.post(f"/eva/v1/solicitudes/{sobre['idSolicitud']}/evaluaciones", headers=cabeceras(analista[0]),
+                 json={"versionSolicitud": 1, "ingresoMensual": "5000.00", "deudaMensual": "0.00",
+                       "riesgo": "BUENO", "verificada": True, "score": 999})
+    assert r.status_code == 422

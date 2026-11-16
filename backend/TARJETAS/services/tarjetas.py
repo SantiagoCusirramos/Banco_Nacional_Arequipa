@@ -4,10 +4,14 @@ from uuid import UUID, uuid4, uuid5
 
 from TARJETAS.core_client import CoreClient
 from TARJETAS.exceptions import TarjetasError
-from TARJETAS.schemas.tarjetas import BloqueoIn, EmisionIn, EstadoIn
+from TARJETAS.schemas.tarjetas import (
+    AutorizacionIn, BloqueoIn, CredencialIn, EmisionIn, EstadoIn, ExtornoIn, TipoCredencial, ValidacionIn,
+)
 
 # Espacio de nombres fijo de los ids de emision. No cambiarlo: una llave ya usada daria otro id.
 _ESPACIO_EMISION = UUID("2f6c1b7e-5a43-4d9e-9a1c-7b3e8f0d4c21")
+# El de las autorizaciones: la misma llave en una emisión y en una autorización da ids distintos.
+_ESPACIO_AUTORIZACION = UUID("9d3a4e51-0c7b-4f62-8e15-3b6a2c9d7f40")
 
 
 def _uuid(valor: str) -> str:
@@ -105,3 +109,62 @@ def bloquear(core: CoreClient, id_tarjeta: str, datos: BloqueoIn, correlation_id
              authorization: str | None = None):
     return cambiar_estado(core, id_tarjeta, EstadoIn(estado="BLOQUEADA", motivo=datos.motivo),
                           correlation_id, authorization)
+
+
+def _uuid_autorizacion(valor: str) -> str:
+    try:
+        return str(UUID(valor))
+    except ValueError:
+        raise TarjetasError("ERR-TAR-ID-INVALIDO", "El identificador de la autorización debe ser un UUID", 400)
+
+
+def id_de_autorizacion(idempotency_key: str) -> str:
+    """Como en la emisión: repetir la autorización con la misma llave devuelve la ya registrada
+    y no retiene el saldo dos veces (RN-BUS-002)."""
+    return str(uuid5(_ESPACIO_AUTORIZACION, idempotency_key))
+
+
+def _canal(datos) -> dict:
+    return {"id_canal": datos.id_canal} if datos.id_canal else {"id_terminal": datos.id_terminal}
+
+
+def autorizar(core: CoreClient, id_tarjeta: str, datos: AutorizacionIn, idempotency_key: str,
+              correlation_id: str, authorization: str | None = None) -> dict:
+    payload = {
+        "uuid_autorizacion": id_de_autorizacion(idempotency_key),
+        "id_tarjeta": _id_tarjeta(id_tarjeta),
+        "num_cuenta": datos.num_cuenta,
+        "tipo_operacion": datos.tipo_operacion,
+        "monto": str(datos.monto),
+        **_canal(datos),
+    }
+    try:
+        return core.autorizar(payload, _uuid(correlation_id), authorization)
+    except TarjetasError as error:
+        if error.code == "BNA-IDEMPOTENCIA":
+            raise TarjetasError("ERR-TAR-IDEMPOTENCIA",
+                                "La llave de idempotencia ya se usó para otra autorización", 409)
+        raise
+
+
+def ver_autorizacion(core: CoreClient, uuid_autorizacion: str, correlation_id: str,
+                     authorization: str | None = None) -> dict:
+    return core.ver_autorizacion(_uuid_autorizacion(uuid_autorizacion), _uuid(correlation_id), authorization)
+
+
+def extornar(core: CoreClient, uuid_autorizacion: str, datos: ExtornoIn, correlation_id: str,
+             authorization: str | None = None) -> dict:
+    return core.extornar(_uuid_autorizacion(uuid_autorizacion), {"motivo": datos.motivo},
+                         _uuid(correlation_id), authorization)
+
+
+def registrar_credencial(core: CoreClient, id_tarjeta: str, tipo: TipoCredencial, datos: CredencialIn,
+                         correlation_id: str, authorization: str | None = None) -> None:
+    core.registrar_credencial(_id_tarjeta(id_tarjeta), tipo, {"valor": datos.valor.get_secret_value()},
+                              _uuid(correlation_id), authorization)
+
+
+def validar_credencial(core: CoreClient, id_tarjeta: str, tipo: TipoCredencial, datos: ValidacionIn,
+                       correlation_id: str, authorization: str | None = None) -> dict:
+    payload = {"valor": datos.valor.get_secret_value(), "correlation_id": _uuid(correlation_id), **_canal(datos)}
+    return core.validar_credencial(_id_tarjeta(id_tarjeta), tipo, payload, _uuid(correlation_id), authorization)

@@ -7,8 +7,9 @@ Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
 saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
 COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
-módulo TARJETAS y todo por los puentes del frontend, que es el camino que sigue el
-navegador.
+módulo TARJETAS (con un retiro autorizado y extornado), una solicitud de crédito
+por EVALUACIÓN (expediente con el formato de SOL → evaluación → decisión, todo en
+COREDB) y todo por los puentes del frontend, que es el camino que sigue el navegador.
 """
 
 import json
@@ -19,16 +20,20 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from datetime import date, timedelta
+from decimal import Decimal
 
 COREDB = os.environ.get("E2E_COREDB", "http://127.0.0.1:8012")
 CUENTAS = os.environ.get("E2E_CUENTAS", "http://cuentas:8001")
 TARJETAS = os.environ.get("E2E_TARJETAS", "http://tarjetas:8002")
 FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
+EVALUACION = os.environ.get("E2E_EVALUACION", "http://evaluacion:8015")
 SERVICIOS = {
     "COREDB": (COREDB + "/coredb/salud", {}),
     "CUENTAS": (CUENTAS + "/health", {}),
     "TARJETAS": (TARJETAS + "/health", {}),
     "SOL": (os.environ.get("E2E_SOL", "http://sol:8011") + "/ready", {}),
+    "EVALUACIÓN": (EVALUACION + "/salud", {}),
     "Seguridad": (os.environ.get("E2E_SEGURIDAD", "http://seguridad:8013") + "/seguridad/estado",
                   {"X-Correlation-ID": "flujo-e2e"}),
     "frontend": (FRONTEND + "/login", {}),
@@ -36,8 +41,15 @@ SERVICIOS = {
 # Solo si se levantó con el perfil `legado`.
 if os.environ.get("E2E_CORE_LEGADO"):
     SERVICIOS["CORE legado"] = (os.environ["E2E_CORE_LEGADO"] + "/health", {})
+# Intentos de la primera consulta a cada servicio. En Kubernetes un pod recién listo
+# puede tardar un momento en recibir tráfico de su Service (`./bna k8s-smoke` pide 5).
+INTENTOS = max(1, int(os.environ.get("E2E_INTENTOS", "1")))
+ESPERA = float(os.environ.get("E2E_ESPERA", "2"))
 USUARIO = os.environ.get("BNA_ADMIN_USUARIO", "admin")
 PASSWORD = os.environ.get("BNA_ADMIN_PASSWORD", "")
+SOL_USUARIO = "asesor.bna"  # usuario sembrado por SOL (backend/SOL/seed.py)
+SOL_PASSWORD = os.environ.get("SOL_INITIAL_PASSWORD", "")
+TOKEN_SOL_EVALUACION = os.environ.get("EVALUACION_TOKEN_SOL", "")
 AGENCIA = "AQP01"
 CANAL = "HB"
 
@@ -69,6 +81,45 @@ def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
         return estado, texto
 
 
+def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
+    """Como el navegador ante el proxy de SOL del frontend: Origin y cookie, sin token.
+    Devuelve (estado, cuerpo JSON o texto, Set-Cookie)."""
+    peticion = urllib.request.Request(f"{FRONTEND}/api/solicitud-credito/{ruta}", method=metodo,
+                                      data=json.dumps(cuerpo).encode() if cuerpo is not None else None)
+    peticion.add_header("Content-Type", "application/json")
+    if metodo != "GET":
+        peticion.add_header("Origin", origen)
+    if cookie:
+        peticion.add_header("Cookie", cookie)
+    try:
+        with urllib.request.urlopen(peticion, timeout=15) as respuesta:
+            estado, texto, galleta = respuesta.status, respuesta.read().decode(), respuesta.headers.get("Set-Cookie", "")
+    except urllib.error.HTTPError as error:
+        estado, texto, galleta = error.code, error.read().decode(), error.headers.get("Set-Cookie", "")
+    except (urllib.error.URLError, OSError) as error:
+        raise Fallo(f"{metodo} {ruta} por el proxy de SOL: sin respuesta ({error})") from error
+    try:
+        return estado, json.loads(texto), galleta
+    except ValueError:
+        return estado, texto, galleta
+
+
+def sano(nombre, url, cabeceras):
+    """Exige un 200; reintenta INTENTOS veces si no hay respuesta o no es 200."""
+    for intento in range(1, INTENTOS + 1):
+        try:
+            estado, _ = pedir("GET", url, cabeceras=cabeceras)
+            error = None if estado == 200 else f"{nombre} no está sano: {url} respondió {estado}"
+        except Fallo as fallo:
+            error = str(fallo)
+        if error is None:
+            return
+        if intento < INTENTOS:
+            print(f"  ..  {error}; nuevo intento en {ESPERA:g} s", flush=True)
+            time.sleep(ESPERA)
+    raise Fallo(error)
+
+
 def exigir(condicion, mensaje):
     if not condicion:
         raise Fallo(mensaje)
@@ -84,12 +135,39 @@ def coredb(metodo, ruta, esperado, cuerpo=None, token=None):
     return respuesta
 
 
+def sobre_sol(cod_cliente, monto="15000.00", plazo=12):
+    """Un expediente CR-INT-02 con la forma que arma SOL: calendario con amortización
+    constante y 1 % de interés mensual, cuadrado al céntimo."""
+    monto, centimo = Decimal(monto), Decimal("0.01")
+    amortizacion = (monto / plazo).quantize(centimo)
+    saldo, cuotas, inicio = monto, [], date.today() + timedelta(days=30)
+    for n in range(1, plazo + 1):
+        capital = saldo if n == plazo else amortizacion
+        interes = (saldo * Decimal("0.01")).quantize(centimo)
+        cuotas.append({"numero_cuota": n, "fecha_vencimiento": (inicio + timedelta(days=30 * (n - 1))).isoformat(),
+                       "saldo_inicial": str(saldo), "amortizacion": str(capital), "interes": str(interes),
+                       "cuota_total": str(capital + interes), "saldo_final": str(saldo - capital)})
+        saldo -= capital
+    total = sum(Decimal(c["cuota_total"]) for c in cuotas)
+    return {
+        "versionContrato": "CR-INT-02-PROPUESTA-v2", "idSolicitud": str(uuid.uuid4()), "versionSolicitud": 1,
+        "idOperacion": str(uuid.uuid4()), "idCorrelacion": str(uuid.uuid4()), "simulado": False,
+        "actorEnvio": "flujo-e2e",
+        "expediente": {
+            "cliente": {"id_cliente": cod_cliente},
+            "condiciones": {"id_cliente": cod_cliente, "monto_solicitado": str(monto), "moneda": "PEN",
+                            "plazo_meses": plazo, "destino_credito": "Flujo de extremo a extremo", "pago_doble": False},
+            "politica": {"tea": "0.1268", "amortizacion": "FRANCES"},
+            "calendario": {"cuotas": cuotas, "total_pagar": str(total)},
+        },
+    }
+
+
 def flujo():
     exigir(PASSWORD, "Falta BNA_ADMIN_PASSWORD")
 
     for nombre, (url, cabeceras) in SERVICIOS.items():
-        estado, _ = pedir("GET", url, cabeceras=cabeceras)
-        exigir(estado == 200, f"{nombre} no está sano: {url} respondió {estado}")
+        sano(nombre, url, cabeceras)
         paso(f"{nombre} responde")
 
     estado, _ = pedir("GET", COREDB + "/coredb/auth/me")
@@ -245,6 +323,35 @@ def flujo():
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "ACTIVA",
            f"Activación por TARJETAS: {estado} {respuesta}")
+    # Un retiro en el cajero de desarrollo: se autoriza y retiene el saldo, la misma llave no
+    # lo retiene dos veces y el extorno lo libera (RN-ATM-003).
+    coredb("POST", "/coredb/movimientos", 201, {
+        "num_cuenta": cuenta_tarjeta, "tipo": "DEPOSITO", "monto": "100.00",
+        "glosa": "Depósito para el retiro con tarjeta", "id_canal": CANAL,
+        "idempotency_key": str(uuid.uuid4()),
+    }, token)
+    retiro = {"num_cuenta": cuenta_tarjeta, "tipo_operacion": "RETIRO", "monto": "40.00",
+              "id_terminal": "DEV-ATM-01"}
+    llave_retiro = {"X-Idempotency-Key": str(uuid.uuid4())}
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/autorizaciones", retiro, token, cabeceras=llave_retiro)
+    exigir(estado == 201 and respuesta["data"]["aprobada"] is True
+           and respuesta["data"]["codigo_respuesta"] == "00",
+           f"Autorización del retiro por TARJETAS: {estado} {respuesta}")
+    autorizacion = respuesta["data"]["uuid_autorizacion"]
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/autorizaciones", retiro, token, cabeceras=llave_retiro)
+    exigir(estado == 201 and respuesta["data"]["uuid_autorizacion"] == autorizacion,
+           f"Repetir la autorización con la misma llave debía devolver la misma: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 60.0, f"La autorización debía retener 40.00 una sola vez: disponible {disponible}")
+    estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/extorno",
+                              {"motivo": "Prueba del flujo"}, token)
+    exigir(estado == 200 and respuesta["data"]["estado_autorizacion"] == "EXTORNADA"
+           and respuesta["data"]["codigo_respuesta"] == "EXT",
+           f"Extorno por TARJETAS: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 100.0, f"El extorno debía liberar el saldo retenido: disponible {disponible}")
+    paso(f"TARJETAS: retiro de 40.00 en el cajero DEV-ATM-01 autorizado (00) y retenido una sola vez "
+         "con la misma llave, y extornado (saldo liberado)")
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
            f"Bloqueo por TARJETAS: {estado} {respuesta}")
@@ -259,6 +366,64 @@ def flujo():
     paso(f"TARJETAS: emisión a {titular} (no a un cliente OBSERVADO), repetición con la misma llave "
          "sin duplicar, 409 con la misma llave y otra cuenta, activación, bloqueo, desbloqueo rechazado y tarjetas del cliente")
 
+    # ── EVALUACIÓN: expediente de SOL → evaluación → decisión, todo en COREDB ──
+    exigir(TOKEN_SOL_EVALUACION, "Falta EVALUACION_TOKEN_SOL para enviar el expediente a Evaluación")
+    base = EVALUACION + "/eva"
+
+    def enviar_expediente(sobre):
+        return pedir("POST", f"{base}/applications", sobre, TOKEN_SOL_EVALUACION,
+                     cabeceras={"X-Idempotency-Key": sobre["idOperacion"], "X-Correlation-ID": sobre["idCorrelacion"]})
+
+    sobre = sobre_sol(cliente)
+    estado, _ = pedir("POST", f"{base}/applications", sobre, token,
+                      cabeceras={"X-Idempotency-Key": sobre["idOperacion"]})
+    exigir(estado == 401, f"Evaluación debía rechazar un expediente sin el token de SOL: {estado}")
+    estado, acuse = enviar_expediente(sobre)
+    exigir(estado == 201 and acuse["idSolicitud"] == sobre["idSolicitud"] and acuse["ronda"] == 1
+           and acuse["acuse"] == f"ACK-{acuse['idEvaluacion']}",
+           f"Expediente de SOL por Evaluación: {estado} {acuse}")
+    estado, repetido = enviar_expediente(sobre)
+    exigir(estado == 200 and repetido == acuse, f"Repetir el expediente debía devolver el mismo acuse: {estado} {repetido}")
+    solicitud = sobre["idSolicitud"]
+    en_core = coredb("GET", f"/coredb/creditos/solicitudes/{solicitud}", 200, token=token)
+    exigir(en_core["estado"] == "EN_EVALUACION" and en_core["codCliente"] == cliente
+           and len(en_core["calendario"]["cuotas"]) == 12 and en_core["historial"][-1]["actor"] == "svc-evaluacion",
+           f"La solicitud en COREDB no es la esperada: {en_core}")
+    situacion = {"versionSolicitud": 1, "ingresoMensual": "5000.00", "deudaMensual": "0.00", "riesgo": "BUENO",
+                 "verificada": True}
+    estado, resultado = pedir("POST", f"{base}/v1/solicitudes/{solicitud}/evaluaciones", situacion, token)
+    exigir(estado == 200 and resultado["resultado"] == "APROBADO" and resultado["estadoSolicitud"] == "APROBADA"
+           and resultado["idEvaluacion"] == acuse["idEvaluacion"],
+           f"Evaluación por la regla: {estado} {resultado}")
+    aprobaciones = coredb("GET", f"/coredb/creditos/aprobaciones?idSolicitud={solicitud}", 200, token=token)
+    exigir([a["idEvaluacion"] for a in aprobaciones] == [acuse["idEvaluacion"]],
+           f"La aprobación debía quedar disponible para Desembolso: {aprobaciones}")
+    detalle = coredb("GET", f"/coredb/creditos/solicitudes/{solicitud}", 200, token=token)
+    exigir(detalle["historial"][-1]["actor"] == USUARIO,
+           f"El historial debía registrar a {USUARIO}, que evaluó con su token: {detalle['historial']}")
+    paso(f"EVALUACIÓN: expediente de SOL registrado en COREDB (acuse {acuse['acuse'][:12]}…, repetición sin "
+         f"duplicar), evaluado por {USUARIO} con su token y APROBADO por la regla; la aprobación queda para Desembolso")
+
+    sobre = sobre_sol(cliente)
+    enviar_expediente(sobre)
+    observada = sobre["idSolicitud"]
+    estado, resultado = pedir("POST", f"{base}/v1/solicitudes/{observada}/evaluaciones",
+                              {**situacion, "ingresoMensual": "4000.00"}, token)
+    exigir(estado == 200 and resultado["resultado"] == "OBSERVADO" and resultado["estadoSolicitud"] == "EN_EVALUACION",
+           f"La zona gris de la regla debía quedar OBSERVADO: {estado} {resultado}")
+    decision = f"{base}/v1/evaluaciones/{resultado['idEvaluacion']}/decision"
+    estado, _ = pedir("POST", decision, {"decision": "OBSERVADO", "comentario": "Precisar el destino declarado."}, token)
+    exigir(estado == 422, f"El analista no devuelve la solicitud a SOL (T1): respondió {estado}")
+    estado, respuesta = pedir("POST", decision, {"decision": "APROBADO", "comentario": "Sustento revisado."}, token)
+    exigir(estado == 422 and respuesta["error"]["code"] == "ANALISTA_REQUERIDO",
+           f"Decidir exige un analista registrado (el administrador no tiene empleado): {estado} {respuesta}")
+    paso("EVALUACIÓN: un caso OBSERVADO espera al analista; no se devuelve a SOL (T1) y decidir exige un "
+         "analista registrado")
+
+    estado, respuesta = pedir("GET", f"{FRONTEND}/api/evaluacion/solicitudes/{solicitud}", token=token)
+    exigir(estado == 200 and respuesta["estado"] == "APROBADA", f"Puente a Evaluación: {estado} {respuesta}")
+    paso("frontend: su puente llega a Evaluación con el token del usuario")
+
     # ── Por los puentes del frontend, como lo hace el navegador ─────────────
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
     exigir(estado == 200 and respuesta["username"] == USUARIO, f"Puente a COREDB: {estado} {respuesta}")
@@ -271,6 +436,27 @@ def flujo():
     estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
     exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
     paso("frontend: sus puentes llegan a COREDB, a CUENTAS y a TARJETAS con el token del usuario")
+
+    # ── SOL por el proxy del frontend: escribir exige el Origin del propio frontend ──
+    exigir(SOL_PASSWORD, "Falta SOL_INITIAL_PASSWORD para entrar a SOL por el frontend")
+    credenciales = {"username": SOL_USUARIO, "password": SOL_PASSWORD}
+    estado, respuesta, _ = pedir_navegador("POST", "auth/login", credenciales, origen="http://otro.example")
+    exigir(estado == 403, f"El proxy de SOL debía rechazar otro origen: {estado} {respuesta}")
+    estado, respuesta, galleta = pedir_navegador("POST", "auth/login", credenciales)
+    exigir(estado == 200 and respuesta.get("usuario", {}).get("rol") == "ASESOR" and "token" not in respuesta,
+           f"Login de SOL por el proxy del frontend: {estado} {respuesta}")
+    exigir(galleta.startswith("bna_sol_session=") and "httponly" in galleta.lower(),
+           "El login de SOL debía dejar la sesión en una cookie HttpOnly")
+    sesion = galleta.split(";", 1)[0]
+    estado, respuesta, _ = pedir_navegador("GET", "policy", cookie=sesion)
+    exigir(estado == 200 and respuesta.get("integracion") == "SIMULADO",
+           f"Política de SOL con la cookie de sesión: {estado} {respuesta}")
+    estado, respuesta, _ = pedir_navegador("POST", "auth/logout", {}, cookie=sesion)
+    exigir(estado == 200, f"Cierre de sesión de SOL por el proxy: {estado} {respuesta}")
+    estado, _, _ = pedir_navegador("GET", "policy", cookie=sesion)
+    exigir(estado == 401, f"La sesión de SOL debía quedar revocada tras cerrar: respondió {estado}")
+    paso("frontend: SOL por su proxy, con login desde el origen del frontend (otro origen, 403), "
+         "sesión en cookie HttpOnly, consulta y cierre de sesión")
 
 
 if __name__ == "__main__":

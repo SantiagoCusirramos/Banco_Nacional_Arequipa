@@ -1,14 +1,15 @@
 """Quién llama a Evaluación.
 
-- Personal del banco y módulos: token de COREDB. Evaluación no conoce la clave que lo firma: lo
-  valida COREDB en `GET /coredb/auth/me`, que devuelve el usuario, su rol y sus acciones del mapa
+- Personal del banco: token de COREDB. Evaluación no conoce la clave que lo firma: lo valida
+  COREDB en `GET /coredb/auth/me`, que devuelve el usuario, su rol y sus acciones del mapa
   versionado `COREDB/permisos.py`. El resultado se recuerda unos segundos para no consultar a
-  COREDB en cada petición; desactivar un usuario surte efecto al vencer ese plazo.
+  COREDB en cada petición; desactivar un usuario surte efecto al vencer ese plazo, y COREDB lo
+  vuelve a comprobar en cada operación, porque Evaluación le reenvía el mismo token.
 - SOL: el token de servicio de CR-INT-02 (su SOL_BUS_TOKEN), solo en las rutas de recepción.
 
-Permisos, con las acciones de COREDB: EVALUAR_CREDITO registra la situación financiera,
-APROBAR_CREDITO decide y revoca, y VER_AUDITORIA consulta. Desembolso entra con su usuario de
-servicio (rol SERVICIO, módulo DESEMBOLSO).
+Permisos, con las acciones de COREDB: VER_CREDITO consulta, EVALUAR_CREDITO registra la
+situación financiera y corre la regla, APROBAR_CREDITO decide y revoca. Un usuario de servicio
+no entra en las rutas del personal.
 """
 from __future__ import annotations
 
@@ -25,11 +26,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .comun import ErrorEva, correlacion_actual
 
+VER = "VER_CREDITO"
 EVALUAR = "EVALUAR_CREDITO"
 DECIDIR = "APROBAR_CREDITO"
-AUDITAR = "VER_AUDITORIA"
-LECTURA = (EVALUAR, DECIDIR, AUDITAR)
-MODULO_DESEMBOLSO = "DESEMBOLSO"
 
 _bearer = HTTPBearer(auto_error=False, scheme_name="Bearer")
 
@@ -49,12 +48,19 @@ class Perfil:
         return any(a in self.acciones for a in acciones)
 
 
+@dataclass(frozen=True)
+class Sesion:
+    """La persona y su token, que se reenvía a COREDB."""
+    perfil: Perfil
+    token: str
+
+
 class VerificadorCoreDb:
     """Valida tokens de COREDB con `GET /coredb/auth/me` y recuerda el perfil unos segundos."""
 
     MAXIMO_EN_MEMORIA = 2000
 
-    def __init__(self, coredb_url: str, timeout: float = 3.0, recordar_seg: float = 30.0,
+    def __init__(self, coredb_url: str, timeout: float = 5.0, recordar_seg: float = 30.0,
                  transporte: httpx.BaseTransport | None = None):
         self._http = httpx.Client(base_url=coredb_url, timeout=timeout, transport=transporte,
                                   follow_redirects=False, trust_env=False)
@@ -97,38 +103,18 @@ def _token(credenciales: HTTPAuthorizationCredentials | None) -> str:
     return credenciales.credentials.strip()
 
 
-def perfil_actual(request: Request, credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> Perfil:
-    return request.app.state.ctx.verificador.perfil(_token(credenciales))
-
-
-def _denegado() -> ErrorEva:
-    return ErrorEva(403, "PERMISO_DENEGADO", "Tu usuario no tiene permiso para esta operación de Evaluación.")
-
-
-def persona(*acciones: str) -> Callable[..., Perfil]:
+def persona(*acciones: str) -> Callable[..., Sesion]:
     """Personal del banco con alguna de `acciones`. Un usuario de servicio no entra aquí."""
 
-    def _dependencia(perfil: Perfil = Depends(perfil_actual)) -> Perfil:
+    def _dependencia(request: Request,
+                     credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> Sesion:
+        token = _token(credenciales)
+        perfil = request.app.state.ctx.verificador.perfil(token)
         if perfil.es_servicio or not perfil.puede(*acciones):
-            raise _denegado()
-        return perfil
+            raise ErrorEva(403, "PERMISO_DENEGADO", "Tu usuario no tiene permiso para esta operación de Evaluación.")
+        return Sesion(perfil, token)
 
     return _dependencia
-
-
-def lector_aprobaciones(perfil: Perfil = Depends(perfil_actual)) -> Perfil:
-    """Desembolso (su usuario de servicio) o personal con permiso de lectura."""
-    if perfil.es_servicio and perfil.modulo == MODULO_DESEMBOLSO:
-        return perfil
-    if not perfil.es_servicio and perfil.puede(*LECTURA):
-        return perfil
-    raise _denegado()
-
-
-def servicio_desembolso(perfil: Perfil = Depends(perfil_actual)) -> Perfil:
-    if perfil.es_servicio and perfil.modulo == MODULO_DESEMBOLSO:
-        return perfil
-    raise _denegado()
 
 
 def canal_sol(request: Request, credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> str:

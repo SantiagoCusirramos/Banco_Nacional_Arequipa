@@ -11,8 +11,8 @@ from uuid import uuid4
 from fastapi import HTTPException
 from sqlalchemy import select
 from .finance import calendar
-from .integrations import captacion_reference
-from .models import Application, Event, Version, Outcome, Delivery, ClientReference, now
+from .integrations import CLIENT_FIELDS, captacion_reference, guarantor_reference
+from .models import Application, Event, Version, Outcome, Delivery, now
 
 
 def fingerprint(data) -> str:
@@ -53,22 +53,7 @@ def prepare(db, payload, policy):
             422,
             "Las referencias de fiadores no pueden repetirse ni ser la del solicitante.",
         )
-    if payload.fiadores and db.info.get("integration_mode") == "REAL":
-        raise HTTPException(422, "La referencia institucional de fiadores requiere homologar su contrato; no se usan datos simulados en REAL.")
-    fiadores = []
-    for identifier in payload.fiadores:
-        ref = db.get(ClientReference, identifier)
-        if not ref or ref.snapshot["estado_cliente"] != "ACTIVO":
-            raise HTTPException(
-                422, "El fiador requiere una referencia de identidad activa."
-            )
-        fiadores.append(
-            {
-                "id_cliente": identifier,
-                "identidad": {k: v for k, v in ref.snapshot.items() if k not in {"correo_electronico", "numero_celular", "fecha_nacimiento"}},
-                "validacion": "SIMULADA",
-            }
-        )
+    fiadores = [guarantor_reference(db, identifier) for identifier in payload.fiadores]
     conditions = payload.model_dump(mode="json", exclude={"revision", "fiadores"})
     conditions["id_producto_credito"] = policy.producto_id
     return {
@@ -167,6 +152,9 @@ def summary(db, application, version=None):
 def detail(db, application):
     # flush hace visibles los eventos y snapshots de la misma transacción.
     db.flush()
+    # MySQL DATETIME(0) puede redondear los microsegundos al persistir.
+    # Proyectar el valor almacenado evita discrepancias con el GET posterior.
+    db.refresh(application)
     data = summary(db, application)
     data["versiones"] = [
         {"numero": v.number, "congelada": v.frozen, "expediente": v.snapshot}
@@ -231,8 +219,9 @@ def projected_detail(db, application, user):
     for version in result["versiones"]:
         snapshot = deepcopy(version["expediente"])
         for identity in [snapshot["cliente"], *[f.get("identidad", {}) for f in snapshot.get("fiadores", [])]]:
-            for key in ["correo_electronico", "numero_celular", "fecha_nacimiento"]:
-                identity.pop(key, None)
+            for key in list(identity):
+                if key not in CLIENT_FIELDS:
+                    identity.pop(key)
         version["expediente"] = snapshot
     return result
 

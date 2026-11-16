@@ -76,6 +76,14 @@ uvicorn CUENTAS.main:app --port 8001
 
 Variables: `CORE_BASE_URL` (por defecto http://localhost:8012, la API COREDB), `CORE_TIMEOUT_SECONDS` (5) y `CORS_ORIGINS` (por defecto http://localhost:3000,http://127.0.0.1:3000).
 
+## Probar en Swagger (/docs)
+
+1. Obtenga el token en COREDB (puerto 8012): `POST /coredb/auth/login` con `{"username": "...", "password": "..."}` y copie `access_token`.
+2. En http://127.0.0.1:8001/docs pulse **Authorize** (candado), pegue solo el token y confirme.
+3. Para deposito, retiro y transferencia agregue `X-Idempotency-Key` (UUIDv4), `X-Channel-ID` (WEB, MOB, ATM, AGE o VEN) y `X-Request-Timestamp` (ISO-8601, por ejemplo `2026-11-15T12:00:00Z`).
+
+El token se conserva al recargar la pagina (`persistAuthorization`). Sin él, las rutas responden 401 `ERR-CTA-TOKEN-REQUERIDO`.
+
 ## Tests
 
 ```bash

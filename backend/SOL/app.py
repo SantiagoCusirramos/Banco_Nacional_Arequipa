@@ -8,16 +8,19 @@ de SOL en el mismo proceso. No es el Bus corporativo ni una integración real.
 import secrets
 import asyncio
 import hashlib
+import logging
 from time import perf_counter
 from sqlalchemy import delete, func, text
 from .clock import business_today
 from .integrations import Integrations, CLIENT_FIELDS
 from .operations import maintenance, process_delivery, security_event
-from .observability import Metrics, log, valid_id
+from .observability import AccessLogPrivacy, Metrics, log, valid_id
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from uuid import uuid4
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Query, Security
+from fastapi.exceptions import RequestValidationError
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -37,6 +40,9 @@ from .models import (
 )
 from .policy import load_policy
 from .schemas import ApplicationInput, Login, ResultInput, RevisionInput, EvaluationResult, DisableUser
+from .schemas import (ApplicationPageResponse, ClientResponse, DetailResponse, DisableUserResponse,
+    EvaluationReceiptResponse, HealthResponse, LoginResponse, MetricsResponse, OkResponse,
+    PendingResponse, PolicyResponse, ReadyResponse, SnapshotResponse, UserResponse, http_errors)
 from .security import token_hash, verify_password, hash_password
 from .service import (
     check_revision,
@@ -76,12 +82,18 @@ def create_app(settings=None, transport=None):
                 except asyncio.TimeoutError:
                     pass
         task = asyncio.create_task(worker()) if settings.worker_seconds > 0 else None
-        yield
-        stopped.set()
-        if task:
-            await task
-        integrations.close()
-        engine.dispose()
+        access_logger = logging.getLogger("uvicorn.access")
+        access_privacy = AccessLogPrivacy()
+        access_logger.addFilter(access_privacy)
+        try:
+            yield
+        finally:
+            stopped.set()
+            if task:
+                await task
+            access_logger.removeFilter(access_privacy)
+            integrations.close()
+            engine.dispose()
 
     app = FastAPI(
         title="BNA · Solicitud de Crédito MVP", version="2.0.0", lifespan=lifespan
@@ -121,15 +133,20 @@ def create_app(settings=None, transport=None):
                 db.rollback()
                 raise
 
-    def authenticated(authorization: str | None = Header(None), db=Depends(db_session)):
-        if not authorization or not authorization.startswith("Bearer "):
+    session_bearer = HTTPBearer(auto_error=False, scheme_name="SOLSession")
+    callback_bearer = HTTPBearer(auto_error=False, scheme_name="EVACallback")
+
+    def authenticated(credentials: HTTPAuthorizationCredentials | None = Security(session_bearer), db=Depends(db_session)):
+        if credentials is None:
             raise HTTPException(401, "Inicia sesión para continuar.")
-        session = db.get(LoginSession, token_hash(authorization[7:]))
-        if not session or session.expires < now():
+        session = db.get(LoginSession, token_hash(credentials.credentials))
+        if not session or session.expires <= now():
             raise HTTPException(401, "La sesión venció. Vuelve a ingresar.")
         user = db.get(User, session.user_id)
         if not user or not user.active:
             raise HTTPException(401, "La cuenta fue deshabilitada.")
+        if settings.mode == "REAL" and user.role == "EVALUADOR":
+            raise HTTPException(401, "El acceso demo está deshabilitado en modo REAL.")
         return user
 
     def role(*allowed):
@@ -152,6 +169,18 @@ def create_app(settings=None, transport=None):
     def correlation(request: Request):
         return request.state.correlation
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, error):
+        issues = []
+        for issue in error.errors():
+            loc = list(issue["loc"])
+            if issue["type"] == "extra_forbidden" and loc:
+                loc[-1] = "campo_no_admitido"
+            loc = [part if isinstance(part, int) else str(part).encode("utf-8", "backslashreplace").decode()
+                   for part in loc]
+            issues.append({"loc": loc, "msg": issue["type"], "type": issue["type"]})
+        return JSONResponse(status_code=422, content={"detail": issues})
+
     @app.exception_handler(OperationalError)
     async def database_error(request, error):
         return JSONResponse(
@@ -170,11 +199,11 @@ def create_app(settings=None, transport=None):
             },
         )
 
-    @app.get("/health")
+    @app.get("/health", response_model=HealthResponse)
     def health():
         return {"status": "ok", "modulo": "SOL", "integracion": settings.mode}
 
-    @app.get("/ready")
+    @app.get("/ready", response_model=ReadyResponse, responses={503: {"model": ReadyResponse}})
     def ready():
         try:
             with engine.connect() as connection:
@@ -185,7 +214,7 @@ def create_app(settings=None, transport=None):
 
     router = APIRouter()
 
-    @router.post("/auth/login")
+    @router.post("/auth/login", response_model=LoginResponse, responses=http_errors(401, 409, 422, 429, 503))
     def login(payload: Login, request: Request, db=Depends(db_session)):
         db.execute(delete(LoginSession).where(LoginSession.expires <= now()))
         user = db.scalar(select(User).where(User.username == payload.username).with_for_update())
@@ -220,11 +249,11 @@ def create_app(settings=None, transport=None):
         security_event(db, user.username, "INGRESO_EXITOSO", trace)
         return {"token": token, "usuario": user_data(user)}
 
-    @router.get("/auth/me")
+    @router.get("/auth/me", response_model=UserResponse, responses=http_errors(401, 503))
     def me(user=Depends(authenticated)):
         return user_data(user)
 
-    @router.post("/auth/logout")
+    @router.post("/auth/logout", response_model=OkResponse, responses=http_errors(401, 409, 422, 503))
     def logout(
         request: Request,
         authorization: str = Header(),
@@ -235,11 +264,11 @@ def create_app(settings=None, transport=None):
         security_event(db, user.username, "CIERRE_SESION", correlation(request))
         return {"ok": True}
 
-    @router.get("/policy")
+    @router.get("/policy", response_model=PolicyResponse, responses=http_errors(401, 503))
     def get_policy(user=Depends(authenticated)):
         return {**policy().model_dump(mode="json"), "integracion": settings.mode}
 
-    @router.get("/clients")
+    @router.get("/clients", response_model=list[ClientResponse], response_model_exclude_unset=True, responses=http_errors(401, 422, 503))
     def clients(request: Request, search: str = Query("", max_length=80),
                 user=Depends(authenticated), db=Depends(db_session)):
         if settings.mode == "REAL":
@@ -254,7 +283,7 @@ def create_app(settings=None, transport=None):
         # Todos los roles reciben solo identidad y habilitación, nunca contacto/DOB.
         return [{k: r[k] for k in CLIENT_FIELDS if k in r} for r in records]
 
-    @router.get("/applications")
+    @router.get("/applications", response_model=ApplicationPageResponse, responses=http_errors(401, 422, 503))
     def applications(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
                      user=Depends(authenticated), db=Depends(db_session)):
         total = db.scalar(select(func.count()).select_from(Application))
@@ -265,7 +294,7 @@ def create_app(settings=None, transport=None):
         return {"items": [summary(db, a, v) for a, v in rows], "total": total,
                 "limit": limit, "offset": offset, "estados": counts}
 
-    @router.post("/admin/users/{username}/disable")
+    @router.post("/admin/users/{username}/disable", response_model=DisableUserResponse, responses=http_errors(401, 403, 404, 409, 422, 503))
     def disable_user(username: str, payload: DisableUser, request: Request,
                      user=Depends(role("SUPERVISOR")), db=Depends(db_session)):
         target = db.scalar(select(User).where(User.username == username).with_for_update())
@@ -280,23 +309,23 @@ def create_app(settings=None, transport=None):
         security_event(db, user.username, "SESIONES_REVOCADAS", correlation(request), target.username)
         return {"usuario": target.username, "activo": False, "sesiones_revocadas": removed}
 
-    @router.get("/ops/metrics")
+    @router.get("/ops/metrics", response_model=MetricsResponse, responses=http_errors(401, 403, 503))
     def get_metrics(user=Depends(role("SUPERVISOR", "AUDITOR"))):
         return metrics.snapshot()
 
-    @router.get("/ops/pending")
+    @router.get("/ops/pending", response_model=PendingResponse, responses=http_errors(401, 403, 503))
     def pending(user=Depends(role("SUPERVISOR", "AUDITOR")), db=Depends(db_session)):
         return {"envios": list(db.scalars(select(Delivery.operation).where(Delivery.status != "CONFIRMADO").limit(100))),
                 "auditoria": [{"estado": status, "cantidad": count} for status, count in db.execute(
                     select(AuditOutbox.status, func.count()).group_by(AuditOutbox.status))]}
 
-    @router.post("/preview")
+    @router.post("/preview", response_model=SnapshotResponse, response_model_exclude_unset=True, responses=http_errors(401, 403, 409, 422, 503))
     def preview(
         payload: ApplicationInput, user=Depends(role("ASESOR")), db=Depends(db_session)
     ):
         return prepare(db, payload, policy())
 
-    @router.post("/applications", status_code=201)
+    @router.post("/applications", status_code=201, response_model=DetailResponse, response_model_exclude_unset=True, responses=http_errors(401, 403, 409, 422, 503))
     def create(
         payload: ApplicationInput,
         request: Request,
@@ -327,13 +356,13 @@ def create_app(settings=None, transport=None):
         event(db, a, user, "CREAR_BORRADOR", None, correlation(request))
         return projected_detail(db, a, user)
 
-    @router.get("/applications/{identifier}")
+    @router.get("/applications/{identifier}", response_model=DetailResponse, response_model_exclude_unset=True, responses=http_errors(401, 404, 422, 503))
     def get_application(
         identifier: str, user=Depends(authenticated), db=Depends(db_session)
     ):
         return projected_detail(db, read_application(db, identifier), user)
 
-    @router.put("/applications/{identifier}")
+    @router.put("/applications/{identifier}", response_model=DetailResponse, response_model_exclude_unset=True, responses=http_errors(401, 403, 404, 409, 422, 503))
     def edit(
         identifier: str,
         payload: ApplicationInput,
@@ -358,7 +387,8 @@ def create_app(settings=None, transport=None):
         event(db, a, user, "EDITAR_BORRADOR", a.state, correlation(request))
         return projected_detail(db, a, user)
 
-    @router.post("/applications/{identifier}/send")
+    @router.post("/applications/{identifier}/send", response_model=DetailResponse, response_model_exclude_unset=True,
+                 responses={**http_errors(401, 403, 404, 409, 422, 503), 202: {"model": DetailResponse, "description": "Reserva durable pendiente; no es acuse EVA"}})
     def send(
         identifier: str,
         payload: RevisionInput,
@@ -410,7 +440,7 @@ def create_app(settings=None, transport=None):
                                 "pendiente_envio": True, "idOperacion": operation})
         return projected_detail(db, a, user)
 
-    @router.post("/applications/{identifier}/revise")
+    @router.post("/applications/{identifier}/revise", response_model=DetailResponse, response_model_exclude_unset=True, responses=http_errors(401, 403, 404, 409, 422, 503))
     def revise(
         identifier: str,
         payload: RevisionInput,
@@ -443,7 +473,7 @@ def create_app(settings=None, transport=None):
         )
         return projected_detail(db, a, user)
 
-    @router.post("/applications/{identifier}/demo-result")
+    @router.post("/applications/{identifier}/demo-result", response_model=DetailResponse, response_model_exclude_unset=True, responses=http_errors(401, 403, 404, 409, 422, 503))
     def result(
         identifier: str,
         payload: ResultInput,
@@ -498,15 +528,17 @@ def create_app(settings=None, transport=None):
         )
         return projected_detail(db, a, user)
 
-    @app.post("/sol/integrations/evaluation-results")
+    @app.post("/sol/integrations/evaluation-results", response_model=EvaluationReceiptResponse, response_model_exclude_unset=True, responses=http_errors(401, 404, 409, 422, 503))
     def evaluation_result(payload: EvaluationResult, request: Request,
-                          authorization: str | None = Header(None),
+                          credentials: HTTPAuthorizationCredentials | None = Security(callback_bearer),
                           operation: str = Header(..., alias="X-Idempotency-Key"),
+                          trace: str = Header(..., alias="X-Correlation-ID", pattern=r"^[A-Za-z0-9._:-]{1,100}$"),
                           db=Depends(db_session)):
         if settings.mode != "REAL" or not settings.callback_token or not secrets.compare_digest(
-                authorization or "", "Bearer " + settings.callback_token):
+                credentials.credentials if credentials else "", settings.callback_token):
             raise HTTPException(401, "Servicio no autorizado.")
-        if operation != payload.idOperacion or payload.idCorrelacion != correlation(request):
+        if (operation != payload.idOperacion or trace != payload.idCorrelacion
+                or trace != correlation(request)):
             raise HTTPException(422, "Identificadores de cuerpo y cabecera diferentes.")
         a = locked_application(db, payload.idSolicitud)
         stamp = fingerprint(payload.model_dump(mode="json"))

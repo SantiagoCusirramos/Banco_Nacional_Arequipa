@@ -2,12 +2,13 @@
 
     uvicorn EVALUACION.main:app --port 8015      (desde backend/)
 
+No tiene base propia: todo se guarda en COREDB (`creditos.*`, CONTRATO_CREDITOS.md §3).
+
 Rutas:
-  CR-INT-02  POST /eva/applications, GET /eva/operations/{idOperacion}       SOL, con su token
-  CR-INT-04  GET /eva/v1/aprobaciones, GET /eva/v1/aprobaciones/{id},        Desembolso (usuario de
-             POST /eva/v1/aprobaciones/{id}/desembolso                       servicio de COREDB)
-  Personal   /eva/v1/evaluaciones..., /eva/v1/envios..., /eva/v1/historial   token de COREDB
-  CR-INT-03  la entrega un trabajador interno a SOL (envios.py)
+  CR-INT-02  POST /eva/applications, GET /eva/operations/{idOperacion}     SOL, con su token
+  Personal   /eva/v1/solicitudes..., /eva/v1/evaluaciones/{id}/decision,  token de COREDB de la
+             /eva/v1/aprobaciones, /eva/v1/catalogo, /eva/v1/resultados-sol persona, reenviado
+  CR-INT-03  lo entrega un trabajador interno a SOL (envios.py)
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import json
 import logging
 import sys
 import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -22,21 +24,20 @@ import httpx
 from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
-from sqlalchemy.exc import DBAPIError
-from sqlalchemy.pool import NullPool
 
-from .auth import AUDITAR, DECIDIR, EVALUAR, LECTURA, Perfil, VerificadorCoreDb, canal_sol, lector_aprobaciones, \
-    persona, servicio_desembolso
+from .auth import DECIDIR, EVALUAR, VER, Sesion, VerificadorCoreDb, canal_sol, persona
 from .comun import ErrorEva, correlacion_valida, fijar_correlacion, restaurar_correlacion
 from .config import Config
-from .contratos import DecisionIn, DesembolsoIn, RevocacionIn, SituacionIn, SobreExpediente
+from .contratos import DecisionIn, RevocacionIn, SituacionIn, SobreExpediente, expediente_coredb, \
+    validar_expediente
+from .coredb import ClienteCoreDb
 from .envios import DespachadorResultados, Trabajador
-from .servicio import Servicio
 
-VERSION = "0.5.0"
+VERSION = "1.0.0"
 log = logging.getLogger("evaluacion")
+BASE = "/coredb/creditos"
+
+EstadoSolicitud = Literal["REGISTRADA", "EN_EVALUACION", "APROBADA", "RECHAZADA", "DESEMBOLSADA"]
 
 
 class _FormatoJson(logging.Formatter):
@@ -57,28 +58,21 @@ def _configurar_registros() -> None:
         raiz.propagate = False
 
 
-def crear_motor(config: Config, *, sin_pool: bool = False) -> Engine:
-    opciones = {"poolclass": NullPool} if sin_pool else {"pool_pre_ping": True, "pool_recycle": 1800}
-    return create_engine(config.database_url, isolation_level="READ COMMITTED", hide_parameters=True,
-                         connect_args={"connect_timeout": 5, "init_command": "SET time_zone = '+00:00'"},
-                         **opciones)
-
-
 class Contexto:
-    """Lo que la API necesita en ejecución: base, reglas, verificador de sesiones y envíos."""
+    """Lo que la API necesita en ejecución: COREDB, verificador de sesiones y envíos a SOL."""
 
-    def __init__(self, config: Config, *, engine: Engine | None = None, verificador: VerificadorCoreDb | None = None,
+    def __init__(self, config: Config, *, transporte_coredb: httpx.BaseTransport | None = None,
                  transporte_sol: httpx.BaseTransport | None = None):
         self.config = config
-        self.engine = engine or crear_motor(config)
-        self.verificador = verificador or VerificadorCoreDb(config.coredb_url, config.timeout_seg,
-                                                            config.sesion_cache_seg)
-        self.servicio = Servicio(self.engine, config)
-        self.despachador = DespachadorResultados(self.engine, config, transporte_sol)
+        self.coredb = ClienteCoreDb(config.coredb_url, config.servicio_usuario, config.servicio_secreto,
+                                    timeout=config.timeout_seg, transporte=transporte_coredb)
+        self.verificador = VerificadorCoreDb(config.coredb_url, config.timeout_seg, config.sesion_cache_seg,
+                                             transporte=transporte_coredb)
+        self.despachador = DespachadorResultados(config, self.coredb, transporte_sol)
         self._trabajador: Trabajador | None = None
 
     def iniciar(self) -> None:
-        if self.config.envio_intervalo_seg > 0:
+        if self.config.envio_intervalo_seg > 0 and self.despachador.configurado:
             self._trabajador = Trabajador(self.despachador, self.config.envio_intervalo_seg)
             self._trabajador.start()
 
@@ -87,23 +81,12 @@ class Contexto:
             self._trabajador.detener()
             self._trabajador.join(timeout=5)
         self.despachador.cerrar()
-        self.engine.dispose()
+        self.verificador.cerrar()
+        self.coredb.cerrar()
 
 
-def _servicio(request: Request) -> Servicio:
-    return request.app.state.ctx.servicio
-
-
-async def _cuerpo_json(request: Request) -> dict:
-    """El sobre tal como llegó, para guardarlo y compararlo; Starlette ya lo leyó y lo reutiliza."""
-    return await request.json()
-
-
-def _error(estado: int, codigo: str, mensaje: str, detalle: dict | None = None) -> JSONResponse:
-    cuerpo = {"code": codigo, "message": mensaje}
-    if detalle:
-        cuerpo["details"] = detalle
-    return JSONResponse(status_code=estado, content={"error": cuerpo})
+def _error(estado: int, codigo: str, mensaje: str) -> JSONResponse:
+    return JSONResponse(status_code=estado, content={"error": {"code": codigo, "message": mensaje}})
 
 
 def crear_app(config: Config | None = None, *, contexto: Contexto | None = None) -> FastAPI:
@@ -123,13 +106,16 @@ def crear_app(config: Config | None = None, *, contexto: Contexto | None = None)
     app = FastAPI(
         title="BNA · Evaluación Crediticia", version=VERSION, lifespan=ciclo_de_vida,
         description=(
-            "Módulo 12 de la Línea de Créditos. Recibe el expediente de Solicitud (CR-INT-02), registra la "
-            "situación financiera, aplica la regla provisional RN-EVA-002-P, devuelve el resultado a Solicitud "
-            "(CR-INT-03) y ofrece la aprobación vigente a Desembolso (CR-INT-04), con el calendario de SOL sin "
-            "cambios. El personal entra con el token de COREDB; SOL, con su token de servicio; Desembolso, con "
-            "su usuario de servicio de COREDB. Montos como texto decimal (\"500.00\")."),
+            "Módulo 12 de la Línea de Créditos, sin base propia. Recibe el expediente de Solicitud (CR-INT-02) y "
+            "lo registra en COREDB con su usuario de servicio; el analista consulta, registra la situación "
+            "financiera (COREDB corre la regla RN-EVA-002-P) y decide los casos OBSERVADO con su propio token de "
+            "COREDB, que Evaluación reenvía; el resultado final vuelve a Solicitud (CR-INT-03). Montos como texto "
+            "decimal (\"500.00\")."),
     )
     app.state.ctx = contexto
+
+    def ctx(request: Request) -> Contexto:
+        return request.app.state.ctx
 
     @app.middleware("http")
     async def correlacion_y_registro(request: Request, call_next):
@@ -150,7 +136,7 @@ def crear_app(config: Config | None = None, *, contexto: Contexto | None = None)
 
     @app.exception_handler(ErrorEva)
     async def _error_eva(_request: Request, exc: ErrorEva):
-        return _error(exc.estado, exc.codigo, exc.mensaje, exc.detalle)
+        return _error(exc.estado, exc.codigo, exc.mensaje)
 
     @app.exception_handler(RequestValidationError)
     async def _error_validacion(_request: Request, exc: RequestValidationError):
@@ -158,26 +144,18 @@ def crear_app(config: Config | None = None, *, contexto: Contexto | None = None)
         return JSONResponse(status_code=422, content={"detail": [
             {"loc": list(e.get("loc", ())), "type": e.get("type"), "msg": e.get("msg")} for e in exc.errors()]})
 
-    @app.exception_handler(DBAPIError)
-    async def _error_base(_request: Request, exc: DBAPIError):
-        original = getattr(exc, "orig", None)
-        codigo = original.args[0] if original is not None and original.args else None
-        if codigo == 1644:  # SIGNAL de un trigger: una regla de datos que la aplicación no debió romper
-            return _error(409, "REGLA_DE_DATOS", str(original.args[1]))
-        log.error("Error de base de datos", extra={"contexto": {"error": type(exc).__name__}})
-        return _error(503, "BASE_NO_DISPONIBLE", "La base de Evaluación no respondió. Intenta de nuevo.")
-
     # ------------------------------------------------------------------ Salud
-    @app.get("/salud", tags=["Estado"], summary="El proceso y su base responden")
+    @app.get("/salud", tags=["Estado"], summary="COREDB responde y el usuario de servicio inicia sesión")
     def salud(request: Request):
+        c = ctx(request)
+        if not c.coredb.salud():
+            return _error(503, "COREDB_NO_DISPONIBLE", "COREDB no responde.")
         try:
-            with request.app.state.ctx.engine.connect() as c:
-                c.execute(text("SELECT 1"))
-        except DBAPIError:
-            return _error(503, "BASE_NO_DISPONIBLE", "La base de Evaluación no responde.")
-        ctx = request.app.state.ctx
+            c.coredb.token_servicio()
+        except ErrorEva as exc:
+            return _error(503, exc.codigo, exc.mensaje)
         return {"estado": "ok", "modulo": "EVALUACION", "version": VERSION,
-                "resultadosASol": "configurado" if ctx.despachador.configurado else "pendiente: SOL en modo SIMULADO"}
+                "resultadosASol": "configurado" if c.despachador.configurado else "pendiente: SOL en modo SIMULADO"}
 
     # ------------------------------------------------------------------ CR-INT-02 (SOL)
     t02 = "CR-INT-02 Solicitud a Evaluación"
@@ -185,85 +163,86 @@ def crear_app(config: Config | None = None, *, contexto: Contexto | None = None)
     @app.post("/eva/applications", tags=[t02], status_code=201,
               summary="Recibir el expediente de una versión de solicitud",
               responses={200: {"description": "Repetición: el mismo acuse"},
-                         409: {"description": "Operación reutilizada o versión ya recibida"}})
-    def recibir_expediente(sobre: SobreExpediente, request: Request, crudo: dict = Depends(_cuerpo_json),
-                           _sol: str = Depends(canal_sol), x_idempotency_key: str | None = Header(default=None)):
+                         409: {"description": "IDEMPOTENCIA_CONFLICTO: la misma versión con otro contenido"},
+                         422: {"description": "EXPEDIENTE_INCONSISTENTE, CLIENTE_NO_HABILITADO, CALENDARIO_INVALIDO "
+                                              "o SOLICITUD_NO_ADMITIDA"}})
+    def recibir_expediente(sobre: SobreExpediente, request: Request, _sol: str = Depends(canal_sol),
+                           x_idempotency_key: str | None = Header(default=None)):
+        """Registra la versión en COREDB y devuelve el acuse que SOL valida. COREDB reconoce la
+        misma versión con el mismo contenido (200, el mismo acuse), así que reenviar es seguro."""
         if x_idempotency_key is not None and x_idempotency_key != sobre.idOperacion:
             raise ErrorEva(422, "CLAVE_DISTINTA", "X-Idempotency-Key debe ser igual a idOperacion.")
-        acuse, nuevo = _servicio(request).recibir_expediente(sobre, crudo)
-        return JSONResponse(status_code=201 if nuevo else 200, content=acuse)
+        validar_expediente(sobre)
+        estado, acuse = ctx(request).coredb.como_servicio("POST", f"{BASE}/solicitudes", json=expediente_coredb(sobre))
+        return JSONResponse(status_code=estado, content={
+            "idSolicitud": sobre.idSolicitud, "versionSolicitud": sobre.versionSolicitud,
+            "idOperacion": sobre.idOperacion, "idEvaluacion": acuse["idEvaluacion"], "ronda": acuse["ronda"],
+            "acuse": f"ACK-{acuse['idEvaluacion']}"})
 
     @app.get("/eva/operations/{id_operacion}", tags=[t02], summary="Consultar la recepción de una operación",
-             responses={404: {"description": "No recibido: SOL puede enviarlo"}})
-    def consultar_operacion(id_operacion: str, request: Request, _sol: str = Depends(canal_sol)):
-        acuse = _servicio(request).acuse(id_operacion)
-        if acuse is None:
-            raise ErrorEva(404, "OPERACION_NO_RECIBIDA", "Evaluación no recibió esa operación.")
-        return acuse
-
-    # ------------------------------------------------------------------ CR-INT-04 (Desembolso)
-    t04 = "CR-INT-04 Evaluación a Desembolso"
-
-    @app.get("/eva/v1/aprobaciones", tags=[t04], summary="Buscar aprobaciones por documento o crédito")
-    def buscar_aprobaciones(request: Request, numeroDocumento: str | None = Query(None, max_length=20),
-                            codCredito: str | None = Query(None, max_length=20),
-                            estado: Literal["VIGENTE", "VENCIDA", "DESEMBOLSADA", "REVOCADA"] | None = None,
-                            perfil: Perfil = Depends(lector_aprobaciones)):
-        return {"items": _servicio(request).buscar_aprobaciones(perfil, numeroDocumento, codCredito, estado)}
-
-    @app.get("/eva/v1/aprobaciones/{id_aprobacion}", tags=[t04], summary="Una aprobación, con el calendario de SOL")
-    def obtener_aprobacion(id_aprobacion: str, request: Request, perfil: Perfil = Depends(lector_aprobaciones)):
-        return _servicio(request).obtener_aprobacion(id_aprobacion, perfil)
-
-    @app.post("/eva/v1/aprobaciones/{id_aprobacion}/desembolso", tags=[t04],
-              summary="Registrar que la aprobación se desembolsó (solo Desembolso)")
-    def registrar_desembolso(id_aprobacion: str, datos: DesembolsoIn, request: Request,
-                             perfil: Perfil = Depends(servicio_desembolso)):
-        return _servicio(request).registrar_desembolso(id_aprobacion, datos, perfil)
+             responses={404: {"description": "Sin registro de la operación: SOL puede enviarla"}})
+    def consultar_operacion(id_operacion: str, _sol: str = Depends(canal_sol)):
+        """Evaluación no guarda las operaciones de SOL: responde 404 y SOL reenvía el expediente, que
+        COREDB reconoce por su versión y contenido sin registrarlo dos veces (devuelve el mismo acuse)."""
+        raise ErrorEva(404, "OPERACION_NO_RECIBIDA",
+                       "Evaluación no guarda operaciones: reenvía el expediente, que se reconoce sin duplicarse.")
 
     # ------------------------------------------------------------------ Personal
     tan = "Analista"
 
-    @app.get("/eva/v1/evaluaciones", tags=[tan], summary="Bandeja de evaluaciones")
-    def listar_evaluaciones(request: Request,
-                            estado: Literal["PENDIENTE", "EN_REVISION", "APROBADO", "OBSERVADO", "RECHAZADO"] | None = None,
-                            buscar: str | None = Query(None, max_length=80), limite: int = Query(50, ge=1, le=200),
-                            perfil: Perfil = Depends(persona(*LECTURA))):
-        return _servicio(request).listar_evaluaciones(perfil, estado, buscar, limite)
+    @app.get("/eva/v1/solicitudes", tags=[tan], summary="Bandeja de solicitudes de crédito")
+    def bandeja(request: Request, estado: EstadoSolicitud | None = None,
+                codCliente: str | None = Query(None, min_length=1, max_length=12, pattern=r"^[A-Za-z0-9]+$"),
+                limite: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
+                sesion: Sesion = Depends(persona(VER))):
+        params = {"limite": limite, "offset": offset, "estado": estado, "codCliente": codCliente}
+        _, datos = ctx(request).coredb.como_persona(
+            sesion.token, "GET", f"{BASE}/solicitudes", params={k: v for k, v in params.items() if v is not None})
+        return datos
 
-    @app.get("/eva/v1/evaluaciones/{id_evaluacion}", tags=[tan], summary="Expediente, evaluación e historial")
-    def detalle_evaluacion(id_evaluacion: str, request: Request, perfil: Perfil = Depends(persona(*LECTURA))):
-        return _servicio(request).detalle(id_evaluacion, perfil)
+    @app.get("/eva/v1/solicitudes/{id_solicitud}", tags=[tan], summary="Calendario, evaluaciones e historial")
+    def detalle(id_solicitud: uuid.UUID, request: Request, sesion: Sesion = Depends(persona(VER))):
+        return ctx(request).coredb.como_persona(sesion.token, "GET", f"{BASE}/solicitudes/{id_solicitud}")[1]
 
-    @app.post("/eva/v1/evaluaciones/{id_evaluacion}/situacion-financiera", tags=[tan],
+    @app.post("/eva/v1/solicitudes/{id_solicitud}/evaluaciones", tags=[tan],
               summary="Registrar la situación financiera y aplicar la regla")
-    def registrar_situacion(id_evaluacion: str, datos: SituacionIn, request: Request,
-                            perfil: Perfil = Depends(persona(EVALUAR))):
-        return _servicio(request).registrar_situacion(id_evaluacion, datos, perfil)
+    def evaluar(id_solicitud: uuid.UUID, datos: SituacionIn, request: Request,
+                sesion: Sesion = Depends(persona(EVALUAR))):
+        return ctx(request).coredb.como_persona(
+            sesion.token, "POST", f"{BASE}/solicitudes/{id_solicitud}/evaluaciones", json=datos.a_coredb())[1]
 
     @app.post("/eva/v1/evaluaciones/{id_evaluacion}/decision", tags=[tan],
-              summary="Decidir un caso EN_REVISION: aprobar, observar (SOL corrige) o rechazar")
-    def decidir(id_evaluacion: str, datos: DecisionIn, request: Request, perfil: Perfil = Depends(persona(DECIDIR))):
-        return _servicio(request).decidir(id_evaluacion, datos, perfil)
+              summary="Decidir un resultado OBSERVADO: aprobar o rechazar")
+    def decidir(id_evaluacion: uuid.UUID, datos: DecisionIn, request: Request,
+                sesion: Sesion = Depends(persona(DECIDIR))):
+        return ctx(request).coredb.como_persona(
+            sesion.token, "POST", f"{BASE}/evaluaciones/{id_evaluacion}/decision", json=datos.model_dump())[1]
 
-    @app.post("/eva/v1/aprobaciones/{id_aprobacion}/revocacion", tags=[tan], summary="Revocar una aprobación vigente")
-    def revocar(id_aprobacion: str, datos: RevocacionIn, request: Request, perfil: Perfil = Depends(persona(DECIDIR))):
-        return _servicio(request).revocar(id_aprobacion, datos, perfil)
+    @app.post("/eva/v1/solicitudes/{id_solicitud}/revocacion", tags=[tan],
+              summary="Revocar una aprobación sin desembolso")
+    def revocar(id_solicitud: uuid.UUID, datos: RevocacionIn, request: Request,
+                sesion: Sesion = Depends(persona(DECIDIR))):
+        return ctx(request).coredb.como_persona(
+            sesion.token, "POST", f"{BASE}/solicitudes/{id_solicitud}/revocacion", json=datos.model_dump())[1]
 
-    @app.get("/eva/v1/envios", tags=[tan], summary="Resultados por entregar a Solicitud (CR-INT-03)")
-    def listar_envios(request: Request, estado: Literal["PENDIENTE", "ENTREGADO", "ERROR"] | None = None,
-                      limite: int = Query(50, ge=1, le=200), _perfil: Perfil = Depends(persona(*LECTURA))):
-        return {"items": _servicio(request).listar_envios(estado, limite),
-                "configurado": request.app.state.ctx.despachador.configurado}
+    @app.get("/eva/v1/aprobaciones", tags=[tan], summary="Aprobaciones vigentes sin desembolso")
+    def aprobaciones(request: Request,
+                     codCliente: str | None = Query(None, min_length=1, max_length=12, pattern=r"^[A-Za-z0-9]+$"),
+                     idSolicitud: uuid.UUID | None = None, sesion: Sesion = Depends(persona(VER))):
+        params = {"codCliente": codCliente, "idSolicitud": str(idSolicitud) if idSolicitud else None}
+        _, datos = ctx(request).coredb.como_persona(
+            sesion.token, "GET", f"{BASE}/aprobaciones", params={k: v for k, v in params.items() if v is not None})
+        return datos
 
-    @app.post("/eva/v1/envios/{id_operacion}/reintento", tags=[tan], summary="Reintentar un envío en ERROR")
-    def reintentar_envio(id_operacion: str, request: Request, perfil: Perfil = Depends(persona(DECIDIR))):
-        return _servicio(request).reintentar_envio(id_operacion, perfil)
+    @app.get("/eva/v1/catalogo", tags=[tan], summary="Estados, reglas y vigencia de la aprobación")
+    def catalogo(request: Request, sesion: Sesion = Depends(persona(VER))):
+        return ctx(request).coredb.como_persona(sesion.token, "GET", "/coredb/catalogos/creditos")[1]
 
-    @app.get("/eva/v1/historial", tags=[tan], summary="Últimos eventos del módulo")
-    def historial(request: Request, limite: int = Query(100, ge=1, le=500),
-                  _perfil: Perfil = Depends(persona(AUDITAR, DECIDIR))):
-        return {"items": _servicio(request).historial(limite)}
+    @app.get("/eva/v1/resultados-sol", tags=[tan], summary="Resultados que se devuelven a Solicitud (CR-INT-03)")
+    def resultados_sol(request: Request, _sesion: Sesion = Depends(persona(VER))):
+        c = ctx(request)
+        return {"configurado": c.despachador.configurado, "ventanaDias": c.config.envio_ventana_dias,
+                "items": c.despachador.resultados()}
 
     return app
 
