@@ -27,5 +27,5 @@ data:
   SOL_GATEWAY_URL: http://sol:8011/gateway/sol
   EVALUACION_GATEWAY_URL: http://evaluacion:8015/eva/v1
   DESEMBOLSO_GATEWAY_URL: http://desembolso:8016/api/v1
-  CAPTACION_GATEWAY_URL: http://captacion:8014/api/v1/captacion
+  CAPTACION_GATEWAY_URL: http://captacion:8017/api/v1/captacion
   SOL_COOKIE_SECURE: "false"

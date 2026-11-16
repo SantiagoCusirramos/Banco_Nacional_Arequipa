@@ -12,13 +12,13 @@ Módulo de Captación de Clientes. Lleva a una persona desde que pide un product
    activo que ya tenga ese documento), le anota las verificaciones de celular y correo, y deja la
    **referencia vigente** que consulta **Solicitud de Crédito** (contrato CR-INT-01).
 
-Puerto **8014**. Pantalla del asesor: **http://localhost:3000/captacion**.
+Puerto **8017**. Pantalla del asesor: **http://localhost:3000/captacion**.
 
 ## Cómo se integra
 
 ```mermaid
 flowchart LR
-  ase["Asesor en /captacion"] --> fe["frontend /api/captacion"] --> cap["CAPTACION :8014"]
+  ase["Asesor en /captacion"] --> fe["frontend /api/captacion"] --> cap["CAPTACION :8017"]
   cap -->|"token del asesor: GET /coredb/auth/me"| coredb["COREDB :8012"]
   cap -->|"usuario de servicio: alta, validaciones, consulta"| coredb
   cap --> aux[("db-aux: bna_captacion")]

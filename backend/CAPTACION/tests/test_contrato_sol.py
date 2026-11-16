@@ -26,7 +26,7 @@ from CAPTACION.tests.conftest import ASESOR, BASE, TOKEN_SOL  # noqa: E402
 def _sol(token=TOKEN_SOL):
     """Las mismas rutas que SOL configuraría en SOL_CAP_*_PATH, contra CAPTACION."""
     ajustes = SimpleNamespace(
-        mode="REAL", bus_base_url="http://captacion:8014", bus_token=token,
+        mode="REAL", bus_base_url="http://captacion:8017", bus_token=token,
         cap_search_path="/cap/references", cap_reference_path="/cap/references/{idCliente}",
         http_timeout=0.6, max_retries=2, request_budget=2.4,
     )

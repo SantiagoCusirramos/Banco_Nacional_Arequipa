@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // servicio a servicio y usan un token que el navegador nunca ve.
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
-  const base = process.env.CAPTACION_GATEWAY_URL || "http://127.0.0.1:8014/api/v1/captacion";
+  const base = process.env.CAPTACION_GATEWAY_URL || "http://127.0.0.1:8017/api/v1/captacion";
   return reenviar(request, base, path, "CAPTACION");
 }
 

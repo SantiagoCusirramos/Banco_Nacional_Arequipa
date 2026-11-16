@@ -178,7 +178,7 @@ services:
   # publica la referencia que consulta SOL (CR-INT-01). Su base propia está en db-aux.
   captacion:
     <<: *captacion
-    command: uvicorn CAPTACION.main:app --host 0.0.0.0 --port 8014
+    command: uvicorn CAPTACION.main:app --host 0.0.0.0 --port 8017
     environment:
       <<: *captacion-entorno
       CAP_SOL_TOKEN: ${CAP_SOL_TOKEN:?Falta en .env. Ejecute ./bna up}
@@ -193,14 +193,14 @@ services:
       coredb:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${BNA_PUERTO_CAPTACION:-8014}:8014"
+      - "127.0.0.1:${BNA_PUERTO_CAPTACION:-8017}:8017"
     healthcheck:
       <<: *sonda
       test:
         - CMD
         - python
         - -c
-        - import urllib.request as u; u.urlopen("http://127.0.0.1:8014/ready", timeout=3)
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8017/ready", timeout=3)
 
   # Crea la base de CAPTACION en db-aux y sus tablas, y con el administrador de
   # COREDB crea o renueva su usuario de servicio (módulo CLIENTES). No borra datos.
@@ -349,7 +349,7 @@ services:
       SOL_COOKIE_SECURE: "false"
       EVALUACION_GATEWAY_URL: http://evaluacion:8015/eva/v1
       DESEMBOLSO_GATEWAY_URL: http://desembolso:8016/api/v1
-      CAPTACION_GATEWAY_URL: http://captacion:8014/api/v1/captacion
+      CAPTACION_GATEWAY_URL: http://captacion:8017/api/v1/captacion
     depends_on:
       coredb:
         condition: service_healthy
