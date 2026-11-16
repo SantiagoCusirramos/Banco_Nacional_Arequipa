@@ -7,8 +7,8 @@ Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
 saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
 COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
-módulo TARJETAS y todo por los puentes del frontend, que es el camino que sigue el
-navegador.
+módulo TARJETAS (con un retiro autorizado y extornado) y todo por los puentes
+del frontend, que es el camino que sigue el navegador.
 """
 
 import json
@@ -264,6 +264,35 @@ def flujo():
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "ACTIVA",
            f"Activación por TARJETAS: {estado} {respuesta}")
+    # Un retiro en el cajero de desarrollo: se autoriza y retiene el saldo, la misma llave no
+    # lo retiene dos veces y el extorno lo libera (RN-ATM-003).
+    coredb("POST", "/coredb/movimientos", 201, {
+        "num_cuenta": cuenta_tarjeta, "tipo": "DEPOSITO", "monto": "100.00",
+        "glosa": "Depósito para el retiro con tarjeta", "id_canal": CANAL,
+        "idempotency_key": str(uuid.uuid4()),
+    }, token)
+    retiro = {"num_cuenta": cuenta_tarjeta, "tipo_operacion": "RETIRO", "monto": "40.00",
+              "id_terminal": "DEV-ATM-01"}
+    llave_retiro = {"X-Idempotency-Key": str(uuid.uuid4())}
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/autorizaciones", retiro, token, cabeceras=llave_retiro)
+    exigir(estado == 201 and respuesta["data"]["aprobada"] is True
+           and respuesta["data"]["codigo_respuesta"] == "00",
+           f"Autorización del retiro por TARJETAS: {estado} {respuesta}")
+    autorizacion = respuesta["data"]["uuid_autorizacion"]
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/autorizaciones", retiro, token, cabeceras=llave_retiro)
+    exigir(estado == 201 and respuesta["data"]["uuid_autorizacion"] == autorizacion,
+           f"Repetir la autorización con la misma llave debía devolver la misma: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 60.0, f"La autorización debía retener 40.00 una sola vez: disponible {disponible}")
+    estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/extorno",
+                              {"motivo": "Prueba del flujo"}, token)
+    exigir(estado == 200 and respuesta["data"]["estado_autorizacion"] == "EXTORNADA"
+           and respuesta["data"]["codigo_respuesta"] == "EXT",
+           f"Extorno por TARJETAS: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 100.0, f"El extorno debía liberar el saldo retenido: disponible {disponible}")
+    paso(f"TARJETAS: retiro de 40.00 en el cajero DEV-ATM-01 autorizado (00) y retenido una sola vez "
+         "con la misma llave, y extornado (saldo liberado)")
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
            f"Bloqueo por TARJETAS: {estado} {respuesta}")
