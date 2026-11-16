@@ -1,61 +1,37 @@
-"""Configuración por ambiente. Variables con prefijo DESEMBOLSO_ (por ejemplo DESEMBOLSO_DATABASE_URL)."""
-from pydantic_settings import BaseSettings, SettingsConfigDict
+"""Configuración de Desembolso, leída del entorno. El secreto no tiene valor por omisión."""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+LONGITUD_MINIMA_SECRETO = 32
 
 
-class Config(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="DESEMBOLSO_", env_file=".env", env_file_encoding="utf-8",
-                                      extra="ignore")
-
-    ambiente: str = "desarrollo"
-    database_url: str = "mysql+pymysql://desembolso_user@127.0.0.1:3306/bna_desembolso"
-    cors_origenes: str = "http://localhost:3000"
-
-    # Módulos del producto (llamadas directas en la red de Docker; aún no hay Bus de Servicios)
+@dataclass(frozen=True)
+class Config:
+    # Secreto del usuario de servicio de COREDB (svc-desembolso). Con él Desembolso lee las
+    # aprobaciones (CR-INT-04) y las cuentas del titular, y comprueba que COREDB responde.
+    servicio_secreto: str
+    servicio_usuario: str = "svc-desembolso"
     coredb_url: str = "http://127.0.0.1:8012"
-    evaluacion_url: str = "http://127.0.0.1:8015"
-    cuentas_url: str = "http://127.0.0.1:8001/api/v1/cuentas"
-    # Vacía mientras Cobranza no esté en el producto: las entregas esperan sin gastar intentos.
-    cobranza_url: str = ""
-    cobranza_api_key: str = ""
-
-    # Usuario de servicio de Desembolso en COREDB (rol SERVICIO, módulo DESEMBOLSO). El secreto
-    # viene del entorno o del archivo que deja desembolso-init ({"username", "secreto"}).
-    svc_usuario: str = "svc-desembolso"
-    svc_secreto: str = ""
-    svc_archivo: str = ""
-
-    # Canal con el que se registra el abono en CUENTAS: ventanilla de la agencia.
-    canal_cuentas: str = "VEN"
-    # COREDB no informa la agencia del usuario: se toma de la instalación.
-    agencia_id: str | None = None
-    agencia_nombre: str | None = None
+    timeout_seg: float = 5.0
     sesion_cache_seg: float = 30.0
 
-    # Integración (RT-04)
-    timeout_dependencia_seg: float = 3.0
-    timeout_abono_seg: float = 5.0
-    reintentos_consulta: int = 2
+    @classmethod
+    def desde_entorno(cls) -> "Config":
+        config = cls(
+            servicio_secreto=os.environ.get("DESEMBOLSO_COREDB_SECRETO", "").strip(),
+            servicio_usuario=os.environ.get("DESEMBOLSO_COREDB_USUARIO", "svc-desembolso").strip(),
+            coredb_url=os.environ.get("COREDB_URL", "http://127.0.0.1:8012").strip().rstrip("/"),
+            timeout_seg=float(os.environ.get("DESEMBOLSO_TIMEOUT_SEG", "5")),
+            sesion_cache_seg=float(os.environ.get("DESEMBOLSO_SESION_CACHE_SEG", "30")),
+        )
+        config.validar()
+        return config
 
-    # Recuperación de órdenes inciertas (RN-07, RT-06)
-    recuperacion_intervalo_seg: float = 10.0
-    recuperacion_espera_seg: float = 30.0
-    recuperacion_gracia_seg: float = 120.0
-    alerta_incierta_min: float = 15.0
-
-    # Entregas a Cobranza y avisos a Evaluación (RN-08)
-    entrega_intervalo_seg: float = 5.0
-    entrega_max_intentos: int = 10
-    entrega_backoff_base_seg: float = 5.0
-    entrega_backoff_max_seg: float = 900.0
-
-    # Reglas configurables
-    validacion_vigencia_min: int = 30
-    # No confirmar si la primera cuota del calendario de SOL vence antes del desembolso:
-    # Cobranza marcaría el crédito en mora apenas lo activa.
-    validar_calendario: bool = True
-    # Seguridad (laboratorio) no ofrece antifraude a los módulos: queda apagado.
-    antifraude_habilitado: bool = False
-    reversion_habilitada: bool = False
-    reversion_plazo_horas: int = 24
-
-    trabajos_habilitados: bool = True
+    def validar(self) -> None:
+        # Los mensajes nunca repiten el valor.
+        if len(self.servicio_secreto) < LONGITUD_MINIMA_SECRETO:
+            raise RuntimeError(f"DESEMBOLSO_COREDB_SECRETO debe tener al menos {LONGITUD_MINIMA_SECRETO} caracteres.")
+        if not self.servicio_usuario:
+            raise RuntimeError("Falta DESEMBOLSO_COREDB_USUARIO.")

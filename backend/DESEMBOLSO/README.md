@@ -1,79 +1,89 @@
 # DESEMBOLSO: desembolso de créditos (módulo 13, Línea de Créditos)
 
-Servicio SRV-CR-04. Convierte una aprobación de Evaluación en un abono confirmado en la cuenta de
-ahorros del titular, entrega a Cobranza la obligación de cobro con el calendario de Solicitud y avisa
-a Evaluación que la aprobación ya se usó. Puerto 8016; base propia `bna_desembolso` en `db-aux`.
-Desarrollo original y documentación de diseño: https://github.com/Rodrigoss06/Modulo-Desembolso.
+Módulo del equipo de Desembolso (Rodrigoss06, #71), integrado sobre COREDB. Convierte una aprobación en un
+abono en la cuenta de ahorros del titular: el operador verifica el documento, prepara la orden, registra la
+identidad y confirma. Puerto 8016. Desarrollo original y documentación de diseño:
+https://github.com/Rodrigoss06/Modulo-Desembolso.
 
-## Flujo en el producto
+**No tiene base propia.** Los datos viven en las tablas `creditos.*` de la base integrada y solo COREDB los
+escribe, por sus procedimientos (`backend/COREDB/CONTRATO_CREDITOS.md` §4). La confirmación es una sola
+operación de la base: abona la cuenta, crea el crédito con su calendario OFICIAL (copia del de Solicitud,
+RN-SOL-006) y deja la solicitud DESEMBOLSADA. Por eso ya no hay llamadas a Evaluación, a CUENTAS ni a
+Cobranza, ni POR_VERIFICAR, outbox o recuperación: si se pierde la respuesta, se repite la confirmación y
+COREDB devuelve el mismo crédito y el mismo abono, sin abonar otra vez.
 
-1. El operador busca el crédito por documento o código (`GET /api/v1/creditos-habilitados`): Desembolso
-   consulta a Evaluación (CR-INT-04) con su usuario de servicio de COREDB.
-2. Prepara la orden (`POST /api/v1/ordenes`, idempotente): guarda la aprobación, el `idSolicitud` y el
-   **calendario de SOL tal cual llegó** (RN-SOL-006). No se prepara si falta el calendario o si su primera
-   cuota ya venció.
-3. Verifica la identidad en ventanilla: registra el número del documento original y se compara con el del
-   titular según Evaluación. El módulo Clientes no está en el producto: no hay biometría.
-4. Elige la cuenta: CUENTAS devuelve las cuentas del cliente; solo es elegible una cuenta de ahorros
-   ACTIVA, INDIVIDUAL, del titular y en la moneda del crédito.
-5. Confirma: revalida aprobación, calendario y cuenta, y abona con `POST /api/v1/cuentas/deposito`, canal
-   VEN, una sola vez, con una llave UUIDv4 derivada de la orden. Si la respuesta se pierde, la orden queda
-   POR_VERIFICAR y se busca el movimiento por la referencia de la glosa, sin volver a abonar.
-6. Con el abono confirmado, en la misma transacción quedan dos entregas (outbox):
-   - a Cobranza, `POST /cr-int-06/obligaciones` con `codCredito`, `idCliente`, `idSolicitud`, monto, fecha
-     del desembolso y `calendarioPagos` (`numeroCuota`, `fechaVencimiento`, `montoCuota` = cuota total);
-     un 409 RN-COB-001 es el acuse de una repetición;
-   - a Evaluación, `POST /eva/v1/aprobaciones/{id}/desembolso`, que marca la aprobación DESEMBOLSADA.
+## Flujo
 
-## Accesos
+1. **Identidad en ventanilla.** El operador revisa el documento original y a la persona, y lo registra:
+   `POST /api/v1/identidad`. COREDB aprueba la verificación solo para un cliente ACTIVO y devuelve su
+   `codCliente` y un `idValidacion`, la evidencia de la orden.
+2. **Aprobación (CR-INT-04).** `GET /api/v1/aprobaciones?codCliente=…`: las aprobaciones vigentes (última
+   ronda, 30 días, sin desembolso) se leen de COREDB, no de Evaluación. `ordenAbierta` dice si ya tienen
+   una orden PREPARADA o VALIDADA.
+3. **Cuenta.** `GET /api/v1/clientes/{codCliente}/cuentas?moneda=PEN`: solo admite el abono una cuenta de
+   ahorros INDIVIDUAL, ACTIVA, del titular y en la moneda del crédito. COREDB lo vuelve a comprobar al
+   preparar, al cambiar la cuenta y al confirmar.
+4. **Orden.** `POST /api/v1/ordenes` con `X-Idempotency-Key` (UUID): el importe es el monto aprobado. La
+   misma llave con el mismo cuerpo devuelve la misma orden (200); con otro cuerpo, 409.
+5. **Validación.** `POST /api/v1/ordenes/{id}/validaciones` con `tipo: IDENTIDAD`, `resultado: APROBADA` y
+   el `idValidacion` del paso 1. Con la identidad y la cuenta aprobadas, la orden queda VALIDADA.
+6. **Confirmación.** `POST /api/v1/ordenes/{id}/confirmacion`: 201 con `codCredito`,
+   `uuidTransaccionAbono` y `fechaEfectiva`; repetirla, 200 con lo mismo. La constancia la arma la pantalla
+   con el detalle de la orden.
 
-El personal entra con su token de COREDB, que valida COREDB (`GET /coredb/auth/me`):
+**Vigencia de la identidad (T7, valor por omisión del equipo):** la verificación debe ser del mismo día
+(fecha de Lima). Una de otro día no valida la orden, y una orden validada ayer no se confirma hoy: hay que
+verificar el documento otra vez.
+
+## Rutas
+
+| Ruta | Quién | En COREDB |
+|---|---|---|
+| `GET /api/v1/sesion` | `VER_CREDITO` o `DESEMBOLSAR_CREDITO` | `GET /coredb/auth/me` |
+| `POST /api/v1/identidad` | `DESEMBOLSAR_CREDITO` (y `VALIDAR_IDENTIDAD` en COREDB) | `POST /coredb/clientes/validaciones/documento` |
+| `GET /api/v1/aprobaciones` | `VER_CREDITO` o `DESEMBOLSAR_CREDITO` | `GET /coredb/creditos/aprobaciones` (`svc-desembolso`) |
+| `GET /api/v1/clientes/{cod}/cuentas` | `DESEMBOLSAR_CREDITO` | `GET /coredb/cuentas` (`svc-desembolso`) |
+| `POST /api/v1/ordenes`, `PUT …/{id}/cuenta`, `POST …/{id}/validaciones`, `…/confirmacion`, `…/rechazo` | `DESEMBOLSAR_CREDITO` | `/coredb/creditos/ordenes…` |
+| `GET /api/v1/ordenes`, `GET /api/v1/ordenes/{id}` | `VER_CREDITO` | Monitor y detalle; el detalle agrega el calendario de la solicitud |
+| `GET /api/v1/conciliacion` | `GENERAR_REPORTES` | `GET /coredb/creditos/conciliacion/desembolsos` |
+
+Lo que hace una persona va con **su token de COREDB**, que Desembolso reenvía: COREDB vuelve a comprobar el
+permiso y la bitácora de la orden registra al operador. El usuario de servicio `svc-desembolso`
+(`SERVICIO:DESEMBOLSO`: `VER_CREDITO`, `VER_CUENTA`) solo lee las aprobaciones y las cuentas, y sirve para
+`/salud`. Un usuario de servicio no entra en las rutas del personal. Errores como COREDB:
+`{"error": {"code", "message"}}`, con sus códigos (`APROBACION_NO_VIGENTE`, `CUENTA_NO_ELEGIBLE`,
+`VALIDACION_NO_ADMITIDA`, …). Especificación: `openapi.json` (`python -m DESEMBOLSO.scripts.exporta_openapi`).
 
 | Rol de COREDB | Perfil en Desembolso |
 |---|---|
-| OPERADOR | Operador de agencia: prepara, verifica y confirma |
-| ADMINISTRADOR | Supervisor: monitor, recuperación, entregas, conciliación y reversiones (COREDB no tiene un rol de supervisor; decisión pendiente del Comité) |
-| AUDITOR | Solo consulta |
-
-Para llamar a Evaluación y CUENTAS, Desembolso usa su usuario de servicio `svc-desembolso`
-(`SERVICIO:DESEMBOLSO` en `COREDB/permisos.py`: `VER_CUENTA` y `REGISTRAR_MOVIMIENTO`), que crea
-`desembolso-init` y cuyo secreto queda en el volumen `desembolso-datos`. A Cobranza la llama con su clave
-`X-API-Key` de integración.
+| OPERADOR | Operador de agencia: verifica, prepara, valida, confirma y rechaza |
+| ADMINISTRADOR | Supervisor: lo mismo, y concilia (COREDB no tiene un rol de supervisor; pregunta T6 del equipo) |
+| AUDITOR | Consulta y concilia |
 
 ## Configuración
 
-Variables con prefijo `DESEMBOLSO_` (ver `config.py`). En el producto las pone `compose.yaml`. Cobranza aún
-no está en el producto (PR #68): mientras `DESEMBOLSO_COBRANZA_URL` esté vacía, sus entregas esperan sin
-gastar intentos. Cuando entre, agregar a `.env`:
+| Variable | Qué es |
+|---|---|
+| `DESEMBOLSO_COREDB_SECRETO` | Secreto de `svc-desembolso`. En el producto lo crea `coredb-init` con `COREDB.scripts.crear_servicio` |
+| `DESEMBOLSO_COREDB_USUARIO` | `svc-desembolso` por omisión |
+| `COREDB_URL` | `http://coredb:8012` en compose |
 
-```dotenv
-DESEMBOLSO_COBRANZA_URL=http://cobranza:8014
-DESEMBOLSO_COBRANZA_API_KEY=<el valor de COBRANZA_API_KEY_INTEGRACION>
-```
+## Ejecutar y probar
 
-## Base de datos
-
-`sql/esquema.sql`: tablas `des_*`, triggers (máquina de estados, datos financieros y calendario
-inmutables, bitácora de solo inserción) y vistas operativas. Lo aplica `scripts/preparar_base.py` en cada
-arranque, sin borrar datos. El usuario `desembolso_user` no tiene DELETE en ninguna tabla.
-
-## Pruebas
+Con el producto: `./bna up` (pantallas en http://localhost:3000/desembolso, API en http://127.0.0.1:8016/docs).
 
 ```bash
-backend/DESEMBOLSO/scripts/pruebas_integracion.sh      # en contenedores, contra un MySQL 8.4 nuevo
-DESEMBOLSO_TEST_MYSQL=mysql+pymysql://root:clave@127.0.0.1:3306 python -m pytest DESEMBOLSO/tests   # desde backend/
+backend/DESEMBOLSO/scripts/pruebas_integracion.sh      # en contenedores: bna-core-db y COREDB nuevos
 ```
 
-`tests/simulador.py` imita los contratos reales de COREDB, Evaluación, CUENTAS y Cobranza, y permite
-inyectar fallas: respuesta perdida, rechazo de la cuenta, caídas, Cobranza con ids de 20 caracteres.
-Los escenarios cubren duplicidad, concurrencia, recuperación sin doble abono, entregas, conciliación,
-permisos y triggers.
+Las pruebas usan la base integrada y COREDB reales: aprobación → orden → validación → confirmación (un solo
+abono, el crédito con su calendario OFICIAL, la solicitud DESEMBOLSADA), confirmar otra vez sin otro abono,
+una cuenta mancomunada y una identidad de otro día rechazadas, y los permisos de cada rol. Al terminar no
+quedan contenedores ni volúmenes.
 
 ## Pendiente
 
-- Reversión: deshabilitada; CUENTAS no ofrece extorno (requiere un cambio en el CORE).
-- Antifraude y eventos a Seguridad (CR-INT-10): Seguridad todavía no los ofrece a los módulos; la bitácora
-  local es la fuente de verdad.
-- Comité: supervisor = ADMINISTRADOR, `cod_cliente` de COREDB como identificador común, ratificar que SOL
-  arma el calendario. Cobranza: ampliar `idSolicitud` e `idCliente` a 36 caracteres.
-- Kubernetes (`k8s/`).
+- Reversión: CUENTAS no tiene extorno y el modelo deja `solicitud_reversion` sin uso en esta fase.
+- Antifraude y eventos a Seguridad (CR-INT-10): Seguridad todavía no los ofrece; la orden admite las
+  validaciones AUTORIZACION y ANTIFRAUDE para cuando existan.
+- Decisiones del equipo con valor por omisión: supervisor = ADMINISTRADOR (T6), identidad del mismo día (T7).

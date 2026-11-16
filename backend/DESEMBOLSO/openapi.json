@@ -1,46 +1,83 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "BNA · Desembolso de créditos",
-    "description": "Servicio SRV-CR-04 (módulo 13): prepara, valida, ejecuta y sigue el desembolso de una aprobación de Evaluación (CR-INT-04). Abona por CUENTAS (CR-INT-05), entrega a Cobranza la obligación con el calendario de Solicitud sin cambios (CR-INT-06) y avisa a Evaluación que la aprobación se usó. El personal entra con su token de COREDB. Montos como texto decimal (\"500.00\").",
+    "title": "BNA · Desembolso de Créditos",
+    "description": "Módulo 13 de la Línea de Créditos, sin base propia. El operador verifica el documento del titular, elige una aprobación vigente (leída de COREDB, CR-INT-04) y una cuenta de ahorros individual del titular, prepara la orden, registra la identidad del día y confirma. COREDB abona, crea el crédito con su calendario oficial y deja la solicitud DESEMBOLSADA en una sola operación; confirmar otra vez devuelve lo mismo sin otro abono. Lo que hace la persona va con su token de COREDB, que Desembolso reenvía. Montos como texto decimal (\"15000.00\").",
     "version": "2.0.0"
   },
   "paths": {
-    "/api/v1/sesion": {
+    "/salud": {
       "get": {
         "tags": [
-          "Sesión"
+          "Estado"
         ],
-        "summary": "Sesion",
-        "operationId": "sesion_api_v1_sesion_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
+        "summary": "COREDB responde y el usuario de servicio inicia sesión",
+        "operationId": "salud_salud_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Sesion"
-                }
+                "schema": {}
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/sesion": {
+      "get": {
+        "tags": [
+          "Operación en agencia"
+        ],
+        "summary": "Perfil de la persona en Desembolso",
+        "operationId": "sesion_api_v1_sesion_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identidad": {
+      "post": {
+        "tags": [
+          "Operación en agencia"
+        ],
+        "summary": "Verificar el documento del titular en ventanilla",
+        "description": "El operador revisó el documento original y a la persona. COREDB registra la verificación y\nla aprueba solo para un cliente ACTIVO; su `idValidacion` es la evidencia IDENTIDAD de la orden,\nválida el mismo día (fecha de Lima). Sin identidad verificada, la respuesta no dice si el\ndocumento es de un cliente.",
+        "operationId": "verificar_identidad_api_v1_identidad_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentidadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
           },
           "422": {
             "description": "Validation Error",
@@ -52,65 +89,62 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
-    "/api/v1/creditos-habilitados": {
+    "/api/v1/aprobaciones": {
       "get": {
         "tags": [
-          "CU-01 Créditos"
+          "Operación en agencia"
         ],
-        "summary": "Creditos Habilitados",
-        "operationId": "creditos_habilitados_api_v1_creditos_habilitados_get",
+        "summary": "Aprobaciones vigentes sin desembolso (CR-INT-04)",
+        "description": "Se leen de COREDB con el usuario de servicio: la última ronda aprobada, dentro de sus 30 días\ny sin desembolso confirmado, con el calendario de Solicitud sin cambios. `ordenAbierta` es la\norden PREPARADA o VALIDADA que ya tiene, si la hay.",
+        "operationId": "aprobaciones_api_v1_aprobaciones_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "documento",
+            "name": "codCliente",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
                   "type": "string",
-                  "maxLength": 15
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Documento"
+              "title": "Codcliente"
             }
           },
           {
-            "name": "credito_id",
+            "name": "idSolicitud",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
                   "type": "string",
-                  "maxLength": 36
+                  "format": "uuid"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Credito Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
+              "title": "Idsolicitud"
             }
           }
         ],
@@ -119,13 +153,66 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CreditoHabilitado"
-                  },
-                  "title": "Response Creditos Habilitados Api V1 Creditos Habilitados Get"
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "FILTRO_REQUERIDO: indica codCliente o idSolicitud"
+          }
+        }
+      }
+    },
+    "/api/v1/clientes/{cod_cliente}/cuentas": {
+      "get": {
+        "tags": [
+          "Operación en agencia"
+        ],
+        "summary": "Cuentas del titular y si admiten el abono",
+        "description": "Las cuentas en las que el cliente es titular, leídas de COREDB con el usuario de servicio. Solo\nadmite el abono una cuenta de ahorros INDIVIDUAL, ACTIVA, del titular y en la moneda del crédito;\n`motivo` dice por qué otra no: CUENTA_MANCOMUNADA, TITULAR_DISTINTO, CUENTA_NO_ACTIVA o\nMONEDA_DISTINTA.",
+        "operationId": "cuentas_api_v1_clientes__cod_cliente__cuentas_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cod_cliente",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 12,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente"
+            }
+          },
+          {
+            "name": "moneda",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                {
+                  "type": "null"
                 }
+              ],
+              "title": "Moneda"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -145,41 +232,25 @@
     "/api/v1/ordenes": {
       "post": {
         "tags": [
-          "CU-02/03 Órdenes"
+          "Órdenes de desembolso"
         ],
-        "summary": "Preparar",
+        "summary": "Preparar la orden de una aprobación",
+        "description": "El importe es el monto aprobado. Se rechaza si la aprobación venció, si su primera cuota ya\nvenció, si ya tiene una orden abierta o si la cuenta no es elegible.",
         "operationId": "preparar_api_v1_ordenes_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "x-idempotency-key",
+            "name": "X-Idempotency-Key",
             "in": "header",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
+              "format": "uuid",
               "title": "X-Idempotency-Key"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
             }
           }
         ],
@@ -188,7 +259,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PrepararOrden"
+                "$ref": "#/components/schemas/OrdenIn"
               }
             }
           }
@@ -198,133 +269,115 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrdenDetalle"
-                }
+                "schema": {}
               }
             }
           },
+          "200": {
+            "description": "La misma llave con el mismo contenido: la misma orden"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "APROBACION_NO_VIGENTE, CALENDARIO_INVALIDO, ORDEN_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
           }
         }
       },
       "get": {
         "tags": [
-          "CU-04 Consultas"
+          "Órdenes de desembolso"
         ],
-        "summary": "Listar",
-        "operationId": "listar_api_v1_ordenes_get",
+        "summary": "Monitor de órdenes",
+        "operationId": "monitor_api_v1_ordenes_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "texto",
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PREPARADA",
+                    "VALIDADA",
+                    "EN_PROCESO",
+                    "POR_VERIFICAR",
+                    "CONFIRMADA",
+                    "RECHAZADA",
+                    "REVERTIDA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "codCliente",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
                   "type": "string",
-                  "maxLength": 40
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Texto"
+              "title": "Codcliente"
             }
           },
           {
-            "name": "estado",
+            "name": "idSolicitud",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "uuid"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Estado"
+              "title": "Idsolicitud"
             }
           },
           {
-            "name": "desde",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Desde"
-            }
-          },
-          {
-            "name": "hasta",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Hasta"
-            }
-          },
-          {
-            "name": "pagina",
+            "name": "limite",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 200,
               "minimum": 1,
-              "default": 1,
-              "title": "Pagina"
+              "default": 50,
+              "title": "Limite"
             }
           },
           {
-            "name": "tamano",
+            "name": "offset",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 20,
-              "title": "Tamano"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -333,9 +386,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginaOrdenes"
-                }
+                "schema": {}
               }
             }
           },
@@ -352,37 +403,28 @@
         }
       }
     },
-    "/api/v1/ordenes/{orden_id}": {
+    "/api/v1/ordenes/{id_orden}": {
       "get": {
         "tags": [
-          "CU-04 Consultas"
+          "Órdenes de desembolso"
         ],
-        "summary": "Detalle",
-        "operationId": "detalle_api_v1_ordenes__orden_id__get",
+        "summary": "La orden, sus validaciones, bitácora y calendario",
+        "description": "Agrega el calendario vigente de la solicitud: el PRELIMINAR de Solicitud antes del desembolso\ny el OFICIAL, su copia, después.",
+        "operationId": "detalle_api_v1_ordenes__id_orden__get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "orden_id",
+            "name": "id_orden",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
+              "format": "uuid",
+              "title": "Id Orden"
             }
           }
         ],
@@ -391,11 +433,12 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrdenDetalle"
-                }
+                "schema": {}
               }
             }
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
           },
           "422": {
             "description": "Validation Error",
@@ -410,167 +453,27 @@
         }
       }
     },
-    "/api/v1/ordenes/{orden_id}/identidad": {
-      "post": {
-        "tags": [
-          "CU-02/03 Órdenes"
-        ],
-        "summary": "Validar Identidad",
-        "operationId": "validar_identidad_api_v1_ordenes__orden_id__identidad_post",
-        "parameters": [
-          {
-            "name": "orden_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValidarIdentidad"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrdenDetalle"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ordenes/{orden_id}/cuentas-elegibles": {
-      "get": {
-        "tags": [
-          "CU-02/03 Órdenes"
-        ],
-        "summary": "Cuentas Elegibles",
-        "operationId": "cuentas_elegibles_api_v1_ordenes__orden_id__cuentas_elegibles_get",
-        "parameters": [
-          {
-            "name": "orden_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CuentaElegible"
-                  },
-                  "title": "Response Cuentas Elegibles Api V1 Ordenes  Orden Id  Cuentas Elegibles Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ordenes/{orden_id}/cuenta-destino": {
+    "/api/v1/ordenes/{id_orden}/cuenta": {
       "put": {
         "tags": [
-          "CU-02/03 Órdenes"
+          "Órdenes de desembolso"
         ],
-        "summary": "Seleccionar Cuenta",
-        "operationId": "seleccionar_cuenta_api_v1_ordenes__orden_id__cuenta_destino_put",
+        "summary": "Cambiar la cuenta de la orden",
+        "operationId": "cambiar_cuenta_api_v1_ordenes__id_orden__cuenta_put",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "orden_id",
+            "name": "id_orden",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
+              "format": "uuid",
+              "title": "Id Orden"
             }
           }
         ],
@@ -579,522 +482,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SeleccionarCuenta"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrdenDetalle"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ordenes/{orden_id}/confirmacion": {
-      "post": {
-        "tags": [
-          "CU-02/03 Órdenes"
-        ],
-        "summary": "Confirmar",
-        "operationId": "confirmar_api_v1_ordenes__orden_id__confirmacion_post",
-        "parameters": [
-          {
-            "name": "orden_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "x-idempotency-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Idempotency-Key"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Confirmar"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrdenDetalle"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Resultado financiero incierto: la orden queda POR_VERIFICAR"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ordenes/{orden_id}/verificacion": {
-      "post": {
-        "tags": [
-          "CU-04 Consultas"
-        ],
-        "summary": "Verificar",
-        "operationId": "verificar_api_v1_ordenes__orden_id__verificacion_post",
-        "parameters": [
-          {
-            "name": "orden_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrdenDetalle"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ordenes/{orden_id}/constancia": {
-      "get": {
-        "tags": [
-          "CU-04 Consultas"
-        ],
-        "summary": "Constancia",
-        "operationId": "constancia_api_v1_ordenes__orden_id__constancia_get",
-        "parameters": [
-          {
-            "name": "orden_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Constancia"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ordenes/{orden_id}/auditoria": {
-      "get": {
-        "tags": [
-          "CU-04 Consultas"
-        ],
-        "summary": "Auditoria",
-        "operationId": "auditoria_api_v1_ordenes__orden_id__auditoria_get",
-        "parameters": [
-          {
-            "name": "orden_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/operacion/resumen": {
-      "get": {
-        "tags": [
-          "CU-05 Operación"
-        ],
-        "summary": "Resumen Operativo",
-        "operationId": "resumen_operativo_api_v1_operacion_resumen_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/operacion/recuperacion": {
-      "post": {
-        "tags": [
-          "CU-05 Operación"
-        ],
-        "summary": "Ejecutar Recuperacion",
-        "operationId": "ejecutar_recuperacion_api_v1_operacion_recuperacion_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/operacion/entregas": {
-      "post": {
-        "tags": [
-          "CU-05 Operación"
-        ],
-        "summary": "Ejecutar Entregas",
-        "operationId": "ejecutar_entregas_api_v1_operacion_entregas_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/operacion/entregas/{evento_id}/reintento": {
-      "post": {
-        "tags": [
-          "CU-05 Operación"
-        ],
-        "summary": "Reintentar Entrega",
-        "operationId": "reintentar_entrega_api_v1_operacion_entregas__evento_id__reintento_post",
-        "parameters": [
-          {
-            "name": "evento_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Evento Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/conciliaciones": {
-      "post": {
-        "tags": [
-          "CU-06 Conciliación"
-        ],
-        "summary": "Conciliar",
-        "operationId": "conciliar_api_v1_conciliaciones_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Conciliar"
+                "$ref": "#/components/schemas/CuentaIn"
               }
             }
           }
@@ -1109,65 +497,33 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "ORDEN_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
           }
         }
       }
     },
-    "/api/v1/ordenes/{orden_id}/reversiones": {
+    "/api/v1/ordenes/{id_orden}/validaciones": {
       "post": {
         "tags": [
-          "CU-07 Reversión"
+          "Órdenes de desembolso"
         ],
-        "summary": "Solicitar Reversion",
-        "operationId": "solicitar_reversion_api_v1_ordenes__orden_id__reversiones_post",
+        "summary": "Registrar una validación (IDENTIDAD con la verificación de hoy)",
+        "description": "Con la última IDENTIDAD y la última CUENTA aprobadas, la orden queda VALIDADA. La identidad\nvale el mismo día (T7): una verificación de otro día se rechaza.",
+        "operationId": "validar_api_v1_ordenes__id_orden__validaciones_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "orden_id",
+            "name": "id_orden",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Orden Id"
-            }
-          },
-          {
-            "name": "x-idempotency-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Idempotency-Key"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
+              "format": "uuid",
+              "title": "Id Orden"
             }
           }
         ],
@@ -1176,7 +532,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SolicitarReversion"
+                "$ref": "#/components/schemas/ValidacionIn"
               }
             }
           }
@@ -1186,56 +542,81 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReversionSalida"
-                }
+                "schema": {}
               }
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "VALIDACION_NO_ADMITIDA u ORDEN_NO_ADMITIDA"
           }
         }
       }
     },
-    "/api/v1/reversiones/{reversion_id}/decision": {
+    "/api/v1/ordenes/{id_orden}/confirmacion": {
       "post": {
         "tags": [
-          "CU-07 Reversión"
+          "Órdenes de desembolso"
         ],
-        "summary": "Decidir Reversion",
-        "operationId": "decidir_reversion_api_v1_reversiones__reversion_id__decision_post",
+        "summary": "Confirmar: abonar, crear el crédito y desembolsar la solicitud",
+        "description": "Una sola operación de COREDB: el abono, el crédito AL_DIA con su calendario OFICIAL y la\nsolicitud DESEMBOLSADA. Si se pierde la respuesta, se repite: devuelve lo mismo sin otro abono.",
+        "operationId": "confirmar_api_v1_ordenes__id_orden__confirmacion_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "reversion_id",
+            "name": "id_orden",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Reversion Id"
+              "format": "uuid",
+              "title": "Id Orden"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
             }
           },
+          "200": {
+            "description": "Ya estaba confirmada: el mismo crédito y el mismo abono"
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA, APROBACION_NO_VIGENTE, VALIDACION_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        }
+      }
+    },
+    "/api/v1/ordenes/{id_orden}/rechazo": {
+      "post": {
+        "tags": [
+          "Órdenes de desembolso"
+        ],
+        "summary": "Rechazar la orden",
+        "description": "La aprobación sigue vigente y admite otra orden.",
+        "operationId": "rechazar_api_v1_ordenes__id_orden__rechazo_post",
+        "security": [
           {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_orden",
+            "in": "path",
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Orden"
             }
           }
         ],
@@ -1244,7 +625,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DecisionReversion"
+                "$ref": "#/components/schemas/RechazoIn"
               }
             }
           }
@@ -1254,63 +635,44 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReversionSalida"
-                }
+                "schema": {}
               }
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "ORDEN_NO_ADMITIDA"
           }
         }
       }
     },
-    "/api/v1/reversiones": {
+    "/api/v1/conciliacion": {
       "get": {
         "tags": [
-          "CU-07 Reversión"
+          "Supervisión"
         ],
-        "summary": "Listar Reversiones",
-        "operationId": "listar_reversiones_api_v1_reversiones_get",
+        "summary": "Órdenes confirmadas frente a lo abonado, por día y moneda",
+        "operationId": "conciliacion_api_v1_conciliacion_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "estado",
+            "name": "fecha",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Estado"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
+              "title": "Fecha"
             }
           }
         ],
@@ -1319,13 +681,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ReversionSalida"
-                  },
-                  "title": "Response Listar Reversiones Api V1 Reversiones Get"
-                }
+                "schema": {}
               }
             }
           },
@@ -1335,65 +691,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/health/live": {
-      "get": {
-        "tags": [
-          "Operación"
-        ],
-        "summary": "Vivo",
-        "operationId": "vivo_health_live_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/health/ready": {
-      "get": {
-        "tags": [
-          "Operación"
-        ],
-        "summary": "Listo",
-        "operationId": "listo_health_ready_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/metrics": {
-      "get": {
-        "tags": [
-          "Operación"
-        ],
-        "summary": "Metricas",
-        "operationId": "metricas_metrics_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
                 }
               }
             }
@@ -1404,675 +701,21 @@
   },
   "components": {
     "schemas": {
-      "Aprobacion": {
+      "CuentaIn": {
         "properties": {
-          "aprobacion_id": {
+          "numCuenta": {
             "type": "string",
-            "title": "Aprobacion Id"
-          },
-          "version": {
-            "type": "integer",
-            "title": "Version"
-          },
-          "credito_id": {
-            "type": "string",
-            "title": "Credito Id"
-          },
-          "cliente_id": {
-            "type": "string",
-            "title": "Cliente Id"
-          },
-          "cliente_nombre": {
-            "type": "string",
-            "title": "Cliente Nombre"
-          },
-          "cliente_documento": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cliente Documento"
-          },
-          "producto": {
-            "type": "string",
-            "title": "Producto"
-          },
-          "importe": {
-            "type": "string",
-            "title": "Importe"
-          },
-          "moneda": {
-            "type": "string",
-            "title": "Moneda"
-          },
-          "plazo_meses": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Plazo Meses"
-          },
-          "tasa_tea": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tasa Tea"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          },
-          "vigente_hasta": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Vigente Hasta"
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "aprobacion_id",
-          "version",
-          "credito_id",
-          "cliente_id",
-          "cliente_nombre",
-          "cliente_documento",
-          "producto",
-          "importe",
-          "moneda",
-          "plazo_meses",
-          "tasa_tea",
-          "estado",
-          "vigente_hasta"
+          "numCuenta"
         ],
-        "title": "Aprobacion"
-      },
-      "Conciliar": {
-        "properties": {
-          "fecha": {
-            "type": "string",
-            "format": "date",
-            "title": "Fecha"
-          },
-          "moneda": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "PEN",
-                  "USD"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Moneda"
-          }
-        },
-        "type": "object",
-        "required": [
-          "fecha"
-        ],
-        "title": "Conciliar"
-      },
-      "Confirmar": {
-        "properties": {
-          "version": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Version",
-            "description": "Versión de la orden que vio el operador (RT-02)"
-          }
-        },
-        "type": "object",
-        "required": [
-          "version"
-        ],
-        "title": "Confirmar"
-      },
-      "Constancia": {
-        "properties": {
-          "codigo_orden": {
-            "type": "string",
-            "title": "Codigo Orden"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          },
-          "operacion_financiera_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Operacion Financiera Id"
-          },
-          "fecha_efectiva": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fecha Efectiva"
-          },
-          "credito_id": {
-            "type": "string",
-            "title": "Credito Id"
-          },
-          "aprobacion_id": {
-            "type": "string",
-            "title": "Aprobacion Id"
-          },
-          "producto": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Producto"
-          },
-          "plazo_meses": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Plazo Meses"
-          },
-          "tasa_tea": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tasa Tea"
-          },
-          "cliente_nombre": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cliente Nombre"
-          },
-          "cliente_documento": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cliente Documento"
-          },
-          "cuenta_enmascarada": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cuenta Enmascarada"
-          },
-          "importe": {
-            "type": "string",
-            "title": "Importe"
-          },
-          "moneda": {
-            "type": "string",
-            "title": "Moneda"
-          },
-          "agencia": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agencia"
-          },
-          "usuario_preparacion": {
-            "type": "string",
-            "title": "Usuario Preparacion"
-          },
-          "usuario_confirmacion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Usuario Confirmacion"
-          },
-          "entrega_estado": {
-            "type": "string",
-            "title": "Entrega Estado"
-          },
-          "correlation_id": {
-            "type": "string",
-            "title": "Correlation Id"
-          },
-          "emitida_en": {
-            "type": "string",
-            "title": "Emitida En"
-          },
-          "emitida_por": {
-            "type": "string",
-            "title": "Emitida Por"
-          }
-        },
-        "type": "object",
-        "required": [
-          "codigo_orden",
-          "estado",
-          "operacion_financiera_id",
-          "fecha_efectiva",
-          "credito_id",
-          "aprobacion_id",
-          "producto",
-          "plazo_meses",
-          "tasa_tea",
-          "cliente_nombre",
-          "cliente_documento",
-          "cuenta_enmascarada",
-          "importe",
-          "moneda",
-          "agencia",
-          "usuario_preparacion",
-          "usuario_confirmacion",
-          "entrega_estado",
-          "correlation_id",
-          "emitida_en",
-          "emitida_por"
-        ],
-        "title": "Constancia"
-      },
-      "CreditoHabilitado": {
-        "properties": {
-          "aprobacion_id": {
-            "type": "string",
-            "title": "Aprobacion Id"
-          },
-          "version": {
-            "type": "integer",
-            "title": "Version"
-          },
-          "credito_id": {
-            "type": "string",
-            "title": "Credito Id"
-          },
-          "cliente_id": {
-            "type": "string",
-            "title": "Cliente Id"
-          },
-          "cliente_nombre": {
-            "type": "string",
-            "title": "Cliente Nombre"
-          },
-          "cliente_documento": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cliente Documento"
-          },
-          "producto": {
-            "type": "string",
-            "title": "Producto"
-          },
-          "importe": {
-            "type": "string",
-            "title": "Importe"
-          },
-          "moneda": {
-            "type": "string",
-            "title": "Moneda"
-          },
-          "plazo_meses": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Plazo Meses"
-          },
-          "tasa_tea": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tasa Tea"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          },
-          "vigente_hasta": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Vigente Hasta"
-          },
-          "habilitada": {
-            "type": "boolean",
-            "title": "Habilitada"
-          },
-          "motivo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Motivo"
-          },
-          "orden_existente": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OrdenBreve"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "aprobacion_id",
-          "version",
-          "credito_id",
-          "cliente_id",
-          "cliente_nombre",
-          "cliente_documento",
-          "producto",
-          "importe",
-          "moneda",
-          "plazo_meses",
-          "tasa_tea",
-          "estado",
-          "vigente_hasta",
-          "habilitada",
-          "motivo",
-          "orden_existente"
-        ],
-        "title": "CreditoHabilitado"
-      },
-      "CuentaElegible": {
-        "properties": {
-          "cuenta_id": {
-            "type": "string",
-            "title": "Cuenta Id"
-          },
-          "numero_enmascarado": {
-            "type": "string",
-            "title": "Numero Enmascarado"
-          },
-          "producto": {
-            "type": "string",
-            "title": "Producto"
-          },
-          "moneda": {
-            "type": "string",
-            "title": "Moneda"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          },
-          "titularidad": {
-            "type": "string",
-            "title": "Titularidad"
-          },
-          "elegible": {
-            "type": "boolean",
-            "title": "Elegible"
-          },
-          "motivo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Motivo"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cuenta_id",
-          "numero_enmascarado",
-          "producto",
-          "moneda",
-          "estado",
-          "titularidad",
-          "elegible",
-          "motivo"
-        ],
-        "title": "CuentaElegible"
-      },
-      "Cuota": {
-        "properties": {
-          "numeroCuota": {
-            "type": "integer",
-            "title": "Numerocuota"
-          },
-          "fechaVencimiento": {
-            "type": "string",
-            "title": "Fechavencimiento"
-          },
-          "amortizacion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Amortizacion"
-          },
-          "interes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Interes"
-          },
-          "cuotaTotal": {
-            "type": "string",
-            "title": "Cuotatotal"
-          },
-          "saldoFinal": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Saldofinal"
-          }
-        },
-        "type": "object",
-        "required": [
-          "numeroCuota",
-          "fechaVencimiento",
-          "cuotaTotal"
-        ],
-        "title": "Cuota",
-        "description": "Una cuota del calendario de Solicitud, como llegó con la aprobación."
-      },
-      "DecisionReversion": {
-        "properties": {
-          "aprobar": {
-            "type": "boolean",
-            "title": "Aprobar"
-          },
-          "motivo": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 255
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Motivo"
-          }
-        },
-        "type": "object",
-        "required": [
-          "aprobar"
-        ],
-        "title": "DecisionReversion"
-      },
-      "EventoSalida": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "tipo": {
-            "type": "string",
-            "title": "Tipo"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          },
-          "intentos": {
-            "type": "integer",
-            "title": "Intentos"
-          },
-          "siguiente_intento": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Siguiente Intento"
-          },
-          "confirmacion_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confirmacion Id"
-          },
-          "ultimo_error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ultimo Error"
-          },
-          "creado_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Creado En"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "tipo",
-          "estado",
-          "intentos",
-          "siguiente_intento",
-          "confirmacion_id",
-          "ultimo_error",
-          "creado_en"
-        ],
-        "title": "EventoSalida"
+        "title": "CuentaIn"
       },
       "HTTPValidationError": {
         "properties": {
@@ -2087,803 +730,138 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "Identidad": {
+      "IdentidadIn": {
         "properties": {
-          "resultado": {
+          "tipoDocumento": {
             "type": "string",
-            "title": "Resultado"
-          },
-          "vence_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Vence En"
-          },
-          "detalle": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Detalle"
-          }
-        },
-        "type": "object",
-        "required": [
-          "resultado",
-          "vence_en",
-          "detalle"
-        ],
-        "title": "Identidad"
-      },
-      "OrdenBreve": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "codigo_orden": {
-            "type": "string",
-            "title": "Codigo Orden"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "codigo_orden",
-          "estado"
-        ],
-        "title": "OrdenBreve"
-      },
-      "OrdenDetalle": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "codigo_orden": {
-            "type": "string",
-            "title": "Codigo Orden"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          },
-          "entrega_estado": {
-            "type": "string",
-            "title": "Entrega Estado"
-          },
-          "motivo_rechazo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Motivo Rechazo"
-          },
-          "aprobacion_id": {
-            "type": "string",
-            "title": "Aprobacion Id"
-          },
-          "aprobacion_version": {
-            "type": "integer",
-            "title": "Aprobacion Version"
-          },
-          "credito_id": {
-            "type": "string",
-            "title": "Credito Id"
-          },
-          "cliente_id": {
-            "type": "string",
-            "title": "Cliente Id"
-          },
-          "cuenta_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cuenta Id"
-          },
-          "importe": {
-            "type": "string",
-            "title": "Importe"
-          },
-          "moneda": {
-            "type": "string",
-            "title": "Moneda"
-          },
-          "operacion_financiera_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Operacion Financiera Id"
-          },
-          "fecha_efectiva": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fecha Efectiva"
-          },
-          "idempotency_key": {
-            "type": "string",
-            "title": "Idempotency Key"
-          },
-          "canal": {
-            "type": "string",
-            "title": "Canal"
-          },
-          "agencia_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agencia Id"
-          },
-          "usuario_preparacion": {
-            "type": "string",
-            "title": "Usuario Preparacion"
-          },
-          "usuario_confirmacion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Usuario Confirmacion"
-          },
-          "correlation_id": {
-            "type": "string",
-            "title": "Correlation Id"
-          },
-          "version": {
-            "type": "integer",
-            "title": "Version"
-          },
-          "creado_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Creado En"
-          },
-          "actualizado_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actualizado En"
-          },
-          "cuenta_enmascarada": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cuenta Enmascarada"
-          },
-          "identidad": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Identidad"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "aprobacion": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Aprobacion"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "solicitud_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Solicitud Id"
-          },
-          "calendario": {
-            "items": {
-              "$ref": "#/components/schemas/Cuota"
-            },
-            "type": "array",
-            "title": "Calendario"
-          },
-          "validaciones": {
-            "items": {
-              "$ref": "#/components/schemas/ValidacionSalida"
-            },
-            "type": "array",
-            "title": "Validaciones"
-          },
-          "eventos": {
-            "items": {
-              "$ref": "#/components/schemas/EventoSalida"
-            },
-            "type": "array",
-            "title": "Eventos"
-          },
-          "reversiones": {
-            "items": {
-              "$ref": "#/components/schemas/ReversionSalida"
-            },
-            "type": "array",
-            "title": "Reversiones"
-          },
-          "acciones": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Acciones"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "codigo_orden",
-          "estado",
-          "entrega_estado",
-          "motivo_rechazo",
-          "aprobacion_id",
-          "aprobacion_version",
-          "credito_id",
-          "cliente_id",
-          "cuenta_id",
-          "importe",
-          "moneda",
-          "operacion_financiera_id",
-          "fecha_efectiva",
-          "idempotency_key",
-          "canal",
-          "agencia_id",
-          "usuario_preparacion",
-          "usuario_confirmacion",
-          "correlation_id",
-          "version",
-          "creado_en",
-          "actualizado_en",
-          "cuenta_enmascarada",
-          "identidad",
-          "aprobacion",
-          "solicitud_id",
-          "calendario",
-          "validaciones",
-          "eventos",
-          "reversiones",
-          "acciones"
-        ],
-        "title": "OrdenDetalle"
-      },
-      "OrdenResumen": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "codigo_orden": {
-            "type": "string",
-            "title": "Codigo Orden"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          },
-          "entrega_estado": {
-            "type": "string",
-            "title": "Entrega Estado"
-          },
-          "motivo_rechazo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Motivo Rechazo"
-          },
-          "aprobacion_id": {
-            "type": "string",
-            "title": "Aprobacion Id"
-          },
-          "aprobacion_version": {
-            "type": "integer",
-            "title": "Aprobacion Version"
-          },
-          "credito_id": {
-            "type": "string",
-            "title": "Credito Id"
-          },
-          "cliente_id": {
-            "type": "string",
-            "title": "Cliente Id"
-          },
-          "cuenta_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cuenta Id"
-          },
-          "importe": {
-            "type": "string",
-            "title": "Importe"
-          },
-          "moneda": {
-            "type": "string",
-            "title": "Moneda"
-          },
-          "operacion_financiera_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Operacion Financiera Id"
-          },
-          "fecha_efectiva": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fecha Efectiva"
-          },
-          "idempotency_key": {
-            "type": "string",
-            "title": "Idempotency Key"
-          },
-          "canal": {
-            "type": "string",
-            "title": "Canal"
-          },
-          "agencia_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agencia Id"
-          },
-          "usuario_preparacion": {
-            "type": "string",
-            "title": "Usuario Preparacion"
-          },
-          "usuario_confirmacion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Usuario Confirmacion"
-          },
-          "correlation_id": {
-            "type": "string",
-            "title": "Correlation Id"
-          },
-          "version": {
-            "type": "integer",
-            "title": "Version"
-          },
-          "creado_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Creado En"
-          },
-          "actualizado_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actualizado En"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "codigo_orden",
-          "estado",
-          "entrega_estado",
-          "motivo_rechazo",
-          "aprobacion_id",
-          "aprobacion_version",
-          "credito_id",
-          "cliente_id",
-          "cuenta_id",
-          "importe",
-          "moneda",
-          "operacion_financiera_id",
-          "fecha_efectiva",
-          "idempotency_key",
-          "canal",
-          "agencia_id",
-          "usuario_preparacion",
-          "usuario_confirmacion",
-          "correlation_id",
-          "version",
-          "creado_en",
-          "actualizado_en"
-        ],
-        "title": "OrdenResumen"
-      },
-      "PaginaOrdenes": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/OrdenResumen"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "pagina": {
-            "type": "integer",
-            "title": "Pagina"
-          },
-          "tamano": {
-            "type": "integer",
-            "title": "Tamano"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "total",
-          "pagina",
-          "tamano"
-        ],
-        "title": "PaginaOrdenes"
-      },
-      "PrepararOrden": {
-        "properties": {
-          "aprobacion_id": {
-            "type": "string",
-            "maxLength": 36,
+            "maxLength": 10,
             "minLength": 1,
-            "title": "Aprobacion Id",
-            "examples": [
-              "APR-2026-0001"
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "aprobacion_id"
-        ],
-        "title": "PrepararOrden"
-      },
-      "ReversionSalida": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
+            "title": "Tipodocumento"
           },
-          "orden_id": {
+          "numeroDocumento": {
             "type": "string",
-            "title": "Orden Id"
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Numerodocumento"
+          },
+          "identidadVerificada": {
+            "type": "boolean",
+            "title": "Identidadverificada"
           },
           "motivo": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Motivo"
-          },
-          "origen": {
-            "type": "string",
-            "title": "Origen"
-          },
-          "estado": {
-            "type": "string",
-            "title": "Estado"
-          },
-          "solicitante_id": {
-            "type": "string",
-            "title": "Solicitante Id"
-          },
-          "autorizador_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Autorizador Id"
-          },
-          "motivo_rechazo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Motivo Rechazo"
-          },
-          "reversion_financiera_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reversion Financiera Id"
-          },
-          "creado_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Creado En"
-          },
-          "actualizado_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actualizado En"
-          },
-          "codigo_orden": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Codigo Orden"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "id",
-          "orden_id",
-          "motivo",
-          "origen",
-          "estado",
-          "solicitante_id",
-          "autorizador_id",
-          "motivo_rechazo",
-          "reversion_financiera_id",
-          "creado_en",
-          "actualizado_en"
+          "tipoDocumento",
+          "numeroDocumento",
+          "identidadVerificada"
         ],
-        "title": "ReversionSalida"
+        "title": "IdentidadIn",
+        "description": "Verificación del documento en ventanilla: el operador revisó el original y a la persona."
       },
-      "SeleccionarCuenta": {
+      "OrdenIn": {
         "properties": {
-          "cuenta_id": {
+          "idEvaluacion": {
             "type": "string",
-            "maxLength": 36,
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "description": "La aprobación: `idEvaluacion` de `GET /api/v1/aprobaciones`."
+          },
+          "numCuenta": {
+            "type": "string",
+            "maxLength": 20,
             "minLength": 1,
-            "title": "Cuenta Id"
+            "title": "Numcuenta"
           },
-          "version": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Version"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cuenta_id",
-          "version"
-        ],
-        "title": "SeleccionarCuenta"
-      },
-      "Sesion": {
-        "properties": {
-          "usuario": {
+          "canal": {
             "type": "string",
-            "title": "Usuario"
+            "enum": [
+              "VEN",
+              "HB"
+            ],
+            "title": "Canal",
+            "default": "VEN"
           },
-          "nombre": {
-            "type": "string",
-            "title": "Nombre"
-          },
-          "rol": {
-            "type": "string",
-            "title": "Rol"
-          },
-          "permisos": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Permisos"
-          },
-          "agencia_id": {
+          "idAgencia": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 10,
+                "minLength": 1
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Agencia Id"
-          },
-          "agencia_nombre": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agencia Nombre"
-          },
-          "reversion_habilitada": {
-            "type": "boolean",
-            "title": "Reversion Habilitada"
+            "title": "Idagencia"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "usuario",
-          "nombre",
-          "rol",
-          "permisos",
-          "agencia_id",
-          "agencia_nombre",
-          "reversion_habilitada"
+          "idEvaluacion",
+          "numCuenta"
         ],
-        "title": "Sesion"
+        "title": "OrdenIn"
       },
-      "SolicitarReversion": {
+      "RechazoIn": {
         "properties": {
           "motivo": {
             "type": "string",
             "maxLength": 255,
-            "minLength": 5,
+            "minLength": 1,
             "title": "Motivo"
-          },
-          "origen": {
-            "type": "string",
-            "enum": [
-              "SOLICITUD_SERVICIO",
-              "INCIDENTE"
-            ],
-            "title": "Origen",
-            "default": "SOLICITUD_SERVICIO"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "motivo"
         ],
-        "title": "SolicitarReversion"
+        "title": "RechazoIn"
       },
-      "ValidacionSalida": {
+      "ValidacionIn": {
         "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
           "tipo": {
             "type": "string",
+            "enum": [
+              "IDENTIDAD",
+              "AUTORIZACION",
+              "ANTIFRAUDE"
+            ],
             "title": "Tipo"
-          },
-          "fase": {
-            "type": "string",
-            "title": "Fase"
-          },
-          "proveedor": {
-            "type": "string",
-            "title": "Proveedor"
-          },
-          "referencia_evidencia": {
-            "type": "string",
-            "title": "Referencia Evidencia"
           },
           "resultado": {
             "type": "string",
+            "enum": [
+              "APROBADA",
+              "RECHAZADA"
+            ],
             "title": "Resultado"
+          },
+          "referenciaEvidencia": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Referenciaevidencia"
           },
           "detalle": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 255
               },
               {
                 "type": "null"
@@ -2891,69 +869,28 @@
             ],
             "title": "Detalle"
           },
-          "vence_en": {
+          "venceEn": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "date-time"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Vence En"
-          },
-          "creado_en": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Creado En"
+            "title": "Venceen"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "id",
           "tipo",
-          "fase",
-          "proveedor",
-          "referencia_evidencia",
           "resultado",
-          "detalle",
-          "vence_en",
-          "creado_en"
+          "referenciaEvidencia"
         ],
-        "title": "ValidacionSalida"
-      },
-      "ValidarIdentidad": {
-        "properties": {
-          "metodo": {
-            "type": "string",
-            "enum": [
-              "VERIFICACION_PRESENCIAL"
-            ],
-            "const": "VERIFICACION_PRESENCIAL",
-            "title": "Metodo",
-            "default": "VERIFICACION_PRESENCIAL"
-          },
-          "numero_documento": {
-            "type": "string",
-            "maxLength": 12,
-            "minLength": 6,
-            "pattern": "^[A-Za-z0-9]+$",
-            "title": "Numero Documento",
-            "description": "Número del documento presentado por el titular"
-          }
-        },
-        "type": "object",
-        "required": [
-          "numero_documento"
-        ],
-        "title": "ValidarIdentidad",
-        "description": "Sin módulo Clientes en el producto: el operador verifica el documento original del titular y\nregistra su número, que se compara con el de Evaluación. No se intercambia biometría."
+        "title": "ValidacionIn",
+        "description": "En IDENTIDAD aprobada, `referenciaEvidencia` es el `idValidacion` de `POST /api/v1/identidad`,\nde hoy y del titular. La validación CUENTA la registra COREDB al elegir la cuenta."
       },
       "ValidationError": {
         "properties": {
@@ -2987,6 +924,12 @@
           "type"
         ],
         "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }
