@@ -132,6 +132,7 @@ humo() {
   compose exec -T \
     -e BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     -e BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
+    -e SOL_INITIAL_PASSWORD="$(valor SOL_INITIAL_PASSWORD)" \
     coredb python - < scripts/flujo_e2e.py
 }
 

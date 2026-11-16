@@ -42,6 +42,8 @@ INTENTOS = max(1, int(os.environ.get("E2E_INTENTOS", "1")))
 ESPERA = float(os.environ.get("E2E_ESPERA", "2"))
 USUARIO = os.environ.get("BNA_ADMIN_USUARIO", "admin")
 PASSWORD = os.environ.get("BNA_ADMIN_PASSWORD", "")
+SOL_USUARIO = "asesor.bna"  # usuario sembrado por SOL (backend/SOL/seed.py)
+SOL_PASSWORD = os.environ.get("SOL_INITIAL_PASSWORD", "")
 AGENCIA = "AQP01"
 CANAL = "HB"
 
@@ -71,6 +73,29 @@ def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
         return estado, json.loads(texto)
     except ValueError:
         return estado, texto
+
+
+def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
+    """Como el navegador ante el proxy de SOL del frontend: Origin y cookie, sin token.
+    Devuelve (estado, cuerpo JSON o texto, Set-Cookie)."""
+    peticion = urllib.request.Request(f"{FRONTEND}/api/solicitud-credito/{ruta}", method=metodo,
+                                      data=json.dumps(cuerpo).encode() if cuerpo is not None else None)
+    peticion.add_header("Content-Type", "application/json")
+    if metodo != "GET":
+        peticion.add_header("Origin", origen)
+    if cookie:
+        peticion.add_header("Cookie", cookie)
+    try:
+        with urllib.request.urlopen(peticion, timeout=15) as respuesta:
+            estado, texto, galleta = respuesta.status, respuesta.read().decode(), respuesta.headers.get("Set-Cookie", "")
+    except urllib.error.HTTPError as error:
+        estado, texto, galleta = error.code, error.read().decode(), error.headers.get("Set-Cookie", "")
+    except (urllib.error.URLError, OSError) as error:
+        raise Fallo(f"{metodo} {ruta} por el proxy de SOL: sin respuesta ({error})") from error
+    try:
+        return estado, json.loads(texto), galleta
+    except ValueError:
+        return estado, texto, galleta
 
 
 def sano(nombre, url, cabeceras):
@@ -319,6 +344,27 @@ def flujo():
     estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
     exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
     paso("frontend: sus puentes llegan a COREDB, a CUENTAS y a TARJETAS con el token del usuario")
+
+    # ── SOL por el proxy del frontend: escribir exige el Origin del propio frontend ──
+    exigir(SOL_PASSWORD, "Falta SOL_INITIAL_PASSWORD para entrar a SOL por el frontend")
+    credenciales = {"username": SOL_USUARIO, "password": SOL_PASSWORD}
+    estado, respuesta, _ = pedir_navegador("POST", "auth/login", credenciales, origen="http://otro.example")
+    exigir(estado == 403, f"El proxy de SOL debía rechazar otro origen: {estado} {respuesta}")
+    estado, respuesta, galleta = pedir_navegador("POST", "auth/login", credenciales)
+    exigir(estado == 200 and respuesta.get("usuario", {}).get("rol") == "ASESOR" and "token" not in respuesta,
+           f"Login de SOL por el proxy del frontend: {estado} {respuesta}")
+    exigir(galleta.startswith("bna_sol_session=") and "httponly" in galleta.lower(),
+           "El login de SOL debía dejar la sesión en una cookie HttpOnly")
+    sesion = galleta.split(";", 1)[0]
+    estado, respuesta, _ = pedir_navegador("GET", "policy", cookie=sesion)
+    exigir(estado == 200 and respuesta.get("integracion") == "SIMULADO",
+           f"Política de SOL con la cookie de sesión: {estado} {respuesta}")
+    estado, respuesta, _ = pedir_navegador("POST", "auth/logout", {}, cookie=sesion)
+    exigir(estado == 200, f"Cierre de sesión de SOL por el proxy: {estado} {respuesta}")
+    estado, _, _ = pedir_navegador("GET", "policy", cookie=sesion)
+    exigir(estado == 401, f"La sesión de SOL debía quedar revocada tras cerrar: respondió {estado}")
+    paso("frontend: SOL por su proxy, con login desde el origen del frontend (otro origen, 403), "
+         "sesión en cookie HttpOnly, consulta y cierre de sesión")
 
 
 if __name__ == "__main__":

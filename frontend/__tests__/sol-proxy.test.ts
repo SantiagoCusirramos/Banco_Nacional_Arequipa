@@ -4,8 +4,8 @@ import { NextRequest } from "next/server";
 import { GET, POST } from "../app/api/solicitud-credito/[...path]/route";
 
 const upstream = vi.fn();
-function request(path: string[], method = "POST", origin: string | null = "http://localhost:3000") {
-  const headers: Record<string, string> = { host: "localhost:3000", cookie: "bna_sol_session=sesion-sintetica", "X-Idempotency-Key": "operacion-e05" };
+function request(path: string[], method = "POST", origin: string | null = "http://localhost:3000", host = "localhost:3000") {
+  const headers: Record<string, string> = { host, cookie: "bna_sol_session=sesion-sintetica", "X-Idempotency-Key": "operacion-e05" };
   if (origin !== null) headers.origin = origin;
   return new NextRequest("http://localhost:3000/api/solicitud-credito/" + path.join("/"), {
     method, headers, ...(method === "GET" ? {} : { body: "{}" }),
@@ -25,6 +25,19 @@ it("usa origen público explícito cuando Next ve host/puerto internos de Docker
   const response = await POST(request(["applications"], "POST", "http://127.0.0.1:13016"), context(["applications"]));
   expect(response.status).toBe(200);
   expect(upstream).toHaveBeenCalledOnce();
+});
+it.each(["localhost:13000", "127.0.0.1:13000"])("sin origen público acepta el host publicado %s aunque Next escuche en el 3000", async (host) => {
+  // compose con BNA_PUERTO_FRONTEND distinto y el NodePort de kind publican otro puerto.
+  const response = await POST(request(["applications"], "POST", `http://${host}`, host), context(["applications"]));
+  expect(response.status).toBe(200);
+  expect(upstream).toHaveBeenCalledOnce();
+});
+it("sin origen público rechaza un origen que no coincide con el host recibido", async () => {
+  for (const origin of ["http://localhost:3000", "http://127.0.0.1:13000", "https://localhost:13000"]) {
+    const response = await POST(request(["applications"], "POST", origin, "localhost:13000"), context(["applications"]));
+    expect(response.status).toBe(403);
+  }
+  expect(upstream).not.toHaveBeenCalled();
 });
 it("no acepta el origen interno ni externos cuando hay origen público configurado", async () => {
   vi.stubEnv("SOL_PUBLIC_ORIGIN", "https://bna.example.test");
