@@ -19,4 +19,5 @@ data:
   TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
   SOL_GATEWAY_URL: http://sol:8011/gateway/sol
   EVALUACION_GATEWAY_URL: http://evaluacion:8015/eva/v1
+  DESEMBOLSO_GATEWAY_URL: http://desembolso:8016/api/v1
   SOL_COOKIE_SECURE: "false"

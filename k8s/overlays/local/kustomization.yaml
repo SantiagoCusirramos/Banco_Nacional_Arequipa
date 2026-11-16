@@ -25,6 +25,10 @@ patches:
     patch: |-
       - { op: add, path: /spec/type, value: NodePort }
       - { op: add, path: /spec/ports/0/nodePort, value: 30015 }
+  - target: { kind: Service, name: desembolso }
+    patch: |-
+      - { op: add, path: /spec/type, value: NodePort }
+      - { op: add, path: /spec/ports/0/nodePort, value: 30016 }
   - target: { kind: Service, name: coredb }
     patch: |-
       - { op: add, path: /spec/type, value: NodePort }

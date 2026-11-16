@@ -67,6 +67,19 @@ spec:
               valueFrom: { secretKeyRef: { name: bna-secretos, key: EVALUACION_COREDB_SECRETO } }
           resources: *recursos-arranque
           securityContext: *contenedor-seguro
+        # Crea o alinea el usuario de servicio de Desembolso con el secreto del Secret.
+        - name: servicio-desembolso
+          image: bna/coredb:local
+          command: [python, -m, COREDB.scripts.crear_servicio, --modulo, DESEMBOLSO, --username, svc-desembolso, --nombre, Desembolso]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_SERVICIO_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: DESEMBOLSO_COREDB_SECRETO } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
       containers:
         - name: coredb
           image: bna/coredb:local
