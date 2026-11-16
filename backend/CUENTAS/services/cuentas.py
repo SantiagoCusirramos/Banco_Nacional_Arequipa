@@ -32,7 +32,7 @@ def abrir_cuenta(core: CoreClient, datos: AbrirCuentaIn, correlation_id: str,
         "cci": datos.cci,
         "moneda": datos.moneda,
         "regimen": datos.regimen,
-        "id_agencia": datos.id_agencia,
+        "id_agencia": datos.id_agencia, 
         "titulares": ids,
     }
     return core.crear_cuenta(payload, correlation_id, authorization)

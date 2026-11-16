@@ -129,9 +129,6 @@ export default function LoginPage() {
           <span className="auth-aside-kicker">BANCO NACIONAL DE AREQUIPA</span>
           <h2>Tu banca, más simple y segura.</h2>
           <p>Accede a tus productos y gestiona tus operaciones desde un solo lugar.</p>
-          <div className="auth-feature"><span>✓</span> Acceso mediante credenciales verificadas</div>
-          <div className="auth-feature"><span>✓</span> Sesión protegida con token JWT</div>
-          <div className="auth-feature"><span>✓</span> Permisos según el rol del usuario</div>
         </div>
       </aside>
     </main>
