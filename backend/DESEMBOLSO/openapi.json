@@ -1,0 +1,936 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "BNA · Desembolso de Créditos",
+    "description": "Módulo 13 de la Línea de Créditos, sin base propia. El operador verifica el documento del titular, elige una aprobación vigente (leída de COREDB, CR-INT-04) y una cuenta de ahorros individual del titular, prepara la orden, registra la identidad del día y confirma. COREDB abona, crea el crédito con su calendario oficial y deja la solicitud DESEMBOLSADA en una sola operación; confirmar otra vez devuelve lo mismo sin otro abono. Lo que hace la persona va con su token de COREDB, que Desembolso reenvía. Montos como texto decimal (\"15000.00\").",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/salud": {
+      "get": {
+        "tags": [
+          "Estado"
+        ],
+        "summary": "COREDB responde y el usuario de servicio inicia sesión",
+        "operationId": "salud_salud_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sesion": {
+      "get": {
+        "tags": [
+          "Operación en agencia"
+        ],
+        "summary": "Perfil de la persona en Desembolso",
+        "operationId": "sesion_api_v1_sesion_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identidad": {
+      "post": {
+        "tags": [
+          "Operación en agencia"
+        ],
+        "summary": "Verificar el documento del titular en ventanilla",
+        "description": "El operador revisó el documento original y a la persona. COREDB registra la verificación y\nla aprueba solo para un cliente ACTIVO; su `idValidacion` es la evidencia IDENTIDAD de la orden,\nválida el mismo día (fecha de Lima). Sin identidad verificada, la respuesta no dice si el\ndocumento es de un cliente.",
+        "operationId": "verificar_identidad_api_v1_identidad_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentidadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/aprobaciones": {
+      "get": {
+        "tags": [
+          "Operación en agencia"
+        ],
+        "summary": "Aprobaciones vigentes sin desembolso (CR-INT-04)",
+        "description": "Se leen de COREDB con el usuario de servicio: la última ronda aprobada, dentro de sus 30 días\ny sin desembolso confirmado, con el calendario de Solicitud sin cambios. `ordenAbierta` es la\norden PREPARADA o VALIDADA que ya tiene, si la hay.",
+        "operationId": "aprobaciones_api_v1_aprobaciones_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codCliente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "name": "idSolicitud",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idsolicitud"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "FILTRO_REQUERIDO: indica codCliente o idSolicitud"
+          }
+        }
+      }
+    },
+    "/api/v1/clientes/{cod_cliente}/cuentas": {
+      "get": {
+        "tags": [
+          "Operación en agencia"
+        ],
+        "summary": "Cuentas del titular y si admiten el abono",
+        "description": "Las cuentas en las que el cliente es titular, leídas de COREDB con el usuario de servicio. Solo\nadmite el abono una cuenta de ahorros INDIVIDUAL, ACTIVA, del titular y en la moneda del crédito;\n`motivo` dice por qué otra no: CUENTA_MANCOMUNADA, TITULAR_DISTINTO, CUENTA_NO_ACTIVA o\nMONEDA_DISTINTA.",
+        "operationId": "cuentas_api_v1_clientes__cod_cliente__cuentas_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cod_cliente",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 12,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Cod Cliente"
+            }
+          },
+          {
+            "name": "moneda",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Moneda"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ordenes": {
+      "post": {
+        "tags": [
+          "Órdenes de desembolso"
+        ],
+        "summary": "Preparar la orden de una aprobación",
+        "description": "El importe es el monto aprobado. Se rechaza si la aprobación venció, si su primera cuota ya\nvenció, si ya tiene una orden abierta o si la cuenta no es elegible.",
+        "operationId": "preparar_api_v1_ordenes_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrdenIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "200": {
+            "description": "La misma llave con el mismo contenido: la misma orden"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
+          "422": {
+            "description": "APROBACION_NO_VIGENTE, CALENDARIO_INVALIDO, ORDEN_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Órdenes de desembolso"
+        ],
+        "summary": "Monitor de órdenes",
+        "operationId": "monitor_api_v1_ordenes_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PREPARADA",
+                    "VALIDADA",
+                    "EN_PROCESO",
+                    "POR_VERIFICAR",
+                    "CONFIRMADA",
+                    "RECHAZADA",
+                    "REVERTIDA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "codCliente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "name": "idSolicitud",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idsolicitud"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ordenes/{id_orden}": {
+      "get": {
+        "tags": [
+          "Órdenes de desembolso"
+        ],
+        "summary": "La orden, sus validaciones, bitácora y calendario",
+        "description": "Agrega el calendario vigente de la solicitud: el PRELIMINAR de Solicitud antes del desembolso\ny el OFICIAL, su copia, después.",
+        "operationId": "detalle_api_v1_ordenes__id_orden__get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_orden",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Orden"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ordenes/{id_orden}/cuenta": {
+      "put": {
+        "tags": [
+          "Órdenes de desembolso"
+        ],
+        "summary": "Cambiar la cuenta de la orden",
+        "operationId": "cambiar_cuenta_api_v1_ordenes__id_orden__cuenta_put",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_orden",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Orden"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CuentaIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        }
+      }
+    },
+    "/api/v1/ordenes/{id_orden}/validaciones": {
+      "post": {
+        "tags": [
+          "Órdenes de desembolso"
+        ],
+        "summary": "Registrar una validación (IDENTIDAD con la verificación de hoy)",
+        "description": "Con la última IDENTIDAD y la última CUENTA aprobadas, la orden queda VALIDADA. La identidad\nvale el mismo día (T7): una verificación de otro día se rechaza.",
+        "operationId": "validar_api_v1_ordenes__id_orden__validaciones_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_orden",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Orden"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidacionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "VALIDACION_NO_ADMITIDA u ORDEN_NO_ADMITIDA"
+          }
+        }
+      }
+    },
+    "/api/v1/ordenes/{id_orden}/confirmacion": {
+      "post": {
+        "tags": [
+          "Órdenes de desembolso"
+        ],
+        "summary": "Confirmar: abonar, crear el crédito y desembolsar la solicitud",
+        "description": "Una sola operación de COREDB: el abono, el crédito AL_DIA con su calendario OFICIAL y la\nsolicitud DESEMBOLSADA. Si se pierde la respuesta, se repite: devuelve lo mismo sin otro abono.",
+        "operationId": "confirmar_api_v1_ordenes__id_orden__confirmacion_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_orden",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Orden"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "200": {
+            "description": "Ya estaba confirmada: el mismo crédito y el mismo abono"
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA, APROBACION_NO_VIGENTE, VALIDACION_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        }
+      }
+    },
+    "/api/v1/ordenes/{id_orden}/rechazo": {
+      "post": {
+        "tags": [
+          "Órdenes de desembolso"
+        ],
+        "summary": "Rechazar la orden",
+        "description": "La aprobación sigue vigente y admite otra orden.",
+        "operationId": "rechazar_api_v1_ordenes__id_orden__rechazo_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_orden",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Orden"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RechazoIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA"
+          }
+        }
+      }
+    },
+    "/api/v1/conciliacion": {
+      "get": {
+        "tags": [
+          "Supervisión"
+        ],
+        "summary": "Órdenes confirmadas frente a lo abonado, por día y moneda",
+        "operationId": "conciliacion_api_v1_conciliacion_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fecha"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CuentaIn": {
+        "properties": {
+          "numCuenta": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "numCuenta"
+        ],
+        "title": "CuentaIn"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IdentidadIn": {
+        "properties": {
+          "tipoDocumento": {
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 1,
+            "title": "Tipodocumento"
+          },
+          "numeroDocumento": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Numerodocumento"
+          },
+          "identidadVerificada": {
+            "type": "boolean",
+            "title": "Identidadverificada"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tipoDocumento",
+          "numeroDocumento",
+          "identidadVerificada"
+        ],
+        "title": "IdentidadIn",
+        "description": "Verificación del documento en ventanilla: el operador revisó el original y a la persona."
+      },
+      "OrdenIn": {
+        "properties": {
+          "idEvaluacion": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "description": "La aprobación: `idEvaluacion` de `GET /api/v1/aprobaciones`."
+          },
+          "numCuenta": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta"
+          },
+          "canal": {
+            "type": "string",
+            "enum": [
+              "VEN",
+              "HB"
+            ],
+            "title": "Canal",
+            "default": "VEN"
+          },
+          "idAgencia": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idagencia"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "idEvaluacion",
+          "numCuenta"
+        ],
+        "title": "OrdenIn"
+      },
+      "RechazoIn": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Motivo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "motivo"
+        ],
+        "title": "RechazoIn"
+      },
+      "ValidacionIn": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "IDENTIDAD",
+              "AUTORIZACION",
+              "ANTIFRAUDE"
+            ],
+            "title": "Tipo"
+          },
+          "resultado": {
+            "type": "string",
+            "enum": [
+              "APROBADA",
+              "RECHAZADA"
+            ],
+            "title": "Resultado"
+          },
+          "referenciaEvidencia": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Referenciaevidencia"
+          },
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "venceEn": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venceen"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tipo",
+          "resultado",
+          "referenciaEvidencia"
+        ],
+        "title": "ValidacionIn",
+        "description": "En IDENTIDAD aprobada, `referenciaEvidencia` es el `idValidacion` de `POST /api/v1/identidad`,\nde hoy y del titular. La validación CUENTA la registra COREDB al elegir la cuenta."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

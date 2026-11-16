@@ -92,8 +92,9 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8012/coredb/salud", timeout=3)
 
-  # Crea el primer administrador si no hay ninguno y el usuario de servicio de
-  # Evaluación (svc-evaluacion) con el secreto de .env, y termina. Repetirlo no cambia nada.
+  # Crea el primer administrador si no hay ninguno y los usuarios de servicio de
+  # Evaluación (svc-evaluacion) y Desembolso (svc-desembolso) con los secretos de .env, y
+  # termina. Repetirlo no cambia nada.
   coredb-init:
     <<: *coredb
     command:
@@ -104,11 +105,14 @@ services:
         --nombre "Administrador inicial" --si-falta
         && CORE_DB_SERVICIO_SECRETO="$$EVALUACION_COREDB_SECRETO"
         python -m COREDB.scripts.crear_servicio --modulo EVALUACION --username svc-evaluacion --nombre Evaluación
+        && CORE_DB_SERVICIO_SECRETO="$$DESEMBOLSO_COREDB_SECRETO"
+        python -m COREDB.scripts.crear_servicio --modulo DESEMBOLSO --username svc-desembolso --nombre Desembolso
     environment:
       <<: *coredb-entorno
       BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
       CORE_DB_ADMIN_INICIAL_PASSWORD: ${BNA_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
       EVALUACION_COREDB_SECRETO: ${EVALUACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+      DESEMBOLSO_COREDB_SECRETO: ${DESEMBOLSO_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
     depends_on:
       db:
         condition: service_healthy
@@ -218,6 +222,33 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8015/salud", timeout=3)
 
+  # ── DESEMBOLSO: desembolso de créditos (Línea de Créditos), sobre COREDB ─
+  # Sin base propia: el operador entra con su token de COREDB, que Desembolso reenvía; la
+  # confirmación abona, crea el crédito y desembolsa la solicitud en una sola operación de
+  # COREDB. Las aprobaciones y las cuentas las lee con su usuario de servicio
+  # (svc-desembolso, que crea coredb-init). Ver backend/DESEMBOLSO/README.md.
+  desembolso:
+    <<: *backend
+    command: uvicorn DESEMBOLSO.main:app --host 0.0.0.0 --port 8016
+    environment:
+      COREDB_URL: http://coredb:8012
+      DESEMBOLSO_COREDB_USUARIO: svc-desembolso
+      DESEMBOLSO_COREDB_SECRETO: ${DESEMBOLSO_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+    depends_on:
+      coredb:
+        condition: service_healthy
+      coredb-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_DESEMBOLSO:-8016}:8016"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8016/salud", timeout=3)
+
   # ── Seguridad: prototipo sobre SQLite ───────────────────────────────────
   seguridad:
     image: bna/seguridad:local
@@ -255,6 +286,7 @@ services:
       SOL_GATEWAY_URL: http://sol:8011/gateway/sol
       SOL_COOKIE_SECURE: "false"
       EVALUACION_GATEWAY_URL: http://evaluacion:8015/eva/v1
+      DESEMBOLSO_GATEWAY_URL: http://desembolso:8016/api/v1
     depends_on:
       coredb:
         condition: service_healthy
@@ -265,6 +297,8 @@ services:
       sol:
         condition: service_healthy
       evaluacion:
+        condition: service_healthy
+      desembolso:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BNA_PUERTO_FRONTEND:-3000}:3000"
