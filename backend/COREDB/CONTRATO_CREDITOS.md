@@ -1,6 +1,6 @@
 # Contrato de COREDB para la línea de créditos
 
-**Estado:** las secciones 3 (Evaluación), 4 (Desembolso) y 5 (Cobranza) están implementadas en `backend/COREDB`. Los módulos EVALUACIÓN (#70), DESEMBOLSO (#71) y COBRANZA (#69) se integran después sobre estas rutas, con la co-autoría de sus autores.
+**Estado:** las secciones 3 (Evaluación), 4 (Desembolso) y 5 (Cobranza) están implementadas en `backend/COREDB`. EVALUACIÓN (#70) ya usa la sección 3 (`backend/EVALUACION`, sin base propia, con el usuario de servicio `svc-evaluacion`); DESEMBOLSO (#71) y COBRANZA (#69) se integran después sobre estas rutas, con la co-autoría de sus autores.
 **Qué es:** las operaciones que el CORE ofrece a Evaluación, Desembolso y Cobranza en `backend/COREDB`, sobre las tablas `creditos.*` de la base integrada (`database/`, desde `bd-v1.4-mysql`). La especificación exacta está en `openapi.json` y en `/docs`.
 **De dónde sale:** la propuesta publicada en #70, #71 y #69 el 2026-11-16 (Con autorización de Santiago Cusirramos), para @Rodrigoss06 y @Rocio00006.
 
