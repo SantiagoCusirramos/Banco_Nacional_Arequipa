@@ -52,7 +52,7 @@ integrada y con PyJWT:
 personas son los de `CORE/data/rbac.json` en `a9bd70f`, y la API nunca lo escribe. La
 acción propia `VALIDAR_IDENTIDAD` la tienen ASESOR, OPERADOR (verifica el documento antes de
 un desembolso) y el usuario de servicio de Clientes;
-`DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR) son las
+`DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR y el servicio de Cobranza) son las
 propias de créditos. Hay usuarios de servicio para CLIENTES, EVALUACION, DESEMBOLSO y COBRANZA.
 Cada ruta declara su permiso con `requiere_permiso`; una prueba falla si una escritura no
 lo declara o si una ruta, salvo las públicas, no exige token.
@@ -131,7 +131,7 @@ Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica 
 ## Créditos
 
 Sobre `creditos.*` (`bd-v1.4-mysql`), descritas en [`CONTRATO_CREDITOS.md`](CONTRATO_CREDITOS.md).
-Por ahora, las áreas de evaluación y desembolso; cobranza viene en el PR siguiente.
+Las tres áreas: evaluación, desembolso y cobranza.
 
 | Ruta | Permiso |
 |---|---|
@@ -147,6 +147,11 @@ Por ahora, las áreas de evaluación y desembolso; cobranza viene en el PR sigui
 | `PUT …/ordenes/{id}/cuenta`, `POST …/ordenes/{id}/validaciones`, `POST …/ordenes/{id}/confirmacion`, `POST …/ordenes/{id}/rechazo` | `DESEMBOLSAR_CREDITO` |
 | `GET /coredb/creditos/ordenes`, `GET /coredb/creditos/ordenes/{id}` | `VER_CREDITO` |
 | `GET /coredb/creditos/conciliacion/desembolsos` | `GENERAR_REPORTES` |
+| `GET /coredb/creditos`, `GET /coredb/creditos/{codCredito}`, `GET …/{codCredito}/pagos`, `GET /coredb/creditos/pagos/{referencia}` | `CONSULTAR_DEUDA` |
+| `POST /coredb/creditos/{codCredito}/pagos` (la `referencia` es la llave) | `REGISTRAR_PAGO` |
+| `POST …/{codCredito}/cuotas/{n}/mora`, `POST /coredb/creditos/vencimientos` | `REGISTRAR_MORA` |
+| `GET …/{codCredito}/cuotas/{n}/mora` | `CONSULTAR_DEUDA` |
+| `GET /coredb/creditos/conciliacion/pagos` | `GENERAR_REPORTES` |
 
 - Campos en camelCase, como el contrato con SOL.
 - La fórmula de RN-EVA-002-P es la del módulo EVALUACIÓN (#70), en
@@ -161,6 +166,11 @@ Por ahora, las áreas de evaluación y desembolso; cobranza viene en el PR sigui
   mismo crédito y el mismo abono, sin abonar otra vez.
 - La evidencia IDENTIDAD de una orden es el `id_validacion` de
   `POST /coredb/clientes/validaciones/documento`, aprobado el mismo día (fecha de Lima).
+- Pagar una cuota debita la cuenta del titular y aplica el pago a las cuotas en una sola
+  transacción. Sin fondos o con la cuenta bloqueada, el pago queda RECHAZADO con su motivo y
+  sin mover dinero. Repetir la referencia devuelve el mismo pago.
+- `POST /coredb/creditos/vencimientos` es la tarea diaria de `svc-cobranza` (la base también la
+  corre a las 00:10 de Lima). La mora se registra y se muestra, pero no se cobra.
 - El usuario de la API no lee tablas de `creditos`: lee las vistas `v_*_api`.
 - Las rutas de crédito del CORE legado (perfil `legado`) siguen aparte.
 

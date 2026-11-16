@@ -1,6 +1,6 @@
 # Contrato de COREDB para la línea de créditos
 
-**Estado:** las secciones 3 (Evaluación) y 4 (Desembolso) están implementadas en `backend/COREDB`. La sección 5 (Cobranza) es la propuesta publicada para los equipos y se implementa en el PR siguiente; puede cambiar en detalle. Los módulos EVALUACIÓN (#70), DESEMBOLSO (#71) y COBRANZA (#69) se integran después sobre estas rutas, con la co-autoría de sus autores.
+**Estado:** las secciones 3 (Evaluación), 4 (Desembolso) y 5 (Cobranza) están implementadas en `backend/COREDB`. Los módulos EVALUACIÓN (#70), DESEMBOLSO (#71) y COBRANZA (#69) se integran después sobre estas rutas, con la co-autoría de sus autores.
 **Qué es:** las operaciones que el CORE ofrece a Evaluación, Desembolso y Cobranza en `backend/COREDB`, sobre las tablas `creditos.*` de la base integrada (`database/`, desde `bd-v1.4-mysql`). La especificación exacta está en `openapi.json` y en `/docs`.
 **De dónde sale:** la propuesta publicada en #70, #71 y #69 el 2026-11-16 (Con autorización de Santiago Cusirramos), para @Rodrigoss06 y @Rocio00006.
 
@@ -33,7 +33,7 @@ Las mismas de [`CONTRATO_CLIENTES.md`](CONTRATO_CLIENTES.md) §1, con estas dife
 | `SERVICIO:DESEMBOLSO` | `VER_CREDITO`, `VER_CUENTA` |
 | `SERVICIO:COBRANZA` | `VER_CREDITO`, `CONSULTAR_DEUDA`, `REGISTRAR_MORA` |
 
-Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR, `SERVICIO:COBRANZA`). Las de evaluación son las de CORE: `EVALUAR_CREDITO` y `APROBAR_CREDITO` (ANALISTA, ADMINISTRADOR), `VER_CREDITO`.
+Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR, `SERVICIO:COBRANZA`). Las de evaluación son las de CORE: `EVALUAR_CREDITO` y `APROBAR_CREDITO` (ANALISTA, ADMINISTRADOR), `VER_CREDITO`. Las de cobranza también: `REGISTRAR_PAGO` (OPERADOR, ADMINISTRADOR) y `CONSULTAR_DEUDA` (todos los roles de personas y `svc-cobranza`).
 
 ## 3. Evaluación (implementada)
 
@@ -158,15 +158,49 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 
 **Qué cambia para Desembolso al integrarse:** se quitan `bna_desembolso`, los clientes de Evaluación, CUENTAS y Cobranza, POR_VERIFICAR, el outbox y el simulador de Cobranza; las pantallas `/desembolso` siguen sobre estas rutas, con el token del operador. La reversión sigue pendiente (CUENTAS no tiene extorno).
 
-## 5. Cobranza (propuesta; PR siguiente)
+## 5. Cobranza (implementada)
 
-| Ruta | Permiso | Qué hace |
+| Ruta | Permiso | Respuesta |
 |---|---|---|
-| `GET /coredb/creditos?codCliente=`, `GET /coredb/creditos/{codCredito}`, `GET …/{codCredito}/pagos`, `GET /coredb/creditos/pagos/{referencia}` | `CONSULTAR_DEUDA` | Crédito con sus cuotas, saldo, mora vigente y estado; pagos y comprobante |
-| `POST /coredb/creditos/{codCredito}/pagos` | `REGISTRAR_PAGO` | `{numCuenta, monto, referencia, canal?}`. La `referencia` es la llave. Debita la cuenta del titular y aplica el pago de la cuota más antigua a la más reciente. Sin fondos o con la cuenta bloqueada: 201 `estado: RECHAZADO` con `motivo`. Un monto mayor que la deuda total: 422 |
-| `POST …/{codCredito}/cuotas/{n}/mora`, `GET` en la misma ruta | `REGISTRAR_MORA`, `CONSULTAR_DEUDA` | Registra el cálculo de mora y su historial |
-| `POST /coredb/creditos/vencimientos` | `REGISTRAR_MORA` | Marca las cuotas vencidas y recalcula AL_DIA o EN_MORA (también corre a diario en la base) |
-| `GET /coredb/creditos/conciliacion/pagos?fecha=` | `GENERAR_REPORTES` | Lo cobrado frente a lo aplicado, por día y canal |
+| `GET /coredb/creditos?codCliente=&estado=&limite=&offset=` | `CONSULTAR_DEUDA` | Créditos, del más reciente al más antiguo |
+| `GET /coredb/creditos/{codCredito}` | `CONSULTAR_DEUDA` | El crédito con `cuotas` y `eventos` |
+| `POST /coredb/creditos/{codCredito}/pagos` | `REGISTRAR_PAGO` (OPERADOR, ADMINISTRADOR) | 201 el pago (CONFIRMADO o RECHAZADO); 200 la misma referencia y el mismo cuerpo |
+| `GET /coredb/creditos/{codCredito}/pagos?limite=&offset=` | `CONSULTAR_DEUDA` | Los pagos del crédito, del más reciente al más antiguo |
+| `GET /coredb/creditos/pagos/{referencia}` | `CONSULTAR_DEUDA` | El comprobante |
+| `POST /coredb/creditos/{codCredito}/cuotas/{n}/mora` | `REGISTRAR_MORA` (ADMINISTRADOR, `svc-cobranza`) | 201 el cálculo |
+| `GET /coredb/creditos/{codCredito}/cuotas/{n}/mora` | `CONSULTAR_DEUDA` | Los cálculos de la cuota, del más reciente al más antiguo |
+| `POST /coredb/creditos/vencimientos` | `REGISTRAR_MORA` | `{fecha, cuotasVencidas, creditosActualizados}` |
+| `GET /coredb/creditos/conciliacion/pagos?fecha=` | `GENERAR_REPORTES` | Por día, canal y moneda |
+
+### 5.1 Consultar la deuda
+
+- El crédito: `codCredito`, `estado` (AL_DIA, EN_MORA o CANCELADO), `codCliente`, `idSolicitud`, `idOrden`, `codigoOrden`, `moneda`, `montoDesembolsado`, `fechaDesembolso`, `numeroCuotas`, `cuotasPagadas`, `cuotasVencidas`, `saldoPendiente`, `proximoVencimiento` (la cuota más antigua con saldo; nulo si no queda deuda) y `moraVigente`.
+- El detalle agrega `cuotas` (`numeroCuota`, `fechaVencimiento`, `capital`, `interes`, `otrosConceptos`, `cuotaTotal`, `saldoPendiente`, `estado`, `diasAtraso`, `moraVigente`) y `eventos` del crédito y de sus cuotas (`accion`, `resultado`, `numeroCuota`, `actor`, `correlationId`, `detalle`, `fechaHora`).
+- `diasAtraso` cuenta desde el vencimiento hasta hoy (Lima) y es 0 si la cuota no tiene saldo o no venció.
+- Crédito inexistente: 404 `CREDITO_NO_ENCONTRADO`.
+
+### 5.2 Pagar
+
+`POST /coredb/creditos/{codCredito}/pagos` con el token del operador: `{numCuenta, monto, referencia, canal?: VEN|HB}`. El canal es VEN si no se indica.
+
+- La `referencia` (1 a 40 caracteres: letras, dígitos y `.`, `_`, `:`, `-`) es la llave del pago.
+- En una transacción: debita la cuenta (movimiento `DEBITO_CUOTA`), aplica el pago de la cuota más antigua a la más reciente (una cuota queda PARCIAL o PAGADA) y recalcula el crédito (pagar toda la deuda lo deja CANCELADO).
+- **Débito rechazado:** sin fondos, con la cuenta no operativa (bloqueada, por ejemplo) o por el tope del canal, el pago queda **RECHAZADO** con su `motivo` (`SALDO_INSUFICIENTE`, `CUENTA_NO_OPERATIVA`, `TOPE_DIARIO_SUPERADO`, `CANAL_NO_ADMITIDO`), sin movimiento y sin tocar las cuotas. Responde 201.
+- Respuesta: `idPago`, `codCredito`, `referencia`, `estado`, `motivo`, `monto`, `montoAplicado`, `numCuenta`, `canal`, `uuidTransaccion` (nulo si se rechazó), `fecha`, `aplicaciones` (`[{numeroCuota, montoAplicado}]`), y el `estadoCredito` y el `saldoPendiente` del crédito al responder.
+- **Repetir:** la misma referencia con el mismo cuerpo en el mismo crédito responde 200 con el mismo pago, sin debitar otra vez; también si el pago fue RECHAZADO, así que un intento nuevo lleva otra referencia. Con otro cuerpo o en otro crédito: 409 `IDEMPOTENCIA_CONFLICTO`. Dos pagos simultáneos del mismo crédito se ordenan en la base: con fondos para uno solo, uno queda CONFIRMADO y el otro RECHAZADO.
+- No se registra nada y responde 422 si el monto supera la deuda total (`PAGO_NO_ADMITIDO`), si la cuenta no es del titular o no está en la moneda del crédito (`CUENTA_NO_ELEGIBLE`) o si el crédito está cancelado (`CREDITO_NO_ADMITIDO`). Crédito inexistente: 404 `CREDITO_NO_ENCONTRADO`.
+- `GET /coredb/creditos/pagos/{referencia}` devuelve el pago sin los campos del crédito; si no existe, 404 `PAGO_NO_ENCONTRADO`.
+
+### 5.3 Mora y vencimientos
+
+- `POST …/{codCredito}/cuotas/{n}/mora` `{montoCalculado}` (0 o más) registra un cálculo para una cuota vencida con saldo; si la cuota no existe, no tiene saldo o aún no vence, 422 `CUOTA_NO_ADMITIDA`. Responde `{idMora, codCredito, numeroCuota, montoCalculado, fechaCalculo, diasAtraso, vigente}`. No lleva llave: cada llamada es un cálculo nuevo y queda vigente el último. La mora se muestra en la deuda, pero no se cobra (decisión 5).
+- `POST /coredb/creditos/vencimientos` `{fecha?}` (el cuerpo es opcional) marca VENCIDA cada cuota PENDIENTE o PARCIAL que venció antes de `fecha` (hoy, en Lima, si no se indica) y deja cada crédito no cancelado EN_MORA (con una cuota VENCIDA) o AL_DIA. `fecha` no puede ser posterior a hoy: 422 `FECHA_NO_ADMITIDA`. Repetirlo el mismo día no cambia nada. La base lo corre también todos los días a las 00:10 de Lima (`creditos.ev_actualizar_vencimientos`); `svc-cobranza` lo llama como tarea diaria y registra la mora.
+
+### 5.4 Conciliación
+
+`GET /coredb/creditos/conciliacion/pagos?fecha=`: `fecha`, `canal`, `moneda`, `pagosConfirmados`, `importeCobrado` (movimientos `DEBITO_CUOTA`), `importeAplicado` (a cuotas) y `pagosRechazados`, por día de negocio (Lima). Sin `fecha`, todos los días con pagos.
+
+**Qué cambia para Cobranza al integrarse:** se quitan `bna_cobranza`, `X-API-Key` (las personas usan su token y `svc-cobranza` solo hace las tareas diarias), `/cr-int-06/obligaciones` (el crédito ya existe al confirmarse el desembolso), el cliente de CUENTAS y el "resolver PENDIENTE". La pantalla "Pagar cuota" pasa a la sesión del operador. CR-INT-08 (Home Banking) queda sin consumidor.
 
 ## 6. Trazabilidad CR-INT-04 a CR-INT-07
 
@@ -175,7 +209,7 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 | CR-INT-04 Evaluación ↔ Desembolso | (a) Las aprobaciones vigentes se leen de la base, con el calendario PRELIMINAR sin cambios. (b) La confirmación deja la solicitud DESEMBOLSADA en la misma transacción que el abono | `v_aprobacion_api`, `v_calendario_api`, `preparar_orden`, `confirmar_orden` | `GET /coredb/creditos/aprobaciones`, `GET /coredb/creditos/solicitudes/{id}`, `POST …/ordenes/{id}/confirmacion` |
 | CR-INT-05 Desembolso → CUENTAS | El abono es un movimiento `DESEMBOLSO` dentro de la confirmación; confirmar otra vez la misma orden devuelve el mismo `uuidTransaccionAbono` | `confirmar_orden` | `POST /coredb/creditos/ordenes`, `PUT …/cuenta`, `POST …/confirmacion` |
 | CR-INT-06 Desembolso → Cobranza | La confirmación crea el crédito (AL_DIA) y su calendario OFICIAL, copia del PRELIMINAR; Cobranza lo lee | `confirmar_orden`, `v_credito_api`, `v_cuota_api` | `GET /coredb/creditos`, `GET /coredb/creditos/{codCredito}` |
-| CR-INT-07 Cobranza → CUENTAS | El débito es un movimiento `DEBITO_CUOTA` dentro del pago; sin fondos, pago RECHAZADO sin movimiento; la `referencia` evita cobrar dos veces | `registrar_pago_cuota`, `v_pago_api` | `POST /coredb/creditos/{codCredito}/pagos` |
+| CR-INT-07 Cobranza → CUENTAS | El débito es un movimiento `DEBITO_CUOTA` dentro del pago; sin fondos o con la cuenta no operativa, pago RECHAZADO sin movimiento; la `referencia` evita cobrar dos veces | `registrar_pago_cuota`, `v_pago_api` | `POST /coredb/creditos/{codCredito}/pagos`, `GET /coredb/creditos/pagos/{referencia}` |
 
 ## 7. Decisiones del equipo (valor por omisión; ninguna bloquea)
 

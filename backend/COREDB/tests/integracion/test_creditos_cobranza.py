@@ -86,8 +86,8 @@ def depositar(api, autorizacion, num_cuenta, monto):
 
 
 def debitos(consulta, num_cuenta):
-    return consulta("SELECT BIN_TO_UUID(uuid_transaccion) AS uuid, monto FROM cuentas.movimiento "
-                    "WHERE num_cuenta = %s AND tipo_operacion = 'DEBITO_CUOTA'", num_cuenta)
+    return list(consulta("SELECT BIN_TO_UUID(uuid_transaccion) AS uuid, monto FROM cuentas.movimiento "
+                         "WHERE num_cuenta = %s AND tipo_operacion = 'DEBITO_CUOTA'", num_cuenta))
 
 
 def detalle(api, encabezados, cod_credito):
@@ -301,8 +301,10 @@ def test_pagos_que_no_se_admiten_no_dejan_rastro(api, operador, credito, abrir_c
     assert not consulta("SELECT 1 FROM creditos.pago WHERE cod_credito = %s", cod_credito)
 
 
-def test_pagar_toda_la_deuda_cancela_el_credito(api, operador, credito):
+def test_pagar_toda_la_deuda_cancela_el_credito(api, autorizacion, operador, credito):
     cod_credito, num_cuenta = credito()
+    # El abono fue de 3000.00 y la deuda, con intereses, es de 3060.00.
+    depositar(api, autorizacion, num_cuenta, DEUDA - Decimal("3000.00"))
     pago = pagar(api, operador[0], cod_credito, num_cuenta, str(DEUDA)).json()
     assert (pago["estado"], pago["estadoCredito"], pago["saldoPendiente"]) == ("CONFIRMADO", "CANCELADO", "0.00")
     leido = detalle(api, operador[0], cod_credito)
