@@ -48,7 +48,9 @@ y su auditoría registra al analista. Un usuario de servicio no entra en ellas. 
 `ANALISTA_REQUERIDO`, …). Especificación: `openapi.json` (`python -m EVALUACION.scripts.exporta_openapi`).
 
 **Analistas:** decidir exige un usuario de COREDB ligado a un empleado activo y registrado con
-`POST /coredb/creditos/analistas` (CONTRATO_CREDITOS.md §3.4). Evaluar solo exige `EVALUAR_CREDITO`.
+`POST /coredb/creditos/analistas` (CONTRATO_CREDITOS.md §3.4). Un administrador da de alta todo por
+la API: usuario ANALISTA (`POST /coredb/usuarios`), empleado ligado a él (`POST /coredb/empleados`) y
+analista. Evaluar solo exige `EVALUAR_CREDITO`.
 
 ## Configuración
 
