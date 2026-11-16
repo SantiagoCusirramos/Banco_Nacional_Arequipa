@@ -1762,6 +1762,117 @@
         "title": "DocumentoVerificar",
         "type": "object"
       },
+      "EmpleadoRegistrado": {
+        "description": "Sin el nombre: no hace falta repetirlo y es un dato personal.",
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "cargo": {
+            "title": "Cargo",
+            "type": "string"
+          },
+          "codigo_empleado": {
+            "title": "Codigo Empleado",
+            "type": "string"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "id_empleado": {
+            "format": "uuid",
+            "title": "Id Empleado",
+            "type": "string"
+          },
+          "id_usuario": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Usuario"
+          }
+        },
+        "required": [
+          "id_empleado",
+          "codigo_empleado",
+          "cargo",
+          "id_agencia",
+          "id_usuario",
+          "activo"
+        ],
+        "title": "EmpleadoRegistrado",
+        "type": "object"
+      },
+      "EmpleadoRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "cargo": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Cargo",
+            "type": "string"
+          },
+          "codigo_empleado": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Codigo Empleado",
+            "type": "string"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "id_usuario": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Una persona sin empleado; se liga al empleado nuevo.",
+            "title": "Id Usuario"
+          },
+          "nombre_completo": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Nombre Completo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo_empleado",
+          "nombre_completo",
+          "cargo"
+        ],
+        "title": "EmpleadoRegistrar",
+        "type": "object"
+      },
       "EstadoClienteRespuesta": {
         "properties": {
           "codigo": {
@@ -7633,6 +7744,58 @@
         "summary": "Ver",
         "tags": [
           "cuentas"
+        ]
+      }
+    },
+    "/coredb/empleados": {
+      "post": {
+        "description": "Registra un empleado activo y, si se indica, lo liga a un usuario. Para que decida\ncréditos: usuario ANALISTA ligado y `POST /coredb/creditos/analistas` con este\n`id_empleado`.",
+        "operationId": "registrar_coredb_empleados_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmpleadoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmpleadoRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "USUARIO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "EMPLEADO_DUPLICADO o USUARIO_NO_ADMITIDO (de servicio o ya ligado)"
+          },
+          "422": {
+            "description": "AGENCIA_NO_ENCONTRADA o datos inválidos"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar",
+        "tags": [
+          "empleados"
         ]
       }
     },

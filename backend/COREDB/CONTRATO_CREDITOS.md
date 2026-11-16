@@ -46,6 +46,7 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 | `POST /coredb/creditos/evaluaciones/{idEvaluacion}/decision` | `APROBAR_CREDITO` | Decisión del analista |
 | `POST /coredb/creditos/solicitudes/{idSolicitud}/revocacion` | `APROBAR_CREDITO` | Solicitud RECHAZADA |
 | `GET /coredb/creditos/aprobaciones?codCliente=&idSolicitud=` | `VER_CREDITO` | Aprobaciones que admiten desembolso |
+| `POST /coredb/empleados` | `REGISTRAR_EMPLEADO` | 201 el empleado (sin el nombre); 409 `EMPLEADO_DUPLICADO` o `USUARIO_NO_ADMITIDO` |
 | `POST /coredb/creditos/analistas` | `CREAR_USUARIO` | 201 `{idAnalista}` |
 | `GET /coredb/catalogos/creditos` | autenticado | Catálogos |
 
@@ -95,7 +96,7 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 `POST /coredb/creditos/evaluaciones/{idEvaluacion}/decision` con `{decision: APROBADO|RECHAZADO, comentario}` (10 a 500 caracteres), con el token del analista.
 
 - Solo para una evaluación OBSERVADO de la ronda vigente, y una sola vez. Respuesta: `{idEvaluacion, idSolicitud, decision, estadoSolicitud}`.
-- **Quién es analista:** el usuario del token debe estar ligado a un empleado activo (`id_empleado` al crearlo con `POST /coredb/usuarios`) y ese empleado debe estar registrado como analista con `POST /coredb/creditos/analistas {idEmpleado}` (un administrador). Si no, 422 `ANALISTA_REQUERIDO`. Los empleados (`core.empleado`) los carga hoy el administrador de la base: COREDB no tiene una ruta para crearlos.
+- **Quién es analista:** el usuario del token debe estar ligado a un empleado activo (`id_empleado` al crearlo con `POST /coredb/usuarios`) y ese empleado debe estar registrado como analista con `POST /coredb/creditos/analistas {idEmpleado}` (un administrador). Si no, 422 `ANALISTA_REQUERIDO`. El empleado lo registra un administrador con `POST /coredb/empleados` (permiso `REGISTRAR_EMPLEADO`, solo ADMINISTRADOR), que también lo liga a un usuario existente (`id_usuario`): una persona sin empleado. Orden: usuario ANALISTA, empleado ligado, `POST /coredb/creditos/analistas`.
 - Errores: 404 `EVALUACION_NO_ENCONTRADA`; 422 `EVALUACION_NO_ADMITIDA` (no es OBSERVADO, ya tiene decisión o no es la vigente).
 
 ### 3.5 Revocación y aprobaciones
