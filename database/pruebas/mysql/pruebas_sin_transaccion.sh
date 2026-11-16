@@ -742,3 +742,25 @@ caso X385 'Una autorización que falla a mitad no deja la fila ni retiene el sal
       AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2') = $disponible" <<SQL
 CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a4000000-0000-4000-8000-000000000003'), $T2, 'CTA-PEN-2', 'VEN', NULL, 'RETIRO', 20, NULL, NULL, @e, @c);
 SQL
+# Empleados (v1.6) en autocommit y dentro de una transacción del que llama.
+root_ -e "INSERT INTO core.usuario_sistema (id_usuario, username, nombre, rol, hash_password, algoritmo_hash, version_hash)
+          VALUES (UUID_TO_BIN('34000000-0000-4000-8000-000000000398'), 'ac-emp', 'E', 'ANALISTA', 'h', 'BCRYPT', 'v2')"
+EMP_USR="UUID_TO_BIN('34000000-0000-4000-8000-000000000398')"
+caso X398 'Un empleado registrado en autocommit queda ligado a su usuario (v1.6)' \
+  "SELECT (SELECT activo FROM core.empleado WHERE codigo_empleado = 'AC-EMP-398') = 1
+      AND (SELECT id_empleado FROM core.usuario_sistema WHERE id_usuario = $EMP_USR) = UUID_TO_BIN('34100000-0000-4000-8000-000000000398')" <<SQL
+CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000398'), 'AC-EMP-398', 'E', 'ANALISTA', 'AQP01', $EMP_USR, 'pruebas');
+SQL
+root_ -e "UPDATE core.usuario_sistema SET id_empleado = NULL WHERE id_usuario = $EMP_USR"
+caso X399 'registrar_empleado no deja el empleado ni el vínculo si falla el evento (v1.6)' \
+  "SELECT (SELECT COUNT(*) FROM core.empleado WHERE codigo_empleado = 'AC-EMP-399') = 0
+      AND (SELECT id_empleado IS NULL FROM core.usuario_sistema WHERE id_usuario = $EMP_USR)" <<SQL
+CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000399'), 'AC-EMP-399', 'E', 'ANALISTA', 'AQP01', $EMP_USR, NULL);
+SQL
+caso X400 'registrar_empleado deshace solo lo suyo dentro de una transacción (v1.6)' \
+  "SELECT $(quedo p400) AND (SELECT COUNT(*) FROM core.empleado WHERE codigo_empleado = 'AC-EMP-400') = 0
+      AND (SELECT id_empleado IS NULL FROM core.usuario_sistema WHERE id_usuario = $EMP_USR)" <<SQL
+$(previo p400)
+CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000400'), 'AC-EMP-400', 'E', 'ANALISTA', 'AQP01', $EMP_USR, NULL);
+COMMIT;
+SQL

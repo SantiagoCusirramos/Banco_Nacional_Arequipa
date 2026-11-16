@@ -966,3 +966,62 @@ CALL prueba.verifica('X381', 'Extensión', 'bna_api', 'bna_api registra y valida
   JSON_ARRAY("CALL tarjetas.registrar_credencial(UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'PIN_ATM', '2468', 'pruebas')",
              "CALL tarjetas.validar_credencial(UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'PIN_ATM', '2468', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)"),
   "SELECT @r = 'EXITOSO' AND @i = 3", 'EXITOSO', "SELECT @r", 'privilegio');
+
+-- Empleados (v1.6), con el rol de la API. El usuario 34…01 es una persona sin empleado.
+SET @emp_usr = "CALL core.crear_usuario(UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'nuevo.analista', 'Nueva Analista', 'ANALISTA', 'h', 'BCRYPT', 'v2', NULL, TRUE, 'pruebas')";
+
+CALL prueba.verifica('X386', 'Extensión', 'Empleados', 'Un administrador registra un empleado y lo liga a un usuario sin empleado',
+  JSON_ARRAY(@emp_usr,
+             "CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000386'), ' EMP-AN-386 ', 'Nueva Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'pruebas')"),
+  "SELECT (SELECT id_empleado FROM core.usuario_sistema WHERE id_usuario = UUID_TO_BIN('34000000-0000-4000-8000-000000000001')) = UUID_TO_BIN('34100000-0000-4000-8000-000000000386')",
+  'el usuario queda ligado al empleado', "SELECT BIN_TO_UUID(id_empleado) FROM core.usuario_sistema WHERE id_usuario = UUID_TO_BIN('34000000-0000-4000-8000-000000000001')", 'procedimiento');
+
+CALL prueba.verifica('X387', 'Extensión', 'Empleados', 'El registro del empleado se audita sin el nombre de la persona',
+  JSON_ARRAY(@emp_usr,
+             "CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000387'), 'EMP-AN-387', 'Nueva Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'admin.pruebas')"),
+  "SELECT (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE modulo = 'CORE' AND entidad = 'empleado' AND id_entidad = '34100000-0000-4000-8000-000000000387' AND accion = 'REGISTRAR_EMPLEADO' AND actor = 'admin.pruebas' AND JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.codigo_empleado')) = 'EMP-AN-387' AND JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.id_usuario')) = '34000000-0000-4000-8000-000000000001') = 1 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'REGISTRAR_EMPLEADO' AND detalle LIKE '%Nueva%') = 0",
+  'un evento REGISTRAR_EMPLEADO sin el nombre', "SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'REGISTRAR_EMPLEADO'", 'procedimiento');
+
+CALL prueba.verifica('X388', 'Extensión', 'Empleados', 'El empleado registrado por la API queda disponible como analista y decide una evaluación R-B',
+  JSON_ARRAY(@emp_usr,
+             "CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000388'), 'EMP-AN-388', 'Nueva Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'pruebas')",
+             "CALL creditos.registrar_analista(UUID_TO_BIN('34100000-0000-4000-8000-000000000388'), 'pruebas', @an)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000388', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000388'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.decidir_evaluacion(@e, 'APROBADO', 'Ingresos estables y sustentados', UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'nuevo.analista', UUID_TO_BIN(UUID()), @estado)"),
+  "SELECT @estado = 'APROBADA' AND (SELECT id_analista FROM creditos.v_evaluacion_api WHERE id_evaluacion = @e) = @an",
+  'APROBADA por el analista nuevo', "SELECT CONCAT_WS(' ', @estado, @an)", 'procedimiento');
+
+CALL prueba.verifica('X389', 'Extensión', 'Empleados', 'Sin usuario, el empleado se registra y puede ser analista',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000389'), 'EMP-AN-389', 'Otro Analista', 'ANALISTA', NULL, NULL, 'pruebas')",
+             "CALL creditos.registrar_analista(UUID_TO_BIN('34100000-0000-4000-8000-000000000389'), 'pruebas', @an)"),
+  "SELECT @an REGEXP '^AN[0-9A-F]{8}$'", 'AN y ocho caracteres', "SELECT @an", 'procedimiento');
+
+CALL prueba.rechaza('X390', 'Extensión', 'Empleados', 'Un código de empleado repetido se rechaza sin mostrar el código',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000390'), 'EMP-AN-1', 'Otro Analista', 'ANALISTA', 'AQP01', NULL, 'pruebas')"),
+  '^BNA-EMPLEADO-DUPLICADO: el código de empleado ya existe$', 'procedimiento');
+
+CALL prueba.rechaza('X391', 'Extensión', 'Empleados', 'Un usuario que ya tiene empleado no se liga a otro',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000391'), 'EMP-AN-391', 'Otro Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'pruebas')"),
+  '^BNA-USUARIO-EMPLEADO: el usuario ya está ligado a un empleado$', 'procedimiento');
+
+CALL prueba.rechaza('X392', 'Extensión', 'Empleados', 'Un usuario de servicio no se liga a un empleado',
+  JSON_ARRAY("CALL core.crear_usuario_servicio(UUID_TO_BIN('34000000-0000-4000-8000-000000000002'), 'svc-x392', 'Servicio', 'CLIENTES', 'h', 'BCRYPT', 'v2', 'pruebas')",
+             "CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000392'), 'EMP-AN-392', 'Otro Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('34000000-0000-4000-8000-000000000002'), 'pruebas')"),
+  '^BNA-USUARIO-EMPLEADO: un usuario de servicio no se liga a un empleado$', 'procedimiento');
+
+CALL prueba.rechaza('X393', 'Extensión', 'Empleados', 'Un usuario inexistente se rechaza',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000393'), 'EMP-AN-393', 'Otro Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN(UUID()), 'pruebas')"),
+  '^BNA-USUARIO: el usuario no existe$', 'procedimiento');
+
+CALL prueba.rechaza('X394', 'Extensión', 'Empleados', 'Una agencia inexistente se rechaza sin mostrarla',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000394'), 'EMP-AN-394', 'Otro Analista', 'ANALISTA', 'NOEXISTE', NULL, 'pruebas')"),
+  '^BNA-AGENCIA: la agencia no existe$', 'procedimiento');
+
+CALL prueba.rechaza('X395', 'Extensión', 'Empleados', 'El código, el nombre y el cargo son obligatorios',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000395'), 'EMP-AN-395', '   ', 'ANALISTA', 'AQP01', NULL, 'pruebas')"),
+  '^BNA-EMPLEADO-DATOS: faltan el código, el nombre o el cargo$', 'procedimiento');
+
+CALL prueba.rechaza('X396', 'Extensión', 'bna_api', 'bna_api no puede: INSERT en core.empleado',
+  JSON_ARRAY("INSERT INTO core.empleado (id_empleado, codigo_empleado, nombre_completo, cargo) VALUES (UUID_TO_BIN(UUID()), 'E396', 'E', 'ANALISTA')"),
+  'denied', 'privilegio');

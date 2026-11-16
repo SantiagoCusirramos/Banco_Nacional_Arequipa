@@ -226,6 +226,21 @@ el nivel de riesgo, y sigue sin leer `tarjetas.credencial`. El hash es
 matriz de coordenadas queda para cuando haya un procedimiento que la emita. Solo agrega
 objetos y cuatro códigos de respuesta: una base anterior necesita un volumen nuevo.
 
+### Empleados (desde `bd-v1.6-mysql`)
+
+Un administrador registra empleados por la API, sin el administrador de la base, y así
+un analista de crédito queda disponible: empleado, usuario ANALISTA ligado a él y
+`creditos.registrar_analista`.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `core.registrar_empleado` | Crea el empleado activo (código, nombre, cargo y agencia opcional) y, si se indica, lo liga a un usuario: una persona que todavía no tiene empleado. Rechaza el código repetido (`BNA-EMPLEADO-DUPLICADO`), la agencia inexistente (`BNA-AGENCIA`), el usuario inexistente (`BNA-USUARIO`) y el usuario de servicio o ya ligado (`BNA-USUARIO-EMPLEADO`) |
+
+Se concede solo a `bna_api`; `bna_api` sigue sin escribir ni leer `core.empleado`. El
+evento `REGISTRAR_EMPLEADO` guarda el código, el cargo y el usuario, no el nombre; los
+mensajes de error no repiten valores de entrada. Solo agrega un procedimiento: una base
+anterior necesita un volumen nuevo para tenerlo.
+
 `pruebas/mysql/run_tests.sh` ejecuta toda la suite con la extensión cargada. Sus
 pruebas (ID `X`) quedan en `resultados/mysql/resultado-extension.tsv`, fuera de la
 matriz. `pruebas_sin_transaccion.sh` prueba cada procedimiento en autocommit, porque
