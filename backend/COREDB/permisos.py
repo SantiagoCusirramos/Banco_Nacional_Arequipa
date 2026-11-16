@@ -44,6 +44,8 @@ PERMISOS: dict[str, frozenset[str]] = {
         "CONSULTAR_DEUDA", "CREAR_CUENTA", "CREAR_TARJETA", "BLOQUEAR_TARJETA",
         "MODIFICAR_CUENTA", "REGISTRAR_MOVIMIENTO", "REGISTRAR_PAGO", "VER_CLIENTE",
         "VER_CREDITO", "VER_CUENTA", "VER_TARJETA", DESEMBOLSAR_CREDITO,
+        # La verificación del documento en ventanilla es la evidencia IDENTIDAD del desembolso.
+        VALIDAR_IDENTIDAD,
     }),
     "SERVICIO:CLIENTES": frozenset({
         "VER_CLIENTE", "CREAR_CLIENTE", "MODIFICAR_CLIENTE", VALIDAR_IDENTIDAD,

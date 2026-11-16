@@ -9,7 +9,7 @@ import hashlib
 import json
 import uuid
 from collections.abc import Callable, Sequence
-from datetime import timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Protocol, TypeVar
 
@@ -23,6 +23,9 @@ from COREDB.transacciones import con_reintentos
 
 T = TypeVar("T")
 
+_CUENTA_NO_ELEGIBLE = ("La cuenta debe ser de ahorros, activa, individual, del titular y en la moneda del "
+                       "crédito.")
+
 # Regla de la base → (código del contrato, estado HTTP, mensaje fijo o None para usar el de la base).
 REGLAS: dict[str, tuple[str, int, str | None]] = {
     "BNA-SOLICITUD": ("SOLICITUD_NO_ADMITIDA", 422, None),
@@ -34,6 +37,17 @@ REGLAS: dict[str, tuple[str, int, str | None]] = {
     "BNA-ANALISTA": ("ANALISTA_REQUERIDO", 422, "El usuario no es un analista de crédito registrado y activo."),
     "BNA-MOTIVO": ("MOTIVO_REQUERIDO", 422, None),
     "BNA-EMPLEADO": ("EMPLEADO_NO_HABILITADO", 422, "El empleado no existe o no está activo."),
+    # Desembolso. Los mensajes del disparador validar_orden y de cuentas.* llevan la cuenta, el
+    # cliente o importes: esos se reemplazan por uno fijo.
+    "BNA-APROBACION": ("APROBACION_NO_VIGENTE", 422, None),
+    "BNA-ORDEN": ("ORDEN_NO_ADMITIDA", 422, None),
+    "BNA-ORDEN-UNICA": ("ORDEN_NO_ADMITIDA", 422, "La solicitud ya tiene un desembolso confirmado."),
+    "BNA-CUENTA-DESTINO": ("CUENTA_NO_ELEGIBLE", 422, _CUENTA_NO_ELEGIBLE),
+    "BNA-CUENTA": ("CUENTA_NO_ELEGIBLE", 422, _CUENTA_NO_ELEGIBLE),
+    "BNA-IMPORTE": ("IMPORTE_NO_ADMITIDO", 422, "El importe supera el límite aprobado."),
+    "BNA-VALIDACION": ("VALIDACION_NO_ADMITIDA", 422, None),
+    "BNA-CANAL": ("CANAL_NO_ADMITIDO", 422, "El canal no admite el desembolso."),
+    "BNA-NUMERACION": ("NUMERACION_AGOTADA", 422, None),
 }
 
 
@@ -300,3 +314,157 @@ def registrar_analista(db: Session, id_empleado: uuid.UUID, *, actor: str) -> st
 def catalogos(db: Session) -> dict[str, Any]:
     (valor,) = llamar(db, "creditos.catalogos_credito", salidas=1)
     return json.loads(valor, parse_float=Decimal)
+
+
+# ── Desembolso (CONTRATO_CREDITOS.md §4) ────────────────────────────────────
+
+
+def orden_no_encontrada() -> ErrorCoreDb:
+    return ErrorCoreDb("ORDEN_NO_ENCONTRADA", "La orden de desembolso no existe.", 404)
+
+
+def huella_orden(datos) -> str:
+    """SHA-256 del contenido de la orden: la misma llave con otro contenido es un conflicto."""
+    canonico = {"id_evaluacion": str(datos.id_evaluacion), "num_cuenta": datos.num_cuenta, "canal": datos.canal,
+                "id_agencia": datos.id_agencia}
+    return hashlib.sha256(json.dumps(canonico, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+_ORDEN = (
+    "SELECT BIN_TO_UUID(id_orden) AS id_orden, codigo_orden, estado_orden AS estado, motivo_rechazo, importe, "
+    "moneda, num_cuenta, id_canal AS canal, id_agencia, BIN_TO_UUID(id_evaluacion) AS id_evaluacion, "
+    "BIN_TO_UUID(id_solicitud) AS id_solicitud, cod_cliente, usuario_preparacion, usuario_confirmacion, "
+    "BIN_TO_UUID(uuid_transaccion_abono) AS uuid_transaccion_abono, cod_credito, creado_en AS fecha_creacion, "
+    "actualizado_en AS fecha_actualizacion FROM creditos.v_orden_api"
+)
+
+
+def _orden(fila) -> dict[str, Any]:
+    datos = dict(fila._mapping)
+    datos["fecha_creacion"] = _utc(datos["fecha_creacion"])
+    datos["fecha_actualizacion"] = _utc(datos["fecha_actualizacion"])
+    return datos
+
+
+def orden(db: Session, id_orden: uuid.UUID) -> dict[str, Any]:
+    fila = db.execute(text(f"{_ORDEN} WHERE id_orden = :id"), {"id": id_orden.bytes}).first()
+    if fila is None:
+        raise orden_no_encontrada()
+    return _orden(fila)
+
+
+def _exigir_orden(db: Session, id_orden: uuid.UUID) -> None:
+    if db.execute(text("SELECT 1 FROM creditos.v_orden_api WHERE id_orden = :id"),
+                  {"id": id_orden.bytes}).first() is None:
+        raise orden_no_encontrada()
+
+
+def detalle_orden(db: Session, id_orden: uuid.UUID) -> dict[str, Any]:
+    datos = orden(db, id_orden)
+    datos["validaciones"] = [
+        {**dict(v._mapping), "vence_en": _utc(v.vence_en), "fecha": _utc(v.fecha)}
+        for v in db.execute(text(
+            "SELECT BIN_TO_UUID(id_validacion) AS id_validacion, tipo_validacion AS tipo, resultado, "
+            "referencia_evidencia, detalle, vence_en, creado_en AS fecha FROM creditos.v_validacion_orden_api "
+            "WHERE id_orden = :id ORDER BY creado_en"
+        ), {"id": id_orden.bytes}).all()
+    ]
+    datos["eventos"] = [
+        {**dict(e._mapping), "fecha_hora": _utc(e.fecha_hora),
+         "detalle": None if e.detalle is None else json.loads(e.detalle, parse_float=Decimal)}
+        for e in db.execute(text(
+            "SELECT accion, resultado, actor, BIN_TO_UUID(correlation_id) AS correlation_id, detalle, fecha_hora "
+            "FROM creditos.v_evento_credito_api WHERE id_entidad = :id ORDER BY fecha_hora, id_evento"
+        ), {"id": str(id_orden)}).all()
+    ]
+    return datos
+
+
+def listar_ordenes(db: Session, *, estado: str | None, cod_cliente: str | None, id_solicitud: uuid.UUID | None,
+                   limite: int, offset: int) -> list[dict[str, Any]]:
+    filtros, parametros = [], {"limite": limite, "offset": offset}
+    if estado is not None:
+        filtros.append("estado_orden = :estado")
+        parametros["estado"] = estado
+    if cod_cliente is not None:
+        filtros.append("cod_cliente = :cliente")
+        parametros["cliente"] = cod_cliente
+    if id_solicitud is not None:
+        filtros.append("id_solicitud = :solicitud")
+        parametros["solicitud"] = id_solicitud.bytes
+    donde = f" WHERE {' AND '.join(filtros)}" if filtros else ""
+    filas = db.execute(
+        text(f"{_ORDEN}{donde} ORDER BY creado_en DESC, id_orden LIMIT :limite OFFSET :offset"), parametros
+    ).all()
+    return [_orden(f) for f in filas]
+
+
+def preparar_orden(db: Session, datos, *, llave: uuid.UUID, correlation_id: uuid.UUID,
+                   actor: str) -> tuple[dict[str, Any], bool]:
+    huella = huella_orden(datos)
+    id_orden, _, repetido = _escribir(db, lambda: llamar(
+        db, "creditos.preparar_orden",
+        datos.id_evaluacion, datos.num_cuenta, datos.canal, datos.id_agencia, llave, huella, actor, correlation_id,
+        salidas=3,
+    ), "preparar_orden")
+    return orden(db, uuid.UUID(bytes=id_orden)), bool(repetido)
+
+
+def cambiar_cuenta(db: Session, id_orden: uuid.UUID, *, num_cuenta: str, correlation_id: uuid.UUID,
+                   actor: str) -> dict[str, Any]:
+    def operacion():
+        _exigir_orden(db, id_orden)
+        llamar(db, "creditos.cambiar_cuenta_orden", id_orden, num_cuenta, actor, correlation_id, salidas=1)
+
+    _escribir(db, operacion, "cambiar_cuenta_orden")
+    return orden(db, id_orden)
+
+
+def _utc_sin_zona(valor: datetime | None) -> datetime | None:
+    return None if valor is None else valor.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def registrar_validacion(db: Session, id_orden: uuid.UUID, datos, *, correlation_id: uuid.UUID,
+                         actor: str) -> dict[str, Any]:
+    def operacion():
+        _exigir_orden(db, id_orden)
+        llamar(db, "creditos.registrar_validacion_orden",
+               id_orden, datos.tipo, datos.resultado, datos.referencia_evidencia, datos.detalle,
+               _utc_sin_zona(datos.vence_en), actor, correlation_id, salidas=1)
+
+    _escribir(db, operacion, "registrar_validacion_orden")
+    return orden(db, id_orden)
+
+
+def confirmar_orden(db: Session, id_orden: uuid.UUID, *, correlation_id: uuid.UUID,
+                    actor: str) -> tuple[dict[str, Any], bool]:
+    def operacion():
+        _exigir_orden(db, id_orden)
+        return llamar(db, "creditos.confirmar_orden", id_orden, actor, correlation_id, salidas=3)
+
+    cod_credito, uuid_abono, repetido = _escribir(db, operacion, "confirmar_orden")
+    (fecha,) = db.execute(text("SELECT fecha_desembolso FROM creditos.v_credito_api WHERE cod_credito = :c"),
+                          {"c": cod_credito}).one()
+    datos = orden(db, id_orden)
+    return {"id_orden": datos["id_orden"], "codigo_orden": datos["codigo_orden"], "estado": datos["estado"],
+            "cod_credito": cod_credito, "uuid_transaccion_abono": _uuid(uuid_abono),
+            "fecha_efectiva": _utc(fecha)}, bool(repetido)
+
+
+def rechazar_orden(db: Session, id_orden: uuid.UUID, *, motivo: str, correlation_id: uuid.UUID,
+                   actor: str) -> dict[str, Any]:
+    def operacion():
+        _exigir_orden(db, id_orden)
+        llamar(db, "creditos.rechazar_orden", id_orden, motivo, actor, correlation_id)
+
+    _escribir(db, operacion, "rechazar_orden")
+    return orden(db, id_orden)
+
+
+def conciliacion_desembolsos(db: Session, fecha: date | None) -> list[dict[str, Any]]:
+    donde, parametros = ("", {}) if fecha is None else (" WHERE fecha = :fecha", {"fecha": fecha})
+    filas = db.execute(text(
+        "SELECT fecha, moneda, ordenes_confirmadas, importe_ordenes, importe_abonado, ordenes_sin_abono "
+        f"FROM creditos.v_conciliacion_diaria{donde} ORDER BY fecha DESC, moneda LIMIT 366"
+    ), parametros).all()
+    return [dict(f._mapping) for f in filas]

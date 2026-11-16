@@ -1,6 +1,6 @@
 # Contrato de COREDB para la línea de créditos
 
-**Estado:** la sección 3 (Evaluación) está implementada en `backend/COREDB`. Las secciones 4 (Desembolso) y 5 (Cobranza) son la propuesta publicada para los equipos y se implementan en los PR siguientes; pueden cambiar en detalle. Los módulos EVALUACIÓN (#70), DESEMBOLSO (#71) y COBRANZA (#69) se integran después sobre estas rutas, con la co-autoría de sus autores.
+**Estado:** las secciones 3 (Evaluación) y 4 (Desembolso) están implementadas en `backend/COREDB`. La sección 5 (Cobranza) es la propuesta publicada para los equipos y se implementa en el PR siguiente; puede cambiar en detalle. Los módulos EVALUACIÓN (#70), DESEMBOLSO (#71) y COBRANZA (#69) se integran después sobre estas rutas, con la co-autoría de sus autores.
 **Qué es:** las operaciones que el CORE ofrece a Evaluación, Desembolso y Cobranza en `backend/COREDB`, sobre las tablas `creditos.*` de la base integrada (`database/`, desde `bd-v1.4-mysql`). La especificación exacta está en `openapi.json` y en `/docs`.
 **De dónde sale:** la propuesta publicada en #70, #71 y #69 el 2026-11-16 (Con autorización de Santiago Cusirramos), para @Rodrigoss06 y @Rocio00006.
 
@@ -8,7 +8,7 @@
 
 - Los datos de créditos viven en `creditos.*`, que ya modelan toda la línea. Cada módulo deja su base propia y llama a COREDB.
 - COREDB escribe solo por procedimientos de la base. Cada operación es atómica y registra su auditoría dentro.
-- **El dinero se mueve dentro de la misma transacción.** Confirmar una orden abona la cuenta, crea el crédito con su calendario OFICIAL y deja la solicitud DESEMBOLSADA, todo junto. Pagar una cuota debita la cuenta y aplica el pago, también junto. Si se pierde la respuesta HTTP, se reintenta con la misma llave sin mover el dinero dos veces. Por eso no hacen falta POR_VERIFICAR, el pago PENDIENTE ni sus procesos de recuperación.
+- **El dinero se mueve dentro de la misma transacción.** Confirmar una orden abona la cuenta, crea el crédito con su calendario OFICIAL y deja la solicitud DESEMBOLSADA, todo junto. Pagar una cuota debita la cuenta y aplica el pago, también junto. Si se pierde la respuesta HTTP, se repite la llamada (con la misma llave en el pago) sin mover el dinero dos veces. Por eso no hacen falta POR_VERIFICAR, el pago PENDIENTE ni sus procesos de recuperación.
 - **Las llamadas entre módulos desaparecen.** CR-INT-04 (Desembolso → Evaluación) y CR-INT-06 (Desembolso → Cobranza) pasan a ser lecturas a COREDB; CR-INT-05 y CR-INT-07 (abonos y débitos por CUENTAS) los hace COREDB. CR-INT-02 y CR-INT-03 (con SOL) siguen.
 
 ## 2. Convenciones
@@ -23,7 +23,7 @@ Las mismas de [`CONTRATO_CLIENTES.md`](CONTRATO_CLIENTES.md) §1, con estas dife
   - `codCliente`: el `cod_cliente` de COREDB (hasta 12, letras y dígitos). La base exige que el cliente exista y pueda operar.
   - `idEvaluacion`, `idOrden` e `idPago`: UUID.
   - `codigoOrden`: `DES-AAAA-NNNNNN`; `codCredito`: `CRE-AAAA-NNNNNN`, que nace al confirmar el desembolso.
-- **Repeticiones:** el expediente es idempotente por `idSolicitud` + `versionSolicitud` + contenido (sección 3.1). La evaluación, la decisión y la revocación se hacen una sola vez: repetirlas responde 422 y el resultado está en el detalle de la solicitud. Las escrituras de dinero (secciones 4 y 5) llevan llave.
+- **Repeticiones:** el expediente es idempotente por `idSolicitud` + `versionSolicitud` + contenido (sección 3.1). La evaluación, la decisión y la revocación se hacen una sola vez: repetirlas responde 422 y el resultado está en el detalle de la solicitud. Preparar una orden lleva `X-Idempotency-Key` (UUID) y el pago, su `referencia`: la misma llave con el mismo cuerpo responde 200 con el resultado original y con otro cuerpo, 409 `IDEMPOTENCIA_CONFLICTO`. Confirmar otra vez una orden responde 200 con el mismo crédito y el mismo abono.
 - **Mensajes:** ninguno repite cuentas, documentos, montos ni `codCliente`.
 - **Credenciales:** cada módulo tiene su usuario de servicio (`svc-evaluacion`, `svc-desembolso`, `svc-cobranza`), que un administrador crea con `POST /coredb/usuarios/servicios` (`modulo`: `EVALUACION`, `DESEMBOLSO` o `COBRANZA`). Lo que hace una persona (analista, operador) va con **el token de esa persona**, que el módulo reenvía: así la auditoría registra a la persona.
 
@@ -109,18 +109,54 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 
 **Qué cambia para Evaluación al integrarse:** se quita `bna_evaluacion`; la pantalla `/evaluacion` sigue sobre estas rutas (ids UUID, sin botón OBSERVAR); CR-INT-03 hacia SOL se reenvía sin estado propio, con un `idOperacion` determinista; las rutas `/eva/v1/aprobaciones` dejan de hacer falta.
 
-## 4. Desembolso (propuesta; PR siguiente)
+## 4. Desembolso (implementada)
 
-| Ruta | Permiso | Qué hace |
+| Ruta | Permiso | Respuesta |
 |---|---|---|
-| `POST /coredb/clientes/validaciones/documento` (ya existe) | `VALIDAR_IDENTIDAD` (se le da también a OPERADOR) | Verificación del documento en ventanilla. Devuelve el `codCliente` y un `id_validacion` |
-| `GET /coredb/creditos/aprobaciones?codCliente=` | `VER_CREDITO` | Las aprobaciones de ese cliente |
-| `POST /coredb/creditos/ordenes` + llave | `DESEMBOLSAR_CREDITO` | `{idEvaluacion, numCuenta, canal?: VEN\|HB, idAgencia?}`. El importe es el monto aprobado. Se rechaza si la aprobación venció o si la primera cuota ya venció. 201 `{idOrden, codigoOrden, estado: PREPARADA, importe, moneda}` |
-| `PUT …/ordenes/{id}/cuenta` | `DESEMBOLSAR_CREDITO` | Cambia la cuenta mientras la orden está PREPARADA o VALIDADA; vuelve a PREPARADA |
-| `POST …/ordenes/{id}/validaciones` | `DESEMBOLSAR_CREDITO` | `{tipo: IDENTIDAD\|AUTORIZACION\|ANTIFRAUDE, resultado, referenciaEvidencia, detalle?}`. En IDENTIDAD, la evidencia es el `id_validacion` anterior, del mismo día (decisión 7). La validación CUENTA la registra COREDB. Con IDENTIDAD y CUENTA aprobadas, la orden pasa a VALIDADA |
-| `POST …/ordenes/{id}/confirmacion` + llave | `DESEMBOLSAR_CREDITO` | Abona, crea el crédito y deja la solicitud DESEMBOLSADA, en una sola operación. `{codigoOrden, estado: CONFIRMADA, codCredito, uuidTransaccionAbono, fechaEfectiva}` |
-| `POST …/ordenes/{id}/rechazo` | `DESEMBOLSAR_CREDITO` | `{motivo}` |
-| `GET …/ordenes?estado=&codCliente=`, `GET …/ordenes/{id}`, `GET /coredb/creditos/conciliacion/desembolsos?fecha=` | `VER_CREDITO`, `GENERAR_REPORTES` | Monitor y conciliación |
+| `POST /coredb/clientes/validaciones/documento` (de Clientes) | `VALIDAR_IDENTIDAD` (también OPERADOR) | `id_validacion`: la evidencia IDENTIDAD |
+| `GET /coredb/creditos/aprobaciones?codCliente=` | `VER_CREDITO` | Aprobaciones del cliente (sección 3.5) |
+| `POST /coredb/creditos/ordenes` + `X-Idempotency-Key` | `DESEMBOLSAR_CREDITO` | 201 la orden; 200 la misma llave y el mismo cuerpo |
+| `PUT /coredb/creditos/ordenes/{idOrden}/cuenta` | `DESEMBOLSAR_CREDITO` | La orden |
+| `POST /coredb/creditos/ordenes/{idOrden}/validaciones` | `DESEMBOLSAR_CREDITO` | 201 la orden |
+| `POST /coredb/creditos/ordenes/{idOrden}/confirmacion` | `DESEMBOLSAR_CREDITO` | 201 la confirmación; 200 si ya estaba confirmada |
+| `POST /coredb/creditos/ordenes/{idOrden}/rechazo` | `DESEMBOLSAR_CREDITO` | La orden |
+| `GET /coredb/creditos/ordenes?estado=&codCliente=&idSolicitud=&limite=&offset=` | `VER_CREDITO` | Monitor |
+| `GET /coredb/creditos/ordenes/{idOrden}` | `VER_CREDITO` | La orden con `validaciones` y `eventos` |
+| `GET /coredb/creditos/conciliacion/desembolsos?fecha=` | `GENERAR_REPORTES` | Por día y moneda |
+
+### 4.1 Preparar
+
+`POST /coredb/creditos/ordenes` con el token del operador y `X-Idempotency-Key` (UUID, obligatoria): `{idEvaluacion, numCuenta, canal?: VEN|HB, idAgencia?}`. El canal es VEN si no se indica.
+
+- `idEvaluacion` es una aprobación de `GET /coredb/creditos/aprobaciones`. El importe es el monto solicitado.
+- La cuenta debe ser de ahorros, ACTIVA, INDIVIDUAL, del titular y en la moneda del crédito. COREDB registra la validación CUENTA.
+- Se rechaza si la aprobación no está vigente (422 `APROBACION_NO_VIGENTE`), si la primera cuota del calendario ya venció (422 `CALENDARIO_INVALIDO`) o si la aprobación ya tiene una orden abierta (422 `ORDEN_NO_ADMITIDA`). Cuenta no elegible: 422 `CUENTA_NO_ELEGIBLE`.
+- La misma llave con el mismo cuerpo responde 200 con la orden (en su estado actual); con otro cuerpo, 409 `IDEMPOTENCIA_CONFLICTO`.
+- La orden: `idOrden`, `codigoOrden` (`DES-AAAA-NNNNNN`), `estado`, `motivoRechazo`, `importe`, `moneda`, `numCuenta`, `canal`, `idAgencia`, `idEvaluacion`, `idSolicitud`, `codCliente`, `usuarioPreparacion`, `usuarioConfirmacion`, `uuidTransaccionAbono`, `codCredito`, `fechaCreacion`, `fechaActualizacion`.
+
+### 4.2 Validar y cambiar la cuenta
+
+- `POST …/ordenes/{idOrden}/validaciones` `{tipo: IDENTIDAD|AUTORIZACION|ANTIFRAUDE, resultado: APROBADA|RECHAZADA, referenciaEvidencia, detalle?, venceEn?}`. En IDENTIDAD aprobada, `referenciaEvidencia` es el `id_validacion` de `POST /coredb/clientes/validaciones/documento`, APROBADO para el titular el mismo día (fecha de Lima, decisión 7). Si no, 422 `VALIDACION_NO_ADMITIDA`.
+- El estado se deriva de la última validación de cada tipo: IDENTIDAD y CUENTA aprobadas y ninguna rechazada → VALIDADA; si no, PREPARADA.
+- `PUT …/ordenes/{idOrden}/cuenta` `{numCuenta}` cambia la cuenta de una orden PREPARADA o VALIDADA y registra otra validación CUENTA. Si la identidad sigue aprobada, la orden sigue VALIDADA.
+- En otro estado: 422 `ORDEN_NO_ADMITIDA`. Orden inexistente: 404 `ORDEN_NO_ENCONTRADA`.
+
+### 4.3 Confirmar
+
+`POST …/ordenes/{idOrden}/confirmacion`, sin cuerpo, con el token del operador.
+
+- Solo una orden VALIDADA, con la identidad verificada ese mismo día. En una transacción: revalida la aprobación y la cuenta, registra el movimiento `DESEMBOLSO` en la cuenta, deja la orden CONFIRMADA, crea el calendario OFICIAL (copia del PRELIMINAR vigente, que queda HISTORICO) y el crédito AL_DIA, y deja la solicitud DESEMBOLSADA.
+- Respuesta 201: `{idOrden, codigoOrden, estado, codCredito, uuidTransaccionAbono, fechaEfectiva}`. `fechaEfectiva` es la del abono.
+- **Sin llave:** confirmar otra vez la misma orden responde 200 con el mismo crédito y el mismo abono, sin otro movimiento. Si se pierde la respuesta, se repite la llamada.
+- Errores: 422 `ORDEN_NO_ADMITIDA` (no está VALIDADA), `APROBACION_NO_VIGENTE`, `VALIDACION_NO_ADMITIDA` (identidad de otro día), `CUENTA_NO_ELEGIBLE`; 404 `ORDEN_NO_ENCONTRADA`.
+
+### 4.4 Rechazar, monitor y conciliación
+
+- `POST …/ordenes/{idOrden}/rechazo` `{motivo}` deja RECHAZADA una orden PREPARADA o VALIDADA. La aprobación sigue vigente y admite otra orden.
+- `GET /coredb/creditos/ordenes` lista de la más reciente a la más antigua; el detalle agrega `validaciones` (`idValidacion`, `tipo`, `resultado`, `referenciaEvidencia`, `detalle`, `venceEn`, `fecha`) y `eventos` de la bitácora de créditos (`accion`, `resultado`, `actor`, `correlationId`, `detalle`, `fechaHora`).
+- `GET /coredb/creditos/conciliacion/desembolsos?fecha=`: `fecha`, `moneda`, `ordenesConfirmadas`, `importeOrdenes`, `importeAbonado`, `ordenesSinAbono`, por día de negocio (Lima). Sin `fecha`, los últimos días.
+
+**Qué cambia para Desembolso al integrarse:** se quitan `bna_desembolso`, los clientes de Evaluación, CUENTAS y Cobranza, POR_VERIFICAR, el outbox y el simulador de Cobranza; las pantallas `/desembolso` siguen sobre estas rutas, con el token del operador. La reversión sigue pendiente (CUENTAS no tiene extorno).
 
 ## 5. Cobranza (propuesta; PR siguiente)
 
@@ -137,7 +173,7 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 | Interfaz | Cómo se cumple | Procedimiento o vista | Ruta |
 |---|---|---|---|
 | CR-INT-04 Evaluación ↔ Desembolso | (a) Las aprobaciones vigentes se leen de la base, con el calendario PRELIMINAR sin cambios. (b) La confirmación deja la solicitud DESEMBOLSADA en la misma transacción que el abono | `v_aprobacion_api`, `v_calendario_api`, `preparar_orden`, `confirmar_orden` | `GET /coredb/creditos/aprobaciones`, `GET /coredb/creditos/solicitudes/{id}`, `POST …/ordenes/{id}/confirmacion` |
-| CR-INT-05 Desembolso → CUENTAS | El abono es un movimiento `DESEMBOLSO` dentro de la confirmación; un reintento con la misma llave devuelve el mismo `uuidTransaccionAbono` | `confirmar_orden` | `POST /coredb/creditos/ordenes`, `PUT …/cuenta`, `POST …/confirmacion` |
+| CR-INT-05 Desembolso → CUENTAS | El abono es un movimiento `DESEMBOLSO` dentro de la confirmación; confirmar otra vez la misma orden devuelve el mismo `uuidTransaccionAbono` | `confirmar_orden` | `POST /coredb/creditos/ordenes`, `PUT …/cuenta`, `POST …/confirmacion` |
 | CR-INT-06 Desembolso → Cobranza | La confirmación crea el crédito (AL_DIA) y su calendario OFICIAL, copia del PRELIMINAR; Cobranza lo lee | `confirmar_orden`, `v_credito_api`, `v_cuota_api` | `GET /coredb/creditos`, `GET /coredb/creditos/{codCredito}` |
 | CR-INT-07 Cobranza → CUENTAS | El débito es un movimiento `DEBITO_CUOTA` dentro del pago; sin fondos, pago RECHAZADO sin movimiento; la `referencia` evita cobrar dos veces | `registrar_pago_cuota`, `v_pago_api` | `POST /coredb/creditos/{codCredito}/pagos` |
 
