@@ -93,7 +93,7 @@ Ningún RF integrado_real. Siguiente etapa E06, preparada para validación/entre
 
 ## Actualización E06 — validación final y entrega
 
-[Entrega final con diez RF/CR-INT](sol-entrega-final.md), [evidencias y comandos](sol-evidencias-testing.md), [OpenAPI SIMULADO](sol-openapi-e06-simulado.json) y [REAL generado](sol-openapi-e06-real.json). HEAD base preservado, workspace E02–E06 sin commit/push. Backend final **169 passed/2 warnings** en SQLite (40,34s) y con fixtures MySQL (49,36s); frontend **114 passed/2 expected fail**, lint/TypeScript/build salida 0. **142 comprobaciones TCP** Next→SOL→MySQL, **7** de migración/rollback/locks y **4** de logs/reinicio, todas salida 0. Proveedores CAP/EVA/Auditoría SIMULADO; REAL de suite es MockTransport, nunca institucional. Algunos tests independientes siguen SQLite aun con fixtures MySQL.
+[Entrega final con diez RF/CR-INT](sol-entrega-final.md), [evidencias y comandos](sol-evidencias-testing.md), [OpenAPI SIMULADO](openapi.json) y [REAL generado](sol-openapi-e06-real.json). HEAD base preservado, workspace E02–E06 sin commit/push. Backend final **169 passed/2 warnings** en SQLite (40,34s) y con fixtures MySQL (49,36s); frontend **114 passed/2 expected fail**, lint/TypeScript/build salida 0. **142 comprobaciones TCP** Next→SOL→MySQL, **7** de migración/rollback/locks y **4** de logs/reinicio, todas salida 0. Proveedores CAP/EVA/Auditoría SIMULADO; REAL de suite es MockTransport, nunca institucional. Algunos tests independientes siguen SQLite aun con fixtures MySQL.
 
 | RF | Estado final | Cobertura / pendiente |
 | --- | --- | --- |

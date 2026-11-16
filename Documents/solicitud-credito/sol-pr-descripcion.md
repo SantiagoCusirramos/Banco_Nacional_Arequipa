@@ -28,7 +28,7 @@ Por ejemplo, ante una respuesta EVA perdida se conserva la operación reservada 
 | Migración v1/rollback/locks MySQL | 7 comprobaciones |
 | Privacidad de logs y persistencia al reiniciar SOL | 4 comprobaciones |
 
-Las ejecuciones backend repiten el mismo conjunto: no son 338 casos únicos. Las advertencias backend heredadas corresponden a AnyIO/Starlette y configuración pytest sin plugin. Los dos fallos esperados frontend no pertenecen a SOL. [Evidencias y comandos](sol-evidencias-testing.md), [entrega](sol-entrega-final.md), [matriz RF](sol-matriz-rf.md), [OpenAPI final](sol-openapi-e06-simulado.json).
+Las ejecuciones backend repiten el mismo conjunto: no son 338 casos únicos. Las advertencias backend heredadas corresponden a AnyIO/Starlette y configuración pytest sin plugin. Los dos fallos esperados frontend no pertenecen a SOL. [Evidencias y comandos](sol-evidencias-testing.md), [entrega](sol-entrega-final.md), [matriz RF](sol-matriz-rf.md), [OpenAPI final](openapi.json).
 
 Este cierre documental no volvió a ejecutar suites ni Docker; verificó diff, scope, JSON/AST y los 28 hashes E06, que siguen vigentes.
 

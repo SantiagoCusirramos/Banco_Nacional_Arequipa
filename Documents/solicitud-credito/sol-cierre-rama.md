@@ -49,7 +49,7 @@ No hay cachés, builds, entornos virtuales, logs crudos, dumps o BD entre los ar
 | `Documents/solicitud-credito/sol-openapi-e05-real.json` | Artefacto documental saneado | Incluir | OpenAPI histórico/final o evidencia deliberada; no caché temporal |
 | `Documents/solicitud-credito/sol-openapi-e05-simulado.json` | Artefacto documental saneado | Incluir | OpenAPI histórico/final o evidencia deliberada; no caché temporal |
 | `Documents/solicitud-credito/sol-openapi-e06-real.json` | Artefacto documental saneado | Incluir | OpenAPI histórico/final o evidencia deliberada; no caché temporal |
-| `Documents/solicitud-credito/sol-openapi-e06-simulado.json` | Artefacto documental saneado | Incluir | OpenAPI histórico/final o evidencia deliberada; no caché temporal |
+| `Documents/solicitud-credito/openapi.json` | Artefacto documental saneado | Incluir | OpenAPI histórico/final o evidencia deliberada; no caché temporal |
 | `Documents/solicitud-credito/sol-pr-descripcion.md` | Documentación SOL | Incluir | Trazabilidad/contratos/plan/prompts/resultados o cierre para el equipo |
 | `Documents/solicitud-credito/sol-seguridad-frontend.md` | Documentación SOL | Incluir | Trazabilidad/contratos/plan/prompts/resultados o cierre para el equipo |
 | `README-INICIO.md` | Instalación del paquete de prompts | Excluir | Material de preparación local, no entrega funcional; conservar sin borrar |

@@ -270,7 +270,7 @@
 
 ## 2026-11-14 — E06, lote 12: evidencia y OpenAPI finales
 
-- Creados sol-openapi-e06-simulado.json (servido por Docker/TCP) y sol-openapi-e06-real.json (generado por la misma imagen con Settings fake, sin lifespan/red/proveedor); E01/E05 preservados. Verificados 2 Bearer, 40 modelos, respuestas 2xx no vacías y 202; SIMULADO 31 paths/35 operaciones, REAL 17/19. Contratos no cambian ni se homologan.
+- Creados openapi.json (servido por Docker/TCP) y sol-openapi-e06-real.json (generado por la misma imagen con Settings fake, sin lifespan/red/proveedor); E01/E05 preservados. Verificados 2 Bearer, 40 modelos, respuestas 2xx no vacías y 202; SIMULADO 31 paths/35 operaciones, REAL 17/19. Contratos no cambian ni se homologan.
 - Creados sol-e06-http-evidencia.json (142 comprobaciones reales TCP, CAP/EVA/Auditoría simulados) y sol-e06-reinicio-privacidad.json (4 comprobaciones: query/credenciales ausentes de logs nuevos y persistencia de sesión/expediente tras reinicio solo SOL). Solo nombres/resultados, sin cookies/tokens/cuerpos/PII.
 - Regresión SQLite final 169 passed/2 warnings/40.34s, salida 0; suite MySQL final en curso. Snapshot servida Python3.11 difiere de E05 Python3.13 solo por descripción HTTP422; esquemas/rutas/security equivalentes. Riesgos externos y navegador real pendientes.
 
@@ -312,3 +312,9 @@
 - Inventario/lista comprobados: 51 rutas candidatas = 49 recomendadas + AGENTS.md y README-INICIO.md excluidos; diez seguidos modificados/41 sin seguimiento, índice vacío. Recomendados: ocho fuentes, cuatro tests y 37 ayudas/documentos (24 Markdown, nueve JSON, dos ensayos Python, un Compose aislado y una lista TXT). Todos existen, sin symlinks ni duplicados.
 - Salida 0: git diff --check; enlaces/espacios nuevos; AST/JSON de candidatos; 28 hashes E06 vigentes; escaneo completo de candidatos por secretos conocidos/patrones/conflictos sin hallazgos. Diff acumulado seguido conserva diez archivos SOL/frontend SOL, 1344 inserciones/87 eliminaciones. Código/pruebas/configuraciones no se editaron en este cierre.
 - Sin suites nuevas/Docker/SQL destructivo/fetch/staging/commit/push/PR ni mensajes a proveedores. Descripción PR y nota listas para revisión local. La selección explícita debe revisarse nuevamente si cambian archivos; siguiente paso exclusivamente revisión humana y eventual commit autorizado por usuario.
+
+## 2026-11-16 — Integración en `main` (con autorización de Santiago Cusirramos)
+
+- Se quitaron del repositorio las instrucciones para agentes (`prompts/` y `plan-integracion-sol.md`), las copias antiguas de OpenAPI (E01, E05 y E06 REAL), la lista de archivos del cierre (`sol-archivos-commit.txt`) y el laboratorio E06 aparte de `./bna` (`compose-e06.yaml`, `e06_validar_http.py`, `e06_validar_mysql.py`): `./bna test` y el flujo de extremo a extremo ya prueban SOL con MySQL y por el proxy del frontend. Siguen en el historial de git (PR #75).
+- El OpenAPI vigente es `openapi.json`: el que publica SOL en `/openapi.json` en modo SIMULADO, idéntico al E06 simulado. Las menciones a los archivos quitados en los informes de arriba son históricas.
+- Proxy del frontend: sin `SOL_PUBLIC_ORIGIN`, el origen esperado es el `Host` que recibe el servidor (con el esquema de Next). Así funciona detrás de compose con cualquier `BNA_PUERTO_FRONTEND` y del NodePort de kind, donde Next escucha en el 3000 y el navegador usa otro puerto. `SOL_PUBLIC_ORIGIN` queda para un proxy TLS delante.

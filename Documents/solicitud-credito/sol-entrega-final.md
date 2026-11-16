@@ -27,7 +27,7 @@ Persistencia complementaria E06: fecha de respuesta usa valor canónico MySQL; r
 
 ## Integraciones y guía de consumo
 
-URLs del laboratorio: backend `http://127.0.0.1:18016`, frontend `http://127.0.0.1:13016/solicitud-credito`. Rutas canónicas `/sol`; `/gateway/sol` es alias en el mismo proceso únicamente SIMULADO. OpenAPI [SIMULADO servido](sol-openapi-e06-simulado.json) / [REAL generado sin proveedor](sol-openapi-e06-real.json). Swagger local `/docs`. Dinero JSON como string decimal, fechas `YYYY-MM-DD`, eventos UTC con Z. Los JSON contienen esquemas completos; no secretos ni aprobación de negocio.
+URLs del laboratorio: backend `http://127.0.0.1:18016`, frontend `http://127.0.0.1:13016/solicitud-credito`. Rutas canónicas `/sol`; `/gateway/sol` es alias en el mismo proceso únicamente SIMULADO. OpenAPI [SIMULADO servido](openapi.json) / [REAL generado sin proveedor](sol-openapi-e06-real.json). Swagger local `/docs`. Dinero JSON como string decimal, fechas `YYYY-MM-DD`, eventos UTC con Z. Los JSON contienen esquemas completos; no secretos ni aprobación de negocio.
 
 | Consumidor / propietario | Endpoints confirmados de SOL | JSON / autenticación / respuesta |
 | --- | --- | --- |
@@ -62,7 +62,7 @@ Ejemplo **simbólico** del callback (reemplazar con identidad y ronda de recepci
 
 Configuración backend: `SOL_DB_HOST/PORT/NAME/USER/PASSWORD`, `SOL_POLICY_FILE`, `SOL_INTEGRATION_MODE`; en REAL exige `SOL_BUS_BASE_URL`, `SOL_BUS_TOKEN`, `SOL_EVA_CALLBACK_TOKEN` distintos ≥32 caracteres, `SOL_CAP_SEARCH_PATH`, `SOL_CAP_REFERENCE_PATH` con `{idCliente}`, `SOL_EVA_SEND_PATH`, `SOL_EVA_STATUS_PATH` con `{idOperacion}`, `SOL_AUDIT_PATH`. Timeout/presupuesto/reintentos/worker: `SOL_HTTP_TIMEOUT_SECONDS`, `SOL_REQUEST_BUDGET_SECONDS`, `SOL_HTTP_MAX_RETRIES`, `SOL_WORKER_SECONDS`. Configuración incompleta falla, nunca fallback. No basta cambiar el modo para homologar un proveedor.
 
-Frontend solo servidor: `SOL_GATEWAY_URL` (SIMULADO `/gateway/sol`; REAL `/sol`), `SOL_PUBLIC_ORIGIN` (origen público HTTP(S) exacto, sin ruta/trailing slash/credenciales), `SOL_COOKIE_SECURE=true` para HTTPS. Sin origen explícito conserva comparación con nextUrl; **Docker/reverse proxy pueden ver origen interno, por lo que deben configurar el público**. No se acepta Forwarded del cliente como autoridad. Compose global quedó intacto y su despliegue público requiere ese ajuste operativo autorizado. La configuración REAL no se activó.
+Frontend solo servidor: `SOL_GATEWAY_URL` (SIMULADO `/gateway/sol`; REAL `/sol`), `SOL_PUBLIC_ORIGIN` (origen público HTTP(S) exacto, sin ruta/trailing slash/credenciales), `SOL_COOKIE_SECURE=true` para HTTPS. Sin origen explícito compara el Origin con el `Host` recibido (funciona detrás de compose y del NodePort de kind; ver `change-log.md`, 2026-11-16); un proxy TLS delante debe configurar el público. No se acepta Forwarded del cliente como autoridad. Compose global quedó intacto y su despliegue público requiere ese ajuste operativo autorizado. La configuración REAL no se activó.
 
 ## Cambios y auditoría final
 
