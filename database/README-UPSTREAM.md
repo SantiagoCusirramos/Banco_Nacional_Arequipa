@@ -1,7 +1,7 @@
 # database/
 
 Esta carpeta es una copia de [bna-core-db](https://github.com/miguelpro324/bna-core-db),
-rama `mysql`, en la etiqueta **`bd-v1.3-mysql`**.
+rama `mysql`, en la etiqueta **`bd-v1.7-mysql`**.
 
 **No se edita aquí.** Un cambio directo se perdería o chocaría con la siguiente
 actualización. Todo cambio de la base va primero a bna-core-db: rama nueva desde
@@ -69,5 +69,14 @@ docker compose -f docker-compose.coredb.yml --env-file backend/COREDB/.env down 
 `bd-v1.1-mysql` cambia el esquema (`core.usuario_sistema`): una base creada con
 `bd-v1.0-mysql` debe recrearse así. `bd-v1.2-mysql` solo agrega vistas de lectura, pero
 una base anterior también debe recrearse para tenerlas. `bd-v1.3-mysql` agrega la cuenta
-principal (`num_cuenta`) a `tarjetas.v_tarjeta_api`; también exige recrear la base. Con el producto completo:
+principal (`num_cuenta`) a `tarjetas.v_tarjeta_api`; también exige recrear la base. `bd-v1.4-mysql` agrega los procedimientos y vistas de
+créditos (`creditos.*`, sección 12 de `sql/bna_extension.sql`) y cuatro tablas de la
+extensión; una base anterior debe recrearse. `bd-v1.5-mysql` agrega los procedimientos de
+Tarjetas para autorizar, extornar y validar el PIN y la clave web, la vista
+`tarjetas.v_autorizacion_api` y cuatro códigos de respuesta; también exige recrear la base.
+`bd-v1.6-mysql` agrega `core.registrar_empleado` (sección 13), para registrar empleados y
+ligarlos a un usuario por la API; también exige recrear la base.
+`bd-v1.7-mysql` agrega el expediente de captación del prospecto (sección 14: tablas
+`clientes.*_captacion`, sus procedimientos y vistas); también exige recrear la base.
+Con el producto completo:
 `./bna reset`.

@@ -8,11 +8,13 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | COREDB | `backend/COREDB` | La API del CORE. Es el único servicio que se conecta a la base integrada | En uso |
 | CUENTAS | `backend/CUENTAS` | Cuentas de ahorro: apertura, depósito, retiro, transferencia y consultas. No tiene base propia: llama a COREDB | En uso |
 | TARJETAS | `backend/TARJETAS` | Tarjetas de débito: emisión, consulta, bloqueo y cambio de estado. No tiene base propia: llama a COREDB | En uso |
-| CAPTACION | `backend/CAPTACION` | Captación de clientes: registro del solicitante, consentimientos, OTP, RENIEC/listas/PEP, centrales y perfil de riesgo; registra al cliente HABILITADO en COREDB y publica la referencia CR-INT-01 que consulta SOL. Expediente en `bna_captacion` (db-aux) | En uso, con proveedores simulados |
-| Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas, captación y solicitud de crédito | En uso |
+| CAPTACION | `backend/CAPTACION` | Captación de clientes: registro del solicitante, consentimientos, OTP, RENIEC/listas/PEP, centrales y perfil de riesgo; registra al cliente HABILITADO en COREDB y publica la referencia CR-INT-01 que consulta SOL. Sin base propia: el expediente vive en la base integrada (`clientes.*_captacion`) y se trabaja por COREDB | En uso, con proveedores simulados |
+| Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas, captación y solicitud de crédito; pantallas del analista (`/evaluacion`) y del operador de desembolso (`/desembolso`) | En uso |
 | SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas | Laboratorio: base propia, sin conexión con el CORE |
+| EVALUACIÓN | `backend/EVALUACION` | Evaluación crediticia: recibe el expediente de SOL y lo registra en COREDB; el analista evalúa con la regla provisional y decide los casos observados. La aprobación queda en COREDB para Desembolso, con el calendario de SOL | En uso: sin base propia, llama a COREDB |
+| DESEMBOLSO | `backend/DESEMBOLSO` | Desembolso de créditos: el operador verifica el documento del titular, prepara la orden con una aprobación y una cuenta individual, y confirma; COREDB abona una sola vez, crea el crédito con su calendario oficial y deja la solicitud desembolsada | En uso: sin base propia, llama a COREDB |
 | Seguridad | `backend/seguridad` | Prototipo de login, topes, auditoría encadenada e incidentes | Laboratorio: SQLite, sin conexión con el CORE |
-| CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene los créditos, que COREDB todavía no ofrece | Opcional: ningún servicio lo llama |
+| CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene su propia evaluación de créditos; COREDB ya ofrece la evaluación, el desembolso y la cobranza sobre la base integrada | Opcional: ningún servicio lo llama |
 
 Lo que no está: el módulo Clientes (en revisión en el PR #25) y el Bus de Servicios, que no existe todavía. Los servicios se llaman entre sí directamente dentro de la red de Docker.
 
@@ -20,7 +22,7 @@ Lo que no está: el módulo Clientes (en revisión en el PR #25) y el Bus de Ser
 
 - Docker con Compose 2.20 o superior, en marcha (`docker compose version`, `docker info`).
 - Git y bash. En Windows, Git Bash o WSL2.
-- Libres en la máquina: los puertos 3000, 3307, 8001, 8002, 8011, 8012, 8013 y 8014, y unos 4 GB de disco para las imágenes.
+- Libres en la máquina: los puertos 3000, 3307, 8001, 8002, 8011, 8012, 8013, 8015, 8016 y 8017, y unos 4 GB de disco para las imágenes.
 
 No hace falta Python, Node ni MySQL: todo corre en contenedores.
 
@@ -47,7 +49,9 @@ flowchart LR
   fe -->|"/api/cuenta"| cta["CUENTAS :8001"]
   fe -->|"/api/tarjeta"| tar["TARJETAS :8002"]
   fe -->|"/api/solicitud-credito"| sol["SOL :8011"]
-  fe -->|"/api/captacion"| cap["CAPTACION :8014"]
+  fe -->|"/api/evaluacion"| eva["EVALUACIÓN :8015"]
+  fe -->|"/api/desembolso"| des["DESEMBOLSO :8016"]
+  fe -->|"/api/captacion"| cap["CAPTACION :8017"]
   cta --> coredb
   tar --> coredb
   cap --> coredb
@@ -55,11 +59,13 @@ flowchart LR
   sol -.->|"CR-INT-01, cuando haya Bus"| cap
   coredb --> db[("db: base integrada, MySQL 8.4 :3307")]
   sol --> aux[("db-aux: bna_sol_mvp y bna legada")]
+  eva --> coredb
+  des --> coredb
   seg["Seguridad :8013"] --> sq[("SQLite en un volumen")]
   leg["CORE legado :8000 (perfil legado)"] -.-> aux
 ```
 
-- El navegador solo habla con el frontend. Sus rutas `/api/core`, `/api/cuenta`, `/api/tarjeta`, `/api/captacion` y `/api/solicitud-credito` reenvían cada petición desde el servidor de Next.js, así que el navegador nunca conoce la dirección de un servicio.
+- El navegador solo habla con el frontend. Sus rutas `/api/core`, `/api/cuenta`, `/api/tarjeta`, `/api/captacion`, `/api/solicitud-credito`, `/api/evaluacion` y `/api/desembolso` reenvían cada petición desde el servidor de Next.js, así que el navegador nunca conoce la dirección de un servicio.
 - COREDB es la única entrada a la base integrada, y escribe en ella solo por procedimientos almacenados.
 - `db-aux` es otro MySQL, con la base de SOL (`bna_sol_mvp`), la de CAPTACION (`bna_captacion`) y el esquema `bna` del CORE legado. La base integrada no recibe esquemas ni usuarios ajenos.
 - Todos los puertos se publican solo en `127.0.0.1`.
@@ -76,6 +82,8 @@ flowchart LR
 | TARJETAS | http://127.0.0.1:8002/docs | El mismo token de COREDB | [`backend/TARJETAS/README.md`](backend/TARJETAS/README.md) |
 | CAPTACION | http://127.0.0.1:8014/docs | El mismo token de COREDB | [`backend/CAPTACION/README.md`](backend/CAPTACION/README.md) |
 | SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
+| Evaluación | http://localhost:3000/evaluacion (API: http://127.0.0.1:8015/docs) | Un usuario de COREDB con rol ANALISTA (decidir exige además un analista registrado: el administrador lo da de alta con `POST /coredb/empleados` y `POST /coredb/creditos/analistas`); AUDITOR solo consulta | [`backend/EVALUACION/README.md`](backend/EVALUACION/README.md) |
+| Desembolso | http://localhost:3000/desembolso (API: http://127.0.0.1:8016/docs) | Un usuario de COREDB con rol OPERADOR; ADMINISTRADOR hace de supervisor y AUDITOR consulta | [`backend/DESEMBOLSO/README.md`](backend/DESEMBOLSO/README.md) |
 | Seguridad | http://127.0.0.1:8013 | No trae usuarios: se crean con una orden | [`backend/seguridad/README.md`](backend/seguridad/README.md) |
 | MySQL de la base integrada | `127.0.0.1:3307` | `root` y `CORE_DB_ROOT_PASSWORD` | [`database/README.md`](database/README.md) |
 | CORE legado (opcional) | http://127.0.0.1:8000/docs | Token de `POST /core/auth/login` | [`backend/CORE/README.md`](backend/CORE/README.md) |
@@ -111,6 +119,8 @@ Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo 
 | `SOL_INITIAL_PASSWORD` | Clave inicial de las cuatro cuentas de demostración de SOL |
 | `SEGURIDAD_SECRET_KEY` | Clave del módulo de Seguridad |
 | `AUX_DB_ROOT_PASSWORD`, `SOL_DB_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base auxiliar y CORE legado |
+| `EVALUACION_COREDB_SECRETO`, `EVALUACION_TOKEN_SOL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | Secreto del usuario de servicio de Evaluación en COREDB y los tokens de CR-INT-02 y CR-INT-03 con SOL |
+| `DESEMBOLSO_COREDB_SECRETO` | Secreto del usuario de servicio de Desembolso en COREDB |
 | `CAP_DB_PASSWORD`, `CAP_SOL_TOKEN`, `CAP_OTP_CLAVE` | CAPTACION: su base en db-aux, el token con el que SOL consulta las referencias y la clave de los OTP |
 | `BNA_PUERTO_*` | Puerto de cada servicio en esta máquina |
 
@@ -126,13 +136,13 @@ Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecu
 ./bna test
 ```
 
-Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, CAPTACION (con sus contratos contra COREDB y contra el adaptador real de SOL), SOL, Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
+Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, SOL, Evaluación, Desembolso y CAPTACION (contra COREDB y la base integrada nuevas; CAPTACION también con el adaptador real de SOL), Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
 
 Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
 
 `./bna smoke` inicia sesión como administrador, registra un cliente, le abre dos cuentas, deposita, transfiere, repite la transferencia para comprobar la idempotencia y lee saldos, movimientos y bitácora por COREDB; después consulta las mismas cuentas por CUENTAS; por TARJETAS emite una tarjeta al cliente de desarrollo `DEV001`, la activa, la bloquea y comprueba que el desbloqueo se rechaza; por CAPTACION capta a un prospecto hasta habilitarlo, comprueba el cliente en COREDB y la referencia CR-INT-01 que leería SOL; y al final llega a los servicios por los puentes del frontend. Cada ejecución crea un cliente nuevo y una tarjeta nueva.
 
-La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue.
+La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue o del flujo de extremo a extremo (`scripts/flujo_e2e.py`).
 
 ## Kubernetes
 
@@ -177,6 +187,8 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 │   ├── TARJETAS/      Módulo de tarjetas de débito
 │   ├── CAPTACION/     Módulo de captación de clientes
 │   ├── SOL/           Solicitud de crédito
+│   ├── EVALUACION/    Evaluación crediticia
+│   ├── DESEMBOLSO/    Desembolso de créditos
 │   ├── seguridad/     Prototipo de Seguridad
 │   ├── CORE/          CORE legado
 │   └── Infraestructura - BD/   Esquema `bna` del CORE legado
@@ -188,6 +200,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 
 - Por módulo: los README enlazados en [Servicios y puertos](#servicios-y-puertos).
 - Contrato de COREDB para el módulo Clientes: [`backend/COREDB/CONTRATO_CLIENTES.md`](backend/COREDB/CONTRATO_CLIENTES.md).
+- Contrato de COREDB para la línea de créditos (Evaluación, Desembolso y Cobranza): [`backend/COREDB/CONTRATO_CREDITOS.md`](backend/COREDB/CONTRATO_CREDITOS.md).
 - Cómo se actualiza `database/`: [`database/README-UPSTREAM.md`](database/README-UPSTREAM.md).
 - Autenticación del CORE legado: [`backend/CORE/AUTH_JWT.md`](backend/CORE/AUTH_JWT.md) y [`backend/CORE/AUTENTICACION.md`](backend/CORE/AUTENTICACION.md).
 - Seguimiento de los hallazgos del CORE legado: [`Documents/08-seguimiento-hallazgos.md`](Documents/08-seguimiento-hallazgos.md).

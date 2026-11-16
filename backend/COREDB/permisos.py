@@ -20,10 +20,16 @@ ACCIONES_CORE = frozenset({
 })
 # Propia de COREDB: registrar el resultado de una validación de identidad de Clientes.
 VALIDAR_IDENTIDAD = "VALIDAR_IDENTIDAD"
-ACCIONES = ACCIONES_CORE | {VALIDAR_IDENTIDAD}
+# Propias de COREDB para créditos (CONTRATO_CREDITOS.md): preparar, validar y confirmar un
+# desembolso, y registrar la mora y los vencimientos.
+DESEMBOLSAR_CREDITO = "DESEMBOLSAR_CREDITO"
+REGISTRAR_MORA = "REGISTRAR_MORA"
+# Propia de COREDB: registrar empleados y ligarlos a su usuario (solo ADMINISTRADOR).
+REGISTRAR_EMPLEADO = "REGISTRAR_EMPLEADO"
+ACCIONES = ACCIONES_CORE | {VALIDAR_IDENTIDAD, DESEMBOLSAR_CREDITO, REGISTRAR_MORA, REGISTRAR_EMPLEADO}
 
 PERMISOS: dict[str, frozenset[str]] = {
-    "ADMINISTRADOR": ACCIONES_CORE,
+    "ADMINISTRADOR": ACCIONES_CORE | {DESEMBOLSAR_CREDITO, REGISTRAR_MORA, REGISTRAR_EMPLEADO},
     "ANALISTA": frozenset({
         "APROBAR_CREDITO", "CONSULTAR_DEUDA", "EVALUAR_CREDITO", "VER_CLIENTE", "VER_CREDITO",
         "VER_CUENTA",
@@ -39,11 +45,18 @@ PERMISOS: dict[str, frozenset[str]] = {
     "OPERADOR": frozenset({
         "CONSULTAR_DEUDA", "CREAR_CUENTA", "CREAR_TARJETA", "BLOQUEAR_TARJETA",
         "MODIFICAR_CUENTA", "REGISTRAR_MOVIMIENTO", "REGISTRAR_PAGO", "VER_CLIENTE",
-        "VER_CREDITO", "VER_CUENTA", "VER_TARJETA",
+        "VER_CREDITO", "VER_CUENTA", "VER_TARJETA", DESEMBOLSAR_CREDITO,
+        # La verificación del documento en ventanilla es la evidencia IDENTIDAD del desembolso.
+        VALIDAR_IDENTIDAD,
     }),
     "SERVICIO:CLIENTES": frozenset({
         "VER_CLIENTE", "CREAR_CLIENTE", "MODIFICAR_CLIENTE", VALIDAR_IDENTIDAD,
     }),
+    # Los módulos de créditos: lo que hace una persona (evaluar, decidir, desembolsar,
+    # cobrar) va con el token de esa persona, que el módulo reenvía.
+    "SERVICIO:EVALUACION": frozenset({"CREAR_SOLICITUD_CREDITO", "VER_CREDITO"}),
+    "SERVICIO:DESEMBOLSO": frozenset({"VER_CREDITO", "VER_CUENTA"}),
+    "SERVICIO:COBRANZA": frozenset({"VER_CREDITO", "CONSULTAR_DEUDA", REGISTRAR_MORA}),
 }
 
 

@@ -50,7 +50,12 @@ integrada y con PyJWT:
 
 **Permisos:** `permisos.py` es un mapa versionado de rol a acciones. Los cinco roles de
 personas son los de `CORE/data/rbac.json` en `a9bd70f`, y la API nunca lo escribe. La
-acción propia `VALIDAR_IDENTIDAD` la tienen ASESOR y el usuario de servicio de Clientes.
+acción propia `VALIDAR_IDENTIDAD` la tienen ASESOR, OPERADOR (verifica el documento antes de
+un desembolso) y el usuario de servicio de Clientes;
+`DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR y el servicio de Cobranza) son las
+propias de créditos. `REGISTRAR_EMPLEADO` (solo ADMINISTRADOR) registra empleados con
+`POST /coredb/empleados` y los liga a su usuario: así un analista queda disponible sin el
+administrador de la base. Hay usuarios de servicio para CLIENTES, EVALUACION, DESEMBOLSO y COBRANZA.
 Cada ruta declara su permiso con `requiere_permiso`; una prueba falla si una escritura no
 lo declara o si una ruta, salvo las públicas, no exige token.
 
@@ -66,6 +71,12 @@ su módulo), nunca con una cuenta de persona:
 4. `POST /coredb/usuarios/{id}/credencial` entrega un secreto nuevo y anula el anterior;
    `POST /coredb/usuarios/{id}/estado {"activo": false}` corta el acceso en la siguiente
    petición.
+
+En el producto, el usuario de Evaluación (`svc-evaluacion`) no se crea por la API sino en el
+arranque: `CORE_DB_SERVICIO_SECRETO=<secreto> python -m COREDB.scripts.crear_servicio --modulo
+EVALUACION --username svc-evaluacion --nombre Evaluación` lo crea con el secreto que el despliegue
+ya tiene (`EVALUACION_COREDB_SECRETO` en `.env` o en el Secret de Kubernetes). Repetirlo no cambia
+nada; con otro secreto, reemplaza el anterior. No toca a una persona con ese nombre.
 
 **Primer administrador:** `python -m COREDB.scripts.crear_administrador` lo crea con las
 credenciales de la base y pide la contraseña en la terminal. Se niega si ya hay un
@@ -99,6 +110,78 @@ Las rutas que usa el módulo Clientes, y el personal, están descritas en
 - No hay rutas para listar clientes ni para buscarlos por nombre, correo o celular.
 
 El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM.md`.
+
+## Autorizaciones y credenciales de tarjeta
+
+Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica la base.
+
+| Ruta | Permiso | Qué hace |
+|---|---|---|
+| `POST /coredb/autorizaciones` | `REGISTRAR_MOVIMIENTO` | Autoriza una operación con tarjeta o registra su rechazo |
+| `GET /coredb/autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Una autorización |
+| `POST /coredb/autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Extorna una autorización sin movimiento |
+| `PUT /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}` | `CREAR_TARJETA` | Asigna o cambia el `PIN_ATM` o la `CLAVE_WEB` |
+| `POST /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion` | `REGISTRAR_MOVIMIENTO` | Valida el PIN o la clave web |
+
+- El `uuid_autorizacion` lo genera quien llama. Repetirlo con los mismos datos devuelve la
+  autorización ya registrada sin volver a retener el saldo; con otros datos, 409
+  `BNA-IDEMPOTENCIA`.
+- Una regla que no se cumple responde 201 con la autorización `RECHAZADA` y su código ISO
+  8583 (`51` sin fondos, `54` vencida, `57` no permitida, `61` excede el tope, `62`
+  restringida). El motivo no trae montos ni saldos. Se indica el canal o la terminal, uno
+  de los dos.
+- El extorno libera el saldo retenido y el tope del día. Repetirlo responde lo mismo; una
+  autorización rechazada o ya contabilizada responde 409 `BNA-EXTORNO`.
+- Un PIN equivocado responde 200 con `FALLIDO` y los intentos que quedan; el tercero
+  seguido bloquea la tarjeta. Con la tarjeta no operativa responde 422 `ERR-TAR-003` sin
+  registrar el intento. El valor no se devuelve, no se registra y no aparece en los errores.
+
+## Créditos
+
+Sobre `creditos.*` (`bd-v1.4-mysql`), descritas en [`CONTRATO_CREDITOS.md`](CONTRATO_CREDITOS.md).
+Las tres áreas: evaluación, desembolso y cobranza.
+
+| Ruta | Permiso |
+|---|---|
+| `POST /coredb/creditos/solicitudes` (expediente de SOL, CR-INT-02) | `CREAR_SOLICITUD_CREDITO` |
+| `GET /coredb/creditos/solicitudes`, `GET /coredb/creditos/solicitudes/{id}` | `VER_CREDITO` |
+| `POST /coredb/creditos/solicitudes/{id}/evaluaciones` (RN-EVA-002-P) | `EVALUAR_CREDITO` |
+| `POST /coredb/creditos/evaluaciones/{id}/decision` | `APROBAR_CREDITO` |
+| `POST /coredb/creditos/solicitudes/{id}/revocacion` | `APROBAR_CREDITO` |
+| `GET /coredb/creditos/aprobaciones` | `VER_CREDITO` |
+| `POST /coredb/creditos/analistas` | `CREAR_USUARIO` |
+| `POST /coredb/empleados` (el empleado y su usuario; antes de `…/analistas`) | `REGISTRAR_EMPLEADO` |
+| `GET /coredb/catalogos/creditos` | autenticado |
+| `POST /coredb/creditos/ordenes` (con `X-Idempotency-Key`) | `DESEMBOLSAR_CREDITO` |
+| `PUT …/ordenes/{id}/cuenta`, `POST …/ordenes/{id}/validaciones`, `POST …/ordenes/{id}/confirmacion`, `POST …/ordenes/{id}/rechazo` | `DESEMBOLSAR_CREDITO` |
+| `GET /coredb/creditos/ordenes`, `GET /coredb/creditos/ordenes/{id}` | `VER_CREDITO` |
+| `GET /coredb/creditos/conciliacion/desembolsos` | `GENERAR_REPORTES` |
+| `GET /coredb/creditos`, `GET /coredb/creditos/{codCredito}`, `GET …/{codCredito}/pagos`, `GET /coredb/creditos/pagos/{referencia}` | `CONSULTAR_DEUDA` |
+| `POST /coredb/creditos/{codCredito}/pagos` (la `referencia` es la llave) | `REGISTRAR_PAGO` |
+| `POST …/{codCredito}/cuotas/{n}/mora`, `POST /coredb/creditos/vencimientos` | `REGISTRAR_MORA` |
+| `GET …/{codCredito}/cuotas/{n}/mora` | `CONSULTAR_DEUDA` |
+| `GET /coredb/creditos/conciliacion/pagos` | `GENERAR_REPORTES` |
+
+- Campos en camelCase, como el contrato con SOL.
+- La fórmula de RN-EVA-002-P es la del módulo EVALUACIÓN (#70), en
+  `services/regla_evaluacion.py`; los umbrales 80 % / 100 % salen de
+  `creditos.regla_evaluacion`, y la base elige la regla.
+- El expediente es idempotente por id, versión y contenido; la evaluación y la decisión se
+  hacen una vez.
+- Para decidir, el usuario del analista debe estar ligado a un empleado de `core.empleado`
+  registrado como analista. COREDB no crea empleados: los carga el administrador de la base.
+- Confirmar un desembolso abona la cuenta, crea el crédito con su calendario OFICIAL y deja la
+  solicitud DESEMBOLSADA en una sola transacción de la base. Repetir la confirmación devuelve el
+  mismo crédito y el mismo abono, sin abonar otra vez.
+- La evidencia IDENTIDAD de una orden es el `id_validacion` de
+  `POST /coredb/clientes/validaciones/documento`, aprobado el mismo día (fecha de Lima).
+- Pagar una cuota debita la cuenta del titular y aplica el pago a las cuotas en una sola
+  transacción. Sin fondos o con la cuenta bloqueada, el pago queda RECHAZADO con su motivo y
+  sin mover dinero. Repetir la referencia devuelve el mismo pago.
+- `POST /coredb/creditos/vencimientos` es la tarea diaria de `svc-cobranza` (la base también la
+  corre a las 00:10 de Lima). La mora se registra y se muestra, pero no se cobra.
+- El usuario de la API no lee tablas de `creditos`: lee las vistas `v_*_api`.
+- Las rutas de crédito del CORE legado (perfil `legado`) siguen aparte.
 
 ## Consultas
 

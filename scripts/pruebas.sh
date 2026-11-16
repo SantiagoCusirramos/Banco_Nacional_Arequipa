@@ -63,6 +63,12 @@ correr "CUENTAS" en_backend CUENTAS/tests
 correr "TARJETAS" en_backend TARJETAS/tests
 correr "CAPTACION" en_backend CAPTACION/tests
 correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests
+correr "EVALUACION contra COREDB y MySQL" \
+  env EVALUACION_IMAGEN_PRUEBAS=bna/backend:local EVALUACION_IMAGEN_COREDB=bna/coredb:local \
+  backend/EVALUACION/scripts/pruebas_integracion.sh
+correr "DESEMBOLSO contra COREDB y MySQL" \
+  env DESEMBOLSO_IMAGEN_PRUEBAS=bna/backend:local DESEMBOLSO_IMAGEN_COREDB=bna/coredb:local \
+  backend/DESEMBOLSO/scripts/pruebas_integracion.sh
 correr "Seguridad" docker run --rm bna/seguridad:local $PYTEST seguridad/tests
 correr "COREDB, unitarias" \
   docker run --rm bna/coredb:local sh -c "cd COREDB && $PYTEST"

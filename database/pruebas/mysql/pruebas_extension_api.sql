@@ -418,3 +418,863 @@ CALL prueba.verifica('X248', 'Extensión', 'Consultas', 'Una tarjeta emitida por
   JSON_ARRAY("CALL tarjetas.emitir_tarjeta(UUID_TO_BIN('a0000000-0000-4000-8000-000000000248'), 'tok-0248', '455788', '0248', CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 4 YEAR), 'C002', 'CTA-PEN-2', 'pruebas')"),
   "SELECT num_cuenta = 'CTA-PEN-2' FROM tarjetas.v_tarjeta_api WHERE id_tarjeta = UUID_TO_BIN('a0000000-0000-4000-8000-000000000248')",
   'CTA-PEN-2', "SELECT IFNULL(num_cuenta, 'NULL') FROM tarjetas.v_tarjeta_api WHERE id_tarjeta = UUID_TO_BIN('a0000000-0000-4000-8000-000000000248')", 'procedimiento');
+
+-- ---------------------------------------------------------------------
+-- v1.4: créditos (solicitud, evaluación, desembolso y cobranza)
+-- ---------------------------------------------------------------------
+-- Ayudantes de pruebas/mysql/arnes_creditos.sql. Los mensajes de los procedimientos
+-- nuevos no llevan cifras: así no repiten cuentas, documentos ni cod_cliente, y los
+-- patrones lo comprueban con [^0-9]*$.
+
+-- Registro del expediente de SOL
+CALL prueba.verifica('X249', 'Extensión', 'Créditos', 'Un expediente nuevo queda EN_EVALUACION con su calendario PRELIMINAR y el id de evaluación determinista',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000249', 'C001', 3000, 3, 1, NULL, @ronda, @eval)"),
+  "SELECT @ronda = 1 AND @eval = creditos.fn_id_evaluacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000249'), 1) AND @cr_repetido = FALSE AND (SELECT CONCAT(estado_solicitud, ' ', version_solicitud, ' ', ronda, ' ', tipo_calendario, ' ', numero_cuotas, ' ', total_cuotas) FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000249')) = 'EN_EVALUACION 1 1 PRELIMINAR 3 3030.00'",
+  'EN_EVALUACION 1 1 PRELIMINAR 3 3030.00', "SELECT CONCAT(estado_solicitud, ' ', version_solicitud, ' ', ronda, ' ', tipo_calendario, ' ', numero_cuotas, ' ', total_cuotas) FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000249')", 'procedimiento');
+
+CALL prueba.verifica('X250', 'Extensión', 'Créditos', 'Repetir la misma versión con el mismo contenido devuelve lo mismo y no crea otro calendario',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000250', 'C001', 3000, 3, 1, NULL, @r1, @e1)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000250', 'C001', 3000, 3, 1, NULL, @r2, @e2)"),
+  "SELECT @cr_repetido = TRUE AND @r1 = @r2 AND @e1 = @e2 AND (SELECT COUNT(DISTINCT id_calendario) FROM creditos.v_calendario_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000250')) = 1",
+  'repetido, un calendario', "SELECT CONCAT(@cr_repetido, ' ', (SELECT COUNT(DISTINCT id_calendario) FROM creditos.v_calendario_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000250')))", 'procedimiento');
+
+CALL prueba.rechaza('X251', 'Extensión', 'Créditos', 'La misma versión con otro contenido se rechaza',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000251', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL prueba.cr_calendario(3000, 3, CURRENT_DATE + INTERVAL 30 DAY, @cuotas)",
+             "CALL creditos.registrar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000251'), 1, 'C001', 3000, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @cuotas, REPEAT('z', 64), 'pruebas', UUID_TO_BIN(UUID()), @r, @e, @rep)"),
+  '^BNA-IDEMPOTENCIA:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X252', 'Extensión', 'Créditos', 'Una versión nueva antes de evaluar abre la ronda 2 con su calendario; el anterior queda HISTORICO',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000252', 'C001', 3000, 3, 1, NULL, @r1, @e1)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000252', 'C001', 4000, 4, 2, NULL, @r2, @e2)"),
+  "SELECT @r2 = 2 AND @e2 = creditos.fn_id_evaluacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000252'), 2) AND (SELECT CONCAT(version_solicitud, ' ', ronda, ' ', monto_solicitado, ' ', plazo_meses, ' ', numero_cuotas) FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000252')) = '2 2 4000.00 4 4' AND (SELECT GROUP_CONCAT(DISTINCT CONCAT(version, estado_calendario) ORDER BY version) FROM creditos.v_calendario_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000252')) = '1HISTORICO,2VIGENTE'",
+  'ronda 2; 1HISTORICO,2VIGENTE', "SELECT (SELECT GROUP_CONCAT(DISTINCT CONCAT(version, estado_calendario) ORDER BY version) FROM creditos.v_calendario_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000252'))", 'procedimiento');
+
+CALL prueba.rechaza('X253', 'Extensión', 'Créditos', 'No se acepta una versión nueva cuando la ronda ya se evaluó',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000253', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000253'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000253', 'C001', 3000, 3, 2, NULL, @r, @e)"),
+  '^BNA-SOLICITUD:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X254', 'Extensión', 'Créditos', 'Un expediente de un cliente inexistente se rechaza sin repetir el código',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000254', 'C999', 3000, 3, 1, NULL, @r, @e)"),
+  '^BNA-CLIENTE:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X255', 'Extensión', 'Créditos', 'Un expediente de un cliente que no puede operar se rechaza',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000255', 'C004', 3000, 3, 1, NULL, @r, @e)"),
+  '^BNA-CLIENTE:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X256', 'Extensión', 'Créditos', 'Un calendario con cuotas no consecutivas se rechaza',
+  JSON_ARRAY("CALL prueba.cr_calendario(3000, 3, CURRENT_DATE + INTERVAL 30 DAY, @cuotas)",
+             "SET @cuotas = JSON_SET(@cuotas, '$[1].numero_cuota', 5)",
+             "CALL creditos.registrar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000256'), 1, 'C001', 3000, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @cuotas, REPEAT('a', 64), 'pruebas', UUID_TO_BIN(UUID()), @r, @e, @rep)"),
+  '^BNA-CALENDARIO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X257', 'Extensión', 'Créditos', 'Un calendario que no amortiza el monto solicitado se rechaza',
+  JSON_ARRAY("CALL prueba.cr_calendario(3000, 3, CURRENT_DATE + INTERVAL 30 DAY, @cuotas)",
+             "CALL creditos.registrar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000257'), 1, 'C001', 3500, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @cuotas, REPEAT('a', 64), 'pruebas', UUID_TO_BIN(UUID()), @r, @e, @rep)"),
+  '^BNA-CALENDARIO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X258', 'Extensión', 'Créditos', 'Un calendario con más cuotas que meses de plazo se rechaza',
+  JSON_ARRAY("CALL prueba.cr_calendario(3000, 4, CURRENT_DATE + INTERVAL 30 DAY, @cuotas)",
+             "CALL creditos.registrar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000258'), 1, 'C001', 3000, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @cuotas, REPEAT('a', 64), 'pruebas', UUID_TO_BIN(UUID()), @r, @e, @rep)"),
+  '^BNA-CALENDARIO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X259', 'Extensión', 'Créditos', 'Una versión anterior a la vigente se rechaza',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000259', 'C001', 3000, 3, 3, NULL, @r, @e)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000259', 'C001', 3000, 3, 2, NULL, @r, @e)"),
+  '^BNA-SOLICITUD:[^0-9]*$', 'procedimiento');
+
+-- Evaluación (RN-EVA-002-P: los umbrales salen de creditos.regla_evaluacion)
+CALL prueba.verifica('X260', 'Extensión', 'Créditos', 'Ratio hasta 80 %: R-A, APROBADO y la solicitud APROBADA, con la evaluación en el id determinista',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000260', 'C001', 3000, 3, 1, NULL, @r, @e0)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000260'), 1, 20000, 0, 850, 30000, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  "SELECT @e = @e0 AND @res = 'APROBADO' AND @regla = 'R-A' AND (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000260')) = 'APROBADA' AND (SELECT COUNT(*) FROM creditos.v_historial_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000260') AND estado_nuevo = 'APROBADA' AND actor = 'pruebas') = 1",
+  'APROBADO R-A APROBADA', "SELECT CONCAT_WS(' ', @res, @regla, (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000260')))", 'procedimiento');
+
+CALL prueba.verifica('X261', 'Extensión', 'Créditos', 'Ratio entre 80 % y 100 %: R-B, OBSERVADO y la solicitud sigue EN_EVALUACION',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000261', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000261'), 1, 20000, 0, 650, 3333.33, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  "SELECT @res = 'OBSERVADO' AND @regla = 'R-B' AND (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000261')) = 'EN_EVALUACION'",
+  'OBSERVADO R-B EN_EVALUACION', "SELECT CONCAT_WS(' ', @res, @regla, (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000261')))", 'procedimiento');
+
+CALL prueba.verifica('X262', 'Extensión', 'Créditos', 'Ratio mayor que 100 %: R-C, RECHAZADO y la solicitud RECHAZADA',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000262', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000262'), 1, 2000, 500, 400, 2999.99, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  "SELECT @res = 'RECHAZADO' AND @regla = 'R-C' AND (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000262')) = 'RECHAZADA'",
+  'RECHAZADO R-C RECHAZADA', "SELECT CONCAT_WS(' ', @res, @regla)", 'procedimiento');
+
+CALL prueba.verifica('X263', 'Extensión', 'Créditos', 'Sin capacidad (límite cero): R-C',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000263', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000263'), 1, 1000, 900, 400, 0, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  "SELECT @res = 'RECHAZADO' AND @regla = 'R-C'", 'RECHAZADO R-C', "SELECT CONCAT_WS(' ', @res, @regla)", 'procedimiento');
+
+CALL prueba.verifica('X264', 'Extensión', 'Créditos', 'Ratio exactamente 80 %: R-A',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000264', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000264'), 1, 20000, 0, 850, 3750, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  "SELECT @regla = 'R-A'", 'R-A', "SELECT @regla", 'procedimiento');
+
+CALL prueba.verifica('X265', 'Extensión', 'Créditos', 'Ratio exactamente 100 %: R-B',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000265', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000265'), 1, 20000, 0, 650, 3000, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  "SELECT @regla = 'R-B'", 'R-B', "SELECT @regla", 'procedimiento');
+
+CALL prueba.rechaza('X266', 'Extensión', 'Créditos', 'Una ronda se evalúa una sola vez',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000266', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000266'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000266'), 1, 20000, 0, 850, 30000, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  '^BNA-EVALUACION:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X267', 'Extensión', 'Créditos', 'No se evalúa una versión que no es la vigente',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000267', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000267', 'C001', 3000, 3, 2, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000267'), 1, 20000, 0, 850, 30000, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  '^BNA-SOLICITUD:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X268', 'Extensión', 'Créditos', 'La evaluación guarda la situación financiera verificada y el score',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000268', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000268'), 1, 5000, 250, 650, 30000, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)"),
+  "SELECT CONCAT_WS(' ', ingreso_mensual, deuda_reportada, resultado_verificacion, score_calculado, limite_aprobado, resultado_regla, resultado, ronda) = '5000.00 250.00 VERIFICADO 650.00 30000.00 APROBADO APROBADO 1' FROM creditos.v_evaluacion_api WHERE id_evaluacion = @e",
+  '5000.00 250.00 VERIFICADO 650.00 30000.00 APROBADO APROBADO 1', "SELECT CONCAT_WS(' ', ingreso_mensual, deuda_reportada, resultado_verificacion, score_calculado, limite_aprobado, resultado_regla, resultado, ronda) FROM creditos.v_evaluacion_api WHERE id_evaluacion = @e", 'procedimiento');
+
+-- Analista y decisión (solo APROBADO o RECHAZADO, y solo sobre R-B)
+CALL prueba.verifica('X269', 'Extensión', 'Créditos', 'Un administrador registra a un empleado activo como analista',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN('31000000-0000-4000-8000-000000000001'), 'pruebas', @an)"),
+  "SELECT @an REGEXP '^AN[0-9A-F]{8}$' AND (SELECT COUNT(*) FROM creditos.v_evaluacion_api) >= 0",
+  'AN y ocho caracteres', "SELECT @an", 'procedimiento');
+
+CALL prueba.rechaza('X270', 'Extensión', 'Créditos', 'Un empleado inactivo no se registra como analista',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN('31000000-0000-4000-8000-000000000003'), 'pruebas', @an)"),
+  '^BNA-EMPLEADO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X271', 'Extensión', 'Créditos', 'Un empleado inexistente no se registra como analista',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN(UUID()), 'pruebas', @an)"),
+  '^BNA-EMPLEADO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X272', 'Extensión', 'Créditos', 'El analista aprueba una evaluación R-B: decisión, analista y solicitud APROBADA',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN('31000000-0000-4000-8000-000000000001'), 'pruebas', @an)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000272', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000272'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.decidir_evaluacion(@e, 'APROBADO', 'Ingresos estables y sustentados', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'analista.cr', UUID_TO_BIN(UUID()), @estado)"),
+  "SELECT @estado = 'APROBADA' AND (SELECT CONCAT_WS(' ', decision, id_analista, resultado) FROM creditos.v_evaluacion_api WHERE id_evaluacion = @e) = CONCAT_WS(' ', 'APROBADO', @an, 'APROBADO') AND (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000272')) = 'APROBADA'",
+  'APROBADO, analista, APROBADA', "SELECT CONCAT_WS(' ', @estado, (SELECT CONCAT_WS(' ', decision, id_analista, resultado) FROM creditos.v_evaluacion_api WHERE id_evaluacion = @e))", 'procedimiento');
+
+CALL prueba.verifica('X273', 'Extensión', 'Créditos', 'El analista rechaza una evaluación R-B: solicitud RECHAZADA',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN('31000000-0000-4000-8000-000000000001'), 'pruebas', @an)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000273', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000273'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.decidir_evaluacion(@e, 'RECHAZADO', 'Endeudamiento alto en otras entidades', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'analista.cr', UUID_TO_BIN(UUID()), @estado)"),
+  "SELECT @estado = 'RECHAZADA' AND (SELECT resultado FROM creditos.v_evaluacion_api WHERE id_evaluacion = @e) = 'RECHAZADO'",
+  'RECHAZADA', "SELECT @estado", 'procedimiento');
+
+CALL prueba.rechaza('X274', 'Extensión', 'Créditos', 'No se decide sobre una evaluación R-A',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN('31000000-0000-4000-8000-000000000001'), 'pruebas', @an)",
+             "CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000274', 'C001', 3000, 3, NULL, @e)",
+             "CALL creditos.decidir_evaluacion(@e, 'RECHAZADO', 'Cambio de criterio del analista', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'analista.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-EVALUACION:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X275', 'Extensión', 'Créditos', 'Una evaluación R-B se decide una sola vez',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN('31000000-0000-4000-8000-000000000001'), 'pruebas', @an)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000275', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000275'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.decidir_evaluacion(@e, 'APROBADO', 'Ingresos estables y sustentados', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'analista.cr', UUID_TO_BIN(UUID()), @estado)",
+             "CALL creditos.decidir_evaluacion(@e, 'RECHAZADO', 'Ingresos estables y sustentados', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'analista.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-EVALUACION:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X276', 'Extensión', 'Créditos', 'Decidir exige un usuario que sea analista registrado',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000276', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000276'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.decidir_evaluacion(@e, 'APROBADO', 'Ingresos estables y sustentados', UUID_TO_BIN('32000000-0000-4000-8000-000000000002'), 'operador.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-ANALISTA:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X277', 'Extensión', 'Créditos', 'La decisión exige un comentario suficiente',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN('31000000-0000-4000-8000-000000000001'), 'pruebas', @an)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000277', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000277'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.decidir_evaluacion(@e, 'APROBADO', ' corto  ', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'analista.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-MOTIVO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X278', 'Extensión', 'Créditos', 'El analista no puede devolver OBSERVADO (diccionario de Evaluación)',
+  JSON_ARRAY("CALL creditos.registrar_analista(UUID_TO_BIN('31000000-0000-4000-8000-000000000001'), 'pruebas', @an)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000278', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000278'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.decidir_evaluacion(@e, 'OBSERVADO', 'Falta sustento de ingresos', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'analista.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-EVALUACION:[^0-9]*$', 'procedimiento');
+
+-- Revocación de una aprobación
+CALL prueba.verifica('X279', 'Extensión', 'Créditos', 'Revocar una aprobación la deja RECHAZADA con el motivo y rechaza su orden abierta',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000279', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.revocar_aprobacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000279'), 'Documentación falsa detectada', 'analista.cr', UUID_TO_BIN(UUID()))"),
+  "SELECT (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000279')) = 'RECHAZADA' AND (SELECT motivo FROM creditos.v_historial_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000279') AND estado_nuevo = 'RECHAZADA') = 'Documentación falsa detectada' AND (SELECT estado_orden FROM creditos.v_orden_api WHERE id_orden = @o) = 'RECHAZADA'",
+  'RECHAZADA con motivo; orden RECHAZADA', "SELECT CONCAT_WS(' ', (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000279')), (SELECT estado_orden FROM creditos.v_orden_api WHERE id_orden = @o))", 'procedimiento');
+
+CALL prueba.rechaza('X280', 'Extensión', 'Créditos', 'Solo se revoca una solicitud APROBADA',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000280', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.revocar_aprobacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000280'), 'Documentación falsa detectada', 'analista.cr', UUID_TO_BIN(UUID()))"),
+  '^BNA-SOLICITUD:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X281', 'Extensión', 'Créditos', 'No se revoca un crédito ya desembolsado',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000281', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.revocar_aprobacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000281'), 'Documentación falsa detectada', 'analista.cr', UUID_TO_BIN(UUID()))"),
+  '^BNA-SOLICITUD:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X282', 'Extensión', 'Créditos', 'Revocar exige un motivo',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000282', 'C001', 3000, 3, NULL, @e)",
+             "CALL creditos.revocar_aprobacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000282'), '   ', 'analista.cr', UUID_TO_BIN(UUID()))"),
+  '^BNA-MOTIVO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X283', 'Extensión', 'Créditos', 'Las aprobaciones vigentes: la aprobada con 30 días de vigencia; ni la desembolsada ni la rechazada',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000283', 'C001', 3000, 3, NULL, @e)",
+             "CALL prueba.cr_credito('33000000-0000-4000-8000-000000000284', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000285', 'C001', 3000, 3, 1, NULL, @r, @e2)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000285'), 1, 2000, 500, 400, 100, 'pruebas', UUID_TO_BIN(UUID()), @e2, @res, @regla)"),
+  "SELECT (SELECT GROUP_CONCAT(BIN_TO_UUID(id_solicitud)) FROM creditos.v_aprobacion_api WHERE cod_cliente = 'C001' AND id_solicitud IN (UUID_TO_BIN('33000000-0000-4000-8000-000000000283'), UUID_TO_BIN('33000000-0000-4000-8000-000000000284'), UUID_TO_BIN('33000000-0000-4000-8000-000000000285'))) = '33000000-0000-4000-8000-000000000283' AND (SELECT TIMESTAMPDIFF(DAY, fecha_aprobacion, vigente_hasta) = 30 AND monto = 3000 AND id_evaluacion = @e AND id_calendario IS NOT NULL FROM creditos.v_aprobacion_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000283'))",
+  'solo la aprobada, vigente 30 días', "SELECT GROUP_CONCAT(BIN_TO_UUID(id_solicitud)) FROM creditos.v_aprobacion_api WHERE cod_cliente = 'C001'", 'vista');
+
+-- Preparación de la orden
+CALL prueba.verifica('X284', 'Extensión', 'Créditos', 'Preparar una orden: PREPARADA, código DES, importe aprobado y la validación CUENTA',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000286', 'C001', 'CTA-PEN-1', 3000, 3, @o)"),
+  "SELECT @cr_repetido = FALSE AND @cr_codigo REGEXP '^DES-[0-9]{4}-[0-9]{6}$' AND (SELECT CONCAT_WS(' ', estado_orden, importe, moneda, num_cuenta, id_canal, cod_cliente, usuario_preparacion) FROM creditos.v_orden_api WHERE id_orden = @o) = 'PREPARADA 3000.00 PEN CTA-PEN-1 VEN C001 operador.cr' AND (SELECT GROUP_CONCAT(CONCAT(tipo_validacion, ' ', resultado)) FROM creditos.v_validacion_orden_api WHERE id_orden = @o) = 'CUENTA APROBADA'",
+  'PREPARADA 3000.00 PEN CTA-PEN-1 VEN C001 operador.cr; CUENTA APROBADA', "SELECT CONCAT_WS('; ', (SELECT CONCAT_WS(' ', estado_orden, importe, moneda, num_cuenta, id_canal, cod_cliente, usuario_preparacion) FROM creditos.v_orden_api WHERE id_orden = @o), (SELECT GROUP_CONCAT(CONCAT(tipo_validacion, ' ', resultado)) FROM creditos.v_validacion_orden_api WHERE id_orden = @o))", 'procedimiento');
+
+CALL prueba.verifica('X285', 'Extensión', 'Créditos', 'Repetir la preparación con la misma llave y contenido devuelve la misma orden',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000287', 'C001', 3000, 3, NULL, @e)",
+             "SET @llave = UUID_TO_BIN(UUID())",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-1', 'VEN', NULL, @llave, REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o1, @c1, @rep1)",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-1', 'VEN', NULL, @llave, REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o2, @c2, @rep2)"),
+  "SELECT @o1 = @o2 AND @c1 = @c2 AND @rep1 = FALSE AND @rep2 = TRUE AND (SELECT COUNT(*) FROM creditos.v_orden_api WHERE id_evaluacion = @e) = 1",
+  'misma orden, repetida', "SELECT CONCAT_WS(' ', @rep1, @rep2, (SELECT COUNT(*) FROM creditos.v_orden_api WHERE id_evaluacion = @e))", 'procedimiento');
+
+CALL prueba.rechaza('X286', 'Extensión', 'Créditos', 'La misma llave con otro contenido se rechaza',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000288', 'C001', 3000, 3, NULL, @e)",
+             "SET @llave = UUID_TO_BIN(UUID())",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-1', 'VEN', NULL, @llave, REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)",
+             "CALL creditos.preparar_orden(@e, 'CR-PEN-1B', 'VEN', NULL, @llave, REPEAT('b', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-IDEMPOTENCIA:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X287', 'Extensión', 'Créditos', 'Una aprobación tiene a lo sumo una orden abierta',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000289', 'C001', 3000, 3, NULL, @e)",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-1', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-1', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-ORDEN:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X288', 'Extensión', 'Créditos', 'No se prepara una orden sin aprobación (R-B sin decidir)',
+  JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000290', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000290'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-1', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-APROBACION:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X289', 'Extensión', 'Créditos', 'No se prepara una orden de un id de evaluación inexistente',
+  JSON_ARRAY("CALL creditos.preparar_orden(UUID_TO_BIN(UUID()), 'CTA-PEN-1', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-APROBACION:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X290', 'Extensión', 'Créditos', 'No se prepara una orden si la primera cuota ya venció',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000291', 'C001', 3000, 3, CURRENT_DATE - INTERVAL 1 DAY, @e)",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-1', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-CALENDARIO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X291', 'Extensión', 'Créditos', 'La cuenta destino debe ser del cliente, y el mensaje no la repite',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000292', 'C001', 3000, 3, NULL, @e)",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-2', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-CUENTA-DESTINO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X292', 'Extensión', 'Créditos', 'La cuenta destino debe estar en la moneda del crédito',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000293', 'C001', 3000, 3, NULL, @e)",
+             "CALL creditos.preparar_orden(@e, 'CTA-USD-1', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-CUENTA-DESTINO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X293', 'Extensión', 'Créditos', 'La cuenta destino debe ser individual',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000294', 'C001', 3000, 3, NULL, @e)",
+             "CALL creditos.preparar_orden(@e, 'CTA-CONJ', 'VEN', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-CUENTA-DESTINO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X294', 'Extensión', 'Créditos', 'El desembolso es por ventanilla o Home Banking',
+  JSON_ARRAY("CALL prueba.cr_aprobada('33000000-0000-4000-8000-000000000295', 'C001', 3000, 3, NULL, @e)",
+             "CALL creditos.preparar_orden(@e, 'CTA-PEN-1', 'ATM', NULL, UUID_TO_BIN(UUID()), REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @o, @c, @rep)"),
+  '^BNA-CANAL:[^0-9]*$', 'procedimiento');
+
+-- Validaciones previas
+CALL prueba.verifica('X295', 'Extensión', 'Créditos', 'La identidad verificada hoy en ventanilla con la cuenta elegida deja la orden VALIDADA',
+  JSON_ARRAY("CALL prueba.cr_validada('33000000-0000-4000-8000-000000000296', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o)"),
+  "SELECT @cr_estado = 'VALIDADA' AND (SELECT estado_orden FROM creditos.v_orden_api WHERE id_orden = @o) = 'VALIDADA' AND (SELECT GROUP_CONCAT(tipo_validacion ORDER BY tipo_validacion) FROM creditos.v_validacion_orden_api WHERE id_orden = @o AND resultado = 'APROBADA') = 'CUENTA,IDENTIDAD'",
+  'VALIDADA', "SELECT @cr_estado", 'procedimiento');
+
+CALL prueba.rechaza('X296', 'Extensión', 'Créditos', 'La validación de identidad de otro cliente no sirve como evidencia',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000297', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL clientes.verificar_documento('DNI', '70000002', TRUE, NULL, UUID_TO_BIN(UUID()), 'operador.cr', @v, @res, @mot, @cli)",
+             "CALL creditos.registrar_validacion_orden(@o, 'IDENTIDAD', 'APROBADA', CAST(@v AS CHAR), NULL, NULL, 'operador.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-VALIDACION:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X297', 'Extensión', 'Créditos', 'Una validación de identidad RECHAZADA no sirve como evidencia',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000298', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL clientes.verificar_documento('DNI', '70000001', FALSE, NULL, UUID_TO_BIN(UUID()), 'operador.cr', @v, @res, @mot, @cli)",
+             "CALL creditos.registrar_validacion_orden(@o, 'IDENTIDAD', 'APROBADA', CAST(@v AS CHAR), NULL, NULL, 'operador.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-VALIDACION:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X298', 'Extensión', 'Créditos', 'La validación CUENTA la registra la base, no quien llama',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000299', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.registrar_validacion_orden(@o, 'CUENTA', 'APROBADA', 'x', NULL, NULL, 'operador.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-VALIDACION:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X299', 'Extensión', 'Créditos', 'Una identidad RECHAZADA queda registrada y la orden sigue PREPARADA',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000300', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.registrar_validacion_orden(@o, 'IDENTIDAD', 'RECHAZADA', 'Documento no coincide', 'Rostro distinto', NULL, 'operador.cr', UUID_TO_BIN(UUID()), @estado)"),
+  "SELECT @estado = 'PREPARADA' AND (SELECT COUNT(*) FROM creditos.v_validacion_orden_api WHERE id_orden = @o AND tipo_validacion = 'IDENTIDAD' AND resultado = 'RECHAZADA') = 1",
+  'PREPARADA', "SELECT @estado", 'procedimiento');
+
+CALL prueba.verifica('X300', 'Extensión', 'Créditos', 'Cambiar la cuenta de una orden VALIDADA a otra elegible deja una validación CUENTA nueva',
+  JSON_ARRAY("CALL prueba.cr_validada('33000000-0000-4000-8000-000000000301', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.cambiar_cuenta_orden(@o, 'CR-PEN-1B', 'operador.cr', UUID_TO_BIN(UUID()), @estado)"),
+  "SELECT @estado = 'VALIDADA' AND (SELECT num_cuenta FROM creditos.v_orden_api WHERE id_orden = @o) = 'CR-PEN-1B' AND (SELECT COUNT(*) FROM creditos.v_validacion_orden_api WHERE id_orden = @o AND tipo_validacion = 'CUENTA') = 2",
+  'VALIDADA con CR-PEN-1B', "SELECT CONCAT_WS(' ', @estado, (SELECT num_cuenta FROM creditos.v_orden_api WHERE id_orden = @o))", 'procedimiento');
+
+CALL prueba.rechaza('X301', 'Extensión', 'Créditos', 'No se cambia la cuenta a una que no es elegible',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000302', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.cambiar_cuenta_orden(@o, 'CTA-USD-1', 'operador.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-CUENTA-DESTINO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X302', 'Extensión', 'Créditos', 'No se cambia la cuenta de una orden confirmada',
+  JSON_ARRAY("CALL prueba.cr_validada('33000000-0000-4000-8000-000000000303', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod, @abono, @rep)",
+             "CALL creditos.cambiar_cuenta_orden(@o, 'CR-PEN-1B', 'operador.cr', UUID_TO_BIN(UUID()), @estado)"),
+  '^BNA-ORDEN:[^0-9]*$', 'procedimiento');
+
+-- Confirmación: abono, crédito y solicitud DESEMBOLSADA en una sola operación
+CALL prueba.rechaza('X303', 'Extensión', 'Créditos', 'No se confirma una orden sin validar',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000304', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod, @abono, @rep)"),
+  '^BNA-ORDEN:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X304', 'Extensión', 'Créditos', 'Confirmar abona la cuenta (DESEMBOLSO), crea el crédito AL_DIA y deja la solicitud DESEMBOLSADA',
+  JSON_ARRAY("SET @antes = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "CALL prueba.cr_validada('33000000-0000-4000-8000-000000000305', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod, @abono, @rep)"),
+  "SELECT @rep = FALSE AND @cod REGEXP '^CRE-[0-9]{4}-[0-9]{6}$' AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @antes + 3000 AND (SELECT CONCAT_WS(' ', tipo_operacion, naturaleza, monto, id_canal) FROM cuentas.v_movimiento_api WHERE uuid_transaccion = @abono) = 'DESEMBOLSO C 3000.00 VEN' AND (SELECT CONCAT_WS(' ', estado_orden, cod_credito = @cod, uuid_transaccion_abono = @abono, usuario_confirmacion) FROM creditos.v_orden_api WHERE id_orden = @o) = 'CONFIRMADA 1 1 operador.cr' AND (SELECT CONCAT_WS(' ', estado_credito, cod_cliente, monto_desembolsado, numero_cuotas, saldo_pendiente) FROM creditos.v_credito_api WHERE cod_credito = @cod) = 'AL_DIA C001 3000.00 3 3030.00' AND (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000305')) = 'DESEMBOLSADA'",
+  'abono, CONFIRMADA, AL_DIA, DESEMBOLSADA', "SELECT CONCAT_WS('; ', (SELECT CONCAT_WS(' ', tipo_operacion, naturaleza, monto, id_canal) FROM cuentas.v_movimiento_api WHERE uuid_transaccion = @abono), (SELECT CONCAT_WS(' ', estado_credito, cod_cliente, monto_desembolsado, numero_cuotas, saldo_pendiente) FROM creditos.v_credito_api WHERE cod_credito = @cod))", 'procedimiento');
+
+CALL prueba.verifica('X305', 'Extensión', 'Créditos', 'El calendario OFICIAL es copia exacta del PRELIMINAR vigente (RN-SOL-006), que queda HISTORICO',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000306', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)"),
+  "SELECT (SELECT GROUP_CONCAT(CONCAT_WS('/', numero_cuota, fecha_vencimiento, capital, interes, saldo_capital, cuota_total) ORDER BY numero_cuota) FROM creditos.v_calendario_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000306') AND tipo_calendario = 'PRELIMINAR') = (SELECT GROUP_CONCAT(CONCAT_WS('/', numero_cuota, fecha_vencimiento, capital, interes, saldo_capital, cuota_total) ORDER BY numero_cuota) FROM creditos.v_calendario_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000306') AND tipo_calendario = 'OFICIAL') AND (SELECT GROUP_CONCAT(DISTINCT CONCAT(tipo_calendario, ' ', estado_calendario) ORDER BY version) FROM creditos.v_calendario_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000306')) = 'PRELIMINAR HISTORICO,OFICIAL VIGENTE' AND (SELECT SUM(saldo_pendiente) FROM creditos.v_cuota_api WHERE cod_credito = @cod) = 3030 AND (SELECT COUNT(*) FROM creditos.v_cuota_api WHERE cod_credito = @cod AND estado_cuota = 'PENDIENTE') = 3",
+  'cuotas iguales; PRELIMINAR HISTORICO, OFICIAL VIGENTE', "SELECT GROUP_CONCAT(DISTINCT CONCAT(tipo_calendario, ' ', estado_calendario) ORDER BY version) FROM creditos.v_calendario_api WHERE id_solicitud = UUID_TO_BIN('33000000-0000-4000-8000-000000000306')", 'procedimiento');
+
+CALL prueba.verifica('X306', 'Extensión', 'Créditos', 'Repetir la confirmación devuelve el mismo crédito y el mismo abono, sin abonar otra vez',
+  JSON_ARRAY("SET @antes = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "CALL prueba.cr_validada('33000000-0000-4000-8000-000000000307', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod1, @ab1, @rep1)",
+             "CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod2, @ab2, @rep2)"),
+  "SELECT @cod1 = @cod2 AND @ab1 = @ab2 AND @rep1 = FALSE AND @rep2 = TRUE AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @antes + 3000",
+  'mismo crédito, un solo abono', "SELECT CONCAT_WS(' ', @rep1, @rep2, (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') - @antes)", 'procedimiento');
+
+CALL prueba.verifica('X307', 'Extensión', 'Créditos', 'La confirmación deja los eventos ORDEN y CREDITO en la bitácora de créditos y el del movimiento en la general',
+  JSON_ARRAY("SET @corr = UUID_TO_BIN(UUID())",
+             "CALL prueba.cr_validada('33000000-0000-4000-8000-000000000308', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.confirmar_orden(@o, 'operador.cr', @corr, @cod, @abono, @rep)"),
+  "SELECT (SELECT GROUP_CONCAT(CONCAT(tipo_entidad, ' ', accion, ' ', modulo) ORDER BY id_evento) FROM creditos.v_evento_credito_api WHERE correlation_id = @corr) = 'ORDEN CONFIRMAR_ORDEN DESEMBOLSO,CREDITO CREAR_CREDITO DESEMBOLSO' AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE correlation_id = @corr AND modulo = 'CUENTAS' AND accion = 'DESEMBOLSO' AND id_entidad = BIN_TO_UUID(@abono)) = 1",
+  'ORDEN y CREDITO; movimiento en CUENTAS', "SELECT GROUP_CONCAT(CONCAT(tipo_entidad, ' ', accion, ' ', modulo) ORDER BY id_evento) FROM creditos.v_evento_credito_api WHERE correlation_id = @corr", 'procedimiento');
+
+CALL prueba.verifica('X308', 'Extensión', 'Créditos', 'Rechazar una orden PREPARADA la deja RECHAZADA con su motivo; ya no se confirma',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000309', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.rechazar_orden(@o, 'El cliente desistió en ventanilla', 'operador.cr', UUID_TO_BIN(UUID()))"),
+  "SELECT CONCAT_WS(' / ', estado_orden, motivo_rechazo) = 'RECHAZADA / El cliente desistió en ventanilla' FROM creditos.v_orden_api WHERE id_orden = @o",
+  'RECHAZADA / El cliente desistió en ventanilla', "SELECT CONCAT_WS(' / ', estado_orden, motivo_rechazo) FROM creditos.v_orden_api WHERE id_orden = @o", 'procedimiento');
+
+CALL prueba.rechaza('X309', 'Extensión', 'Créditos', 'Rechazar una orden exige un motivo',
+  JSON_ARRAY("CALL prueba.cr_orden('33000000-0000-4000-8000-000000000310', 'C001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.rechazar_orden(@o, '', 'operador.cr', UUID_TO_BIN(UUID()))"),
+  '^BNA-MOTIVO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X310', 'Extensión', 'Créditos', 'Una orden RECHAZADA no se confirma',
+  JSON_ARRAY("CALL prueba.cr_validada('33000000-0000-4000-8000-000000000311', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @o)",
+             "CALL creditos.rechazar_orden(@o, 'El cliente desistió en ventanilla', 'operador.cr', UUID_TO_BIN(UUID()))",
+             "CALL creditos.confirmar_orden(@o, 'operador.cr', UUID_TO_BIN(UUID()), @cod, @abono, @rep)"),
+  '^BNA-ORDEN:[^0-9]*$', 'procedimiento');
+
+-- Pago de cuotas: débito y aplicación en una sola operación
+CALL prueba.verifica('X311', 'Extensión', 'Créditos', 'Un pago parcial debita la cuenta (DEBITO_CUOTA) y deja la cuota PARCIAL',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000312', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "SET @antes = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 500, 'REF-X311', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @estado, @aplicado, @motivo, @rep)"),
+  "SELECT @estado = 'CONFIRMADO' AND @aplicado = 500 AND @motivo IS NULL AND @rep = FALSE AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @antes - 500 AND (SELECT CONCAT_WS(' ', estado_cuota, saldo_pendiente) FROM creditos.v_cuota_api WHERE cod_credito = @cod AND numero_cuota = 1) = 'PARCIAL 510.00' AND (SELECT CONCAT_WS(' ', tipo_operacion, naturaleza, monto) FROM cuentas.v_movimiento_api m JOIN creditos.v_pago_api p ON p.uuid_transaccion = m.uuid_transaccion WHERE p.id_pago = @pago) = 'DEBITO_CUOTA D 500.00'",
+  'CONFIRMADO 500; cuota PARCIAL 510.00', "SELECT CONCAT_WS(' ', @estado, @aplicado, (SELECT CONCAT_WS(' ', estado_cuota, saldo_pendiente) FROM creditos.v_cuota_api WHERE cod_credito = @cod AND numero_cuota = 1))", 'procedimiento');
+
+CALL prueba.verifica('X312', 'Extensión', 'Créditos', 'Un pago mayor que la cuota se aplica a la siguiente, de la más antigua a la más reciente',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000313', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 1500, 'REF-X312', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @estado, @aplicado, @motivo, @rep)"),
+  "SELECT (SELECT GROUP_CONCAT(CONCAT_WS(' ', numero_cuota, estado_cuota, saldo_pendiente) ORDER BY numero_cuota) FROM creditos.v_cuota_api WHERE cod_credito = @cod) = '1 PAGADA 0.00,2 PARCIAL 520.00,3 PENDIENTE 1010.00' AND (SELECT monto_aplicado FROM creditos.v_pago_api WHERE id_pago = @pago) = 1500",
+  '1 PAGADA 0.00,2 PARCIAL 520.00,3 PENDIENTE 1010.00', "SELECT GROUP_CONCAT(CONCAT_WS(' ', numero_cuota, estado_cuota, saldo_pendiente) ORDER BY numero_cuota) FROM creditos.v_cuota_api WHERE cod_credito = @cod", 'procedimiento');
+
+CALL prueba.verifica('X313', 'Extensión', 'Créditos', 'Pagar toda la deuda deja las cuotas PAGADA y el crédito CANCELADO',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000314', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 3030, 'REF-X313', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @estado, @aplicado, @motivo, @rep)"),
+  "SELECT (SELECT CONCAT_WS(' ', estado_credito, saldo_pendiente, cuotas_pagadas) FROM creditos.v_credito_api WHERE cod_credito = @cod) = 'CANCELADO 0.00 3'",
+  'CANCELADO 0.00 3', "SELECT CONCAT_WS(' ', estado_credito, saldo_pendiente, cuotas_pagadas) FROM creditos.v_credito_api WHERE cod_credito = @cod", 'procedimiento');
+
+CALL prueba.rechaza('X314', 'Extensión', 'Créditos', 'Un pago mayor que la deuda total se rechaza',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000315', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 3030.01, 'REF-X314', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @estado, @aplicado, @motivo, @rep)"),
+  '^BNA-PAGO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X315', 'Extensión', 'Créditos', 'La cuenta que paga debe ser del titular del crédito, y el mensaje no la repite',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000316', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-2', 100, 'REF-X315', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @estado, @aplicado, @motivo, @rep)"),
+  '^BNA-CUENTA-ORIGEN:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X316', 'Extensión', 'Créditos', 'Un crédito CANCELADO no recibe pagos',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000317', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 3030, 'REF-X316a', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @estado, @aplicado, @motivo, @rep)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 10, 'REF-X316b', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @estado, @aplicado, @motivo, @rep)"),
+  '^BNA-CREDITO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X317', 'Extensión', 'Créditos', 'Sin fondos, el pago queda RECHAZADO con su motivo, sin movimiento y sin tocar las cuotas',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000318', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CR-PEN-1B', 100, 'REF-X317', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @estado, @aplicado, @motivo, @rep)"),
+  "SELECT @estado = 'RECHAZADO' AND @motivo = 'BNA-SALDO' AND @aplicado = 0 AND (SELECT CONCAT_WS(' ', estado_confirmacion, motivo_rechazo, uuid_transaccion IS NULL, monto_aplicado) FROM creditos.v_pago_api WHERE id_pago = @pago) = 'RECHAZADO BNA-SALDO 1 0.00' AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CR-PEN-1B') = 0 AND (SELECT SUM(saldo_pendiente) FROM creditos.v_cuota_api WHERE cod_credito = @cod) = 3030",
+  'RECHAZADO BNA-SALDO 1 0.00', "SELECT CONCAT_WS(' ', @estado, @motivo, (SELECT CONCAT_WS(' ', estado_confirmacion, motivo_rechazo, uuid_transaccion IS NULL, monto_aplicado) FROM creditos.v_pago_api WHERE id_pago = @pago))", 'procedimiento');
+
+CALL prueba.verifica('X318', 'Extensión', 'Créditos', 'Repetir la referencia con el mismo contenido devuelve el mismo pago, sin debitar otra vez',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000319', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "SET @antes = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 500, 'REF-X318', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p1, @e1, @a1, @m1, @r1)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 500, 'REF-X318', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p2, @e2, @a2, @m2, @r2)"),
+  "SELECT @p1 = @p2 AND @e2 = 'CONFIRMADO' AND @a2 = 500 AND @r1 = FALSE AND @r2 = TRUE AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @antes - 500",
+  'mismo pago, un débito', "SELECT CONCAT_WS(' ', @r1, @r2, @antes - (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1'))", 'procedimiento');
+
+CALL prueba.rechaza('X319', 'Extensión', 'Créditos', 'La misma referencia con otro contenido se rechaza',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000320', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 500, 'REF-X319', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p, @e, @a, @m, @r)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 600, 'REF-X319', 'VEN', REPEAT('b', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p, @e, @a, @m, @r)"),
+  '^BNA-IDEMPOTENCIA:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X320', 'Extensión', 'Créditos', 'Repetir la referencia de un pago RECHAZADO devuelve RECHAZADO y no intenta debitar otra vez',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000321', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CR-PEN-1B', 100, 'REF-X320', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p1, @e1, @a1, @m1, @r1)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CR-PEN-1B', 100, 'REF-X320', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p2, @e2, @a2, @m2, @r2)"),
+  "SELECT @p1 = @p2 AND @e2 = 'RECHAZADO' AND @m2 = 'BNA-SALDO' AND @r2 = TRUE AND (SELECT COUNT(*) FROM creditos.v_pago_api WHERE cod_credito = @cod) = 1",
+  'RECHAZADO repetido', "SELECT CONCAT_WS(' ', @e2, @m2, @r2)", 'procedimiento');
+
+CALL prueba.rechaza('X321', 'Extensión', 'Créditos', 'Un crédito inexistente no recibe pagos',
+  JSON_ARRAY("CALL creditos.registrar_pago_cuota('CRE-NO-EXISTE', 'CTA-PEN-1', 10, 'REF-X321', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p, @e, @a, @m, @r)"),
+  '^BNA-CREDITO:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X322', 'Extensión', 'Créditos', 'El pago se lee con su cuenta, su movimiento y su reparto entre cuotas',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000322', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 1500, 'REF-X322', 'HB', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @pago, @e, @a, @m, @r)"),
+  "SELECT CONCAT_WS(' ', referencia, num_cuenta, id_canal, estado_confirmacion, monto_pago, monto_aplicado, uuid_transaccion IS NOT NULL, JSON_LENGTH(aplicaciones), JSON_CONTAINS(aplicaciones, JSON_OBJECT('numero_cuota', 2, 'monto_aplicado', 490.00)), JSON_CONTAINS(aplicaciones, JSON_OBJECT('numero_cuota', 1, 'monto_aplicado', 1010.00))) = 'REF-X322 CTA-PEN-1 HB CONFIRMADO 1500.00 1500.00 1 2 1 1' FROM creditos.v_pago_api WHERE id_pago = @pago",
+  'REF-X322 CTA-PEN-1 HB CONFIRMADO 1500.00 1500.00 1 2 1 1', "SELECT CONCAT_WS(' ', referencia, num_cuenta, id_canal, estado_confirmacion, monto_pago, monto_aplicado, uuid_transaccion IS NOT NULL, JSON_LENGTH(aplicaciones), CAST(aplicaciones AS CHAR)) FROM creditos.v_pago_api WHERE id_pago = @pago", 'vista');
+
+-- Mora y vencimientos (CR-0001 de datos.sql: la cuota 1 venció el 2026-11-15)
+CALL prueba.verifica('X323', 'Extensión', 'Créditos', 'Se registra la mora de una cuota atrasada; queda vigente con sus días de atraso',
+  JSON_ARRAY("CALL creditos.registrar_mora('CR-0001', 1, 15.50, 'svc-cobranza', UUID_TO_BIN(UUID()), @mora)"),
+  "SELECT (SELECT CONCAT_WS(' ', monto_calculado, vigente, dias_atraso = DATEDIFF(core.fn_fecha_negocio(UTC_TIMESTAMP(6)), '2026-11-15')) FROM creditos.v_mora_api WHERE id_mora = @mora) = '15.50 1 1' AND (SELECT mora_vigente FROM creditos.v_cuota_api WHERE cod_credito = 'CR-0001' AND numero_cuota = 1) = 15.50",
+  '15.50 1 1', "SELECT CONCAT_WS(' ', monto_calculado, vigente, dias_atraso) FROM creditos.v_mora_api WHERE id_mora = @mora", 'procedimiento');
+
+CALL prueba.verifica('X324', 'Extensión', 'Créditos', 'Un cálculo nuevo de mora deja vigente solo el último',
+  JSON_ARRAY("CALL creditos.registrar_mora('CR-0001', 1, 15.50, 'svc-cobranza', UUID_TO_BIN(UUID()), @m1)",
+             "DO SLEEP(0.01)",
+             "CALL creditos.registrar_mora('CR-0001', 1, 18.25, 'svc-cobranza', UUID_TO_BIN(UUID()), @m2)"),
+  "SELECT (SELECT GROUP_CONCAT(CONCAT(monto_calculado, ':', vigente) ORDER BY fecha_calculo) FROM creditos.v_mora_api WHERE id_mora IN (@m1, @m2)) = '15.50:0,18.25:1' AND (SELECT mora_vigente FROM creditos.v_credito_api WHERE cod_credito = 'CR-0001') = 18.25",
+  '15.50:0,18.25:1', "SELECT GROUP_CONCAT(CONCAT(monto_calculado, ':', vigente) ORDER BY fecha_calculo) FROM creditos.v_mora_api WHERE id_mora IN (@m1, @m2)", 'procedimiento');
+
+CALL prueba.rechaza('X325', 'Extensión', 'Créditos', 'No se registra mora de una cuota que aún no vence',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000325', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.registrar_mora(@cod, 1, 5, 'svc-cobranza', UUID_TO_BIN(UUID()), @mora)"),
+  '^BNA-CUOTA:[^0-9]*$', 'procedimiento');
+
+CALL prueba.rechaza('X326', 'Extensión', 'Créditos', 'La mora no puede ser negativa',
+  JSON_ARRAY("CALL creditos.registrar_mora('CR-0001', 1, -1, 'svc-cobranza', UUID_TO_BIN(UUID()), @mora)"),
+  '^BNA-MORA:[^0-9]*$', 'procedimiento');
+
+CALL prueba.verifica('X327', 'Extensión', 'Créditos', 'Los vencimientos del día marcan la cuota VENCIDA y el crédito EN_MORA; uno al día no cambia',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000327', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.actualizar_vencimientos(NULL, 'svc-cobranza', @cuotas, @creditos)"),
+  "SELECT @cuotas >= 1 AND @creditos >= 1 AND (SELECT estado_cuota FROM creditos.v_cuota_api WHERE cod_credito = 'CR-0001' AND numero_cuota = 1) = 'VENCIDA' AND (SELECT estado_credito = 'EN_MORA' AND cuotas_vencidas >= 1 FROM creditos.v_credito_api WHERE cod_credito = 'CR-0001') AND (SELECT estado_credito FROM creditos.v_credito_api WHERE cod_credito = @cod) = 'AL_DIA'",
+  'VENCIDA, EN_MORA; el nuevo AL_DIA', "SELECT CONCAT_WS(' ', @cuotas, @creditos, (SELECT estado_credito FROM creditos.v_credito_api WHERE cod_credito = 'CR-0001'), (SELECT estado_credito FROM creditos.v_credito_api WHERE cod_credito = @cod))", 'procedimiento');
+
+CALL prueba.verifica('X328', 'Extensión', 'Créditos', 'Pagar la cuota vencida devuelve el crédito a AL_DIA',
+  JSON_ARRAY("CALL prueba.cr_credito('33000000-0000-4000-8000-000000000328', 'C001', '70000001', 'CTA-PEN-1', 3000, 3, @cod)",
+             "CALL creditos.actualizar_vencimientos(CURRENT_DATE + INTERVAL 40 DAY, 'svc-cobranza', @cuotas, @creditos)",
+             "SET @mora = (SELECT estado_credito FROM creditos.v_credito_api WHERE cod_credito = @cod)",
+             "CALL creditos.registrar_pago_cuota(@cod, 'CTA-PEN-1', 1010, 'REF-X328', 'VEN', REPEAT('a', 64), 'operador.cr', UUID_TO_BIN(UUID()), @p, @e, @a, @m, @r)"),
+  "SELECT @mora = 'EN_MORA' AND (SELECT estado_credito FROM creditos.v_credito_api WHERE cod_credito = @cod) = 'AL_DIA' AND (SELECT estado_cuota FROM creditos.v_cuota_api WHERE cod_credito = @cod AND numero_cuota = 1) = 'PAGADA'",
+  'EN_MORA y luego AL_DIA', "SELECT CONCAT_WS(' ', @mora, (SELECT estado_credito FROM creditos.v_credito_api WHERE cod_credito = @cod))", 'procedimiento');
+
+CALL prueba.verifica('X329', 'Extensión', 'Créditos', 'Los días de atraso se cuentan desde el vencimiento y son cero si la cuota no vence',
+  JSON_ARRAY("DO 0"),
+  "SELECT (SELECT dias_atraso FROM creditos.v_cuota_api WHERE cod_credito = 'CR-0001' AND numero_cuota = 1) = DATEDIFF(core.fn_fecha_negocio(UTC_TIMESTAMP(6)), '2026-11-15') AND (SELECT dias_atraso FROM creditos.v_cuota_api WHERE cod_credito = 'CR-0001' AND numero_cuota = 3) = GREATEST(0, DATEDIFF(core.fn_fecha_negocio(UTC_TIMESTAMP(6)), '2027-01-15'))",
+  'días desde el vencimiento', "SELECT GROUP_CONCAT(dias_atraso ORDER BY numero_cuota) FROM creditos.v_cuota_api WHERE cod_credito = 'CR-0001'", 'vista');
+
+-- Catálogos, función y vistas
+CALL prueba.verifica('X330', 'Extensión', 'Créditos', 'Los catálogos de créditos incluyen estados, reglas con umbrales, métodos, validaciones y canales',
+  JSON_ARRAY("CALL creditos.catalogos_credito(@cat)"),
+  "SELECT JSON_LENGTH(@cat, '$.estados_solicitud') = 5 AND JSON_UNQUOTE(JSON_EXTRACT(@cat, '$.reglas[1].id_regla')) = 'R-B' AND JSON_EXTRACT(@cat, '$.reglas[1].ratio_min') = 80 AND JSON_EXTRACT(@cat, '$.reglas[1].ratio_max') = 100 AND JSON_LENGTH(@cat, '$.metodos_amortizacion') = 3 AND JSON_LENGTH(@cat, '$.tipos_validacion') = 4 AND JSON_LENGTH(@cat, '$.estados_orden') = 7 AND JSON_LENGTH(@cat, '$.estados_cuota') = 4 AND JSON_LENGTH(@cat, '$.estados_credito') = 3 AND JSON_CONTAINS(@cat, '\"VEN\"', '$.canales_desembolso') AND JSON_CONTAINS(@cat, '\"HB\"', '$.canales_desembolso') AND JSON_EXTRACT(@cat, '$.vigencia_aprobacion_dias') = 30",
+  'catálogos completos', "SELECT LEFT(@cat, 200)", 'procedimiento');
+
+CALL prueba.verifica('X331', 'Extensión', 'Créditos', 'El id de evaluación es determinista, distinto por ronda y un UUID válido (versión 8)',
+  JSON_ARRAY("SET @a = creditos.fn_id_evaluacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000331'), 1)",
+             "SET @b = creditos.fn_id_evaluacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000331'), 1)",
+             "SET @c = creditos.fn_id_evaluacion(UUID_TO_BIN('33000000-0000-4000-8000-000000000331'), 2)"),
+  "SELECT @a = @b AND @a <> @c AND (ASCII(SUBSTR(@a, 7, 1)) >> 4) = 8 AND (ASCII(SUBSTR(@a, 9, 1)) & 0xC0) = 0x80 AND LENGTH(@a) = 16",
+  'determinista, versión 8', "SELECT BIN_TO_UUID(@a)", 'procedimiento');
+
+CALL prueba.verifica('X332', 'Extensión', 'Créditos', 'Las vistas de créditos no exponen nombres, documentos ni contactos del cliente',
+  JSON_ARRAY("SET @n = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'creditos' AND table_name LIKE 'v\\_%\\_api' AND column_name IN ('nombres', 'apellido_paterno', 'apellido_materno', 'numero_documento', 'tipo_documento', 'correo', 'celular'))",
+             "SET @v = (SELECT COUNT(*) FROM information_schema.views WHERE table_schema = 'creditos' AND table_name LIKE 'v\\_%\\_api')"),
+  "SELECT @n = 0 AND @v = 12", '0 columnas personales en 12 vistas', "SELECT CONCAT(@n, ' columnas en ', @v, ' vistas')", 'vista');
+
+-- Permisos de bna_api sobre creditos
+CALL prueba.rechaza('X333', 'Extensión', 'bna_api', 'bna_api no puede: SELECT creditos.solicitud_credito',
+  JSON_ARRAY("SELECT * FROM creditos.solicitud_credito"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X334', 'Extensión', 'bna_api', 'bna_api no puede: SELECT creditos.orden_desembolso',
+  JSON_ARRAY("SELECT * FROM creditos.orden_desembolso"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X335', 'Extensión', 'bna_api', 'bna_api no puede: INSERT en creditos.pago',
+  JSON_ARRAY("INSERT INTO creditos.pago (monto_pago, referencia_transaccion, estado_confirmacion, cod_credito, id_canal) VALUES (1, 'X335', 'CONFIRMADO', 'CR-0001', 'VEN')"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X336', 'Extensión', 'bna_api', 'bna_api no puede: registrar_evento_credito',
+  JSON_ARRAY("CALL creditos.registrar_evento_credito('ORDEN', 'x', NULL, 'FALSO', NULL, 13, 'nadie', UUID_TO_BIN(UUID()), NULL)"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X337', 'Extensión', 'bna_api', 'bna_api no puede: aplicar_pago',
+  JSON_ARRAY("CALL creditos.aplicar_pago(UUID_TO_BIN('f0000000-0000-4000-8000-000000000001'), @a)"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X338', 'Extensión', 'bna_api', 'bna_api no puede: verificar_aprobacion',
+  JSON_ARRAY("CALL creditos.verificar_aprobacion(UUID_TO_BIN(UUID()), @s, @c, @m, @mo)"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X339', 'Extensión', 'bna_api', 'bna_api no puede: INSERT en creditos.numerador_orden',
+  JSON_ARRAY("INSERT INTO creditos.numerador_orden () VALUES ()"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X340', 'Extensión', 'bna_api', 'bna_api no puede: escribir por la vista de créditos',
+  JSON_ARRAY("UPDATE creditos.v_credito_api SET estado_credito = 'CANCELADO'"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X341', 'Extensión', 'bna_api', 'bna_api no puede: UPDATE de creditos.cuota',
+  JSON_ARRAY("UPDATE creditos.cuota SET saldo_pendiente = 0"), 'denied', 'privilegio');
+
+-- Autorizaciones y credenciales de tarjeta (v1.5), con el rol de la API.
+CALL prueba.verifica('X378', 'Extensión', 'bna_api', 'bna_api autoriza por el procedimiento y lee la autorización en su vista',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000001'), UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'CTA-PEN-2', 'VEN', NULL, 'RETIRO', 10, NULL, 'pruebas', @e, @c)"),
+  "SELECT @e = 'AUTORIZADA' AND (SELECT estado_autorizacion FROM tarjetas.v_autorizacion_api WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000001')) = 'AUTORIZADA' AND (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'tarjetas' AND table_name = 'v_autorizacion_api' AND column_name IN ('ip_origen', 'nivel_riesgo')) = 0",
+  'AUTORIZADA y legible en v_autorizacion_api', "SELECT @e", 'privilegio');
+
+CALL prueba.rechaza('X379', 'Extensión', 'bna_api', 'bna_api no puede: INSERT en autorizacion',
+  JSON_ARRAY("INSERT INTO tarjetas.autorizacion (tipo_operacion, monto, estado_autorizacion, id_canal, id_tarjeta, num_cuenta) VALUES ('RETIRO', 1, 'AUTORIZADA', 'VEN', UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'CTA-PEN-2')"),
+  'denied', 'privilegio');
+
+CALL prueba.rechaza('X380', 'Extensión', 'bna_api', 'bna_api no puede: formato_credencial',
+  JSON_ARRAY("CALL tarjetas.formato_credencial('PIN_ATM', '1234')"), 'denied', 'privilegio');
+
+CALL prueba.verifica('X381', 'Extensión', 'bna_api', 'bna_api registra y valida un PIN sin leer las credenciales',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'PIN_ATM', '2468', 'pruebas')",
+             "CALL tarjetas.validar_credencial(UUID_TO_BIN('a0000000-0000-4000-8000-000000000002'), 'PIN_ATM', '2468', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)"),
+  "SELECT @r = 'EXITOSO' AND @i = 3", 'EXITOSO', "SELECT @r", 'privilegio');
+
+-- Empleados (v1.6), con el rol de la API. El usuario 34…01 es una persona sin empleado.
+SET @emp_usr = "CALL core.crear_usuario(UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'nuevo.analista', 'Nueva Analista', 'ANALISTA', 'h', 'BCRYPT', 'v2', NULL, TRUE, 'pruebas')";
+
+CALL prueba.verifica('X386', 'Extensión', 'Empleados', 'Un administrador registra un empleado y lo liga a un usuario sin empleado',
+  JSON_ARRAY(@emp_usr,
+             "CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000386'), ' EMP-AN-386 ', 'Nueva Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'pruebas')"),
+  "SELECT (SELECT id_empleado FROM core.usuario_sistema WHERE id_usuario = UUID_TO_BIN('34000000-0000-4000-8000-000000000001')) = UUID_TO_BIN('34100000-0000-4000-8000-000000000386')",
+  'el usuario queda ligado al empleado', "SELECT BIN_TO_UUID(id_empleado) FROM core.usuario_sistema WHERE id_usuario = UUID_TO_BIN('34000000-0000-4000-8000-000000000001')", 'procedimiento');
+
+CALL prueba.verifica('X387', 'Extensión', 'Empleados', 'El registro del empleado se audita sin el nombre de la persona',
+  JSON_ARRAY(@emp_usr,
+             "CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000387'), 'EMP-AN-387', 'Nueva Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'admin.pruebas')"),
+  "SELECT (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE modulo = 'CORE' AND entidad = 'empleado' AND id_entidad = '34100000-0000-4000-8000-000000000387' AND accion = 'REGISTRAR_EMPLEADO' AND actor = 'admin.pruebas' AND JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.codigo_empleado')) = 'EMP-AN-387' AND JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.id_usuario')) = '34000000-0000-4000-8000-000000000001') = 1 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'REGISTRAR_EMPLEADO' AND detalle LIKE '%Nueva%') = 0",
+  'un evento REGISTRAR_EMPLEADO sin el nombre', "SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'REGISTRAR_EMPLEADO'", 'procedimiento');
+
+CALL prueba.verifica('X388', 'Extensión', 'Empleados', 'El empleado registrado por la API queda disponible como analista y decide una evaluación R-B',
+  JSON_ARRAY(@emp_usr,
+             "CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000388'), 'EMP-AN-388', 'Nueva Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'pruebas')",
+             "CALL creditos.registrar_analista(UUID_TO_BIN('34100000-0000-4000-8000-000000000388'), 'pruebas', @an)",
+             "CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000388', 'C001', 3000, 3, 1, NULL, @r, @e)",
+             "CALL creditos.evaluar_solicitud(UUID_TO_BIN('33000000-0000-4000-8000-000000000388'), 1, 20000, 0, 650, 3500, 'pruebas', UUID_TO_BIN(UUID()), @e, @res, @regla)",
+             "CALL creditos.decidir_evaluacion(@e, 'APROBADO', 'Ingresos estables y sustentados', UUID_TO_BIN('34000000-0000-4000-8000-000000000001'), 'nuevo.analista', UUID_TO_BIN(UUID()), @estado)"),
+  "SELECT @estado = 'APROBADA' AND (SELECT id_analista FROM creditos.v_evaluacion_api WHERE id_evaluacion = @e) = @an",
+  'APROBADA por el analista nuevo', "SELECT CONCAT_WS(' ', @estado, @an)", 'procedimiento');
+
+CALL prueba.verifica('X389', 'Extensión', 'Empleados', 'Sin usuario, el empleado se registra y puede ser analista',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000389'), 'EMP-AN-389', 'Otro Analista', 'ANALISTA', NULL, NULL, 'pruebas')",
+             "CALL creditos.registrar_analista(UUID_TO_BIN('34100000-0000-4000-8000-000000000389'), 'pruebas', @an)"),
+  "SELECT @an REGEXP '^AN[0-9A-F]{8}$'", 'AN y ocho caracteres', "SELECT @an", 'procedimiento');
+
+CALL prueba.rechaza('X390', 'Extensión', 'Empleados', 'Un código de empleado repetido se rechaza sin mostrar el código',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000390'), 'EMP-AN-1', 'Otro Analista', 'ANALISTA', 'AQP01', NULL, 'pruebas')"),
+  '^BNA-EMPLEADO-DUPLICADO: el código de empleado ya existe$', 'procedimiento');
+
+CALL prueba.rechaza('X391', 'Extensión', 'Empleados', 'Un usuario que ya tiene empleado no se liga a otro',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000391'), 'EMP-AN-391', 'Otro Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('32000000-0000-4000-8000-000000000001'), 'pruebas')"),
+  '^BNA-USUARIO-EMPLEADO: el usuario ya está ligado a un empleado$', 'procedimiento');
+
+CALL prueba.rechaza('X392', 'Extensión', 'Empleados', 'Un usuario de servicio no se liga a un empleado',
+  JSON_ARRAY("CALL core.crear_usuario_servicio(UUID_TO_BIN('34000000-0000-4000-8000-000000000002'), 'svc-x392', 'Servicio', 'CLIENTES', 'h', 'BCRYPT', 'v2', 'pruebas')",
+             "CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000392'), 'EMP-AN-392', 'Otro Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN('34000000-0000-4000-8000-000000000002'), 'pruebas')"),
+  '^BNA-USUARIO-EMPLEADO: un usuario de servicio no se liga a un empleado$', 'procedimiento');
+
+CALL prueba.rechaza('X393', 'Extensión', 'Empleados', 'Un usuario inexistente se rechaza',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000393'), 'EMP-AN-393', 'Otro Analista', 'ANALISTA', 'AQP01', UUID_TO_BIN(UUID()), 'pruebas')"),
+  '^BNA-USUARIO: el usuario no existe$', 'procedimiento');
+
+CALL prueba.rechaza('X394', 'Extensión', 'Empleados', 'Una agencia inexistente se rechaza sin mostrarla',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000394'), 'EMP-AN-394', 'Otro Analista', 'ANALISTA', 'NOEXISTE', NULL, 'pruebas')"),
+  '^BNA-AGENCIA: la agencia no existe$', 'procedimiento');
+
+CALL prueba.rechaza('X395', 'Extensión', 'Empleados', 'El código, el nombre y el cargo son obligatorios',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000395'), 'EMP-AN-395', '   ', 'ANALISTA', 'AQP01', NULL, 'pruebas')"),
+  '^BNA-EMPLEADO-DATOS: faltan el código, el nombre o el cargo$', 'procedimiento');
+
+CALL prueba.rechaza('X396', 'Extensión', 'bna_api', 'bna_api no puede: INSERT en core.empleado',
+  JSON_ARRAY("INSERT INTO core.empleado (id_empleado, codigo_empleado, nombre_completo, cargo) VALUES (UUID_TO_BIN(UUID()), 'E396', 'E', 'ANALISTA')"),
+  'denied', 'privilegio');
+
+-- ---------------------------------------------------------------------
+-- Captación (v1.7): el expediente del prospecto en tablas de extensión de clientes.
+-- Ayudantes en arnes_captacion.sql. Caso de la prueba X4NN: 35100000-…-000000000NNN.
+-- ---------------------------------------------------------------------
+CALL prueba.verifica('X401', 'Extensión', 'Captación', 'Un asesor registra al prospecto con su documento validado por el catálogo',
+  JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(prueba.cap_id('35000000', 401), 'DNI', '71000401', ' Rosa ', 'Prospecto', '', '951000401', 'Rosa@Example.com', 'asesor.cap', UUID_TO_BIN(UUID()), @id, @dup)"),
+  "SELECT @dup = 0 AND BIN_TO_UUID(@id) = '35000000-0000-4000-8000-000000000401' AND (SELECT COUNT(*) FROM clientes.v_solicitante_captacion_api WHERE id_solicitante = '35000000-0000-4000-8000-000000000401' AND nombres = 'Rosa' AND apellido_materno IS NULL AND correo = 'rosa@example.com' AND cod_cliente IS NULL AND creado_por = 'asesor.cap') = 1",
+  'un solicitante nuevo, correo en minúsculas', "SELECT CONCAT_WS(' ', @dup, BIN_TO_UUID(@id))", 'procedimiento');
+
+CALL prueba.verifica('X402', 'Extensión', 'Captación', 'El mismo documento devuelve el mismo solicitante y lo marca como duplicado',
+  JSON_ARRAY("CALL prueba.cap_solicitante(402, '71000402', @a)",
+             "CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '71000402', 'Otro', 'Nombre', NULL, '951999402', 'otro@example.com', 'asesor.cap', UUID_TO_BIN(UUID()), @b, @dup)"),
+  "SELECT @dup = 1 AND @a = @b AND (SELECT COUNT(*) FROM clientes.v_solicitante_captacion_api WHERE numero_documento = '71000402' AND nombres = 'Prospecto') = 1",
+  'el primero, sin cambios', "SELECT CONCAT_WS(' ', @dup, BIN_TO_UUID(@b))", 'procedimiento');
+
+CALL prueba.verifica('X403', 'Extensión', 'Captación', 'El registro del solicitante se audita sin su documento ni su nombre',
+  JSON_ARRAY("CALL prueba.cap_solicitante(403, '71000403', @a)"),
+  "SELECT (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE modulo = 'CLIENTES' AND entidad = 'solicitante_captacion' AND id_entidad = '35000000-0000-4000-8000-000000000403' AND accion = 'REGISTRAR_SOLICITANTE' AND actor = 'asesor.cap') = 1 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '35000000-0000-4000-8000-000000000403' AND (detalle LIKE '%71000403%' OR detalle LIKE '%Prospecto%' OR detalle LIKE '%example%')) = 0",
+  'un evento REGISTRAR_SOLICITANTE sin datos personales', "SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'REGISTRAR_SOLICITANTE'", 'procedimiento');
+
+CALL prueba.rechaza('X404', 'Extensión', 'Captación', 'Un DNI que no cumple su formato se rechaza sin repetirlo',
+  JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '7100A', 'Rosa', 'Prospecto', NULL, '951000404', 'r@example.com', 'asesor.cap', UUID_TO_BIN(UUID()), @id, @dup)"),
+  '^BNA-DOCUMENTO: el número no cumple el formato de su tipo de documento$', 'procedimiento');
+
+CALL prueba.rechaza('X405', 'Extensión', 'Captación', 'Un celular que no es de nueve dígitos con 9 se rechaza',
+  JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '71000405', 'Rosa', 'Prospecto', NULL, '851000405', 'r@example.com', 'asesor.cap', UUID_TO_BIN(UUID()), @id, @dup)"),
+  '^BNA-SOLICITANTE-DATOS: el celular no es válido$', 'procedimiento');
+
+CALL prueba.verifica('X406', 'Extensión', 'Captación', 'Abrir el caso lo deja INICIADO con lo que falta para habilitarlo',
+  JSON_ARRAY("CALL prueba.cap_caso(406, '71000406', @c)"),
+  "SELECT (SELECT estado = 'INICIADO' AND canal = 'AGENCIA' AND id_agencia = 'AQP01' AND JSON_CONTAINS(faltantes, '\"Consentimiento TRATAMIENTO_DATOS aceptado\"') AND JSON_CONTAINS(faltantes, '\"Verificación OTP del celular\"') AND JSON_CONTAINS(faltantes, '\"Perfil de riesgo calculado\"') FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000406')",
+  'INICIADO con faltantes', "SELECT CONCAT_WS(' ', estado, faltantes) FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000406'", 'procedimiento');
+
+CALL prueba.rechaza('X407', 'Extensión', 'Captación', 'Un solicitante no tiene dos casos abiertos',
+  JSON_ARRAY("CALL prueba.cap_caso(407, '71000407', @c)",
+             "CALL clientes.abrir_caso_captacion(UUID_TO_BIN(UUID()), prueba.cap_id('35000000', 407), 'WEB', NULL, NULL, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CASO-ABIERTO: el solicitante ya tiene un caso abierto$', 'procedimiento');
+
+CALL prueba.rechaza('X408', 'Extensión', 'Captación', 'Un caso de un solicitante inexistente se rechaza',
+  JSON_ARRAY("CALL clientes.abrir_caso_captacion(UUID_TO_BIN(UUID()), UUID_TO_BIN(UUID()), 'WEB', NULL, NULL, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-SOLICITANTE: el solicitante no existe$', 'procedimiento');
+
+CALL prueba.rechaza('X409', 'Extensión', 'Captación', 'Un canal desconocido se rechaza',
+  JSON_ARRAY("CALL prueba.cap_solicitante(409, '71000409', @s)",
+             "CALL clientes.abrir_caso_captacion(UUID_TO_BIN(UUID()), @s, 'FAX', NULL, NULL, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CASO-DATOS: el canal no es válido$', 'procedimiento');
+
+CALL prueba.verifica('X410', 'Extensión', 'Captación', 'Los consentimientos pasan el caso a EN_VALIDACION y TERMINOS guarda su versión',
+  JSON_ARRAY("CALL prueba.cap_consentido(410, '71000410', @c)"),
+  "SELECT @cap_estado = 'EN_VALIDACION' AND (SELECT COUNT(*) FROM clientes.v_consentimiento_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000410' AND aceptado = 1) = 3 AND (SELECT version FROM clientes.v_consentimiento_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000410' AND tipo = 'TERMINOS') = 'v1' AND (SELECT COUNT(*) FROM clientes.v_consentimiento_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000410' AND tipo <> 'TERMINOS' AND version IS NOT NULL) = 0",
+  'EN_VALIDACION, tres aceptados, versión solo en TERMINOS', "SELECT @cap_estado", 'procedimiento');
+
+CALL prueba.rechaza('X411', 'Extensión', 'Captación', 'Un tipo de consentimiento desconocido se rechaza',
+  JSON_ARRAY("CALL prueba.cap_caso(411, '71000411', @c)",
+             "CALL clientes.registrar_consentimientos_captacion(@c, JSON_ARRAY(JSON_OBJECT('tipo', 'MARKETING', 'aceptado', TRUE, 'medio', 'DIGITAL')), 'v1', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CONSENTIMIENTO-DATOS: tipo, aceptación o medio no válidos$', 'procedimiento');
+
+CALL prueba.rechaza('X412', 'Extensión', 'Captación', 'Sin consentimiento de tratamiento de datos no se envía un OTP',
+  JSON_ARRAY("CALL prueba.cap_caso(412, '71000412', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN(UUID()), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x)"),
+  '^BNA-CONSENTIMIENTO-REQUERIDO: falta el consentimiento TRATAMIENTO_DATOS$', 'procedimiento');
+
+CALL prueba.verifica('X413', 'Extensión', 'Captación', 'Un OTP nuevo vence en los minutos del catálogo y deja vencido al pendiente anterior del mismo canal',
+  JSON_ARRAY("CALL prueba.cap_consentido(413, '71000413', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000413'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x1)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000001413'), @c, 'SMS', REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x2)"),
+  "SELECT (SELECT estado FROM clientes.v_otp_captacion_api WHERE id_otp = '35200000-0000-4000-8000-000000000413') = 'EXPIRADO' AND (SELECT estado = 'PENDIENTE' AND TIMESTAMPDIFF(SECOND, fecha_emision, fecha_expiracion) = 300 AND fecha_expiracion = @x2 FROM clientes.v_otp_captacion_api WHERE id_otp = '35200000-0000-4000-8000-000000001413')",
+  'el primero EXPIRADO, el segundo PENDIENTE por 5 minutos', "SELECT GROUP_CONCAT(estado) FROM clientes.v_otp_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000413'", 'procedimiento');
+
+CALL prueba.verifica('X414', 'Extensión', 'Captación', 'El código correcto queda USADO y registra la verificación del celular',
+  JSON_ARRAY("CALL prueba.cap_consentido(414, '71000414', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000414'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000414'), @c, REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod, @rest, @est)"),
+  "SELECT @cod = 'USADO' AND @rest = 3 AND (SELECT COUNT(*) FROM clientes.v_validacion_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000414' AND tipo = 'CELULAR' AND resultado = 'APROBADO' AND proveedor = 'OTP-SMS') = 1",
+  'USADO y CELULAR APROBADO', "SELECT CONCAT_WS(' ', @cod, @rest, @est)", 'procedimiento');
+
+CALL prueba.verifica('X415', 'Extensión', 'Captación', 'El tercer código errado bloquea el OTP y no verifica el celular',
+  JSON_ARRAY("CALL prueba.cap_consentido(415, '71000415', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000415'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000415'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod1, @rest1, @est)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000415'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod2, @rest2, @est)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000415'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod3, @rest3, @est)"),
+  "SELECT @cod1 = 'PENDIENTE' AND @rest1 = 2 AND @cod3 = 'BLOQUEADO' AND @rest3 = 0 AND (SELECT intentos_fallidos FROM clientes.v_otp_captacion_api WHERE id_otp = '35200000-0000-4000-8000-000000000415') = 3 AND (SELECT COUNT(*) FROM clientes.v_validacion_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000415') = 0",
+  'BLOQUEADO al tercero, sin validación', "SELECT CONCAT_WS(' ', @cod1, @rest1, @cod3, @rest3)", 'procedimiento');
+
+CALL prueba.rechaza('X416', 'Extensión', 'Captación', 'Un OTP bloqueado ya no se verifica',
+  JSON_ARRAY("CALL prueba.cap_consentido(416, '71000416', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @a, @b, @e)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @a, @b, @e)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @a, @b, @e)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @a, @b, @e)"),
+  '^BNA-OTP: no hay un código pendiente$', 'procedimiento');
+
+CALL prueba.rechaza('X417', 'Extensión', 'Captación', 'El celular y el correo se verifican solo con un OTP',
+  JSON_ARRAY("CALL prueba.cap_consentido(417, '71000417', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'CELULAR', 'APROBADO', 'MANUAL', 'Llamada', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-VALIDACION-CAPTACION: tipo o resultado no válidos$', 'procedimiento');
+
+CALL prueba.rechaza('X418', 'Extensión', 'Captación', 'La biometría exige su propio consentimiento',
+  JSON_ARRAY("CALL prueba.cap_consentido(418, '71000418', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'BIOMETRIA', 'APROBADO', 'SIMULADO', 'Rostro', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CONSENTIMIENTO-REQUERIDO: falta el consentimiento BIOMETRIA$', 'procedimiento');
+
+CALL prueba.verifica('X419', 'Extensión', 'Captación', 'Una validación rechazada cierra el caso como RECHAZADO con su motivo',
+  JSON_ARRAY("CALL prueba.cap_consentido(419, '71000419', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'LISTAS_NEGRAS', 'RECHAZADO', 'SIMULADO', 'Coincidencia', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'RECHAZADO' AND (SELECT motivo_cierre = 'Validación rechazada: LISTAS_NEGRAS' AND fecha_cierre IS NOT NULL AND JSON_LENGTH(faltantes) = 0 FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000419')",
+  'RECHAZADO, cerrado, sin faltantes', "SELECT CONCAT_WS(' ', estado, motivo_cierre) FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000419'", 'procedimiento');
+
+CALL prueba.rechaza('X420', 'Extensión', 'Captación', 'Un caso cerrado no admite cambios',
+  JSON_ARRAY("CALL prueba.cap_consentido(420, '71000420', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'RENIEC', 'RECHAZADO', 'SIMULADO', 'No coincide', 'asesor.cap', UUID_TO_BIN(UUID()), @e)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'RENIEC', 'APROBADO', 'MANUAL', 'Revisado', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CASO-CERRADO: el caso ya no admite cambios$', 'procedimiento');
+
+CALL prueba.verifica('X421', 'Extensión', 'Captación', 'Una validación OBSERVADA deja el caso OBSERVADO hasta que una revisión manual la reemplaza',
+  JSON_ARRAY("CALL prueba.cap_consentido(421, '71000421', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'PEP', 'OBSERVADO', 'SIMULADO', 'Posible PEP', 'asesor.cap', UUID_TO_BIN(UUID()), @e1)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'PEP', 'APROBADO', 'MANUAL', 'Debida diligencia', 'asesor.cap', UUID_TO_BIN(UUID()), @e2)"),
+  "SELECT @e1 = 'OBSERVADO' AND @e2 = 'EN_VALIDACION'",
+  'OBSERVADO y luego EN_VALIDACION', "SELECT CONCAT_WS(' ', @e1, @e2)", 'procedimiento');
+
+CALL prueba.rechaza('X422', 'Extensión', 'Captación', 'Sin consentimiento de consulta a burós no se consulta una central',
+  JSON_ARRAY("CALL prueba.cap_caso(422, '71000422', @c)",
+             "CALL clientes.registrar_consentimientos_captacion(@c, JSON_ARRAY(JSON_OBJECT('tipo', 'TRATAMIENTO_DATOS', 'aceptado', TRUE, 'medio', 'DIGITAL'), JSON_OBJECT('tipo', 'CONSULTA_BUROS', 'aceptado', FALSE, 'medio', 'DIGITAL')), 'v1', 'asesor.cap', UUID_TO_BIN(UUID()), @e)",
+             "CALL clientes.registrar_consulta_riesgo_captacion(@c, 'SBS', 'NORMAL', 0, 0, 0, 'SIMULADO', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CONSENTIMIENTO-REQUERIDO: falta el consentimiento CONSULTA_BUROS$', 'procedimiento');
+
+CALL prueba.rechaza('X423', 'Extensión', 'Captación', 'El perfil de riesgo exige al menos una consulta a una central',
+  JSON_ARRAY("CALL prueba.cap_consentido(423, '71000423', @c)",
+             "CALL clientes.registrar_perfil_captacion(@c, 800, 'BAJO', NULL, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-SIN-CONSULTA: consulte al menos una central de riesgo$', 'procedimiento');
+
+CALL prueba.verifica('X424', 'Extensión', 'Captación', 'Con todo lo requerido el caso queda APROBADO y sin faltantes',
+  JSON_ARRAY("CALL prueba.cap_listo(424, '71000424', @c)"),
+  "SELECT (SELECT estado = 'APROBADO' AND JSON_LENGTH(faltantes) = 0 FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000424') AND (SELECT puntaje = 820 AND vigente = 1 FROM clientes.v_perfil_riesgo_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000424')",
+  'APROBADO, perfil vigente', "SELECT CONCAT_WS(' ', estado, faltantes) FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000424'", 'procedimiento');
+
+CALL prueba.verifica('X425', 'Extensión', 'Captación', 'Una consulta posterior al perfil exige recalcularlo',
+  JSON_ARRAY("CALL prueba.cap_listo(425, '71000425', @c)",
+             "CALL clientes.registrar_consulta_riesgo_captacion(@c, 'INFOCORP', 'CPP', 1500.50, 2, 15, 'MANUAL', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'EN_VALIDACION' AND (SELECT JSON_CONTAINS(faltantes, '\"Perfil de riesgo actualizado con la última consulta\"') FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000425') AND (SELECT vigente = 0 FROM clientes.v_perfil_riesgo_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000425')",
+  'EN_VALIDACION, perfil no vigente', "SELECT @e", 'procedimiento');
+
+CALL prueba.verifica('X426', 'Extensión', 'Captación', 'Un perfil MUY_ALTO rechaza el caso',
+  JSON_ARRAY("CALL prueba.cap_listo(426, '71000426', @c)",
+             "CALL clientes.registrar_perfil_captacion(@c, 150, 'MUY_ALTO', 'Mora alta', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'RECHAZADO' AND (SELECT motivo_cierre FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000426') = 'Perfil de riesgo MUY_ALTO'",
+  'RECHAZADO por el perfil', "SELECT @e", 'procedimiento');
+
+CALL prueba.verifica('X427', 'Extensión', 'Captación', 'La observación del asesor detiene el caso y al levantarla vuelve a APROBADO',
+  JSON_ARRAY("CALL prueba.cap_listo(427, '71000427', @c)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'OBSERVAR', 'Falta sustento de domicilio', 'asesor.cap', UUID_TO_BIN(UUID()), @e1)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'LEVANTAR_OBSERVACION', 'Domicilio sustentado', 'asesor.cap', UUID_TO_BIN(UUID()), @e2)"),
+  "SELECT @e1 = 'OBSERVADO' AND @e2 = 'APROBADO' AND (SELECT observacion IS NULL FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000427')",
+  'OBSERVADO y luego APROBADO', "SELECT CONCAT_WS(' ', @e1, @e2)", 'procedimiento');
+
+CALL prueba.verifica('X428', 'Extensión', 'Captación', 'El asesor rechaza un caso abierto con su motivo',
+  JSON_ARRAY("CALL prueba.cap_caso(428, '71000428', @c)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'RECHAZAR', 'Desistió', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'RECHAZADO' AND (SELECT motivo_cierre = 'Desistió' AND fecha_cierre IS NOT NULL FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000428')",
+  'RECHAZADO', "SELECT @e", 'procedimiento');
+
+CALL prueba.verifica('X429', 'Extensión', 'Captación', 'Cerrado un caso, el solicitante puede abrir otro',
+  JSON_ARRAY("CALL prueba.cap_caso(429, '71000429', @c)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'RECHAZAR', 'Desistió', 'asesor.cap', UUID_TO_BIN(UUID()), @e)",
+             "CALL clientes.abrir_caso_captacion(UUID_TO_BIN('35100000-0000-4000-8000-000000001429'), prueba.cap_id('35000000', 429), 'WEB', NULL, NULL, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  "SELECT (SELECT COUNT(*) FROM clientes.v_caso_captacion_api WHERE id_solicitante = '35000000-0000-4000-8000-000000000429') = 2",
+  'dos casos, uno abierto', "SELECT GROUP_CONCAT(estado) FROM clientes.v_caso_captacion_api WHERE id_solicitante = '35000000-0000-4000-8000-000000000429'", 'procedimiento');
+
+CALL prueba.rechaza('X430', 'Extensión', 'Captación', 'Solo se revoca un caso HABILITADO',
+  JSON_ARRAY("CALL prueba.cap_listo(430, '71000430', @c)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'REVOCAR', 'Fraude', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CASO-ESTADO: solo se revoca un caso HABILITADO$', 'procedimiento');
+
+CALL prueba.rechaza('X431', 'Extensión', 'Captación', 'Un caso que no está listo no se liga a un cliente',
+  JSON_ARRAY("CALL prueba.cap_consentido(431, '70000001', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CASO-NO-LISTO: el caso no cumple los requisitos para habilitarse$', 'procedimiento');
+
+CALL prueba.rechaza('X432', 'Extensión', 'Captación', 'El cliente ligado debe tener el documento del solicitante',
+  JSON_ARRAY("CALL prueba.cap_listo(432, '71000432', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CLIENTE-DOCUMENTO: el cliente no tiene el documento del solicitante$', 'procedimiento');
+
+CALL prueba.rechaza('X433', 'Extensión', 'Captación', 'Un cliente que no está ACTIVO no se liga',
+  JSON_ARRAY("CALL prueba.cap_listo(433, '70000004', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C004', FALSE, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CLIENTE-NO-ACTIVO: el cliente no está ACTIVO$', 'procedimiento');
+
+CALL prueba.rechaza('X434', 'Extensión', 'Captación', 'Sin cliente ligado el caso no se habilita',
+  JSON_ARRAY("CALL prueba.cap_listo(434, '71000434', @c)",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CASO-NO-LISTO: el caso no tiene un cliente ligado$', 'procedimiento');
+
+CALL prueba.verifica('X435', 'Extensión', 'Captación', 'Un cliente existente se liga y el caso se habilita con su vigencia',
+  JSON_ARRAY("CALL prueba.cap_listo(435, '70000001', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'HABILITADO' AND (SELECT cod_cliente = 'C001' AND cliente_nuevo = 0 AND estado_cliente = 'ACTIVO' AND id_verificacion_captacion = 'VC-1' AND fecha_verificacion = core.fn_fecha_negocio(UTC_TIMESTAMP(6)) AND vigente_hasta = fecha_verificacion + INTERVAL 30 DAY AND fecha_cierre IS NOT NULL FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000435') AND (SELECT cod_cliente FROM clientes.v_solicitante_captacion_api WHERE id_solicitante = '35000000-0000-4000-8000-000000000435') = 'C001'",
+  'HABILITADO con C001 por 30 días', "SELECT CONCAT_WS(' ', estado, cod_cliente, fecha_verificacion, vigente_hasta) FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000435'", 'procedimiento');
+
+CALL prueba.verifica('X436', 'Extensión', 'Captación', 'Un cliente nuevo registrado HABILITADO se liga, y la verificación del celular queda también en el cliente',
+  JSON_ARRAY("CALL prueba.cap_listo(436, '71000436', @c)",
+             "CALL clientes.registrar_cliente('DNI', '71000436', 'Prospecto', 'Ficticio', NULL, 'p436@example.com', '950000436', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'svc-captacion', @cli)",
+             "CALL clientes.vincular_cliente_captacion(@c, @cli, TRUE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'HABILITADO' AND (SELECT cliente_nuevo = 1 AND cod_cliente = @cli FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000436') AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'REGISTRAR_VALIDACION' AND JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.cod_cliente')) = @cli AND JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.tipo_validacion')) = 'CELULAR' AND actor = 'asesor.cap') = 1",
+  'HABILITADO y la validación CELULAR del cliente', "SELECT CONCAT_WS(' ', @e, @cli)", 'procedimiento');
+
+CALL prueba.verifica('X437', 'Extensión', 'Captación', 'Habilitar otra vez no cambia nada ni repite eventos',
+  JSON_ARRAY("CALL prueba.cap_listo(437, '70000002', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C002', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e1)",
+             "CALL clientes.habilitar_caso_captacion(@c, 60, 'asesor.cap', UUID_TO_BIN(UUID()), @e2)"),
+  "SELECT @e1 = 'HABILITADO' AND @e2 = 'HABILITADO' AND (SELECT vigente_hasta = fecha_verificacion + INTERVAL 30 DAY FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000437') AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '35100000-0000-4000-8000-000000000437' AND accion = 'HABILITAR') = 1",
+  'un solo HABILITAR, vigencia de la primera', "SELECT CONCAT_WS(' ', @e1, @e2)", 'procedimiento');
+
+CALL prueba.verifica('X438', 'Extensión', 'Captación', 'Un caso HABILITADO se revoca con su motivo',
+  JSON_ARRAY("CALL prueba.cap_listo(438, '70000003', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C003', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e1)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'REVOCAR', 'Documento adulterado', 'asesor.cap', UUID_TO_BIN(UUID()), @e2)"),
+  "SELECT @e2 = 'REVOCADO' AND (SELECT motivo_cierre = 'Documento adulterado' AND cod_cliente = 'C003' FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000438')",
+  'REVOCADO', "SELECT @e2", 'procedimiento');
+
+CALL prueba.rechaza('X439', 'Extensión', 'Captación', 'La vigencia de la habilitación va de 1 a 365 días',
+  JSON_ARRAY("CALL prueba.cap_listo(439, '70000001', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 0, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CASO-DATOS: la vigencia va de 1 a 365 días$', 'procedimiento');
+
+CALL prueba.verifica('X440', 'Extensión', 'Captación', 'Cada paso del expediente se audita con su actor, sin el documento ni el hash del OTP',
+  JSON_ARRAY("CALL prueba.cap_listo(440, '70000001', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT (SELECT COUNT(DISTINCT accion) FROM core.v_evento_auditoria_api WHERE modulo = 'CLIENTES' AND entidad = 'caso_captacion' AND id_entidad = '35100000-0000-4000-8000-000000000440' AND accion IN ('ABRIR_CASO', 'REGISTRAR_CONSENTIMIENTOS', 'ENVIAR_OTP', 'VERIFICAR_OTP', 'REGISTRAR_VALIDACION', 'CONSULTAR_CENTRAL', 'CALCULAR_PERFIL', 'VINCULAR_CLIENTE', 'HABILITAR')) = 9 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '35100000-0000-4000-8000-000000000440' AND (detalle LIKE '%70000001%' OR detalle LIKE '%aaaaaaaa%')) = 0",
+  'nueve acciones auditadas', "SELECT GROUP_CONCAT(DISTINCT accion) FROM core.v_evento_auditoria_api WHERE id_entidad = '35100000-0000-4000-8000-000000000440'", 'procedimiento');
+
+CALL prueba.verifica('X441', 'Extensión', 'Captación', 'La vista de OTP de la API no expone el hash del código',
+  JSON_ARRAY("DO 0"),
+  "SELECT (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'clientes' AND table_name = 'v_otp_captacion_api') > 0 AND (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'clientes' AND table_name = 'v_otp_captacion_api' AND column_name LIKE '%codigo%') = 0",
+  'sin columna del código', "SELECT GROUP_CONCAT(column_name) FROM information_schema.columns WHERE table_schema = 'clientes' AND table_name = 'v_otp_captacion_api'", 'declarativo');
+
+CALL prueba.rechaza('X442', 'Extensión', 'bna_api', 'bna_api no puede: leer clientes.otp_captacion (el hash del código)',
+  JSON_ARRAY("SELECT COUNT(*) INTO @n FROM clientes.otp_captacion"),
+  'denied', 'privilegio');
+
+CALL prueba.rechaza('X443', 'Extensión', 'bna_api', 'bna_api no puede: UPDATE en clientes.caso_captacion',
+  JSON_ARRAY("UPDATE clientes.caso_captacion SET estado = 'APROBADO'"),
+  'denied', 'privilegio');

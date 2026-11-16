@@ -13,7 +13,7 @@ RED=kind
 NS=bna
 IMAGENES=(bna/core-db:local bna/db-aux:local bna/coredb:local bna/backend:local
           bna/sol:local bna/seguridad:local bna/frontend:local)
-DESPLIEGUES=(db db-aux coredb cuentas tarjetas sol captacion seguridad frontend)
+DESPLIEGUES=(db db-aux coredb cuentas tarjetas sol evaluacion desembolso captacion seguridad frontend)
 ESPERA="${BNA_ESPERA_SEGUNDOS:-600}"
 
 k() { kubectl --context "$CONTEXTO" "$@"; }
@@ -105,6 +105,8 @@ Producto desplegado en el clúster $CLUSTER (kind).
   CUENTAS       http://127.0.0.1:18001/docs
   TARJETAS      http://127.0.0.1:18002/docs
   SOL           http://127.0.0.1:18011/docs
+  Evaluación    http://localhost:13000/evaluacion (API: http://127.0.0.1:18015/docs)
+  Desembolso    http://localhost:13000/desembolso (API: http://127.0.0.1:18016/docs)
   CAPTACION     http://127.0.0.1:18014/docs
   Seguridad     http://127.0.0.1:18013
 
@@ -116,9 +118,13 @@ TEXTO
 humo() {
   requisitos
   exigir_cluster
+  # E2E_INTENTOS: el Service puede tardar en enrutar a un pod que acaba de quedar listo.
   k -n "$NS" exec -i deployment/coredb -c coredb -- env \
+    E2E_INTENTOS=5 E2E_ESPERA=2 \
     BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
+    SOL_INITIAL_PASSWORD="$(valor SOL_INITIAL_PASSWORD)" \
+    EVALUACION_TOKEN_SOL="$(valor EVALUACION_TOKEN_SOL)" \
     CAP_SOL_TOKEN="$(valor CAP_SOL_TOKEN)" \
     python - < scripts/flujo_e2e.py
 }

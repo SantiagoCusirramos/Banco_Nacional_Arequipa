@@ -113,6 +113,10 @@ resumen() {
   CAPTACION         http://127.0.0.1:$(valor BNA_PUERTO_CAPTACION)/docs
   Captación (asesor) http://localhost:$(valor BNA_PUERTO_FRONTEND)/captacion
   Seguridad         http://127.0.0.1:$(valor BNA_PUERTO_SEGURIDAD)
+  Evaluación        http://localhost:$(valor BNA_PUERTO_FRONTEND)/evaluacion
+                    API: http://127.0.0.1:$(valor BNA_PUERTO_EVALUACION)/docs
+  Desembolso        http://localhost:$(valor BNA_PUERTO_FRONTEND)/desembolso
+                    API: http://127.0.0.1:$(valor BNA_PUERTO_DESEMBOLSO)/docs
   MySQL (CORE)      127.0.0.1:$(valor BNA_PUERTO_DB)
 
   Administrador de COREDB: usuario $(valor BNA_ADMIN_USUARIO); su contraseña está en
@@ -134,6 +138,8 @@ humo() {
   compose exec -T \
     -e BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     -e BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
+    -e SOL_INITIAL_PASSWORD="$(valor SOL_INITIAL_PASSWORD)" \
+    -e EVALUACION_TOKEN_SOL="$(valor EVALUACION_TOKEN_SOL)" \
     -e CAP_SOL_TOKEN="$(valor CAP_SOL_TOKEN)" \
     coredb python - < scripts/flujo_e2e.py
 }

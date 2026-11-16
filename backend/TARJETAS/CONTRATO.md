@@ -69,6 +69,11 @@ Los decide COREDB, según el rol del token:
 | `POST /emision` | `CREAR_TARJETA` | Sí | Sí | No | No |
 | `POST /{id_tarjeta}/bloqueo` | `BLOQUEAR_TARJETA` | Sí | Sí | No | No |
 | `POST /{id_tarjeta}/estado` | `BLOQUEAR_TARJETA` | Sí | Sí | No | No |
+| `POST /{id_tarjeta}/autorizaciones` | `REGISTRAR_MOVIMIENTO` | Sí | Sí | No | No |
+| `GET /autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Sí | Sí | Sí | No |
+| `POST /autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Sí | Sí | No | No |
+| `PUT /{id_tarjeta}/credenciales/{tipo}` | `CREAR_TARJETA` | Sí | Sí | No | No |
+| `POST /{id_tarjeta}/credenciales/{tipo}/validacion` | `REGISTRAR_MOVIMIENTO` | Sí | Sí | No | No |
 
 Sin permiso, la respuesta es 403 `ERR-TAR-PERMISO-DENEGADO`.
 
@@ -146,6 +151,81 @@ El motivo es obligatorio (de 3 a 255 caracteres) y queda en el historial de la t
 - Una transición que la base no admite (por ejemplo, reactivar una tarjeta `CANCELADA`) responde 400 `ERR-TAR-002`.
 - El origen del cambio no se envía: COREDB lo toma del token (`OPERADOR` para personas, `SISTEMA` para otro módulo).
 
+### 4.6 Autorizar un débito: `POST /api/v1/tarjetas/{id_tarjeta}/autorizaciones`
+
+Antes de contabilizar un retiro o un pago con la tarjeta. Exige `X-Idempotency-Key` (UUIDv4), como la emisión.
+
+```json
+{"num_cuenta": "10100000000001", "tipo_operacion": "RETIRO", "monto": "150.00", "id_terminal": "DEV-ATM-01"}
+```
+
+- `tipo_operacion`: `RETIRO` (por omisión), `PAGO` o `FONDEO_BILLETERA`.
+- `id_canal` (`ATM`, `AGE`, `VEN`, `HB`, `BD`) o `id_terminal`: uno de los dos.
+- La cuenta debe ser una de las que opera la tarjeta.
+- Si se aprueba, el monto queda retenido del saldo disponible y suma al tope del día del canal (RN-TOP-001) hasta que se contabilice o se extorne.
+
+```json
+{"uuid_autorizacion": "…", "id_tarjeta": "…", "num_cuenta": "10100000000001", "id_canal": null,
+ "id_terminal": "DEV-ATM-01", "tipo_operacion": "RETIRO", "monto": "150.00",
+ "estado_autorizacion": "AUTORIZADA", "codigo_respuesta": "00", "motivo_rechazo": null, "aprobada": true}
+```
+
+| Estado | `error_code` | Cuándo |
+|---|---|---|
+| 201 | | `aprobada: true`, `codigo_respuesta` `00`. `message`: `Operación autorizada` |
+| 201 | | Una regla no se cumple: `aprobada: false`, `estado_autorizacion` `RECHAZADA` y `codigo_respuesta` `51` (sin fondos), `54` (vencida), `57` (no permitida en la cuenta o el canal, por ejemplo una cuenta mancomunada en cajero), `61` (excede el tope del día) o `62` (tarjeta no operativa). `message`: `Operación rechazada (código 51)` |
+| 201 | | La misma llave y los mismos datos otra vez: devuelve la autorización ya registrada y no retiene el saldo dos veces |
+| 400 | `ERR-TAR-HEADER-REQUERIDO`, `ERR-TAR-HEADER-INVALIDO` | Falta la llave o no es un UUIDv4 |
+| 400 | `ERR-VALIDACION-ESQUEMA` | Un campo falta, sobra o no tiene el formato, o vienen el canal y la terminal a la vez |
+| 400 | `ERR-TAR-CUENTA-INVALIDA` | La tarjeta no opera esa cuenta, o no existe |
+| 409 | `ERR-TAR-IDEMPOTENCIA` | La llave ya se usó para otra autorización |
+
+El motivo de un rechazo no trae montos ni saldos, para poder mostrarlo.
+
+### 4.7 Una autorización: `GET /api/v1/tarjetas/autorizaciones/{uuid_autorizacion}`
+
+Responde la autorización (404 `ERR-TAR-AUTORIZACION-NO-ENCONTRADA` si no existe).
+
+### 4.8 Extornar: `POST /api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/extorno`
+
+```json
+{"motivo": "Cajero sin efectivo"}
+```
+
+Pasa la autorización a `EXTORNADA` (`codigo_respuesta` `EXT`) y libera el saldo retenido y el tope (RN-ATM-003). Repetirlo responde lo mismo sin cambiar nada.
+
+| Estado | `error_code` | Cuándo |
+|---|---|---|
+| 200 | | `message`: `Operación extornada` |
+| 404 | `ERR-TAR-AUTORIZACION-NO-ENCONTRADA` | No existe |
+| 409 | `ERR-TAR-EXTORNO-NO-PERMITIDO` | Fue rechazada, o la operación ya se contabilizó (se revierte con un movimiento inverso en CUENTAS) |
+
+### 4.9 Claves de la tarjeta: `PUT /api/v1/tarjetas/{id_tarjeta}/credenciales/{tipo}` y `POST .../{tipo}/validacion`
+
+`tipo`: `PIN_ATM` (4 dígitos) o `CLAVE_WEB` (6 dígitos), RN-TAR-001.
+
+```json
+{"valor": "4821"}
+```
+
+Asignar o cambiar la clave reinicia los intentos fallidos. La base guarda solo su hash con una sal propia. `message`: `Clave registrada`.
+
+Para validar, se envía también el canal o la terminal:
+
+```json
+{"valor": "4821", "id_terminal": "DEV-ATM-01"}
+```
+
+| Estado | `error_code` | Cuándo |
+|---|---|---|
+| 200 | | `{"resultado": "EXITOSO", "intentos_restantes": 3}`, `message`: `Clave correcta` |
+| 200 | | `{"resultado": "FALLIDO", "intentos_restantes": 2}`, `message`: `Clave incorrecta`. Con 0 la tarjeta quedó `BLOQUEADA` (RN-TAR-004) |
+| 400 | `ERR-VALIDACION-ESQUEMA` | La clave no son de 4 a 6 dígitos, o el tipo no es uno de los dos |
+| 400 | `ERR-TAR-CREDENCIAL-INVALIDA` | La longitud no es la del tipo, o la tarjeta aún no tiene esa clave |
+| 400 | `ERR-TAR-003` | La tarjeta no está operativa: no se valida ni se cuenta el intento |
+
+La clave nunca se devuelve, no se registra en la bitácora y no aparece en los mensajes de error.
+
 ## 5. Errores comunes
 
 | Estado | `error_code` | Cuándo |
@@ -153,11 +233,11 @@ El motivo es obligatorio (de 3 a 255 caracteres) y queda en el historial de la t
 | 401 | `ERR-TAR-TOKEN-REQUERIDO`, `ERR-TAR-TOKEN-INVALIDO`, `ERR-TAR-TOKEN-EXPIRADO` | Sin token, token malo o vencido. Ante `ERR-TAR-TOKEN-EXPIRADO`, iniciar sesión otra vez y repetir una sola vez |
 | 403 | `ERR-TAR-PERMISO-DENEGADO` | El rol no tiene el permiso |
 | 503 | `ERR-COR-NO-DISPONIBLE` | COREDB no está disponible |
-| 504 | `ERR-TAR-TIMEOUT-CORE` | COREDB no respondió a tiempo. En una emisión, repetir con la misma llave |
+| 504 | `ERR-TAR-TIMEOUT-CORE` | COREDB no respondió a tiempo. En una emisión o una autorización, repetir con la misma llave |
 
 ## 6. Pendiente
 
-- **Autorizar, extornar y validar claves.** Retiros en cajero (RN-TOP-001), extornos (RN-ATM-003) y validación del PIN, la clave web y la tarjeta matriz (RN-TAR-001, 002 y 004) necesitan procedimientos en la base que COREDB pueda ejecutar. Propuestos en [miguelpro324/bna-core-db#1](https://github.com/miguelpro324/bna-core-db/issues/1). Cuando existan, este contrato suma sus rutas.
+- **Tarjeta matriz.** Validar una coordenada (RN-TAR-002) necesita un procedimiento que emita la matriz; la base aún no lo tiene.
 - **Usuarios de servicio de los módulos consumidores.** Dar `VER_TARJETA` a `SERVICIO:CAJERO_ATM`, `SERVICIO:HOME_BANKING` y `SERVICIO:BILLETERA_DIGITAL` en COREDB, cuando esos módulos se integren.
 - **Tarjetas virtuales.** Necesitan un BIN propio de tipo `VIRTUAL` en el catálogo (issue #34, pregunta 7).
 

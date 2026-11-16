@@ -226,3 +226,138 @@ CALL prueba.verifica('X67', 'Extensión', 'Canal', 'Un crédito por AGE no depen
 CALL prueba.rechaza('X68', 'Extensión', 'Canal', 'Una autorización por HB en USD se rechaza como en el movimiento (C2)',
   JSON_ARRAY("INSERT INTO tarjetas.autorizacion (tipo_operacion, monto, estado_autorizacion, id_canal, id_tarjeta, num_cuenta) VALUES ('RETIRO', 10, 'AUTORIZADA', 'HB', UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'CTA-USD-1')"),
   'ERR-TAR-006: el canal HB no opera en USD$', 'trigger');
+
+-- Autorizaciones, extornos y credenciales de tarjeta (v1.5). T1 es la tarjeta de C001
+-- y opera CTA-PEN-1, CTA-USD-1 y CTA-CONJ.
+SET @t1 = UUID_TO_BIN('a0000000-0000-4000-8000-000000000001');
+
+CALL prueba.verifica('X357', 'Extensión', 'Autorización', 'Un retiro en cajero dentro del tope se autoriza y retiene el saldo',
+  JSON_ARRAY("SET @s0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000001'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 100, NULL, 'pruebas', @e, @c)"),
+  "SELECT @e = 'AUTORIZADA' AND @c = '00' AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 - 100 AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'AUTORIZAR_OPERACION') = 1",
+  'AUTORIZADA, 00 y saldo disponible - 100', "SELECT CONCAT(@e, ', ', @c)", 'procedimiento');
+
+CALL prueba.verifica('X358', 'Extensión', 'Autorización', 'Repetir el uuid con los mismos datos no vuelve a retener el saldo',
+  JSON_ARRAY("SET @s0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000002'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 100, NULL, 'pruebas', @e1, @c1)",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000002'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 100, NULL, 'pruebas', @e2, @c2)"),
+  "SELECT @e2 = 'AUTORIZADA' AND @c2 = '00' AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 - 100 AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'AUTORIZAR_OPERACION') = 1",
+  'una sola retención y un evento', "SELECT CONCAT(@e2, ', ', @c2)", 'procedimiento');
+
+CALL prueba.rechaza('X359', 'Extensión', 'Autorización', 'El mismo uuid con otro monto se rechaza',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000003'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 100, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000003'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 200, NULL, 'pruebas', @e, @c)"),
+  'BNA-IDEMPOTENCIA: la autorización', 'procedimiento');
+
+CALL prueba.verifica('X360', 'Extensión', 'Autorización', 'Sin saldo queda RECHAZADA con 51 y el saldo no cambia',
+  JSON_ARRAY("SET @s0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-USD-1')",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000004'), @t1, 'CTA-USD-1', 'VEN', NULL, 'RETIRO', 999999, NULL, 'pruebas', @e, @c)"),
+  "SELECT @e = 'RECHAZADA' AND @c = '51' AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-USD-1') = @s0 AND (SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a2000000-0000-4000-8000-000000000004')) = 'RECHAZADA'",
+  'RECHAZADA, 51, saldo igual', "SELECT CONCAT(@e, ', ', @c)", 'procedimiento');
+
+CALL prueba.verifica('X361', 'Extensión', 'Autorización', 'Sobre el tope del cajero queda RECHAZADA con 61, sin montos en el motivo',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000005'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 2000, NULL, 'pruebas', @e, @c)"),
+  "SELECT @e = 'RECHAZADA' AND @c = '61' AND (SELECT motivo_rechazo FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a2000000-0000-4000-8000-000000000005')) = 'ERR-TAR-007: tope diario excedido (RN-TOP-001)'",
+  'RECHAZADA y 61', "SELECT CONCAT(@e, ', ', @c)", 'procedimiento');
+
+CALL prueba.verifica('X362', 'Extensión', 'Autorización', 'Con la tarjeta bloqueada queda RECHAZADA con 62',
+  JSON_ARRAY("CALL tarjetas.cambiar_estado_tarjeta(@t1, 'BLOQUEADA', 'prueba', 'CLIENTE', 'pruebas', @h)",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000006'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 100, NULL, 'pruebas', @e, @c)"),
+  "SELECT @e = 'RECHAZADA' AND @c = '62'", 'RECHAZADA y 62', "SELECT CONCAT(@e, ', ', @c)", 'procedimiento');
+
+CALL prueba.verifica('X363', 'Extensión', 'Autorización', 'Una cuenta mancomunada conjunta en cajero queda RECHAZADA con 57 (RN-ATM-005)',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000007'), @t1, 'CTA-CONJ', NULL, 'ATM-AQP-001', 'RETIRO', 10, NULL, 'pruebas', @e, @c)"),
+  "SELECT @e = 'RECHAZADA' AND @c = '57'", 'RECHAZADA y 57', "SELECT CONCAT(@e, ', ', @c)", 'procedimiento');
+
+CALL prueba.rechaza('X364', 'Extensión', 'Autorización', 'Una tarjeta no autoriza en una cuenta que no opera',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000008'), @t1, 'CTA-PEN-2', 'VEN', NULL, 'RETIRO', 10, NULL, 'pruebas', @e, @c)"),
+  'BNA-TARJETA: la tarjeta no opera esa cuenta', 'procedimiento');
+
+CALL prueba.rechaza('X365', 'Extensión', 'Autorización', 'Un monto de cero se rechaza',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000009'), @t1, 'CTA-PEN-1', 'VEN', NULL, 'RETIRO', 0, NULL, 'pruebas', @e, @c)"),
+  'BNA-MONTO', 'procedimiento');
+
+CALL prueba.verifica('X366', 'Extensión', 'Extorno', 'El extorno libera el saldo retenido y el tope del día (RN-ATM-003)',
+  JSON_ARRAY("SET @s0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @k0 = (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM')",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000010'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 300, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.extornar_autorizacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000010'), 'Cajero sin efectivo', 'pruebas', @x)"),
+  "SELECT @x = 'EXTORNADA' AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 AND (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM') = @k0 AND (SELECT codigo_respuesta FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a2000000-0000-4000-8000-000000000010')) = 'EXT'",
+  'EXTORNADA, saldo y tope como antes', "SELECT @x", 'procedimiento');
+
+CALL prueba.verifica('X367', 'Extensión', 'Extorno', 'Repetir el extorno no cambia nada y deja un solo evento',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000011'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 50, NULL, 'pruebas', @e, @c)",
+             "SET @s0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "CALL tarjetas.extornar_autorizacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000011'), 'x', 'pruebas', @x1)",
+             "CALL tarjetas.extornar_autorizacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000011'), 'x', 'pruebas', @x2)"),
+  "SELECT @x2 = 'EXTORNADA' AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 + 50 AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE accion = 'EXTORNAR_AUTORIZACION') = 1",
+  'una sola liberación', "SELECT @x2", 'procedimiento');
+
+CALL prueba.rechaza('X368', 'Extensión', 'Extorno', 'No se extorna una autorización que no existe',
+  JSON_ARRAY("CALL tarjetas.extornar_autorizacion(UUID_TO_BIN('a2000000-0000-4000-8000-0000000000ff'), 'x', 'pruebas', @x)"),
+  'BNA-AUTORIZACION: la autorización no existe', 'procedimiento');
+
+CALL prueba.rechaza('X369', 'Extensión', 'Extorno', 'No se extorna una autorización rechazada',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000012'), @t1, 'CTA-USD-1', 'VEN', NULL, 'RETIRO', 999999, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.extornar_autorizacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000012'), 'x', 'pruebas', @x)"),
+  'BNA-EXTORNO: una autorización rechazada', 'procedimiento');
+
+CALL prueba.rechaza('X370', 'Extensión', 'Extorno', 'No se extorna una operación que ya tiene su movimiento',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000013'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 100, NULL, 'pruebas', @e, @c)",
+             "CALL prueba.movimiento('CTA-PEN-1', 'RETIRO', 100, 'ATM', NULL, UUID_TO_BIN('a2000000-0000-4000-8000-000000000013'), @m)",
+             "CALL tarjetas.extornar_autorizacion(UUID_TO_BIN('a2000000-0000-4000-8000-000000000013'), 'x', 'pruebas', @x)"),
+  'BNA-EXTORNO: la operación ya tiene su movimiento', 'procedimiento');
+
+CALL prueba.verifica('X371', 'Extensión', 'Credenciales', 'Un PIN registrado se valida y no queda en claro',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(@t1, 'PIN_ATM', '4821', 'pruebas')",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '4821', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)"),
+  "SELECT @r = 'EXITOSO' AND @i = 3 AND (SELECT COUNT(*) FROM tarjetas.credencial WHERE id_tarjeta = @t1 AND (hash_credencial LIKE '%4821%' OR sal LIKE '%4821%' OR hash_credencial = SHA2('4821', 256))) = 0 AND (SELECT COUNT(*) FROM core.evento_auditoria WHERE detalle LIKE '%4821%') = 0",
+  'EXITOSO y 3 intentos', "SELECT CONCAT(@r, ', ', @i)", 'procedimiento');
+
+CALL prueba.verifica('X372', 'Extensión', 'Credenciales', 'Un PIN equivocado registra el intento FALLIDO y descuenta uno',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(@t1, 'PIN_ATM', '4821', 'pruebas')",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '0000', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)"),
+  "SELECT @r = 'FALLIDO' AND @i = 2 AND (SELECT COUNT(*) FROM tarjetas.intento_autenticacion WHERE id_tarjeta = @t1 AND resultado = 'FALLIDO') = 1",
+  'FALLIDO y 2 intentos', "SELECT CONCAT(@r, ', ', @i)", 'procedimiento');
+
+CALL prueba.verifica('X373', 'Extensión', 'Credenciales', 'El tercer PIN equivocado bloquea la tarjeta (RN-TAR-004)',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(@t1, 'PIN_ATM', '4821', 'pruebas')",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '0000', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '0001', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '0002', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)"),
+  "SELECT @r = 'FALLIDO' AND @i = 0 AND (SELECT estado_tarjeta FROM tarjetas.tarjeta WHERE id_tarjeta = @t1) = 'BLOQUEADA'",
+  'BLOQUEADA y 0 intentos', "SELECT (SELECT estado_tarjeta FROM tarjetas.tarjeta WHERE id_tarjeta = @t1)", 'procedimiento');
+
+CALL prueba.rechaza('X374', 'Extensión', 'Credenciales', 'Con la tarjeta bloqueada no se valida el PIN ni se registra el intento',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(@t1, 'PIN_ATM', '4821', 'pruebas')",
+             "CALL tarjetas.cambiar_estado_tarjeta(@t1, 'BLOQUEADA', 'prueba', 'CLIENTE', 'pruebas', @h)",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '4821', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)"),
+  'ERR-TAR-003: la tarjeta no es operativa', 'procedimiento');
+
+CALL prueba.rechaza('X375', 'Extensión', 'Credenciales', 'Un PIN de cinco dígitos se rechaza sin mostrarlo (RN-TAR-001)',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(@t1, 'PIN_ATM', '48213', 'pruebas')"),
+  'BNA-CREDENCIAL: PIN_ATM debe tener 4 dígitos$', 'procedimiento');
+
+CALL prueba.verifica('X376', 'Extensión', 'Credenciales', 'Cambiar el PIN reemplaza el anterior y reinicia los intentos',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(@t1, 'PIN_ATM', '4821', 'pruebas')",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '0000', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i)",
+             "CALL tarjetas.registrar_credencial(@t1, 'PIN_ATM', '7390', 'pruebas')",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '4821', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r1, @i1)",
+             "CALL tarjetas.validar_credencial(@t1, 'PIN_ATM', '7390', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r2, @i2)"),
+  "SELECT @r1 = 'FALLIDO' AND @i1 = 2 AND @r2 = 'EXITOSO' AND @i2 = 3",
+  'el PIN anterior falla y el nuevo pasa', "SELECT CONCAT(@r1, ', ', @r2)", 'procedimiento');
+
+CALL prueba.verifica('X377', 'Extensión', 'Credenciales', 'La clave web de seis dígitos se valida por Home Banking',
+  JSON_ARRAY("CALL tarjetas.registrar_credencial(@t1, 'CLAVE_WEB', '615243', 'pruebas')",
+             "CALL tarjetas.validar_credencial(@t1, 'CLAVE_WEB', '615243', 'HB', NULL, '10.0.0.8', NULL, 'pruebas', @r, @i)"),
+  "SELECT @r = 'EXITOSO' AND @i = 3", 'EXITOSO', "SELECT @r", 'procedimiento');
+
+-- Empleados (v1.6): solo la API registra empleados.
+CALL prueba.rechaza('X397', 'Extensión', 'Empleados', 'bna_app no puede registrar empleados (solo bna_api)',
+  JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN(UUID()), 'EMP-X397', 'E', 'ANALISTA', 'AQP01', NULL, 'pruebas')"),
+  'denied', 'privilegio');
+
+-- Captación (v1.7): solo la API trabaja el expediente del prospecto.
+CALL prueba.rechaza('X444', 'Extensión', 'Captación', 'bna_app no puede registrar solicitantes (solo bna_api)',
+  JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '71000444', 'R', 'P', NULL, '951000444', 'r@example.com', 'pruebas', UUID_TO_BIN(UUID()), @id, @dup)"),
+  'denied', 'privilegio');

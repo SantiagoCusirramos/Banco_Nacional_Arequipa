@@ -1,6 +1,42 @@
 {
   "components": {
     "schemas": {
+      "AcuseSolicitud": {
+        "properties": {
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "idEvaluacion": {
+            "description": "Id determinista de la evaluación de esta ronda.",
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "ronda": {
+            "title": "Ronda",
+            "type": "integer"
+          },
+          "versionSolicitud": {
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "ronda",
+          "idEvaluacion",
+          "estado"
+        ],
+        "title": "AcuseSolicitud",
+        "type": "object"
+      },
       "AgenciaRespuesta": {
         "properties": {
           "id_agencia": {
@@ -17,6 +53,306 @@
           "nombre"
         ],
         "title": "AgenciaRespuesta",
+        "type": "object"
+      },
+      "AnalistaRegistrado": {
+        "properties": {
+          "idAnalista": {
+            "title": "Idanalista",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idAnalista"
+        ],
+        "title": "AnalistaRegistrado",
+        "type": "object"
+      },
+      "AnalistaRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "idEmpleado": {
+            "format": "uuid",
+            "title": "Idempleado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEmpleado"
+        ],
+        "title": "AnalistaRegistrar",
+        "type": "object"
+      },
+      "AplicacionPago": {
+        "properties": {
+          "montoAplicado": {
+            "title": "Montoaplicado",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "title": "Numerocuota",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numeroCuota",
+          "montoAplicado"
+        ],
+        "title": "AplicacionPago",
+        "type": "object"
+      },
+      "AprobacionRespuesta": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "fechaAprobacion": {
+            "format": "date-time",
+            "title": "Fechaaprobacion",
+            "type": "string"
+          },
+          "idCalendario": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El calendario PRELIMINAR vigente, sin cambios.",
+            "title": "Idcalendario"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "limiteAprobado": {
+            "title": "Limiteaprobado",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "plazoMeses": {
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "ronda": {
+            "title": "Ronda",
+            "type": "integer"
+          },
+          "vigenteHasta": {
+            "format": "date-time",
+            "title": "Vigentehasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "idSolicitud",
+          "codCliente",
+          "ronda",
+          "monto",
+          "moneda",
+          "plazoMeses",
+          "limiteAprobado",
+          "fechaAprobacion",
+          "vigenteHasta",
+          "idCalendario"
+        ],
+        "title": "AprobacionRespuesta",
+        "type": "object"
+      },
+      "AutorizacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "id_canal": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "id_tarjeta": {
+            "format": "uuid",
+            "title": "Id Tarjeta",
+            "type": "string"
+          },
+          "id_terminal": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Terminal"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "tipo_operacion": {
+            "maxLength": 25,
+            "minLength": 1,
+            "pattern": "^[A-Z_]+$",
+            "title": "Tipo Operacion",
+            "type": "string"
+          },
+          "uuid_autorizacion": {
+            "description": "Lo genera quien llama (RN-BUS-002). Repetirlo con los mismos datos devuelve la autorización ya registrada; con otros datos, 409 BNA-IDEMPOTENCIA.",
+            "format": "uuid",
+            "title": "Uuid Autorizacion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_autorizacion",
+          "id_tarjeta",
+          "num_cuenta",
+          "tipo_operacion",
+          "monto"
+        ],
+        "title": "AutorizacionRegistrar",
+        "type": "object"
+      },
+      "AutorizacionRespuesta": {
+        "properties": {
+          "codigo_respuesta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 8583: 00 aprobada, 51 sin fondos, 54 vencida, 57 no permitida, 61 excede el tope, 62 restringida, EXT extornada.",
+            "title": "Codigo Respuesta"
+          },
+          "estado_autorizacion": {
+            "title": "Estado Autorizacion",
+            "type": "string"
+          },
+          "id_canal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "id_tarjeta": {
+            "format": "uuid",
+            "title": "Id Tarjeta",
+            "type": "string"
+          },
+          "id_terminal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Terminal"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "motivo_rechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Rechazo"
+          },
+          "num_cuenta": {
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "tipo_operacion": {
+            "title": "Tipo Operacion",
+            "type": "string"
+          },
+          "uuid_autorizacion": {
+            "format": "uuid",
+            "title": "Uuid Autorizacion",
+            "type": "string"
+          },
+          "uuid_transaccion": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uuid Transaccion"
+          }
+        },
+        "required": [
+          "uuid_autorizacion",
+          "id_tarjeta",
+          "num_cuenta",
+          "id_canal",
+          "id_terminal",
+          "tipo_operacion",
+          "monto",
+          "estado_autorizacion",
+          "codigo_respuesta",
+          "motivo_rechazo",
+          "uuid_transaccion"
+        ],
+        "title": "AutorizacionRespuesta",
         "type": "object"
       },
       "COREDB__routers__clientes__EstadoCambiar": {
@@ -83,6 +419,88 @@
         "title": "EstadoCambiar",
         "type": "object"
       },
+      "CalendarioExpediente": {
+        "additionalProperties": false,
+        "properties": {
+          "cuotas": {
+            "items": {
+              "$ref": "#/components/schemas/CuotaExpediente"
+            },
+            "maxItems": 600,
+            "minItems": 1,
+            "title": "Cuotas",
+            "type": "array"
+          },
+          "metodo": {
+            "description": "FRANCES, ALEMAN o AMERICANO.",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Metodo",
+            "type": "string"
+          },
+          "tasa": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Fracción: 0.2200 es 22 %.",
+            "title": "Tasa"
+          }
+        },
+        "required": [
+          "metodo",
+          "tasa",
+          "cuotas"
+        ],
+        "title": "CalendarioExpediente",
+        "type": "object"
+      },
+      "CalendarioRespuesta": {
+        "properties": {
+          "cuotas": {
+            "items": {
+              "$ref": "#/components/schemas/CuotaRespuesta"
+            },
+            "title": "Cuotas",
+            "type": "array"
+          },
+          "idCalendario": {
+            "format": "uuid",
+            "title": "Idcalendario",
+            "type": "string"
+          },
+          "metodo": {
+            "title": "Metodo",
+            "type": "string"
+          },
+          "tasa": {
+            "title": "Tasa",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "PRELIMINAR",
+              "OFICIAL"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idCalendario",
+          "tipo",
+          "metodo",
+          "tasa",
+          "cuotas"
+        ],
+        "title": "CalendarioRespuesta",
+        "type": "object"
+      },
       "CatalogosClientesRespuesta": {
         "properties": {
           "estados_cliente": {
@@ -105,6 +523,83 @@
           "estados_cliente"
         ],
         "title": "CatalogosClientesRespuesta",
+        "type": "object"
+      },
+      "CatalogosCreditoRespuesta": {
+        "properties": {
+          "canalesDesembolso": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Canalesdesembolso",
+            "type": "array"
+          },
+          "estadosCredito": {
+            "items": {
+              "$ref": "#/components/schemas/CodigoCredito"
+            },
+            "title": "Estadoscredito",
+            "type": "array"
+          },
+          "estadosCuota": {
+            "items": {
+              "$ref": "#/components/schemas/CodigoCredito"
+            },
+            "title": "Estadoscuota",
+            "type": "array"
+          },
+          "estadosOrden": {
+            "items": {
+              "$ref": "#/components/schemas/EstadoCredito"
+            },
+            "title": "Estadosorden",
+            "type": "array"
+          },
+          "estadosSolicitud": {
+            "items": {
+              "$ref": "#/components/schemas/EstadoCredito"
+            },
+            "title": "Estadossolicitud",
+            "type": "array"
+          },
+          "metodosAmortizacion": {
+            "items": {
+              "$ref": "#/components/schemas/CodigoCredito"
+            },
+            "title": "Metodosamortizacion",
+            "type": "array"
+          },
+          "reglas": {
+            "items": {
+              "$ref": "#/components/schemas/ReglaEvaluacion"
+            },
+            "title": "Reglas",
+            "type": "array"
+          },
+          "tiposValidacion": {
+            "items": {
+              "$ref": "#/components/schemas/CodigoCredito"
+            },
+            "title": "Tiposvalidacion",
+            "type": "array"
+          },
+          "vigenciaAprobacionDias": {
+            "title": "Vigenciaaprobaciondias",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "estadosSolicitud",
+          "reglas",
+          "metodosAmortizacion",
+          "tiposValidacion",
+          "estadosOrden",
+          "estadosCuota",
+          "estadosCredito",
+          "canalesDesembolso",
+          "vigenciaAprobacionDias"
+        ],
+        "title": "CatalogosCreditoRespuesta",
         "type": "object"
       },
       "ClienteConEstadoAnterior": {
@@ -390,6 +885,125 @@
         "title": "ClienteRespuesta",
         "type": "object"
       },
+      "CodigoCredito": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "descripcion"
+        ],
+        "title": "CodigoCredito",
+        "type": "object"
+      },
+      "ConciliacionDesembolso": {
+        "properties": {
+          "fecha": {
+            "format": "date",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "importeAbonado": {
+            "title": "Importeabonado",
+            "type": "string"
+          },
+          "importeOrdenes": {
+            "title": "Importeordenes",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "ordenesConfirmadas": {
+            "title": "Ordenesconfirmadas",
+            "type": "integer"
+          },
+          "ordenesSinAbono": {
+            "title": "Ordenessinabono",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fecha",
+          "moneda",
+          "ordenesConfirmadas",
+          "importeOrdenes",
+          "importeAbonado",
+          "ordenesSinAbono"
+        ],
+        "title": "ConciliacionDesembolso",
+        "type": "object"
+      },
+      "ConciliacionPagos": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "importeAplicado": {
+            "title": "Importeaplicado",
+            "type": "string"
+          },
+          "importeCobrado": {
+            "title": "Importecobrado",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "pagosConfirmados": {
+            "title": "Pagosconfirmados",
+            "type": "integer"
+          },
+          "pagosRechazados": {
+            "title": "Pagosrechazados",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fecha",
+          "canal",
+          "moneda",
+          "pagosConfirmados",
+          "importeCobrado",
+          "importeAplicado",
+          "pagosRechazados"
+        ],
+        "title": "ConciliacionPagos",
+        "type": "object"
+      },
+      "CredencialRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "valor": {
+            "format": "password",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Valor",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "valor"
+        ],
+        "title": "CredencialRegistrar",
+        "type": "object"
+      },
       "CredencialRespuesta": {
         "properties": {
           "secreto": {
@@ -406,6 +1020,270 @@
           "secreto"
         ],
         "title": "CredencialRespuesta",
+        "type": "object"
+      },
+      "CredencialValidar": {
+        "additionalProperties": false,
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "id_canal": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "id_terminal": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Terminal"
+          },
+          "valor": {
+            "format": "password",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Valor",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "valor"
+        ],
+        "title": "CredencialValidar",
+        "type": "object"
+      },
+      "CreditoDetalle": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "cuotas": {
+            "items": {
+              "$ref": "#/components/schemas/CuotaCreditoRespuesta"
+            },
+            "title": "Cuotas",
+            "type": "array"
+          },
+          "cuotasPagadas": {
+            "title": "Cuotaspagadas",
+            "type": "integer"
+          },
+          "cuotasVencidas": {
+            "title": "Cuotasvencidas",
+            "type": "integer"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "$ref": "#/components/schemas/EventoCreditoRespuesta"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "fechaDesembolso": {
+            "format": "date-time",
+            "title": "Fechadesembolso",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoDesembolsado": {
+            "title": "Montodesembolsado",
+            "type": "string"
+          },
+          "moraVigente": {
+            "description": "Suma del último cálculo de mora de las cuotas con saldo. No se cobra.",
+            "title": "Moravigente",
+            "type": "string"
+          },
+          "numeroCuotas": {
+            "title": "Numerocuotas",
+            "type": "integer"
+          },
+          "proximoVencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La cuota más antigua con saldo; nulo si no queda deuda.",
+            "title": "Proximovencimiento"
+          },
+          "saldoPendiente": {
+            "title": "Saldopendiente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codCredito",
+          "estado",
+          "codCliente",
+          "idSolicitud",
+          "idOrden",
+          "codigoOrden",
+          "moneda",
+          "montoDesembolsado",
+          "fechaDesembolso",
+          "numeroCuotas",
+          "cuotasPagadas",
+          "cuotasVencidas",
+          "saldoPendiente",
+          "proximoVencimiento",
+          "moraVigente",
+          "cuotas",
+          "eventos"
+        ],
+        "title": "CreditoDetalle",
+        "type": "object"
+      },
+      "CreditoRespuesta": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "cuotasPagadas": {
+            "title": "Cuotaspagadas",
+            "type": "integer"
+          },
+          "cuotasVencidas": {
+            "title": "Cuotasvencidas",
+            "type": "integer"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaDesembolso": {
+            "format": "date-time",
+            "title": "Fechadesembolso",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoDesembolsado": {
+            "title": "Montodesembolsado",
+            "type": "string"
+          },
+          "moraVigente": {
+            "description": "Suma del último cálculo de mora de las cuotas con saldo. No se cobra.",
+            "title": "Moravigente",
+            "type": "string"
+          },
+          "numeroCuotas": {
+            "title": "Numerocuotas",
+            "type": "integer"
+          },
+          "proximoVencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La cuota más antigua con saldo; nulo si no queda deuda.",
+            "title": "Proximovencimiento"
+          },
+          "saldoPendiente": {
+            "title": "Saldopendiente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codCredito",
+          "estado",
+          "codCliente",
+          "idSolicitud",
+          "idOrden",
+          "codigoOrden",
+          "moneda",
+          "montoDesembolsado",
+          "fechaDesembolso",
+          "numeroCuotas",
+          "cuotasPagadas",
+          "cuotasVencidas",
+          "saldoPendiente",
+          "proximoVencimiento",
+          "moraVigente"
+        ],
+        "title": "CreditoRespuesta",
         "type": "object"
       },
       "CuentaAbrir": {
@@ -462,6 +1340,22 @@
           "titulares"
         ],
         "title": "CuentaAbrir",
+        "type": "object"
+      },
+      "CuentaCambiar": {
+        "additionalProperties": false,
+        "properties": {
+          "numCuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "numCuenta"
+        ],
+        "title": "CuentaCambiar",
         "type": "object"
       },
       "CuentaRespuesta": {
@@ -526,6 +1420,261 @@
           "titulares"
         ],
         "title": "CuentaRespuesta",
+        "type": "object"
+      },
+      "CuotaCreditoRespuesta": {
+        "properties": {
+          "capital": {
+            "title": "Capital",
+            "type": "string"
+          },
+          "cuotaTotal": {
+            "title": "Cuotatotal",
+            "type": "string"
+          },
+          "diasAtraso": {
+            "title": "Diasatraso",
+            "type": "integer"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaVencimiento": {
+            "format": "date",
+            "title": "Fechavencimiento",
+            "type": "string"
+          },
+          "interes": {
+            "title": "Interes",
+            "type": "string"
+          },
+          "moraVigente": {
+            "title": "Moravigente",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "title": "Numerocuota",
+            "type": "integer"
+          },
+          "otrosConceptos": {
+            "title": "Otrosconceptos",
+            "type": "string"
+          },
+          "saldoPendiente": {
+            "title": "Saldopendiente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "numeroCuota",
+          "fechaVencimiento",
+          "capital",
+          "interes",
+          "otrosConceptos",
+          "cuotaTotal",
+          "saldoPendiente",
+          "estado",
+          "diasAtraso",
+          "moraVigente"
+        ],
+        "title": "CuotaCreditoRespuesta",
+        "type": "object"
+      },
+      "CuotaExpediente": {
+        "additionalProperties": false,
+        "properties": {
+          "amortizacion": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amortizacion"
+          },
+          "cuotaTotal": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Cuotatotal"
+          },
+          "fechaVencimiento": {
+            "format": "date",
+            "title": "Fechavencimiento",
+            "type": "string"
+          },
+          "interes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Interes"
+          },
+          "numeroCuota": {
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Numerocuota",
+            "type": "integer"
+          },
+          "saldoFinal": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Saldofinal"
+          },
+          "saldoInicial": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Saldoinicial"
+          }
+        },
+        "required": [
+          "numeroCuota",
+          "fechaVencimiento",
+          "saldoInicial",
+          "amortizacion",
+          "interes",
+          "cuotaTotal",
+          "saldoFinal"
+        ],
+        "title": "CuotaExpediente",
+        "type": "object"
+      },
+      "CuotaRespuesta": {
+        "properties": {
+          "capital": {
+            "title": "Capital",
+            "type": "string"
+          },
+          "cuotaTotal": {
+            "title": "Cuotatotal",
+            "type": "string"
+          },
+          "estadoCuota": {
+            "title": "Estadocuota",
+            "type": "string"
+          },
+          "fechaVencimiento": {
+            "format": "date",
+            "title": "Fechavencimiento",
+            "type": "string"
+          },
+          "interes": {
+            "title": "Interes",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "title": "Numerocuota",
+            "type": "integer"
+          },
+          "otrosConceptos": {
+            "title": "Otrosconceptos",
+            "type": "string"
+          },
+          "saldoCapital": {
+            "title": "Saldocapital",
+            "type": "string"
+          },
+          "saldoPendiente": {
+            "title": "Saldopendiente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "numeroCuota",
+          "fechaVencimiento",
+          "capital",
+          "interes",
+          "otrosConceptos",
+          "cuotaTotal",
+          "saldoCapital",
+          "saldoPendiente",
+          "estadoCuota"
+        ],
+        "title": "CuotaRespuesta",
+        "type": "object"
+      },
+      "DecisionRegistrada": {
+        "properties": {
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "estadoSolicitud": {
+            "title": "Estadosolicitud",
+            "type": "string"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "idSolicitud",
+          "decision",
+          "estadoSolicitud"
+        ],
+        "title": "DecisionRegistrada",
+        "type": "object"
+      },
+      "DecisionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "comentario": {
+            "maxLength": 500,
+            "minLength": 10,
+            "title": "Comentario",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "APROBADO",
+              "RECHAZADO"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "comentario"
+        ],
+        "title": "DecisionRegistrar",
         "type": "object"
       },
       "DocumentoVerificado": {
@@ -613,6 +1762,117 @@
         "title": "DocumentoVerificar",
         "type": "object"
       },
+      "EmpleadoRegistrado": {
+        "description": "Sin el nombre: no hace falta repetirlo y es un dato personal.",
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "cargo": {
+            "title": "Cargo",
+            "type": "string"
+          },
+          "codigo_empleado": {
+            "title": "Codigo Empleado",
+            "type": "string"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "id_empleado": {
+            "format": "uuid",
+            "title": "Id Empleado",
+            "type": "string"
+          },
+          "id_usuario": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Usuario"
+          }
+        },
+        "required": [
+          "id_empleado",
+          "codigo_empleado",
+          "cargo",
+          "id_agencia",
+          "id_usuario",
+          "activo"
+        ],
+        "title": "EmpleadoRegistrado",
+        "type": "object"
+      },
+      "EmpleadoRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "cargo": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Cargo",
+            "type": "string"
+          },
+          "codigo_empleado": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Codigo Empleado",
+            "type": "string"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "id_usuario": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Una persona sin empleado; se liga al empleado nuevo.",
+            "title": "Id Usuario"
+          },
+          "nombre_completo": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Nombre Completo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo_empleado",
+          "nombre_completo",
+          "cargo"
+        ],
+        "title": "EmpleadoRegistrar",
+        "type": "object"
+      },
       "EstadoClienteRespuesta": {
         "properties": {
           "codigo": {
@@ -634,6 +1894,340 @@
           "permite_operar"
         ],
         "title": "EstadoClienteRespuesta",
+        "type": "object"
+      },
+      "EstadoCredito": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          },
+          "esFinal": {
+            "title": "Esfinal",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "codigo",
+          "descripcion",
+          "esFinal"
+        ],
+        "title": "EstadoCredito",
+        "type": "object"
+      },
+      "EvaluacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "deudaMensual": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Deudamensual"
+          },
+          "ingresoMensual": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Ingresomensual"
+          },
+          "riesgo": {
+            "enum": [
+              "BUENO",
+              "REGULAR",
+              "ALTO"
+            ],
+            "title": "Riesgo",
+            "type": "string"
+          },
+          "verificada": {
+            "title": "Verificada",
+            "type": "boolean"
+          },
+          "versionSolicitud": {
+            "maximum": 32767.0,
+            "minimum": 1.0,
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "versionSolicitud",
+          "ingresoMensual",
+          "deudaMensual",
+          "riesgo",
+          "verificada"
+        ],
+        "title": "EvaluacionRegistrar",
+        "type": "object"
+      },
+      "EvaluacionRespuesta": {
+        "properties": {
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "deudaMensual": {
+            "title": "Deudamensual",
+            "type": "string"
+          },
+          "esUltima": {
+            "title": "Esultima",
+            "type": "boolean"
+          },
+          "fechaDecision": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechadecision"
+          },
+          "fechaEvaluacion": {
+            "format": "date-time",
+            "title": "Fechaevaluacion",
+            "type": "string"
+          },
+          "idAnalista": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idanalista"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "ingresoMensual": {
+            "title": "Ingresomensual",
+            "type": "string"
+          },
+          "limite": {
+            "title": "Limite",
+            "type": "string"
+          },
+          "regla": {
+            "title": "Regla",
+            "type": "string"
+          },
+          "resultado": {
+            "description": "La decisión del analista si la hay; si no, el de la regla.",
+            "title": "Resultado",
+            "type": "string"
+          },
+          "resultadoRegla": {
+            "title": "Resultadoregla",
+            "type": "string"
+          },
+          "resultadoVerificacion": {
+            "title": "Resultadoverificacion",
+            "type": "string"
+          },
+          "ronda": {
+            "title": "Ronda",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "ronda",
+          "fechaEvaluacion",
+          "score",
+          "limite",
+          "regla",
+          "resultadoRegla",
+          "ingresoMensual",
+          "deudaMensual",
+          "resultadoVerificacion",
+          "decision",
+          "comentario",
+          "fechaDecision",
+          "idAnalista",
+          "resultado",
+          "esUltima"
+        ],
+        "title": "EvaluacionRespuesta",
+        "type": "object"
+      },
+      "EventoCreditoRespuesta": {
+        "properties": {
+          "accion": {
+            "title": "Accion",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlationid"
+          },
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "fechaHora": {
+            "format": "date-time",
+            "title": "Fechahora",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerocuota"
+          },
+          "resultado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado"
+          }
+        },
+        "required": [
+          "accion",
+          "resultado",
+          "numeroCuota",
+          "actor",
+          "correlationId",
+          "detalle",
+          "fechaHora"
+        ],
+        "title": "EventoCreditoRespuesta",
+        "type": "object"
+      },
+      "EventoOrdenRespuesta": {
+        "properties": {
+          "accion": {
+            "title": "Accion",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlationid"
+          },
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "fechaHora": {
+            "format": "date-time",
+            "title": "Fechahora",
+            "type": "string"
+          },
+          "resultado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado"
+          }
+        },
+        "required": [
+          "accion",
+          "resultado",
+          "actor",
+          "correlationId",
+          "detalle",
+          "fechaHora"
+        ],
+        "title": "EventoOrdenRespuesta",
         "type": "object"
       },
       "EventoRespuesta": {
@@ -705,6 +2299,100 @@
         "title": "EventoRespuesta",
         "type": "object"
       },
+      "ExpedienteRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "calendario": {
+            "$ref": "#/components/schemas/CalendarioExpediente"
+          },
+          "codCliente": {
+            "maxLength": 12,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9]+$",
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "condicionPagoDoble": {
+            "default": false,
+            "title": "Condicionpagodoble",
+            "type": "boolean"
+          },
+          "destino": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Forma parte de la huella del expediente; no se guarda.",
+            "title": "Destino"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoSolicitado": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Montosolicitado"
+          },
+          "plazoMeses": {
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "versionSolicitud": {
+            "maximum": 32767.0,
+            "minimum": 1.0,
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "codCliente",
+          "montoSolicitado",
+          "moneda",
+          "plazoMeses",
+          "calendario"
+        ],
+        "title": "ExpedienteRegistrar",
+        "type": "object"
+      },
+      "ExtornoRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "title": "ExtornoRegistrar",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -716,6 +2404,42 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HistorialRespuesta": {
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaHora": {
+            "format": "date-time",
+            "title": "Fechahora",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "required": [
+          "estado",
+          "fechaHora",
+          "actor",
+          "motivo"
+        ],
+        "title": "HistorialRespuesta",
         "type": "object"
       },
       "LoginPeticion": {
@@ -767,6 +2491,75 @@
           "decimales"
         ],
         "title": "MonedaRespuesta",
+        "type": "object"
+      },
+      "MoraRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "montoCalculado": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Montocalculado"
+          }
+        },
+        "required": [
+          "montoCalculado"
+        ],
+        "title": "MoraRegistrar",
+        "type": "object"
+      },
+      "MoraRespuesta": {
+        "properties": {
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "diasAtraso": {
+            "description": "Días entre el vencimiento y la fecha del cálculo (Lima).",
+            "title": "Diasatraso",
+            "type": "integer"
+          },
+          "fechaCalculo": {
+            "format": "date-time",
+            "title": "Fechacalculo",
+            "type": "string"
+          },
+          "idMora": {
+            "format": "uuid",
+            "title": "Idmora",
+            "type": "string"
+          },
+          "montoCalculado": {
+            "title": "Montocalculado",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "title": "Numerocuota",
+            "type": "integer"
+          },
+          "vigente": {
+            "description": "Solo el último cálculo de la cuota está vigente.",
+            "title": "Vigente",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "idMora",
+          "codCredito",
+          "numeroCuota",
+          "montoCalculado",
+          "fechaCalculo",
+          "diasAtraso",
+          "vigente"
+        ],
+        "title": "MoraRespuesta",
         "type": "object"
       },
       "MovimientoDetalle": {
@@ -930,6 +2723,651 @@
         "title": "MovimientoRespuesta",
         "type": "object"
       },
+      "OrdenConfirmada": {
+        "properties": {
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaEfectiva": {
+            "description": "Fecha y hora del abono.",
+            "format": "date-time",
+            "title": "Fechaefectiva",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "uuidTransaccionAbono": {
+            "format": "uuid",
+            "title": "Uuidtransaccionabono",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idOrden",
+          "codigoOrden",
+          "estado",
+          "codCredito",
+          "uuidTransaccionAbono",
+          "fechaEfectiva"
+        ],
+        "title": "OrdenConfirmada",
+        "type": "object"
+      },
+      "OrdenDetalle": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "codCredito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codcredito"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "$ref": "#/components/schemas/EventoOrdenRespuesta"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "fechaActualizacion": {
+            "format": "date-time",
+            "title": "Fechaactualizacion",
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "format": "date-time",
+            "title": "Fechacreacion",
+            "type": "string"
+          },
+          "idAgencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idagencia"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "importe": {
+            "title": "Importe",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "motivoRechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivorechazo"
+          },
+          "numCuenta": {
+            "title": "Numcuenta",
+            "type": "string"
+          },
+          "usuarioConfirmacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuarioconfirmacion"
+          },
+          "usuarioPreparacion": {
+            "title": "Usuariopreparacion",
+            "type": "string"
+          },
+          "uuidTransaccionAbono": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uuidtransaccionabono"
+          },
+          "validaciones": {
+            "items": {
+              "$ref": "#/components/schemas/ValidacionOrdenRespuesta"
+            },
+            "title": "Validaciones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "idOrden",
+          "codigoOrden",
+          "estado",
+          "motivoRechazo",
+          "importe",
+          "moneda",
+          "numCuenta",
+          "canal",
+          "idAgencia",
+          "idEvaluacion",
+          "idSolicitud",
+          "codCliente",
+          "usuarioPreparacion",
+          "usuarioConfirmacion",
+          "uuidTransaccionAbono",
+          "codCredito",
+          "fechaCreacion",
+          "fechaActualizacion",
+          "validaciones",
+          "eventos"
+        ],
+        "title": "OrdenDetalle",
+        "type": "object"
+      },
+      "OrdenPreparar": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "default": "VEN",
+            "enum": [
+              "VEN",
+              "HB"
+            ],
+            "title": "Canal",
+            "type": "string"
+          },
+          "idAgencia": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idagencia"
+          },
+          "idEvaluacion": {
+            "description": "La aprobación: `idEvaluacion` de `GET /coredb/creditos/aprobaciones`.",
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "numCuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "numCuenta"
+        ],
+        "title": "OrdenPreparar",
+        "type": "object"
+      },
+      "OrdenRespuesta": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "codCredito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codcredito"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaActualizacion": {
+            "format": "date-time",
+            "title": "Fechaactualizacion",
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "format": "date-time",
+            "title": "Fechacreacion",
+            "type": "string"
+          },
+          "idAgencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idagencia"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "importe": {
+            "title": "Importe",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "motivoRechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivorechazo"
+          },
+          "numCuenta": {
+            "title": "Numcuenta",
+            "type": "string"
+          },
+          "usuarioConfirmacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuarioconfirmacion"
+          },
+          "usuarioPreparacion": {
+            "title": "Usuariopreparacion",
+            "type": "string"
+          },
+          "uuidTransaccionAbono": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uuidtransaccionabono"
+          }
+        },
+        "required": [
+          "idOrden",
+          "codigoOrden",
+          "estado",
+          "motivoRechazo",
+          "importe",
+          "moneda",
+          "numCuenta",
+          "canal",
+          "idAgencia",
+          "idEvaluacion",
+          "idSolicitud",
+          "codCliente",
+          "usuarioPreparacion",
+          "usuarioConfirmacion",
+          "uuidTransaccionAbono",
+          "codCredito",
+          "fechaCreacion",
+          "fechaActualizacion"
+        ],
+        "title": "OrdenRespuesta",
+        "type": "object"
+      },
+      "PagoRegistrado": {
+        "properties": {
+          "aplicaciones": {
+            "items": {
+              "$ref": "#/components/schemas/AplicacionPago"
+            },
+            "title": "Aplicaciones",
+            "type": "array"
+          },
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "estado": {
+            "enum": [
+              "CONFIRMADO",
+              "RECHAZADO",
+              "PENDIENTE"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "estadoCredito": {
+            "description": "Estado del crédito al responder.",
+            "title": "Estadocredito",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "idPago": {
+            "format": "uuid",
+            "title": "Idpago",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "montoAplicado": {
+            "title": "Montoaplicado",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Si el débito se rechazó: SALDO_INSUFICIENTE, CUENTA_NO_OPERATIVA, TOPE_DIARIO_SUPERADO o CANAL_NO_ADMITIDO.",
+            "title": "Motivo"
+          },
+          "numCuenta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numcuenta"
+          },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
+          "saldoPendiente": {
+            "description": "Deuda del crédito al responder.",
+            "title": "Saldopendiente",
+            "type": "string"
+          },
+          "uuidTransaccion": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El movimiento DEBITO_CUOTA; nulo si se rechazó.",
+            "title": "Uuidtransaccion"
+          }
+        },
+        "required": [
+          "idPago",
+          "codCredito",
+          "referencia",
+          "estado",
+          "motivo",
+          "monto",
+          "montoAplicado",
+          "numCuenta",
+          "canal",
+          "uuidTransaccion",
+          "fecha",
+          "aplicaciones",
+          "estadoCredito",
+          "saldoPendiente"
+        ],
+        "title": "PagoRegistrado",
+        "type": "object"
+      },
+      "PagoRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "default": "VEN",
+            "enum": [
+              "VEN",
+              "HB"
+            ],
+            "title": "Canal",
+            "type": "string"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "numCuenta": {
+            "description": "Cuenta de ahorros del titular, en la moneda del crédito.",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta",
+            "type": "string"
+          },
+          "referencia": {
+            "description": "Llave del pago: la misma referencia con el mismo contenido devuelve el mismo pago.",
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Referencia",
+            "type": "string"
+          }
+        },
+        "required": [
+          "numCuenta",
+          "monto",
+          "referencia"
+        ],
+        "title": "PagoRegistrar",
+        "type": "object"
+      },
+      "PagoRespuesta": {
+        "properties": {
+          "aplicaciones": {
+            "items": {
+              "$ref": "#/components/schemas/AplicacionPago"
+            },
+            "title": "Aplicaciones",
+            "type": "array"
+          },
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "estado": {
+            "enum": [
+              "CONFIRMADO",
+              "RECHAZADO",
+              "PENDIENTE"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "idPago": {
+            "format": "uuid",
+            "title": "Idpago",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "montoAplicado": {
+            "title": "Montoaplicado",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Si el débito se rechazó: SALDO_INSUFICIENTE, CUENTA_NO_OPERATIVA, TOPE_DIARIO_SUPERADO o CANAL_NO_ADMITIDO.",
+            "title": "Motivo"
+          },
+          "numCuenta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numcuenta"
+          },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
+          "uuidTransaccion": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El movimiento DEBITO_CUOTA; nulo si se rechazó.",
+            "title": "Uuidtransaccion"
+          }
+        },
+        "required": [
+          "idPago",
+          "codCredito",
+          "referencia",
+          "estado",
+          "motivo",
+          "monto",
+          "montoAplicado",
+          "numCuenta",
+          "canal",
+          "uuidTransaccion",
+          "fecha",
+          "aplicaciones"
+        ],
+        "title": "PagoRespuesta",
+        "type": "object"
+      },
       "PerfilRespuesta": {
         "properties": {
           "acciones": {
@@ -1047,6 +3485,172 @@
         "title": "ProductoCreditoRespuesta",
         "type": "object"
       },
+      "RechazoRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "title": "RechazoRegistrar",
+        "type": "object"
+      },
+      "ReglaEvaluacion": {
+        "properties": {
+          "codigoRn": {
+            "title": "Codigorn",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          },
+          "idRegla": {
+            "title": "Idregla",
+            "type": "string"
+          },
+          "ratioMax": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratiomax"
+          },
+          "ratioMin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratiomin"
+          },
+          "resultado": {
+            "title": "Resultado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idRegla",
+          "codigoRn",
+          "descripcion",
+          "ratioMin",
+          "ratioMax",
+          "resultado"
+        ],
+        "title": "ReglaEvaluacion",
+        "type": "object"
+      },
+      "ResultadoEvaluacion": {
+        "properties": {
+          "estadoSolicitud": {
+            "title": "Estadosolicitud",
+            "type": "string"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "limite": {
+            "title": "Limite",
+            "type": "string"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Monto / límite; null si no hay capacidad de pago.",
+            "title": "Ratio"
+          },
+          "regla": {
+            "title": "Regla",
+            "type": "string"
+          },
+          "resultado": {
+            "enum": [
+              "APROBADO",
+              "OBSERVADO",
+              "RECHAZADO"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "idSolicitud",
+          "resultado",
+          "regla",
+          "score",
+          "limite",
+          "ratio",
+          "estadoSolicitud"
+        ],
+        "title": "ResultadoEvaluacion",
+        "type": "object"
+      },
+      "RevocacionRegistrada": {
+        "properties": {
+          "estadoSolicitud": {
+            "title": "Estadosolicitud",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "estadoSolicitud"
+        ],
+        "title": "RevocacionRegistrada",
+        "type": "object"
+      },
+      "RevocacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "title": "RevocacionRegistrar",
+        "type": "object"
+      },
       "RolAsignar": {
         "properties": {
           "rol": {
@@ -1095,6 +3699,241 @@
           "nombre"
         ],
         "title": "ServicioCrear",
+        "type": "object"
+      },
+      "SolicitudDetalle": {
+        "properties": {
+          "calendario": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalendarioRespuesta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "condicionPagoDoble": {
+            "title": "Condicionpagodoble",
+            "type": "boolean"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "evaluaciones": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluacionRespuesta"
+            },
+            "title": "Evaluaciones",
+            "type": "array"
+          },
+          "fechaCreacion": {
+            "format": "date-time",
+            "title": "Fechacreacion",
+            "type": "string"
+          },
+          "historial": {
+            "items": {
+              "$ref": "#/components/schemas/HistorialRespuesta"
+            },
+            "title": "Historial",
+            "type": "array"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoSolicitado": {
+            "title": "Montosolicitado",
+            "type": "string"
+          },
+          "numeroCuotas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerocuotas"
+          },
+          "plazoMeses": {
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "primerVencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primervencimiento"
+          },
+          "ronda": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ronda"
+          },
+          "totalCuotas": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalcuotas"
+          },
+          "versionSolicitud": {
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "ronda",
+          "codCliente",
+          "montoSolicitado",
+          "moneda",
+          "plazoMeses",
+          "condicionPagoDoble",
+          "estado",
+          "fechaCreacion",
+          "numeroCuotas",
+          "totalCuotas",
+          "primerVencimiento",
+          "calendario",
+          "evaluaciones",
+          "historial"
+        ],
+        "title": "SolicitudDetalle",
+        "type": "object"
+      },
+      "SolicitudResumen": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "condicionPagoDoble": {
+            "title": "Condicionpagodoble",
+            "type": "boolean"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "format": "date-time",
+            "title": "Fechacreacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoSolicitado": {
+            "title": "Montosolicitado",
+            "type": "string"
+          },
+          "numeroCuotas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerocuotas"
+          },
+          "plazoMeses": {
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "primerVencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primervencimiento"
+          },
+          "ronda": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ronda"
+          },
+          "totalCuotas": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalcuotas"
+          },
+          "versionSolicitud": {
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "ronda",
+          "codCliente",
+          "montoSolicitado",
+          "moneda",
+          "plazoMeses",
+          "condicionPagoDoble",
+          "estado",
+          "fechaCreacion",
+          "numeroCuotas",
+          "totalCuotas",
+          "primerVencimiento"
+        ],
+        "title": "SolicitudResumen",
         "type": "object"
       },
       "TarjetaEmitir": {
@@ -1569,6 +4408,127 @@
         "title": "UsuarioSesion",
         "type": "object"
       },
+      "ValidacionOrdenRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "detalle": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "referenciaEvidencia": {
+            "description": "En IDENTIDAD aprobada, el `id_validacion` de `POST /coredb/clientes/validaciones/documento`, aprobado hoy para el titular.",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Referenciaevidencia",
+            "type": "string"
+          },
+          "resultado": {
+            "enum": [
+              "APROBADA",
+              "RECHAZADA"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          },
+          "tipo": {
+            "description": "La validación CUENTA la registra COREDB al elegir la cuenta.",
+            "enum": [
+              "IDENTIDAD",
+              "AUTORIZACION",
+              "ANTIFRAUDE"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          },
+          "venceEn": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venceen"
+          }
+        },
+        "required": [
+          "tipo",
+          "resultado",
+          "referenciaEvidencia"
+        ],
+        "title": "ValidacionOrdenRegistrar",
+        "type": "object"
+      },
+      "ValidacionOrdenRespuesta": {
+        "properties": {
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "idValidacion": {
+            "format": "uuid",
+            "title": "Idvalidacion",
+            "type": "string"
+          },
+          "referenciaEvidencia": {
+            "title": "Referenciaevidencia",
+            "type": "string"
+          },
+          "resultado": {
+            "title": "Resultado",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "venceEn": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venceen"
+          }
+        },
+        "required": [
+          "idValidacion",
+          "tipo",
+          "resultado",
+          "referenciaEvidencia",
+          "detalle",
+          "venceEn",
+          "fecha"
+        ],
+        "title": "ValidacionOrdenRespuesta",
+        "type": "object"
+      },
       "ValidacionRegistrada": {
         "properties": {
           "id_validacion": {
@@ -1623,6 +4583,29 @@
         "title": "ValidacionRegistrar",
         "type": "object"
       },
+      "ValidacionRespuesta": {
+        "properties": {
+          "intentos_restantes": {
+            "description": "Al llegar a 0 la tarjeta queda BLOQUEADA (RN-TAR-004).",
+            "title": "Intentos Restantes",
+            "type": "integer"
+          },
+          "resultado": {
+            "enum": [
+              "EXITOSO",
+              "FALLIDO"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resultado",
+          "intentos_restantes"
+        ],
+        "title": "ValidacionRespuesta",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -1654,6 +4637,50 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VencimientosEjecutar": {
+        "additionalProperties": false,
+        "properties": {
+          "fecha": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Vence las cuotas anteriores a esta fecha; por omisión, hoy (Lima). No puede ser posterior a hoy.",
+            "title": "Fecha"
+          }
+        },
+        "title": "VencimientosEjecutar",
+        "type": "object"
+      },
+      "VencimientosResultado": {
+        "properties": {
+          "creditosActualizados": {
+            "title": "Creditosactualizados",
+            "type": "integer"
+          },
+          "cuotasVencidas": {
+            "title": "Cuotasvencidas",
+            "type": "integer"
+          },
+          "fecha": {
+            "format": "date",
+            "title": "Fecha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fecha",
+          "cuotasVencidas",
+          "creditosActualizados"
+        ],
+        "title": "VencimientosResultado",
         "type": "object"
       }
     },
@@ -1936,6 +4963,162 @@
         ]
       }
     },
+    "/coredb/autorizaciones": {
+      "post": {
+        "description": "Autoriza la operación o registra su rechazo. Si se aprueba, retiene el monto del saldo\ndisponible y lo suma al consumo del día del canal hasta que se contabilice o se extorne.",
+        "operationId": "autorizar_coredb_autorizaciones_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutorizacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutorizacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "BNA-IDEMPOTENCIA"
+          },
+          "422": {
+            "description": "BNA-TARJETA, BNA-MONTO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Autorizar",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/autorizaciones/{uuid_autorizacion}": {
+      "get": {
+        "operationId": "ver_coredb_autorizaciones__uuid_autorizacion__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid_autorizacion",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Uuid Autorizacion",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutorizacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Ver",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/autorizaciones/{uuid_autorizacion}/extorno": {
+      "post": {
+        "description": "Extorna una autorización que aún no tiene movimiento y libera el saldo y el tope\n(RN-ATM-003). Repetirlo responde lo mismo sin cambiar nada.",
+        "operationId": "extornar_coredb_autorizaciones__uuid_autorizacion__extorno_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid_autorizacion",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Uuid Autorizacion",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtornoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutorizacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "BNA-AUTORIZACION"
+          },
+          "409": {
+            "description": "BNA-EXTORNO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Extornar",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
     "/coredb/catalogos/agencias": {
       "get": {
         "operationId": "agencias_coredb_catalogos_agencias_get",
@@ -1988,6 +5171,33 @@
           }
         ],
         "summary": "Catalogos De Clientes",
+        "tags": [
+          "catálogos"
+        ]
+      }
+    },
+    "/coredb/catalogos/creditos": {
+      "get": {
+        "description": "Estados, reglas de RN-EVA-002-P con sus umbrales (ratio monto / límite, en %), métodos\nde amortización, tipos de validación del desembolso, canales y vigencia de una aprobación.\nCampos en camelCase, como el resto de créditos (CONTRATO_CREDITOS.md).",
+        "operationId": "catalogos_de_creditos_coredb_catalogos_creditos_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogosCreditoRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Catalogos De Creditos",
         "tags": [
           "catálogos"
         ]
@@ -2473,6 +5683,1921 @@
         ]
       }
     },
+    "/coredb/creditos": {
+      "get": {
+        "description": "Créditos desembolsados, del más reciente al más antiguo.",
+        "operationId": "listar_coredb_creditos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "AL_DIA",
+                    "EN_MORA",
+                    "CANCELADO"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CreditoRespuesta"
+                  },
+                  "title": "Response Listar Coredb Creditos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Listar",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/analistas": {
+      "post": {
+        "description": "Registra a un empleado activo como analista de crédito. Para decidir, el usuario del\nanalista debe estar ligado a ese empleado (`id_empleado` de `POST /coredb/usuarios`).",
+        "operationId": "registrar_analista_coredb_creditos_analistas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalistaRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalistaRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "409": {
+            "description": "ANALISTA_DUPLICADO"
+          },
+          "422": {
+            "description": "EMPLEADO_NO_HABILITADO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Analista",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/aprobaciones": {
+      "get": {
+        "description": "Aprobaciones que todavía admiten un desembolso: la última ronda, aprobada por la regla o\npor el analista, dentro de su vigencia y sin orden confirmada. El calendario está en\n`GET /coredb/creditos/solicitudes/{idSolicitud}`.",
+        "operationId": "aprobaciones_coredb_creditos_aprobaciones_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "idSolicitud",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idsolicitud"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AprobacionRespuesta"
+                  },
+                  "title": "Response Aprobaciones Coredb Creditos Aprobaciones Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Aprobaciones",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/conciliacion/desembolsos": {
+      "get": {
+        "description": "Órdenes confirmadas frente a lo abonado en las cuentas, por día de negocio (Lima) y\nmoneda. Sin `fecha`, los últimos días con desembolsos.",
+        "operationId": "conciliacion_coredb_creditos_conciliacion_desembolsos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fecha",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fecha"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConciliacionDesembolso"
+                  },
+                  "title": "Response Conciliacion Coredb Creditos Conciliacion Desembolsos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Conciliacion",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/conciliacion/pagos": {
+      "get": {
+        "description": "Lo cobrado (movimientos DEBITO_CUOTA) frente a lo aplicado a cuotas, por día de\nnegocio (Lima), canal y moneda, con los pagos rechazados. Sin `fecha`, todos los días con\npagos.",
+        "operationId": "conciliacion_coredb_creditos_conciliacion_pagos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fecha",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fecha"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConciliacionPagos"
+                  },
+                  "title": "Response Conciliacion Coredb Creditos Conciliacion Pagos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Conciliacion",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/evaluaciones/{id_evaluacion}/decision": {
+      "post": {
+        "description": "El analista decide, una sola vez, una evaluación OBSERVADO de la ronda vigente. El\nusuario del token debe estar ligado a un empleado registrado como analista.",
+        "operationId": "decidir_coredb_creditos_evaluaciones__id_evaluacion__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_evaluacion",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Evaluacion",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionRegistrada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "EVALUACION_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "ANALISTA_REQUERIDO o EVALUACION_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Decidir",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes": {
+      "get": {
+        "description": "Órdenes de desembolso, de la más reciente a la más antigua.",
+        "operationId": "monitor_coredb_creditos_ordenes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PREPARADA",
+                    "VALIDADA",
+                    "EN_PROCESO",
+                    "POR_VERIFICAR",
+                    "CONFIRMADA",
+                    "RECHAZADA",
+                    "REVERTIDA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "idSolicitud",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idsolicitud"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrdenRespuesta"
+                  },
+                  "title": "Response Monitor Coredb Creditos Ordenes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Monitor",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      },
+      "post": {
+        "description": "Prepara la orden de desembolso de una aprobación vigente, con la cuenta elegida. El\nimporte es el monto solicitado. Se rechaza si la aprobación venció, si su primera cuota\nya venció o si ya tiene una orden abierta. La misma llave con el mismo contenido responde\n200 con la misma orden; con otro contenido, 409.",
+        "operationId": "preparar_coredb_creditos_ordenes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "X-Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrdenPreparar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "La misma llave con el mismo contenido"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
+          "422": {
+            "description": "APROBACION_NO_VIGENTE, CALENDARIO_INVALIDO, ORDEN_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Preparar",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}": {
+      "get": {
+        "description": "La orden con sus validaciones y su bitácora.",
+        "operationId": "detalle_coredb_creditos_ordenes__id_orden__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenDetalle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Detalle",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}/confirmacion": {
+      "post": {
+        "description": "Confirma una orden VALIDADA en una sola operación: abona la cuenta (movimiento\nDESEMBOLSO), crea el crédito AL_DIA con su calendario OFICIAL, copia del PRELIMINAR, y\ndeja la solicitud DESEMBOLSADA. Confirmar otra vez responde 200 con el mismo crédito y el\nmismo abono, sin abonar de nuevo: si se pierde la respuesta, se repite la llamada.",
+        "operationId": "confirmar_coredb_creditos_ordenes__id_orden__confirmacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La orden ya estaba confirmada: el mismo crédito y el mismo abono"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenConfirmada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA, APROBACION_NO_VIGENTE, VALIDACION_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Confirmar",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}/cuenta": {
+      "put": {
+        "description": "Cambia la cuenta de una orden PREPARADA o VALIDADA y registra otra validación CUENTA.\nEl estado se recalcula: con la identidad ya aprobada, la orden sigue VALIDADA.",
+        "operationId": "cambiar_cuenta_coredb_creditos_ordenes__id_orden__cuenta_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CuentaCambiar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Cambiar Cuenta",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}/rechazo": {
+      "post": {
+        "description": "Rechaza una orden PREPARADA o VALIDADA con su motivo. La aprobación sigue vigente y\nadmite otra orden.",
+        "operationId": "rechazar_coredb_creditos_ordenes__id_orden__rechazo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RechazoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Rechazar",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}/validaciones": {
+      "post": {
+        "description": "Registra una validación de la orden. Con la última IDENTIDAD y la última CUENTA\naprobadas, y ninguna última validación rechazada, la orden queda VALIDADA; si no,\nPREPARADA. La identidad se verifica el mismo día del desembolso (fecha de Lima).",
+        "operationId": "validar_coredb_creditos_ordenes__id_orden__validaciones_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidacionOrdenRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "VALIDACION_NO_ADMITIDA u ORDEN_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Validar",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/pagos/{referencia}": {
+      "get": {
+        "description": "El pago con esa referencia: su estado, el movimiento y el reparto entre cuotas.",
+        "operationId": "comprobante_coredb_creditos_pagos__referencia__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "referencia",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Referencia",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagoRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "PAGO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Comprobante",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/solicitudes": {
+      "get": {
+        "description": "Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente.",
+        "operationId": "bandeja_coredb_creditos_solicitudes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "REGISTRADA",
+                    "EN_EVALUACION",
+                    "APROBADA",
+                    "RECHAZADA",
+                    "DESEMBOLSADA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SolicitudResumen"
+                  },
+                  "title": "Response Bandeja Coredb Creditos Solicitudes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Bandeja",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      },
+      "post": {
+        "description": "Registra una versión del expediente de SOL (CR-INT-02) con su calendario PRELIMINAR.\n\nUna versión nueva abre otra ronda y solo se acepta mientras la ronda vigente no esté\nevaluada. La misma versión con el mismo contenido responde 200 con el mismo acuse; con\notro contenido, 409. El `idEvaluacion` del acuse es el que tendrá la evaluación.",
+        "operationId": "registrar_solicitud_coredb_creditos_solicitudes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpedienteRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "El mismo expediente ya se había recibido"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcuseSolicitud"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
+          "422": {
+            "description": "CLIENTE_NO_HABILITADO, CALENDARIO_INVALIDO o SOLICITUD_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Solicitud",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/solicitudes/{id_solicitud}": {
+      "get": {
+        "description": "La solicitud con su calendario vigente (el PRELIMINAR de SOL o, ya desembolsada, el\nOFICIAL), sus evaluaciones por ronda y su historial de estados.",
+        "operationId": "detalle_coredb_creditos_solicitudes__id_solicitud__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitud",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitud",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudDetalle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITUD_NO_ENCONTRADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Detalle",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/solicitudes/{id_solicitud}/evaluaciones": {
+      "post": {
+        "description": "Corre RN-EVA-002-P sobre la ronda vigente: COREDB calcula el score y el límite, y la\nbase elige la regla con sus umbrales. APROBADO deja la solicitud APROBADA, RECHAZADO la\ndeja RECHAZADA y OBSERVADO la deja EN_EVALUACION para el analista. Una ronda se evalúa una\nsola vez: si se pierde la respuesta, el resultado está en el detalle de la solicitud.",
+        "operationId": "evaluar_coredb_creditos_solicitudes__id_solicitud__evaluaciones_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitud",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitud",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoEvaluacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITUD_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "SITUACION_NO_VERIFICADA, SOLICITUD_NO_ADMITIDA o EVALUACION_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Evaluar",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/solicitudes/{id_solicitud}/revocacion": {
+      "post": {
+        "description": "Revoca una aprobación sin desembolso: la solicitud queda RECHAZADA con el motivo y sus\nórdenes abiertas, RECHAZADA.",
+        "operationId": "revocar_coredb_creditos_solicitudes__id_solicitud__revocacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitud",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitud",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevocacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocacionRegistrada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITUD_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "SOLICITUD_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Revocar",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/vencimientos": {
+      "post": {
+        "description": "Marca VENCIDA cada cuota PENDIENTE o PARCIAL que venció antes de la fecha y deja cada\ncrédito no cancelado EN_MORA (con una cuota VENCIDA) o AL_DIA. La base lo corre también\nuna vez al día (00:10, Lima); repetirlo el mismo día no cambia nada. Es la tarea diaria de\n`svc-cobranza`.",
+        "operationId": "vencimientos_coredb_creditos_vencimientos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VencimientosEjecutar"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Datos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VencimientosResultado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "description": "FECHA_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Vencimientos",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/{cod_credito}": {
+      "get": {
+        "description": "El crédito con sus cuotas (saldo, días de atraso, mora vigente) y su bitácora.",
+        "operationId": "detalle_coredb_creditos__cod_credito__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditoDetalle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Detalle",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/{cod_credito}/cuotas/{numero_cuota}/mora": {
+      "get": {
+        "description": "Los cálculos de mora de la cuota, del más reciente al más antiguo.",
+        "operationId": "historial_mora_coredb_creditos__cod_credito__cuotas__numero_cuota__mora_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "numero_cuota",
+            "required": true,
+            "schema": {
+              "maximum": 600,
+              "minimum": 1,
+              "title": "Numero Cuota",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MoraRespuesta"
+                  },
+                  "title": "Response Historial Mora Coredb Creditos  Cod Credito  Cuotas  Numero Cuota  Mora Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Historial Mora",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      },
+      "post": {
+        "description": "Registra un cálculo de mora de una cuota vencida con saldo. Ninguna fuente define la\nfórmula: la calcula quien llama. Queda vigente el último cálculo; la mora se muestra en la\ndeuda, pero no se cobra (decisión 5 del contrato).",
+        "operationId": "registrar_mora_coredb_creditos__cod_credito__cuotas__numero_cuota__mora_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "numero_cuota",
+            "required": true,
+            "schema": {
+              "maximum": 600,
+              "minimum": 1,
+              "title": "Numero Cuota",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoraRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoraRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "description": "CUOTA_NO_ADMITIDA (no existe, no tiene saldo o aún no vence)"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Mora",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/{cod_credito}/pagos": {
+      "get": {
+        "description": "Los pagos del crédito, confirmados y rechazados, del más reciente al más antiguo.",
+        "operationId": "pagos_coredb_creditos__cod_credito__pagos_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PagoRespuesta"
+                  },
+                  "title": "Response Pagos Coredb Creditos  Cod Credito  Pagos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Pagos",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      },
+      "post": {
+        "description": "Cobra un pago en una sola operación: debita la cuenta del titular (movimiento\nDEBITO_CUOTA) y lo aplica de la cuota más antigua a la más reciente. Si el débito se\nrechaza (saldo, cuenta no operativa, tope del canal), el pago queda RECHAZADO con su\n`motivo`, sin movimiento y sin tocar las cuotas, y responde 201. La misma referencia con\nel mismo contenido responde 200 con el mismo pago, sin debitar otra vez (también si fue\nRECHAZADO: otro intento lleva otra referencia); con otro contenido u otro crédito, 409. Un\nmonto mayor que la deuda total, una cuenta ajena o un crédito cancelado dan 422 sin\nregistrar nada.",
+        "operationId": "pagar_coredb_creditos__cod_credito__pagos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "La misma referencia con el mismo contenido: el mismo pago"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagoRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
+          "422": {
+            "description": "PAGO_NO_ADMITIDO, CREDITO_NO_ADMITIDO o CUENTA_NO_ELEGIBLE"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Pagar",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
     "/coredb/cuentas": {
       "get": {
         "description": "Las cuentas en las que el cliente es titular, por número de cuenta. No hay una\nruta que liste todas las cuentas.",
@@ -2619,6 +7744,58 @@
         "summary": "Ver",
         "tags": [
           "cuentas"
+        ]
+      }
+    },
+    "/coredb/empleados": {
+      "post": {
+        "description": "Registra un empleado activo y, si se indica, lo liga a un usuario. Para que decida\ncréditos: usuario ANALISTA ligado y `POST /coredb/creditos/analistas` con este\n`id_empleado`.",
+        "operationId": "registrar_coredb_empleados_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmpleadoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmpleadoRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "USUARIO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "EMPLEADO_DUPLICADO o USUARIO_NO_ADMITIDO (de servicio o ya ligado)"
+          },
+          "422": {
+            "description": "AGENCIA_NO_ENCONTRADA o datos inválidos"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar",
+        "tags": [
+          "empleados"
         ]
       }
     },
@@ -3021,6 +8198,129 @@
           }
         ],
         "summary": "Ver",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}": {
+      "put": {
+        "description": "Asigna o cambia el PIN o la clave web y reinicia los intentos fallidos. La base guarda\nsolo su hash con una sal propia.",
+        "operationId": "registrar_credencial_coredb_tarjetas__id_tarjeta__credenciales__tipo__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tipo",
+            "required": true,
+            "schema": {
+              "enum": [
+                "PIN_ATM",
+                "CLAVE_WEB"
+              ],
+              "title": "Tipo",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredencialRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "BNA-CREDENCIAL, BNA-TARJETA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Credencial",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion": {
+      "post": {
+        "description": "Compara el valor dentro de la base y registra el intento. Un valor equivocado responde\n200 con FALLIDO; el tercero seguido bloquea la tarjeta. Con la tarjeta no operativa se\nrechaza (422 ERR-TAR-003) sin registrar el intento.",
+        "operationId": "validar_credencial_coredb_tarjetas__id_tarjeta__credenciales__tipo__validacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tipo",
+            "required": true,
+            "schema": {
+              "enum": [
+                "PIN_ATM",
+                "CLAVE_WEB"
+              ],
+              "title": "Tipo",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredencialValidar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "BNA-CREDENCIAL, ERR-TAR-003"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Validar Credencial",
         "tags": [
           "tarjetas"
         ]
