@@ -25,8 +25,7 @@ export default function LoginPage() {
     setError(""); setMensaje(""); setCargando(true);
     try {
       await iniciarSesion(username.trim(), password);
-      // Tras autenticarse, el usuario entra directo al módulo de Cuentas.
-      router.replace("/cuenta");
+      router.replace("/");
     } catch (err) {
       setError(mensajeError(err));
     } finally {
