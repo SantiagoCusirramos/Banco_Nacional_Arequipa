@@ -241,6 +241,38 @@ evento `REGISTRAR_EMPLEADO` guarda el código, el cargo y el usuario, no el nomb
 mensajes de error no repiten valores de entrada. Solo agrega un procedimiento: una base
 anterior necesita un volumen nuevo para tenerlo.
 
+### Captación (desde `bd-v1.7-mysql`)
+
+El expediente del **prospecto**, que todavía no es cliente, en tablas de extensión del
+esquema `clientes`: `solicitante_captacion`, `caso_captacion`, `consentimiento_captacion`,
+`otp_captacion`, `validacion_captacion`, `consulta_riesgo_captacion` y
+`perfil_riesgo_captacion`. El modelo normalizado no cambia: solo se ligan a él por el
+cliente que resulta (`clientes.cliente`), la agencia y, a través del cliente, su
+verificación de captación. Los proveedores (RENIEC, listas, PEP, centrales, SMS) y el
+puntaje son del módulo CAPTACION; la base guarda lo que responden y aplica las reglas del
+expediente.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `clientes.registrar_solicitante_captacion` | Registra al prospecto con su documento validado por `clientes.tipo_documento`; un documento repetido devuelve el mismo solicitante (`p_duplicado`) |
+| `clientes.abrir_caso_captacion` | Abre el caso (INICIADO). Un solo caso abierto por solicitante (`BNA-CASO-ABIERTO`, y un índice único sobre una columna generada) |
+| `clientes.registrar_consentimientos_captacion` | De uno a cuatro consentimientos en JSON; vale el último de cada tipo y la versión se guarda solo en TERMINOS |
+| `clientes.emitir_otp_captacion` / `verificar_otp_captacion` | Guarda el HMAC que calcula CAPTACION, vence el pendiente anterior del mismo canal y cuenta intentos; vencimiento e intentos salen de `clientes.tipo_contacto`. El código correcto registra la verificación CELULAR o CORREO |
+| `clientes.registrar_validacion_captacion` | RENIEC, listas, PEP o biometría (con su consentimiento), del proveedor o manual; reemplaza al resultado anterior del mismo tipo |
+| `clientes.registrar_consulta_riesgo_captacion` / `registrar_perfil_captacion` | La respuesta de una central (exige CONSULTA_BUROS) y el perfil de 0 a 1000 (exige una consulta; una consulta posterior lo deja desactualizado) |
+| `clientes.cambiar_estado_caso_captacion` | Observar, levantar la observación, rechazar o revocar (solo un caso HABILITADO) |
+| `clientes.vincular_cliente_captacion` | Liga al caso APROBADO el cliente ACTIVO con el documento del solicitante; quien verificó la identidad lo registra antes con `registrar_cliente` (punto R-01) |
+| `clientes.habilitar_caso_captacion` | HABILITADO con vigencia de 1 a 365 días desde la fecha de negocio; deja en `clientes.validacion_identidad` las verificaciones de contacto. Repetirlo no cambia nada |
+
+El estado se recalcula tras cada paso: INICIADO → EN_VALIDACION → APROBADO → HABILITADO,
+OBSERVADO mientras algo quede por resolver, y RECHAZADO (validación rechazada, perfil
+MUY_ALTO o decisión del asesor) o REVOCADO como finales. Las vistas
+`clientes.v_*_captacion_api` dan a `bna_api` lo que necesita leer, con lo que falta para
+habilitar el caso (`faltantes`) y sin el hash del OTP; `bna_api` no escribe ni lee las
+tablas. Los eventos van al módulo CLIENTES (punto R-01: `core.modulo` no tiene CAPTACION)
+sin documento, nombres ni contactos. Solo agrega objetos: una base anterior necesita un
+volumen nuevo para tenerlos.
+
 `pruebas/mysql/run_tests.sh` ejecuta toda la suite con la extensión cargada. Sus
 pruebas (ID `X`) quedan en `resultados/mysql/resultado-extension.tsv`, fuera de la
 matriz. `pruebas_sin_transaccion.sh` prueba cada procedimiento en autocommit, porque
