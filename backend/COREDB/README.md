@@ -53,7 +53,9 @@ personas son los de `CORE/data/rbac.json` en `a9bd70f`, y la API nunca lo escrib
 acción propia `VALIDAR_IDENTIDAD` la tienen ASESOR, OPERADOR (verifica el documento antes de
 un desembolso) y el usuario de servicio de Clientes;
 `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR y el servicio de Cobranza) son las
-propias de créditos. Hay usuarios de servicio para CLIENTES, EVALUACION, DESEMBOLSO y COBRANZA.
+propias de créditos. `REGISTRAR_EMPLEADO` (solo ADMINISTRADOR) registra empleados con
+`POST /coredb/empleados` y los liga a su usuario: así un analista queda disponible sin el
+administrador de la base. Hay usuarios de servicio para CLIENTES, EVALUACION, DESEMBOLSO y COBRANZA.
 Cada ruta declara su permiso con `requiere_permiso`; una prueba falla si una escritura no
 lo declara o si una ruta, salvo las públicas, no exige token.
 
@@ -148,6 +150,7 @@ Las tres áreas: evaluación, desembolso y cobranza.
 | `POST /coredb/creditos/solicitudes/{id}/revocacion` | `APROBAR_CREDITO` |
 | `GET /coredb/creditos/aprobaciones` | `VER_CREDITO` |
 | `POST /coredb/creditos/analistas` | `CREAR_USUARIO` |
+| `POST /coredb/empleados` (el empleado y su usuario; antes de `…/analistas`) | `REGISTRAR_EMPLEADO` |
 | `GET /coredb/catalogos/creditos` | autenticado |
 | `POST /coredb/creditos/ordenes` (con `X-Idempotency-Key`) | `DESEMBOLSAR_CREDITO` |
 | `PUT …/ordenes/{id}/cuenta`, `POST …/ordenes/{id}/validaciones`, `POST …/ordenes/{id}/confirmacion`, `POST …/ordenes/{id}/rechazo` | `DESEMBOLSAR_CREDITO` |

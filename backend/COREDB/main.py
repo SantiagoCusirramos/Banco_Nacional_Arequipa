@@ -14,7 +14,7 @@ from COREDB.database import verificar_configuracion
 from COREDB.errores import registrar_manejadores
 from COREDB.routers import (
     auditoria, auth, autorizaciones, catalogos, clientes, creditos_cobranza, creditos_desembolso,
-    creditos_evaluacion, cuentas, movimientos, salud, tarjetas, usuarios,
+    creditos_evaluacion, cuentas, empleados, movimientos, salud, tarjetas, usuarios,
 )
 
 
@@ -38,6 +38,7 @@ registrar_manejadores(app)
 app.include_router(salud.router)
 app.include_router(auth.router)
 app.include_router(usuarios.router)
+app.include_router(empleados.router)
 app.include_router(clientes.router)
 app.include_router(movimientos.router)
 app.include_router(cuentas.router)
