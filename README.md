@@ -11,7 +11,7 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas y solicitud de crédito | En uso |
 | SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas | Laboratorio: base propia, sin conexión con el CORE |
 | Seguridad | `backend/seguridad` | Prototipo de login, topes, auditoría encadenada e incidentes | Laboratorio: SQLite, sin conexión con el CORE |
-| CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene los créditos, que COREDB todavía no ofrece | Opcional: ningún servicio lo llama |
+| CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene su propia evaluación de créditos; COREDB ya ofrece la evaluación y el desembolso sobre la base integrada | Opcional: ningún servicio lo llama |
 
 Lo que no está: el módulo Clientes (en revisión en el PR #25) y el Bus de Servicios, que no existe todavía. Los servicios se llaman entre sí directamente dentro de la red de Docker.
 

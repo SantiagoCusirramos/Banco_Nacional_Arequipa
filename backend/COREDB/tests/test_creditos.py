@@ -158,6 +158,7 @@ CODIGOS_DESEMBOLSO = {
     "BNA-ORDEN": "ORDEN_NO_ADMITIDA",
     "BNA-ORDEN-UNICA": "ORDEN_NO_ADMITIDA",
     "BNA-CUENTA-DESTINO": "CUENTA_NO_ELEGIBLE",
+    "BNA-CUENTA": "CUENTA_NO_ELEGIBLE",
     "BNA-IMPORTE": "IMPORTE_NO_ADMITIDO",
     "BNA-VALIDACION": "VALIDACION_NO_ADMITIDA",
     "BNA-CANAL": "CANAL_NO_ADMITIDO",
@@ -177,6 +178,7 @@ def test_cada_codigo_del_desembolso_tiene_su_error(regla, codigo):
     "BNA-IMPORTE: el importe 15000.00 supera el límite aprobado 12000.00",
     "BNA-ORDEN-UNICA: la solicitud 0b6f0000-0000-4000-8000-000000000001 ya tiene una orden CONFIRMADA",
     "BNA-CANAL: canal desconocido XYZ",
+    "BNA-CUENTA: no existe la cuenta CTA-0000000000001234",
 ])
 def test_los_mensajes_del_desembolso_no_repiten_valores(mensaje):
     traducido = creditos.traducir(ErrorCoreDb(mensaje.split(":")[0], mensaje))
@@ -290,10 +292,10 @@ def test_la_huella_de_la_orden_cambia_con_su_contenido():
 def test_cuerpo_de_la_validacion(cuerpo):
     from pydantic import ValidationError
 
-    from COREDB.routers.creditos_desembolso import ValidacionRegistrar
+    from COREDB.routers.creditos_desembolso import ValidacionOrdenRegistrar
 
     with pytest.raises(ValidationError):
-        ValidacionRegistrar.model_validate(cuerpo)
+        ValidacionOrdenRegistrar.model_validate(cuerpo)
 
 
 def test_sin_token_401_en_creditos():

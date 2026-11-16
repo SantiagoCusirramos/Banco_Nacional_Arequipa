@@ -885,6 +885,45 @@
         "title": "CodigoCredito",
         "type": "object"
       },
+      "ConciliacionDesembolso": {
+        "properties": {
+          "fecha": {
+            "format": "date",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "importeAbonado": {
+            "title": "Importeabonado",
+            "type": "string"
+          },
+          "importeOrdenes": {
+            "title": "Importeordenes",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "ordenesConfirmadas": {
+            "title": "Ordenesconfirmadas",
+            "type": "integer"
+          },
+          "ordenesSinAbono": {
+            "title": "Ordenessinabono",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fecha",
+          "moneda",
+          "ordenesConfirmadas",
+          "importeOrdenes",
+          "importeAbonado",
+          "ordenesSinAbono"
+        ],
+        "title": "ConciliacionDesembolso",
+        "type": "object"
+      },
       "CredencialRegistrar": {
         "additionalProperties": false,
         "properties": {
@@ -1031,6 +1070,22 @@
           "titulares"
         ],
         "title": "CuentaAbrir",
+        "type": "object"
+      },
+      "CuentaCambiar": {
+        "additionalProperties": false,
+        "properties": {
+          "numCuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "numCuenta"
+        ],
+        "title": "CuentaCambiar",
         "type": "object"
       },
       "CuentaRespuesta": {
@@ -1601,6 +1656,67 @@
         "title": "EvaluacionRespuesta",
         "type": "object"
       },
+      "EventoOrdenRespuesta": {
+        "properties": {
+          "accion": {
+            "title": "Accion",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlationid"
+          },
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "fechaHora": {
+            "format": "date-time",
+            "title": "Fechahora",
+            "type": "string"
+          },
+          "resultado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado"
+          }
+        },
+        "required": [
+          "accion",
+          "resultado",
+          "actor",
+          "correlationId",
+          "detalle",
+          "fechaHora"
+        ],
+        "title": "EventoOrdenRespuesta",
+        "type": "object"
+      },
       "EventoRespuesta": {
         "properties": {
           "accion": {
@@ -2025,6 +2141,387 @@
         "title": "MovimientoRespuesta",
         "type": "object"
       },
+      "OrdenConfirmada": {
+        "properties": {
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaEfectiva": {
+            "description": "Fecha y hora del abono.",
+            "format": "date-time",
+            "title": "Fechaefectiva",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "uuidTransaccionAbono": {
+            "format": "uuid",
+            "title": "Uuidtransaccionabono",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idOrden",
+          "codigoOrden",
+          "estado",
+          "codCredito",
+          "uuidTransaccionAbono",
+          "fechaEfectiva"
+        ],
+        "title": "OrdenConfirmada",
+        "type": "object"
+      },
+      "OrdenDetalle": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "codCredito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codcredito"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "$ref": "#/components/schemas/EventoOrdenRespuesta"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "fechaActualizacion": {
+            "format": "date-time",
+            "title": "Fechaactualizacion",
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "format": "date-time",
+            "title": "Fechacreacion",
+            "type": "string"
+          },
+          "idAgencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idagencia"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "importe": {
+            "title": "Importe",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "motivoRechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivorechazo"
+          },
+          "numCuenta": {
+            "title": "Numcuenta",
+            "type": "string"
+          },
+          "usuarioConfirmacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuarioconfirmacion"
+          },
+          "usuarioPreparacion": {
+            "title": "Usuariopreparacion",
+            "type": "string"
+          },
+          "uuidTransaccionAbono": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uuidtransaccionabono"
+          },
+          "validaciones": {
+            "items": {
+              "$ref": "#/components/schemas/ValidacionOrdenRespuesta"
+            },
+            "title": "Validaciones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "idOrden",
+          "codigoOrden",
+          "estado",
+          "motivoRechazo",
+          "importe",
+          "moneda",
+          "numCuenta",
+          "canal",
+          "idAgencia",
+          "idEvaluacion",
+          "idSolicitud",
+          "codCliente",
+          "usuarioPreparacion",
+          "usuarioConfirmacion",
+          "uuidTransaccionAbono",
+          "codCredito",
+          "fechaCreacion",
+          "fechaActualizacion",
+          "validaciones",
+          "eventos"
+        ],
+        "title": "OrdenDetalle",
+        "type": "object"
+      },
+      "OrdenPreparar": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "default": "VEN",
+            "enum": [
+              "VEN",
+              "HB"
+            ],
+            "title": "Canal",
+            "type": "string"
+          },
+          "idAgencia": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idagencia"
+          },
+          "idEvaluacion": {
+            "description": "La aprobación: `idEvaluacion` de `GET /coredb/creditos/aprobaciones`.",
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "numCuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "numCuenta"
+        ],
+        "title": "OrdenPreparar",
+        "type": "object"
+      },
+      "OrdenRespuesta": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "codCredito": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codcredito"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaActualizacion": {
+            "format": "date-time",
+            "title": "Fechaactualizacion",
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "format": "date-time",
+            "title": "Fechacreacion",
+            "type": "string"
+          },
+          "idAgencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idagencia"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "importe": {
+            "title": "Importe",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "motivoRechazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivorechazo"
+          },
+          "numCuenta": {
+            "title": "Numcuenta",
+            "type": "string"
+          },
+          "usuarioConfirmacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuarioconfirmacion"
+          },
+          "usuarioPreparacion": {
+            "title": "Usuariopreparacion",
+            "type": "string"
+          },
+          "uuidTransaccionAbono": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uuidtransaccionabono"
+          }
+        },
+        "required": [
+          "idOrden",
+          "codigoOrden",
+          "estado",
+          "motivoRechazo",
+          "importe",
+          "moneda",
+          "numCuenta",
+          "canal",
+          "idAgencia",
+          "idEvaluacion",
+          "idSolicitud",
+          "codCliente",
+          "usuarioPreparacion",
+          "usuarioConfirmacion",
+          "uuidTransaccionAbono",
+          "codCredito",
+          "fechaCreacion",
+          "fechaActualizacion"
+        ],
+        "title": "OrdenRespuesta",
+        "type": "object"
+      },
       "PerfilRespuesta": {
         "properties": {
           "acciones": {
@@ -2140,6 +2637,22 @@
           "activo"
         ],
         "title": "ProductoCreditoRespuesta",
+        "type": "object"
+      },
+      "RechazoRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "title": "RechazoRegistrar",
         "type": "object"
       },
       "ReglaEvaluacion": {
@@ -3047,6 +3560,127 @@
           "creado_en"
         ],
         "title": "UsuarioSesion",
+        "type": "object"
+      },
+      "ValidacionOrdenRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "detalle": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "referenciaEvidencia": {
+            "description": "En IDENTIDAD aprobada, el `id_validacion` de `POST /coredb/clientes/validaciones/documento`, aprobado hoy para el titular.",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Referenciaevidencia",
+            "type": "string"
+          },
+          "resultado": {
+            "enum": [
+              "APROBADA",
+              "RECHAZADA"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          },
+          "tipo": {
+            "description": "La validación CUENTA la registra COREDB al elegir la cuenta.",
+            "enum": [
+              "IDENTIDAD",
+              "AUTORIZACION",
+              "ANTIFRAUDE"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          },
+          "venceEn": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venceen"
+          }
+        },
+        "required": [
+          "tipo",
+          "resultado",
+          "referenciaEvidencia"
+        ],
+        "title": "ValidacionOrdenRegistrar",
+        "type": "object"
+      },
+      "ValidacionOrdenRespuesta": {
+        "properties": {
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "idValidacion": {
+            "format": "uuid",
+            "title": "Idvalidacion",
+            "type": "string"
+          },
+          "referenciaEvidencia": {
+            "title": "Referenciaevidencia",
+            "type": "string"
+          },
+          "resultado": {
+            "title": "Resultado",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "venceEn": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venceen"
+          }
+        },
+        "required": [
+          "idValidacion",
+          "tipo",
+          "resultado",
+          "referenciaEvidencia",
+          "detalle",
+          "venceEn",
+          "fecha"
+        ],
+        "title": "ValidacionOrdenRespuesta",
         "type": "object"
       },
       "ValidacionRegistrada": {
@@ -4292,6 +4926,72 @@
         ]
       }
     },
+    "/coredb/creditos/conciliacion/desembolsos": {
+      "get": {
+        "description": "Órdenes confirmadas frente a lo abonado en las cuentas, por día de negocio (Lima) y\nmoneda. Sin `fecha`, los últimos días con desembolsos.",
+        "operationId": "conciliacion_coredb_creditos_conciliacion_desembolsos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fecha",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fecha"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConciliacionDesembolso"
+                  },
+                  "title": "Response Conciliacion Coredb Creditos Conciliacion Desembolsos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Conciliacion",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
     "/coredb/creditos/evaluaciones/{id_evaluacion}/decision": {
       "post": {
         "description": "El analista decide, una sola vez, una evaluación OBSERVADO de la ronda vigente. El\nusuario del token debe estar ligado a un empleado registrado como analista.",
@@ -4366,6 +5066,575 @@
         "summary": "Decidir",
         "tags": [
           "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes": {
+      "get": {
+        "description": "Órdenes de desembolso, de la más reciente a la más antigua.",
+        "operationId": "monitor_coredb_creditos_ordenes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PREPARADA",
+                    "VALIDADA",
+                    "EN_PROCESO",
+                    "POR_VERIFICAR",
+                    "CONFIRMADA",
+                    "RECHAZADA",
+                    "REVERTIDA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "idSolicitud",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idsolicitud"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrdenRespuesta"
+                  },
+                  "title": "Response Monitor Coredb Creditos Ordenes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Monitor",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      },
+      "post": {
+        "description": "Prepara la orden de desembolso de una aprobación vigente, con la cuenta elegida. El\nimporte es el monto solicitado. Se rechaza si la aprobación venció, si su primera cuota\nya venció o si ya tiene una orden abierta. La misma llave con el mismo contenido responde\n200 con la misma orden; con otro contenido, 409.",
+        "operationId": "preparar_coredb_creditos_ordenes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "X-Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrdenPreparar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "La misma llave con el mismo contenido"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
+          "422": {
+            "description": "APROBACION_NO_VIGENTE, CALENDARIO_INVALIDO, ORDEN_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Preparar",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}": {
+      "get": {
+        "description": "La orden con sus validaciones y su bitácora.",
+        "operationId": "detalle_coredb_creditos_ordenes__id_orden__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenDetalle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Detalle",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}/confirmacion": {
+      "post": {
+        "description": "Confirma una orden VALIDADA en una sola operación: abona la cuenta (movimiento\nDESEMBOLSO), crea el crédito AL_DIA con su calendario OFICIAL, copia del PRELIMINAR, y\ndeja la solicitud DESEMBOLSADA. Confirmar otra vez responde 200 con el mismo crédito y el\nmismo abono, sin abonar de nuevo: si se pierde la respuesta, se repite la llamada.",
+        "operationId": "confirmar_coredb_creditos_ordenes__id_orden__confirmacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La orden ya estaba confirmada: el mismo crédito y el mismo abono"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenConfirmada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA, APROBACION_NO_VIGENTE, VALIDACION_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Confirmar",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}/cuenta": {
+      "put": {
+        "description": "Cambia la cuenta de una orden PREPARADA o VALIDADA y registra otra validación CUENTA.\nEl estado se recalcula: con la identidad ya aprobada, la orden sigue VALIDADA.",
+        "operationId": "cambiar_cuenta_coredb_creditos_ordenes__id_orden__cuenta_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CuentaCambiar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA o CUENTA_NO_ELEGIBLE"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Cambiar Cuenta",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}/rechazo": {
+      "post": {
+        "description": "Rechaza una orden PREPARADA o VALIDADA con su motivo. La aprobación sigue vigente y\nadmite otra orden.",
+        "operationId": "rechazar_coredb_creditos_ordenes__id_orden__rechazo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RechazoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "ORDEN_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Rechazar",
+        "tags": [
+          "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/ordenes/{id_orden}/validaciones": {
+      "post": {
+        "description": "Registra una validación de la orden. Con la última IDENTIDAD y la última CUENTA\naprobadas, y ninguna última validación rechazada, la orden queda VALIDADA; si no,\nPREPARADA. La identidad se verifica el mismo día del desembolso (fecha de Lima).",
+        "operationId": "validar_coredb_creditos_ordenes__id_orden__validaciones_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_orden",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Orden",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidacionOrdenRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "ORDEN_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "VALIDACION_NO_ADMITIDA u ORDEN_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Validar",
+        "tags": [
+          "créditos: desembolso"
         ]
       }
     },
