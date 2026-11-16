@@ -424,6 +424,38 @@ def flujo():
     paso("EVALUACIÓN: un caso OBSERVADO espera al analista; no se devuelve a SOL (T1) y decidir exige un "
          "analista registrado")
 
+    # El administrador da de alta al analista por la API: usuario ANALISTA, empleado ligado a
+    # él (POST /coredb/empleados, solo ADMINISTRADOR) y registro como analista de crédito.
+    analista = "an" + uuid.uuid4().hex[:12]
+    clave_analista = "clave-" + uuid.uuid4().hex
+    usuario_analista = coredb("POST", "/coredb/usuarios", 201, {
+        "username": analista, "nombre": "Analista del flujo", "password": clave_analista, "rol": "ANALISTA"}, token)
+    token_an = coredb("POST", "/coredb/auth/login", 200,
+                      {"username": analista, "password": clave_analista})["access_token"]
+    alta_empleado = {"codigo_empleado": "EMP-" + uuid.uuid4().hex[:10].upper(), "nombre_completo": "Analista del flujo",
+                     "cargo": "ANALISTA", "id_agencia": AGENCIA, "id_usuario": usuario_analista["id_usuario"]}
+    coredb("POST", "/coredb/empleados", 403, alta_empleado, token_an)
+    empleado = coredb("POST", "/coredb/empleados", 201, alta_empleado, token)
+    exigir(empleado["id_usuario"] == usuario_analista["id_usuario"] and "nombre_completo" not in empleado,
+           f"El empleado debía quedar ligado al usuario, sin repetir el nombre: {empleado}")
+    ligado = coredb("GET", f"/coredb/usuarios/{usuario_analista['id_usuario']}", 200, token=token)
+    exigir(ligado["id_empleado"] == empleado["id_empleado"], f"El usuario debía quedar ligado al empleado: {ligado}")
+    coredb("POST", "/coredb/empleados", 409, {**alta_empleado, "id_usuario": None}, token)
+    id_analista = coredb("POST", "/coredb/creditos/analistas", 201,
+                         {"idEmpleado": empleado["id_empleado"]}, token)["idAnalista"]
+    estado, decidida = pedir("POST", decision, {"decision": "APROBADO", "comentario": "Sustento revisado y suficiente."},
+                             token_an)
+    exigir(estado == 200 and decidida["decision"] == "APROBADO" and decidida["estadoSolicitud"] == "APROBADA",
+           f"Decisión del analista por Evaluación: {estado} {decidida}")
+    detalle = coredb("GET", f"/coredb/creditos/solicitudes/{observada}", 200, token=token)
+    ultima = detalle["evaluaciones"][-1]
+    exigir(detalle["estado"] == "APROBADA" and ultima["decision"] == "APROBADO" and ultima["idAnalista"] == id_analista
+           and detalle["historial"][-1]["actor"] == analista,
+           f"La decisión debía quedar en COREDB a nombre del analista: {detalle}")
+    paso(f"EVALUACIÓN: el administrador registra al empleado {empleado['codigo_empleado']} ligado a {analista} "
+         f"(ANALISTA; él mismo no puede: 403; código repetido: 409) y lo registra como analista {id_analista}; "
+         "el analista decide el caso OBSERVADO con su token: APROBADA")
+
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/evaluacion/solicitudes/{solicitud}", token=token)
     exigir(estado == 200 and respuesta["estado"] == "APROBADA", f"Puente a Evaluación: {estado} {respuesta}")
     paso("frontend: su puente llega a Evaluación con el token del usuario")
@@ -451,8 +483,8 @@ def flujo():
     exigir(estado == 201 and verificacion["resultado"] == "APROBADO" and verificacion["codCliente"] == cliente,
            f"Verificación del documento por Desembolso: {estado} {verificacion}")
     estado, aprobaciones = pedir("GET", f"{des}/aprobaciones?codCliente={cliente}", token=token_op)
-    exigir(estado == 200 and [a["idEvaluacion"] for a in aprobaciones] == [acuse["idEvaluacion"]],
-           f"Desembolso debía leer de COREDB la aprobación de Evaluación: {estado} {aprobaciones}")
+    exigir(estado == 200 and {a["idEvaluacion"] for a in aprobaciones} == {acuse["idEvaluacion"], ultima["idEvaluacion"]},
+           f"Desembolso debía leer de COREDB las dos aprobaciones (regla y analista): {estado} {aprobaciones}")
     estado, cuentas_abono = pedir("GET", f"{des}/clientes/{cliente}/cuentas?moneda=PEN", token=token_op)
     exigir(estado == 200 and {c["numCuenta"] for c in cuentas_abono if c["elegible"]} >= {abono},
            f"La cuenta nueva debía admitir el abono: {estado} {cuentas_abono}")
@@ -487,7 +519,8 @@ def flujo():
     exigir(desembolsada["estado"] == "DESEMBOLSADA" and desembolsada["calendario"]["tipo"] == "OFICIAL",
            f"La solicitud debía quedar DESEMBOLSADA con su calendario OFICIAL: {desembolsada['estado']}")
     estado, sin_aprobaciones = pedir("GET", f"{des}/aprobaciones?codCliente={cliente}", token=token_op)
-    exigir(estado == 200 and sin_aprobaciones == [], f"La aprobación ya no debía estar disponible: {sin_aprobaciones}")
+    exigir(estado == 200 and [a["idEvaluacion"] for a in sin_aprobaciones] == [ultima["idEvaluacion"]],
+           f"Solo debía quedar la aprobación del analista: {sin_aprobaciones}")
     paso(f"DESEMBOLSO: {operador} (OPERADOR) verifica el documento, prepara la orden {orden['codigoOrden']} "
          f"(repetición sin duplicar), la valida y la confirma: abono único de 15000.00, crédito "
          f"{confirmada['codCredito']} AL_DIA con calendario OFICIAL y solicitud DESEMBOLSADA; confirmar otra vez "
