@@ -764,3 +764,35 @@ $(previo p400)
 CALL core.registrar_empleado(UUID_TO_BIN('34100000-0000-4000-8000-000000000400'), 'AC-EMP-400', 'E', 'ANALISTA', 'AQP01', $EMP_USR, NULL);
 COMMIT;
 SQL
+# Captación (v1.7) en autocommit y dentro de una transacción del que llama.
+caso X445 'Un expediente completo en autocommit queda HABILITADO con su cliente (v1.7)' \
+  "SELECT (SELECT estado = 'HABILITADO' AND cod_cliente = 'C001' FROM clientes.caso_captacion
+            WHERE id_caso = UUID_TO_BIN('35100000-0000-4000-8000-000000000445'))" <<'SQL'
+CALL prueba.cap_listo(445, '70000001', @c);
+CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()));
+CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e);
+SQL
+caso X446 'abrir_caso_captacion no deja el caso si falla el evento (v1.7)' \
+  "SELECT (SELECT COUNT(*) FROM clientes.caso_captacion WHERE id_caso = UUID_TO_BIN('35100000-0000-4000-8000-000000000446')) = 0
+      AND (SELECT COUNT(*) FROM clientes.solicitante_captacion WHERE id_solicitante = UUID_TO_BIN('35000000-0000-4000-8000-000000000446')) = 1" <<'SQL'
+CALL prueba.cap_solicitante(446, '71000446', @s);
+CALL clientes.abrir_caso_captacion(UUID_TO_BIN('35100000-0000-4000-8000-000000000446'), @s, 'WEB', NULL, NULL, NULL, UUID_TO_BIN(UUID()));
+SQL
+root_ -e "CALL prueba.cap_caso(447, '71000447', @c)" || true
+caso X447 'registrar_consentimientos_captacion deshace solo lo suyo dentro de una transacción (v1.7)' \
+  "SELECT $(quedo p447) AND (SELECT COUNT(*) FROM clientes.consentimiento_captacion
+                             WHERE id_caso = UUID_TO_BIN('35100000-0000-4000-8000-000000000447')) = 0" <<SQL
+$(previo p447)
+CALL clientes.registrar_consentimientos_captacion(UUID_TO_BIN('35100000-0000-4000-8000-000000000447'), JSON_ARRAY(JSON_OBJECT('tipo', 'TERMINOS', 'aceptado', TRUE, 'medio', 'DIGITAL')), 'v1', NULL, UUID_TO_BIN(UUID()), @e);
+COMMIT;
+SQL
+root_ -e "CALL prueba.cap_consentido(448, '71000448', @c);
+          CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000448'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x);
+          UPDATE clientes.otp_captacion SET fecha_emision = UTC_TIMESTAMP(6) - INTERVAL 10 MINUTE,
+                                            fecha_expiracion = UTC_TIMESTAMP(6) - INTERVAL 1 SECOND
+           WHERE id_otp = UUID_TO_BIN('35200000-0000-4000-8000-000000000448')" || true
+caso X448 'Un OTP vencido queda EXPIRADO aunque el código sea correcto, y no verifica el celular (v1.7)' \
+  "SELECT (SELECT estado FROM clientes.otp_captacion WHERE id_otp = UUID_TO_BIN('35200000-0000-4000-8000-000000000448')) = 'EXPIRADO'
+      AND (SELECT COUNT(*) FROM clientes.validacion_captacion WHERE id_caso = UUID_TO_BIN('35100000-0000-4000-8000-000000000448')) = 0" <<'SQL'
+CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000448'), UUID_TO_BIN('35100000-0000-4000-8000-000000000448'), REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod, @rest, @e);
+SQL

@@ -81,6 +81,8 @@ root_ < "$HERE/datos.sql"
 root_ < "$ROOT/sql/bna_extension.sql"
 # Ayudantes y datos de las pruebas de créditos (v1.4).
 root_ < "$HERE/arnes_creditos.sql"
+# Ayudantes de las pruebas de captación (v1.7).
+root_ < "$HERE/arnes_captacion.sql"
 root_ -e "INSERT INTO core.periodo_contable VALUES (2001, 1, '2001-01-01', '2001-01-31', 'CERRADO'),
                                                    (2002, 1, '2002-01-01', '2002-01-31', 'ABIERTO')"
 root_ -e "CREATE USER 'bna_api_user'@'%' IDENTIFIED BY 'api' DEFAULT ROLE bna_api;

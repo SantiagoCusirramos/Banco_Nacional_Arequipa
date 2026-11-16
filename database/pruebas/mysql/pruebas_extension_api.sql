@@ -1025,3 +1025,256 @@ CALL prueba.rechaza('X395', 'Extensión', 'Empleados', 'El código, el nombre y 
 CALL prueba.rechaza('X396', 'Extensión', 'bna_api', 'bna_api no puede: INSERT en core.empleado',
   JSON_ARRAY("INSERT INTO core.empleado (id_empleado, codigo_empleado, nombre_completo, cargo) VALUES (UUID_TO_BIN(UUID()), 'E396', 'E', 'ANALISTA')"),
   'denied', 'privilegio');
+
+-- ---------------------------------------------------------------------
+-- Captación (v1.7): el expediente del prospecto en tablas de extensión de clientes.
+-- Ayudantes en arnes_captacion.sql. Caso de la prueba X4NN: 35100000-…-000000000NNN.
+-- ---------------------------------------------------------------------
+CALL prueba.verifica('X401', 'Extensión', 'Captación', 'Un asesor registra al prospecto con su documento validado por el catálogo',
+  JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(prueba.cap_id('35000000', 401), 'DNI', '71000401', ' Rosa ', 'Prospecto', '', '951000401', 'Rosa@Example.com', 'asesor.cap', UUID_TO_BIN(UUID()), @id, @dup)"),
+  "SELECT @dup = 0 AND BIN_TO_UUID(@id) = '35000000-0000-4000-8000-000000000401' AND (SELECT COUNT(*) FROM clientes.v_solicitante_captacion_api WHERE id_solicitante = '35000000-0000-4000-8000-000000000401' AND nombres = 'Rosa' AND apellido_materno IS NULL AND correo = 'rosa@example.com' AND cod_cliente IS NULL AND creado_por = 'asesor.cap') = 1",
+  'un solicitante nuevo, correo en minúsculas', "SELECT CONCAT_WS(' ', @dup, BIN_TO_UUID(@id))", 'procedimiento');
+
+CALL prueba.verifica('X402', 'Extensión', 'Captación', 'El mismo documento devuelve el mismo solicitante y lo marca como duplicado',
+  JSON_ARRAY("CALL prueba.cap_solicitante(402, '71000402', @a)",
+             "CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '71000402', 'Otro', 'Nombre', NULL, '951999402', 'otro@example.com', 'asesor.cap', UUID_TO_BIN(UUID()), @b, @dup)"),
+  "SELECT @dup = 1 AND @a = @b AND (SELECT COUNT(*) FROM clientes.v_solicitante_captacion_api WHERE numero_documento = '71000402' AND nombres = 'Prospecto') = 1",
+  'el primero, sin cambios', "SELECT CONCAT_WS(' ', @dup, BIN_TO_UUID(@b))", 'procedimiento');
+
+CALL prueba.verifica('X403', 'Extensión', 'Captación', 'El registro del solicitante se audita sin su documento ni su nombre',
+  JSON_ARRAY("CALL prueba.cap_solicitante(403, '71000403', @a)"),
+  "SELECT (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE modulo = 'CLIENTES' AND entidad = 'solicitante_captacion' AND id_entidad = '35000000-0000-4000-8000-000000000403' AND accion = 'REGISTRAR_SOLICITANTE' AND actor = 'asesor.cap') = 1 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '35000000-0000-4000-8000-000000000403' AND (detalle LIKE '%71000403%' OR detalle LIKE '%Prospecto%' OR detalle LIKE '%example%')) = 0",
+  'un evento REGISTRAR_SOLICITANTE sin datos personales', "SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'REGISTRAR_SOLICITANTE'", 'procedimiento');
+
+CALL prueba.rechaza('X404', 'Extensión', 'Captación', 'Un DNI que no cumple su formato se rechaza sin repetirlo',
+  JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '7100A', 'Rosa', 'Prospecto', NULL, '951000404', 'r@example.com', 'asesor.cap', UUID_TO_BIN(UUID()), @id, @dup)"),
+  '^BNA-DOCUMENTO: el número no cumple el formato de su tipo de documento$', 'procedimiento');
+
+CALL prueba.rechaza('X405', 'Extensión', 'Captación', 'Un celular que no es de nueve dígitos con 9 se rechaza',
+  JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '71000405', 'Rosa', 'Prospecto', NULL, '851000405', 'r@example.com', 'asesor.cap', UUID_TO_BIN(UUID()), @id, @dup)"),
+  '^BNA-SOLICITANTE-DATOS: el celular no es válido$', 'procedimiento');
+
+CALL prueba.verifica('X406', 'Extensión', 'Captación', 'Abrir el caso lo deja INICIADO con lo que falta para habilitarlo',
+  JSON_ARRAY("CALL prueba.cap_caso(406, '71000406', @c)"),
+  "SELECT (SELECT estado = 'INICIADO' AND canal = 'AGENCIA' AND id_agencia = 'AQP01' AND JSON_CONTAINS(faltantes, '\"Consentimiento TRATAMIENTO_DATOS aceptado\"') AND JSON_CONTAINS(faltantes, '\"Verificación OTP del celular\"') AND JSON_CONTAINS(faltantes, '\"Perfil de riesgo calculado\"') FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000406')",
+  'INICIADO con faltantes', "SELECT CONCAT_WS(' ', estado, faltantes) FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000406'", 'procedimiento');
+
+CALL prueba.rechaza('X407', 'Extensión', 'Captación', 'Un solicitante no tiene dos casos abiertos',
+  JSON_ARRAY("CALL prueba.cap_caso(407, '71000407', @c)",
+             "CALL clientes.abrir_caso_captacion(UUID_TO_BIN(UUID()), prueba.cap_id('35000000', 407), 'WEB', NULL, NULL, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CASO-ABIERTO: el solicitante ya tiene un caso abierto$', 'procedimiento');
+
+CALL prueba.rechaza('X408', 'Extensión', 'Captación', 'Un caso de un solicitante inexistente se rechaza',
+  JSON_ARRAY("CALL clientes.abrir_caso_captacion(UUID_TO_BIN(UUID()), UUID_TO_BIN(UUID()), 'WEB', NULL, NULL, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-SOLICITANTE: el solicitante no existe$', 'procedimiento');
+
+CALL prueba.rechaza('X409', 'Extensión', 'Captación', 'Un canal desconocido se rechaza',
+  JSON_ARRAY("CALL prueba.cap_solicitante(409, '71000409', @s)",
+             "CALL clientes.abrir_caso_captacion(UUID_TO_BIN(UUID()), @s, 'FAX', NULL, NULL, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CASO-DATOS: el canal no es válido$', 'procedimiento');
+
+CALL prueba.verifica('X410', 'Extensión', 'Captación', 'Los consentimientos pasan el caso a EN_VALIDACION y TERMINOS guarda su versión',
+  JSON_ARRAY("CALL prueba.cap_consentido(410, '71000410', @c)"),
+  "SELECT @cap_estado = 'EN_VALIDACION' AND (SELECT COUNT(*) FROM clientes.v_consentimiento_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000410' AND aceptado = 1) = 3 AND (SELECT version FROM clientes.v_consentimiento_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000410' AND tipo = 'TERMINOS') = 'v1' AND (SELECT COUNT(*) FROM clientes.v_consentimiento_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000410' AND tipo <> 'TERMINOS' AND version IS NOT NULL) = 0",
+  'EN_VALIDACION, tres aceptados, versión solo en TERMINOS', "SELECT @cap_estado", 'procedimiento');
+
+CALL prueba.rechaza('X411', 'Extensión', 'Captación', 'Un tipo de consentimiento desconocido se rechaza',
+  JSON_ARRAY("CALL prueba.cap_caso(411, '71000411', @c)",
+             "CALL clientes.registrar_consentimientos_captacion(@c, JSON_ARRAY(JSON_OBJECT('tipo', 'MARKETING', 'aceptado', TRUE, 'medio', 'DIGITAL')), 'v1', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CONSENTIMIENTO-DATOS: tipo, aceptación o medio no válidos$', 'procedimiento');
+
+CALL prueba.rechaza('X412', 'Extensión', 'Captación', 'Sin consentimiento de tratamiento de datos no se envía un OTP',
+  JSON_ARRAY("CALL prueba.cap_caso(412, '71000412', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN(UUID()), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x)"),
+  '^BNA-CONSENTIMIENTO-REQUERIDO: falta el consentimiento TRATAMIENTO_DATOS$', 'procedimiento');
+
+CALL prueba.verifica('X413', 'Extensión', 'Captación', 'Un OTP nuevo vence en los minutos del catálogo y deja vencido al pendiente anterior del mismo canal',
+  JSON_ARRAY("CALL prueba.cap_consentido(413, '71000413', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000413'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x1)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000001413'), @c, 'SMS', REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x2)"),
+  "SELECT (SELECT estado FROM clientes.v_otp_captacion_api WHERE id_otp = '35200000-0000-4000-8000-000000000413') = 'EXPIRADO' AND (SELECT estado = 'PENDIENTE' AND TIMESTAMPDIFF(SECOND, fecha_emision, fecha_expiracion) = 300 AND fecha_expiracion = @x2 FROM clientes.v_otp_captacion_api WHERE id_otp = '35200000-0000-4000-8000-000000001413')",
+  'el primero EXPIRADO, el segundo PENDIENTE por 5 minutos', "SELECT GROUP_CONCAT(estado) FROM clientes.v_otp_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000413'", 'procedimiento');
+
+CALL prueba.verifica('X414', 'Extensión', 'Captación', 'El código correcto queda USADO y registra la verificación del celular',
+  JSON_ARRAY("CALL prueba.cap_consentido(414, '71000414', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000414'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000414'), @c, REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod, @rest, @est)"),
+  "SELECT @cod = 'USADO' AND @rest = 3 AND (SELECT COUNT(*) FROM clientes.v_validacion_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000414' AND tipo = 'CELULAR' AND resultado = 'APROBADO' AND proveedor = 'OTP-SMS') = 1",
+  'USADO y CELULAR APROBADO', "SELECT CONCAT_WS(' ', @cod, @rest, @est)", 'procedimiento');
+
+CALL prueba.verifica('X415', 'Extensión', 'Captación', 'El tercer código errado bloquea el OTP y no verifica el celular',
+  JSON_ARRAY("CALL prueba.cap_consentido(415, '71000415', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000415'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000415'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod1, @rest1, @est)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000415'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod2, @rest2, @est)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000415'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod3, @rest3, @est)"),
+  "SELECT @cod1 = 'PENDIENTE' AND @rest1 = 2 AND @cod3 = 'BLOQUEADO' AND @rest3 = 0 AND (SELECT intentos_fallidos FROM clientes.v_otp_captacion_api WHERE id_otp = '35200000-0000-4000-8000-000000000415') = 3 AND (SELECT COUNT(*) FROM clientes.v_validacion_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000415') = 0",
+  'BLOQUEADO al tercero, sin validación', "SELECT CONCAT_WS(' ', @cod1, @rest1, @cod3, @rest3)", 'procedimiento');
+
+CALL prueba.rechaza('X416', 'Extensión', 'Captación', 'Un OTP bloqueado ya no se verifica',
+  JSON_ARRAY("CALL prueba.cap_consentido(416, '71000416', @c)",
+             "CALL clientes.emitir_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, 'SMS', REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @x)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @a, @b, @e)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @a, @b, @e)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, REPEAT('b', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @a, @b, @e)",
+             "CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000416'), @c, REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @a, @b, @e)"),
+  '^BNA-OTP: no hay un código pendiente$', 'procedimiento');
+
+CALL prueba.rechaza('X417', 'Extensión', 'Captación', 'El celular y el correo se verifican solo con un OTP',
+  JSON_ARRAY("CALL prueba.cap_consentido(417, '71000417', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'CELULAR', 'APROBADO', 'MANUAL', 'Llamada', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-VALIDACION-CAPTACION: tipo o resultado no válidos$', 'procedimiento');
+
+CALL prueba.rechaza('X418', 'Extensión', 'Captación', 'La biometría exige su propio consentimiento',
+  JSON_ARRAY("CALL prueba.cap_consentido(418, '71000418', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'BIOMETRIA', 'APROBADO', 'SIMULADO', 'Rostro', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CONSENTIMIENTO-REQUERIDO: falta el consentimiento BIOMETRIA$', 'procedimiento');
+
+CALL prueba.verifica('X419', 'Extensión', 'Captación', 'Una validación rechazada cierra el caso como RECHAZADO con su motivo',
+  JSON_ARRAY("CALL prueba.cap_consentido(419, '71000419', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'LISTAS_NEGRAS', 'RECHAZADO', 'SIMULADO', 'Coincidencia', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'RECHAZADO' AND (SELECT motivo_cierre = 'Validación rechazada: LISTAS_NEGRAS' AND fecha_cierre IS NOT NULL AND JSON_LENGTH(faltantes) = 0 FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000419')",
+  'RECHAZADO, cerrado, sin faltantes', "SELECT CONCAT_WS(' ', estado, motivo_cierre) FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000419'", 'procedimiento');
+
+CALL prueba.rechaza('X420', 'Extensión', 'Captación', 'Un caso cerrado no admite cambios',
+  JSON_ARRAY("CALL prueba.cap_consentido(420, '71000420', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'RENIEC', 'RECHAZADO', 'SIMULADO', 'No coincide', 'asesor.cap', UUID_TO_BIN(UUID()), @e)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'RENIEC', 'APROBADO', 'MANUAL', 'Revisado', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CASO-CERRADO: el caso ya no admite cambios$', 'procedimiento');
+
+CALL prueba.verifica('X421', 'Extensión', 'Captación', 'Una validación OBSERVADA deja el caso OBSERVADO hasta que una revisión manual la reemplaza',
+  JSON_ARRAY("CALL prueba.cap_consentido(421, '71000421', @c)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'PEP', 'OBSERVADO', 'SIMULADO', 'Posible PEP', 'asesor.cap', UUID_TO_BIN(UUID()), @e1)",
+             "CALL clientes.registrar_validacion_captacion(@c, 'PEP', 'APROBADO', 'MANUAL', 'Debida diligencia', 'asesor.cap', UUID_TO_BIN(UUID()), @e2)"),
+  "SELECT @e1 = 'OBSERVADO' AND @e2 = 'EN_VALIDACION'",
+  'OBSERVADO y luego EN_VALIDACION', "SELECT CONCAT_WS(' ', @e1, @e2)", 'procedimiento');
+
+CALL prueba.rechaza('X422', 'Extensión', 'Captación', 'Sin consentimiento de consulta a burós no se consulta una central',
+  JSON_ARRAY("CALL prueba.cap_caso(422, '71000422', @c)",
+             "CALL clientes.registrar_consentimientos_captacion(@c, JSON_ARRAY(JSON_OBJECT('tipo', 'TRATAMIENTO_DATOS', 'aceptado', TRUE, 'medio', 'DIGITAL'), JSON_OBJECT('tipo', 'CONSULTA_BUROS', 'aceptado', FALSE, 'medio', 'DIGITAL')), 'v1', 'asesor.cap', UUID_TO_BIN(UUID()), @e)",
+             "CALL clientes.registrar_consulta_riesgo_captacion(@c, 'SBS', 'NORMAL', 0, 0, 0, 'SIMULADO', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CONSENTIMIENTO-REQUERIDO: falta el consentimiento CONSULTA_BUROS$', 'procedimiento');
+
+CALL prueba.rechaza('X423', 'Extensión', 'Captación', 'El perfil de riesgo exige al menos una consulta a una central',
+  JSON_ARRAY("CALL prueba.cap_consentido(423, '71000423', @c)",
+             "CALL clientes.registrar_perfil_captacion(@c, 800, 'BAJO', NULL, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-SIN-CONSULTA: consulte al menos una central de riesgo$', 'procedimiento');
+
+CALL prueba.verifica('X424', 'Extensión', 'Captación', 'Con todo lo requerido el caso queda APROBADO y sin faltantes',
+  JSON_ARRAY("CALL prueba.cap_listo(424, '71000424', @c)"),
+  "SELECT (SELECT estado = 'APROBADO' AND JSON_LENGTH(faltantes) = 0 FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000424') AND (SELECT puntaje = 820 AND vigente = 1 FROM clientes.v_perfil_riesgo_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000424')",
+  'APROBADO, perfil vigente', "SELECT CONCAT_WS(' ', estado, faltantes) FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000424'", 'procedimiento');
+
+CALL prueba.verifica('X425', 'Extensión', 'Captación', 'Una consulta posterior al perfil exige recalcularlo',
+  JSON_ARRAY("CALL prueba.cap_listo(425, '71000425', @c)",
+             "CALL clientes.registrar_consulta_riesgo_captacion(@c, 'INFOCORP', 'CPP', 1500.50, 2, 15, 'MANUAL', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'EN_VALIDACION' AND (SELECT JSON_CONTAINS(faltantes, '\"Perfil de riesgo actualizado con la última consulta\"') FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000425') AND (SELECT vigente = 0 FROM clientes.v_perfil_riesgo_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000425')",
+  'EN_VALIDACION, perfil no vigente', "SELECT @e", 'procedimiento');
+
+CALL prueba.verifica('X426', 'Extensión', 'Captación', 'Un perfil MUY_ALTO rechaza el caso',
+  JSON_ARRAY("CALL prueba.cap_listo(426, '71000426', @c)",
+             "CALL clientes.registrar_perfil_captacion(@c, 150, 'MUY_ALTO', 'Mora alta', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'RECHAZADO' AND (SELECT motivo_cierre FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000426') = 'Perfil de riesgo MUY_ALTO'",
+  'RECHAZADO por el perfil', "SELECT @e", 'procedimiento');
+
+CALL prueba.verifica('X427', 'Extensión', 'Captación', 'La observación del asesor detiene el caso y al levantarla vuelve a APROBADO',
+  JSON_ARRAY("CALL prueba.cap_listo(427, '71000427', @c)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'OBSERVAR', 'Falta sustento de domicilio', 'asesor.cap', UUID_TO_BIN(UUID()), @e1)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'LEVANTAR_OBSERVACION', 'Domicilio sustentado', 'asesor.cap', UUID_TO_BIN(UUID()), @e2)"),
+  "SELECT @e1 = 'OBSERVADO' AND @e2 = 'APROBADO' AND (SELECT observacion IS NULL FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000427')",
+  'OBSERVADO y luego APROBADO', "SELECT CONCAT_WS(' ', @e1, @e2)", 'procedimiento');
+
+CALL prueba.verifica('X428', 'Extensión', 'Captación', 'El asesor rechaza un caso abierto con su motivo',
+  JSON_ARRAY("CALL prueba.cap_caso(428, '71000428', @c)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'RECHAZAR', 'Desistió', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'RECHAZADO' AND (SELECT motivo_cierre = 'Desistió' AND fecha_cierre IS NOT NULL FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000428')",
+  'RECHAZADO', "SELECT @e", 'procedimiento');
+
+CALL prueba.verifica('X429', 'Extensión', 'Captación', 'Cerrado un caso, el solicitante puede abrir otro',
+  JSON_ARRAY("CALL prueba.cap_caso(429, '71000429', @c)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'RECHAZAR', 'Desistió', 'asesor.cap', UUID_TO_BIN(UUID()), @e)",
+             "CALL clientes.abrir_caso_captacion(UUID_TO_BIN('35100000-0000-4000-8000-000000001429'), prueba.cap_id('35000000', 429), 'WEB', NULL, NULL, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  "SELECT (SELECT COUNT(*) FROM clientes.v_caso_captacion_api WHERE id_solicitante = '35000000-0000-4000-8000-000000000429') = 2",
+  'dos casos, uno abierto', "SELECT GROUP_CONCAT(estado) FROM clientes.v_caso_captacion_api WHERE id_solicitante = '35000000-0000-4000-8000-000000000429'", 'procedimiento');
+
+CALL prueba.rechaza('X430', 'Extensión', 'Captación', 'Solo se revoca un caso HABILITADO',
+  JSON_ARRAY("CALL prueba.cap_listo(430, '71000430', @c)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'REVOCAR', 'Fraude', 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CASO-ESTADO: solo se revoca un caso HABILITADO$', 'procedimiento');
+
+CALL prueba.rechaza('X431', 'Extensión', 'Captación', 'Un caso que no está listo no se liga a un cliente',
+  JSON_ARRAY("CALL prueba.cap_consentido(431, '70000001', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CASO-NO-LISTO: el caso no cumple los requisitos para habilitarse$', 'procedimiento');
+
+CALL prueba.rechaza('X432', 'Extensión', 'Captación', 'El cliente ligado debe tener el documento del solicitante',
+  JSON_ARRAY("CALL prueba.cap_listo(432, '71000432', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CLIENTE-DOCUMENTO: el cliente no tiene el documento del solicitante$', 'procedimiento');
+
+CALL prueba.rechaza('X433', 'Extensión', 'Captación', 'Un cliente que no está ACTIVO no se liga',
+  JSON_ARRAY("CALL prueba.cap_listo(433, '70000004', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C004', FALSE, 'asesor.cap', UUID_TO_BIN(UUID()))"),
+  '^BNA-CLIENTE-NO-ACTIVO: el cliente no está ACTIVO$', 'procedimiento');
+
+CALL prueba.rechaza('X434', 'Extensión', 'Captación', 'Sin cliente ligado el caso no se habilita',
+  JSON_ARRAY("CALL prueba.cap_listo(434, '71000434', @c)",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CASO-NO-LISTO: el caso no tiene un cliente ligado$', 'procedimiento');
+
+CALL prueba.verifica('X435', 'Extensión', 'Captación', 'Un cliente existente se liga y el caso se habilita con su vigencia',
+  JSON_ARRAY("CALL prueba.cap_listo(435, '70000001', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'HABILITADO' AND (SELECT cod_cliente = 'C001' AND cliente_nuevo = 0 AND estado_cliente = 'ACTIVO' AND id_verificacion_captacion = 'VC-1' AND fecha_verificacion = core.fn_fecha_negocio(UTC_TIMESTAMP(6)) AND vigente_hasta = fecha_verificacion + INTERVAL 30 DAY AND fecha_cierre IS NOT NULL FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000435') AND (SELECT cod_cliente FROM clientes.v_solicitante_captacion_api WHERE id_solicitante = '35000000-0000-4000-8000-000000000435') = 'C001'",
+  'HABILITADO con C001 por 30 días', "SELECT CONCAT_WS(' ', estado, cod_cliente, fecha_verificacion, vigente_hasta) FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000435'", 'procedimiento');
+
+CALL prueba.verifica('X436', 'Extensión', 'Captación', 'Un cliente nuevo registrado HABILITADO se liga, y la verificación del celular queda también en el cliente',
+  JSON_ARRAY("CALL prueba.cap_listo(436, '71000436', @c)",
+             "CALL clientes.registrar_cliente('DNI', '71000436', 'Prospecto', 'Ficticio', NULL, 'p436@example.com', '950000436', 'v1', 'HABILITADO', UUID_TO_BIN(UUID()), 'svc-captacion', @cli)",
+             "CALL clientes.vincular_cliente_captacion(@c, @cli, TRUE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT @e = 'HABILITADO' AND (SELECT cliente_nuevo = 1 AND cod_cliente = @cli FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000436') AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'REGISTRAR_VALIDACION' AND JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.cod_cliente')) = @cli AND JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.tipo_validacion')) = 'CELULAR' AND actor = 'asesor.cap') = 1",
+  'HABILITADO y la validación CELULAR del cliente', "SELECT CONCAT_WS(' ', @e, @cli)", 'procedimiento');
+
+CALL prueba.verifica('X437', 'Extensión', 'Captación', 'Habilitar otra vez no cambia nada ni repite eventos',
+  JSON_ARRAY("CALL prueba.cap_listo(437, '70000002', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C002', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e1)",
+             "CALL clientes.habilitar_caso_captacion(@c, 60, 'asesor.cap', UUID_TO_BIN(UUID()), @e2)"),
+  "SELECT @e1 = 'HABILITADO' AND @e2 = 'HABILITADO' AND (SELECT vigente_hasta = fecha_verificacion + INTERVAL 30 DAY FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000437') AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '35100000-0000-4000-8000-000000000437' AND accion = 'HABILITAR') = 1",
+  'un solo HABILITAR, vigencia de la primera', "SELECT CONCAT_WS(' ', @e1, @e2)", 'procedimiento');
+
+CALL prueba.verifica('X438', 'Extensión', 'Captación', 'Un caso HABILITADO se revoca con su motivo',
+  JSON_ARRAY("CALL prueba.cap_listo(438, '70000003', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C003', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e1)",
+             "CALL clientes.cambiar_estado_caso_captacion(@c, 'REVOCAR', 'Documento adulterado', 'asesor.cap', UUID_TO_BIN(UUID()), @e2)"),
+  "SELECT @e2 = 'REVOCADO' AND (SELECT motivo_cierre = 'Documento adulterado' AND cod_cliente = 'C003' FROM clientes.v_caso_captacion_api WHERE id_caso = '35100000-0000-4000-8000-000000000438')",
+  'REVOCADO', "SELECT @e2", 'procedimiento');
+
+CALL prueba.rechaza('X439', 'Extensión', 'Captación', 'La vigencia de la habilitación va de 1 a 365 días',
+  JSON_ARRAY("CALL prueba.cap_listo(439, '70000001', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 0, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  '^BNA-CASO-DATOS: la vigencia va de 1 a 365 días$', 'procedimiento');
+
+CALL prueba.verifica('X440', 'Extensión', 'Captación', 'Cada paso del expediente se audita con su actor, sin el documento ni el hash del OTP',
+  JSON_ARRAY("CALL prueba.cap_listo(440, '70000001', @c)",
+             "CALL clientes.vincular_cliente_captacion(@c, 'C001', FALSE, 'svc-captacion', UUID_TO_BIN(UUID()))",
+             "CALL clientes.habilitar_caso_captacion(@c, 30, 'asesor.cap', UUID_TO_BIN(UUID()), @e)"),
+  "SELECT (SELECT COUNT(DISTINCT accion) FROM core.v_evento_auditoria_api WHERE modulo = 'CLIENTES' AND entidad = 'caso_captacion' AND id_entidad = '35100000-0000-4000-8000-000000000440' AND accion IN ('ABRIR_CASO', 'REGISTRAR_CONSENTIMIENTOS', 'ENVIAR_OTP', 'VERIFICAR_OTP', 'REGISTRAR_VALIDACION', 'CONSULTAR_CENTRAL', 'CALCULAR_PERFIL', 'VINCULAR_CLIENTE', 'HABILITAR')) = 9 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '35100000-0000-4000-8000-000000000440' AND (detalle LIKE '%70000001%' OR detalle LIKE '%aaaaaaaa%')) = 0",
+  'nueve acciones auditadas', "SELECT GROUP_CONCAT(DISTINCT accion) FROM core.v_evento_auditoria_api WHERE id_entidad = '35100000-0000-4000-8000-000000000440'", 'procedimiento');
+
+CALL prueba.verifica('X441', 'Extensión', 'Captación', 'La vista de OTP de la API no expone el hash del código',
+  JSON_ARRAY("DO 0"),
+  "SELECT (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'clientes' AND table_name = 'v_otp_captacion_api') > 0 AND (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'clientes' AND table_name = 'v_otp_captacion_api' AND column_name LIKE '%codigo%') = 0",
+  'sin columna del código', "SELECT GROUP_CONCAT(column_name) FROM information_schema.columns WHERE table_schema = 'clientes' AND table_name = 'v_otp_captacion_api'", 'declarativo');
+
+CALL prueba.rechaza('X442', 'Extensión', 'bna_api', 'bna_api no puede: leer clientes.otp_captacion (el hash del código)',
+  JSON_ARRAY("SELECT COUNT(*) INTO @n FROM clientes.otp_captacion"),
+  'denied', 'privilegio');
+
+CALL prueba.rechaza('X443', 'Extensión', 'bna_api', 'bna_api no puede: UPDATE en clientes.caso_captacion',
+  JSON_ARRAY("UPDATE clientes.caso_captacion SET estado = 'APROBADO'"),
+  'denied', 'privilegio');
