@@ -50,7 +50,9 @@ integrada y con PyJWT:
 
 **Permisos:** `permisos.py` es un mapa versionado de rol a acciones. Los cinco roles de
 personas son los de `CORE/data/rbac.json` en `a9bd70f`, y la API nunca lo escribe. La
-acción propia `VALIDAR_IDENTIDAD` la tienen ASESOR y el usuario de servicio de Clientes.
+acción propia `VALIDAR_IDENTIDAD` la tienen ASESOR y el usuario de servicio de Clientes;
+`DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR) son las
+propias de créditos. Hay usuarios de servicio para CLIENTES, EVALUACION, DESEMBOLSO y COBRANZA.
 Cada ruta declara su permiso con `requiere_permiso`; una prueba falla si una escritura no
 lo declara o si una ruta, salvo las públicas, no exige token.
 
@@ -99,6 +101,33 @@ Las rutas que usa el módulo Clientes, y el personal, están descritas en
 - No hay rutas para listar clientes ni para buscarlos por nombre, correo o celular.
 
 El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM.md`.
+
+## Créditos
+
+Sobre `creditos.*` (`bd-v1.4-mysql`), descritas en [`CONTRATO_CREDITOS.md`](CONTRATO_CREDITOS.md).
+Por ahora, el área de evaluación; desembolso y cobranza vienen en los PR siguientes.
+
+| Ruta | Permiso |
+|---|---|
+| `POST /coredb/creditos/solicitudes` (expediente de SOL, CR-INT-02) | `CREAR_SOLICITUD_CREDITO` |
+| `GET /coredb/creditos/solicitudes`, `GET /coredb/creditos/solicitudes/{id}` | `VER_CREDITO` |
+| `POST /coredb/creditos/solicitudes/{id}/evaluaciones` (RN-EVA-002-P) | `EVALUAR_CREDITO` |
+| `POST /coredb/creditos/evaluaciones/{id}/decision` | `APROBAR_CREDITO` |
+| `POST /coredb/creditos/solicitudes/{id}/revocacion` | `APROBAR_CREDITO` |
+| `GET /coredb/creditos/aprobaciones` | `VER_CREDITO` |
+| `POST /coredb/creditos/analistas` | `CREAR_USUARIO` |
+| `GET /coredb/catalogos/creditos` | autenticado |
+
+- Campos en camelCase, como el contrato con SOL.
+- La fórmula de RN-EVA-002-P es la del módulo EVALUACIÓN (#70), en
+  `services/regla_evaluacion.py`; los umbrales 80 % / 100 % salen de
+  `creditos.regla_evaluacion`, y la base elige la regla.
+- El expediente es idempotente por id, versión y contenido; la evaluación y la decisión se
+  hacen una vez.
+- Para decidir, el usuario del analista debe estar ligado a un empleado de `core.empleado`
+  registrado como analista. COREDB no crea empleados: los carga el administrador de la base.
+- El usuario de la API no lee tablas de `creditos`: lee las vistas `v_*_api`.
+- Las rutas de crédito del CORE legado (perfil `legado`) siguen aparte.
 
 ## Consultas
 
