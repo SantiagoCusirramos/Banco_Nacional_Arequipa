@@ -356,3 +356,8 @@ CALL prueba.verifica('X377', 'Extensión', 'Credenciales', 'La clave web de seis
 CALL prueba.rechaza('X397', 'Extensión', 'Empleados', 'bna_app no puede registrar empleados (solo bna_api)',
   JSON_ARRAY("CALL core.registrar_empleado(UUID_TO_BIN(UUID()), 'EMP-X397', 'E', 'ANALISTA', 'AQP01', NULL, 'pruebas')"),
   'denied', 'privilegio');
+
+-- Captación (v1.7): solo la API trabaja el expediente del prospecto.
+CALL prueba.rechaza('X444', 'Extensión', 'Captación', 'bna_app no puede registrar solicitantes (solo bna_api)',
+  JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '71000444', 'R', 'P', NULL, '951000444', 'r@example.com', 'pruebas', UUID_TO_BIN(UUID()), @id, @dup)"),
+  'denied', 'privilegio');

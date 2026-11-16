@@ -3077,3 +3077,1003 @@ END //
 DELIMITER ;
 
 GRANT EXECUTE ON PROCEDURE core.registrar_empleado TO bna_api;
+
+-- ---------------------------------------------------------------------
+-- 14. Captación (v1.7)
+-- ---------------------------------------------------------------------
+-- El expediente del prospecto, que todavía no es cliente: quién pidió, qué consintió,
+-- cómo se verificó su identidad, qué dijeron las centrales y si quedó habilitado. Son
+-- tablas de extensión del esquema clientes; el modelo normalizado no cambia. Solo se
+-- ligan a él por el cliente que resulta (clientes.cliente), la agencia y, a través del
+-- cliente, su verificación de captación. Los proveedores (RENIEC, listas, PEP,
+-- centrales, SMS) y el puntaje son del módulo CAPTACION: la base guarda lo que
+-- responden y aplica las reglas del expediente (consentimientos exigidos, OTP con
+-- vencimiento e intentos de clientes.tipo_contacto, un caso abierto por solicitante,
+-- estado recalculado tras cada paso). El hash del OTP lo calcula CAPTACION con su clave;
+-- la base solo lo compara y ninguna vista lo expone. El estado sigue
+-- INICIADO → EN_VALIDACION → APROBADO → HABILITADO, con OBSERVADO mientras algo quede por
+-- resolver y RECHAZADO o REVOCADO como finales. Los eventos van al módulo CLIENTES
+-- (core.modulo no tiene CAPTACION: punto R-01) sin documento, nombres ni contactos. Sigue
+-- el patrón de la sección 8 y se concede solo a bna_api.
+
+CREATE TABLE clientes.solicitante_captacion (
+    id_solicitante     BINARY(16),
+    tipo_documento     VARCHAR(10) NOT NULL,
+    numero_documento   VARCHAR(12) NOT NULL,
+    nombres            VARCHAR(100) NOT NULL,
+    apellido_paterno   VARCHAR(100) NOT NULL,
+    apellido_materno   VARCHAR(100),
+    celular            CHAR(9) NOT NULL,
+    correo             VARCHAR(150) NOT NULL,
+    cod_cliente        VARCHAR(12),
+    creado_por         VARCHAR(40) NOT NULL,
+    fecha_registro     DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_solicitante_captacion PRIMARY KEY (id_solicitante),
+    CONSTRAINT uk_solicitante_captacion_1 UNIQUE (tipo_documento, numero_documento),
+    CONSTRAINT fk_solicitante_captacion_1 FOREIGN KEY (tipo_documento) REFERENCES clientes.tipo_documento (cod_tipo_documento),
+    CONSTRAINT fk_solicitante_captacion_2 FOREIGN KEY (cod_cliente) REFERENCES clientes.cliente (cod_cliente),
+    CONSTRAINT ck_solicitante_captacion_1 CHECK (REGEXP_LIKE(celular, '^9[0-9]{8}$'))
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: el prospecto de captación, antes de ser cliente.';
+
+CREATE TABLE clientes.caso_captacion (
+    id_caso            BINARY(16),
+    id_solicitante     BINARY(16) NOT NULL,
+    canal              VARCHAR(10) NOT NULL
+        CHECK (canal IN ('AGENCIA', 'WEB', 'MOVIL', 'AGENTE', 'CAMPANA')),
+    id_agencia         VARCHAR(10),
+    producto_interes   VARCHAR(60),
+    estado             VARCHAR(15) NOT NULL
+        CHECK (estado IN ('INICIADO', 'EN_VALIDACION', 'OBSERVADO', 'APROBADO', 'HABILITADO', 'RECHAZADO', 'REVOCADO')),
+    observacion        VARCHAR(255),
+    motivo_cierre      VARCHAR(255),
+    cod_cliente        VARCHAR(12),
+    cliente_nuevo      TINYINT(1),
+    fecha_verificacion DATE,
+    vigente_hasta      DATE,
+    creado_por         VARCHAR(40) NOT NULL,
+    fecha_apertura     DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    fecha_cierre       DATETIME(6),
+    -- Un solo caso abierto por solicitante: la columna vale NULL en un caso cerrado.
+    solicitante_abierto BINARY(16) AS (IF(estado IN ('INICIADO', 'EN_VALIDACION', 'OBSERVADO', 'APROBADO'), id_solicitante, NULL)) STORED,
+    CONSTRAINT pk_caso_captacion PRIMARY KEY (id_caso),
+    CONSTRAINT uk_caso_captacion_1 UNIQUE (solicitante_abierto),
+    CONSTRAINT fk_caso_captacion_1 FOREIGN KEY (id_solicitante) REFERENCES clientes.solicitante_captacion (id_solicitante),
+    CONSTRAINT fk_caso_captacion_2 FOREIGN KEY (id_agencia) REFERENCES core.agencia (id_agencia),
+    CONSTRAINT fk_caso_captacion_3 FOREIGN KEY (cod_cliente) REFERENCES clientes.cliente (cod_cliente),
+    CONSTRAINT ck_caso_captacion_1 CHECK (cliente_nuevo IN (0, 1)),
+    CONSTRAINT ck_caso_captacion_2 CHECK (estado <> 'HABILITADO' OR (cod_cliente IS NOT NULL AND vigente_hasta > fecha_verificacion))
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: el caso de captación de un solicitante y su habilitación.';
+CREATE INDEX ix_caso_captacion_1 ON clientes.caso_captacion (estado, fecha_apertura);
+
+CREATE TABLE clientes.consentimiento_captacion (
+    id_consentimiento  BIGINT AUTO_INCREMENT,
+    id_caso            BINARY(16) NOT NULL,
+    tipo               VARCHAR(20) NOT NULL
+        CHECK (tipo IN ('TRATAMIENTO_DATOS', 'CONSULTA_BUROS', 'TERMINOS', 'BIOMETRIA')),
+    aceptado           TINYINT(1) NOT NULL,
+    medio              VARCHAR(12) NOT NULL
+        CHECK (medio IN ('DIGITAL', 'FISICO', 'BIOMETRICO')),
+    version            VARCHAR(10),
+    registrado_por     VARCHAR(40) NOT NULL,
+    fecha              DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_consentimiento_captacion PRIMARY KEY (id_consentimiento),
+    CONSTRAINT fk_consentimiento_captacion_1 FOREIGN KEY (id_caso) REFERENCES clientes.caso_captacion (id_caso),
+    CONSTRAINT ck_consentimiento_captacion_1 CHECK (aceptado IN (0, 1))
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: consentimientos del solicitante; vale el último de cada tipo.';
+
+CREATE TABLE clientes.otp_captacion (
+    id_otp             BINARY(16),
+    id_caso            BINARY(16) NOT NULL,
+    canal              VARCHAR(5) NOT NULL CHECK (canal IN ('SMS', 'EMAIL')),
+    codigo_hmac        CHAR(64) NOT NULL,
+    intentos_fallidos  SMALLINT DEFAULT 0 NOT NULL,
+    estado             VARCHAR(10) NOT NULL
+        CHECK (estado IN ('PENDIENTE', 'USADO', 'EXPIRADO', 'BLOQUEADO')),
+    fecha_emision      DATETIME(6) NOT NULL,
+    fecha_expiracion   DATETIME(6) NOT NULL,
+    CONSTRAINT pk_otp_captacion PRIMARY KEY (id_otp),
+    CONSTRAINT fk_otp_captacion_1 FOREIGN KEY (id_caso) REFERENCES clientes.caso_captacion (id_caso),
+    CONSTRAINT ck_otp_captacion_1 CHECK (fecha_expiracion > fecha_emision)
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: código OTP del solicitante (HMAC calculado por CAPTACION).';
+
+CREATE TABLE clientes.validacion_captacion (
+    id_validacion      BIGINT AUTO_INCREMENT,
+    id_caso            BINARY(16) NOT NULL,
+    tipo               VARCHAR(15) NOT NULL
+        CHECK (tipo IN ('RENIEC', 'LISTAS_NEGRAS', 'PEP', 'BIOMETRIA', 'CELULAR', 'CORREO')),
+    resultado          VARCHAR(10) NOT NULL CHECK (resultado IN ('APROBADO', 'OBSERVADO', 'RECHAZADO')),
+    proveedor          VARCHAR(40) NOT NULL,
+    detalle            VARCHAR(200),
+    registrado_por     VARCHAR(40) NOT NULL,
+    fecha              DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_validacion_captacion PRIMARY KEY (id_validacion),
+    CONSTRAINT fk_validacion_captacion_1 FOREIGN KEY (id_caso) REFERENCES clientes.caso_captacion (id_caso)
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: verificaciones del solicitante; vale la última de cada tipo.';
+
+CREATE TABLE clientes.consulta_riesgo_captacion (
+    id_consulta        BIGINT AUTO_INCREMENT,
+    id_caso            BINARY(16) NOT NULL,
+    central            VARCHAR(10) NOT NULL CHECK (central IN ('SBS', 'INFOCORP', 'SENTINEL', 'EQUIFAX')),
+    calificacion       VARCHAR(12) NOT NULL
+        CHECK (calificacion IN ('NORMAL', 'CPP', 'DEFICIENTE', 'DUDOSO', 'PERDIDA')),
+    deuda_total        DECIMAL(15,2) NOT NULL CHECK (deuda_total >= 0),
+    entidades          SMALLINT NOT NULL CHECK (entidades BETWEEN 0 AND 99),
+    dias_mora          SMALLINT NOT NULL CHECK (dias_mora BETWEEN 0 AND 9999),
+    fuente             VARCHAR(12) NOT NULL CHECK (fuente IN ('SIMULADO', 'MANUAL')),
+    registrado_por     VARCHAR(40) NOT NULL,
+    fecha              DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_consulta_riesgo_captacion PRIMARY KEY (id_consulta),
+    CONSTRAINT fk_consulta_riesgo_captacion_1 FOREIGN KEY (id_caso) REFERENCES clientes.caso_captacion (id_caso)
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: respuestas de las centrales de riesgo para el solicitante.';
+
+CREATE TABLE clientes.perfil_riesgo_captacion (
+    id_perfil          BIGINT AUTO_INCREMENT,
+    id_caso            BINARY(16) NOT NULL,
+    puntaje            SMALLINT NOT NULL CHECK (puntaje BETWEEN 0 AND 1000),
+    calificacion       VARCHAR(10) NOT NULL CHECK (calificacion IN ('BAJO', 'MEDIO', 'ALTO', 'MUY_ALTO')),
+    observacion        VARCHAR(200),
+    -- La última consulta que conocía el perfil: una consulta posterior lo deja desactualizado.
+    id_consulta_base   BIGINT NOT NULL,
+    registrado_por     VARCHAR(40) NOT NULL,
+    fecha              DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_perfil_riesgo_captacion PRIMARY KEY (id_perfil),
+    CONSTRAINT fk_perfil_riesgo_captacion_1 FOREIGN KEY (id_caso) REFERENCES clientes.caso_captacion (id_caso),
+    CONSTRAINT fk_perfil_riesgo_captacion_2 FOREIGN KEY (id_consulta_base) REFERENCES clientes.consulta_riesgo_captacion (id_consulta)
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: perfil de riesgo del solicitante (0 a 1000), calculado por CAPTACION.';
+
+DELIMITER //
+
+-- La última validación de un tipo (la más reciente reemplaza a las anteriores).
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION clientes.fn_validacion_captacion(p_id_caso BINARY(16), p_tipo VARCHAR(15))
+    RETURNS VARCHAR(10) READS SQL DATA
+    COMMENT 'Resultado de la última validación de ese tipo, o NULL.'
+BEGIN
+    RETURN (SELECT resultado FROM clientes.validacion_captacion
+             WHERE id_caso = p_id_caso AND tipo = p_tipo ORDER BY id_validacion DESC LIMIT 1);
+END //
+
+-- Los tipos cuya última validación tiene ese resultado, en orden alfabético.
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION clientes.fn_validaciones_captacion(p_id_caso BINARY(16), p_resultado VARCHAR(10))
+    RETURNS VARCHAR(100) READS SQL DATA
+    COMMENT 'Tipos separados por coma, o NULL.'
+BEGIN
+    RETURN (SELECT GROUP_CONCAT(v.tipo ORDER BY v.tipo SEPARATOR ', ')
+              FROM clientes.validacion_captacion v
+             WHERE v.id_caso = p_id_caso AND v.resultado = p_resultado
+               AND v.id_validacion = (SELECT MAX(w.id_validacion) FROM clientes.validacion_captacion w
+                                       WHERE w.id_caso = v.id_caso AND w.tipo = v.tipo));
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION clientes.fn_consentido_captacion(p_id_caso BINARY(16), p_tipo VARCHAR(20))
+    RETURNS BOOLEAN READS SQL DATA
+    COMMENT 'Si el último consentimiento de ese tipo está aceptado.'
+BEGIN
+    RETURN coalesce((SELECT aceptado = 1 FROM clientes.consentimiento_captacion
+                      WHERE id_caso = p_id_caso AND tipo = p_tipo ORDER BY id_consentimiento DESC LIMIT 1), FALSE);
+END //
+
+-- Lo que falta para habilitar un caso abierto; vacío si está listo o cerrado. Los
+-- textos son los que muestra la pantalla del asesor.
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION clientes.fn_faltantes_captacion(p_id_caso BINARY(16))
+    RETURNS JSON READS SQL DATA
+    COMMENT 'Arreglo JSON con lo que falta para habilitar el caso.'
+BEGIN
+    DECLARE v_f JSON DEFAULT JSON_ARRAY();
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_observacion VARCHAR(255);
+    DECLARE v_lista VARCHAR(100);
+    DECLARE v_resultado VARCHAR(10);
+    DECLARE v_perfil, v_base BIGINT;
+    DECLARE v_calificacion VARCHAR(10);
+    SELECT estado, observacion INTO v_estado, v_observacion FROM clientes.caso_captacion WHERE id_caso = p_id_caso;
+    IF v_estado IS NULL THEN
+        RETURN NULL;
+    END IF;
+    IF v_estado IN ('HABILITADO', 'RECHAZADO', 'REVOCADO') THEN
+        RETURN v_f;
+    END IF;
+    IF NOT clientes.fn_consentido_captacion(p_id_caso, 'TRATAMIENTO_DATOS') THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Consentimiento TRATAMIENTO_DATOS aceptado');
+    END IF;
+    IF NOT clientes.fn_consentido_captacion(p_id_caso, 'CONSULTA_BUROS') THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Consentimiento CONSULTA_BUROS aceptado');
+    END IF;
+    IF NOT clientes.fn_consentido_captacion(p_id_caso, 'TERMINOS') THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Consentimiento TERMINOS aceptado');
+    END IF;
+    -- Los resultados pasan por una variable: la colación de la base decide la comparación.
+    SET v_resultado = clientes.fn_validacion_captacion(p_id_caso, 'CELULAR');
+    IF NOT (v_resultado <=> 'APROBADO') THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Verificación OTP del celular');
+    END IF;
+    SET v_resultado = clientes.fn_validacion_captacion(p_id_caso, 'RENIEC');
+    IF NOT (v_resultado <=> 'APROBADO') THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Validación RENIEC aprobada');
+    END IF;
+    SET v_resultado = clientes.fn_validacion_captacion(p_id_caso, 'LISTAS_NEGRAS');
+    IF NOT (v_resultado <=> 'APROBADO') THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Validación LISTAS_NEGRAS aprobada');
+    END IF;
+    SET v_lista = clientes.fn_validaciones_captacion(p_id_caso, 'RECHAZADO');
+    IF v_lista IS NOT NULL THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', CONCAT('Validaciones rechazadas: ', v_lista));
+    END IF;
+    SET v_lista = clientes.fn_validaciones_captacion(p_id_caso, 'OBSERVADO');
+    IF v_lista IS NOT NULL THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', CONCAT('Validaciones observadas: ', v_lista,
+                                                     ' (registre una validación manual)'));
+    END IF;
+    IF v_observacion IS NOT NULL THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', CONCAT('Observación del asesor: ', v_observacion));
+    END IF;
+    SELECT id_perfil, id_consulta_base, calificacion INTO v_perfil, v_base, v_calificacion
+      FROM clientes.perfil_riesgo_captacion WHERE id_caso = p_id_caso ORDER BY id_perfil DESC LIMIT 1;
+    IF v_perfil IS NULL THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Perfil de riesgo calculado');
+    ELSEIF EXISTS (SELECT 1 FROM clientes.consulta_riesgo_captacion WHERE id_caso = p_id_caso AND id_consulta > v_base) THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Perfil de riesgo actualizado con la última consulta');
+    ELSEIF v_calificacion = 'MUY_ALTO' THEN
+        SET v_f = JSON_ARRAY_APPEND(v_f, '$', 'Perfil de riesgo MUY_ALTO');
+    END IF;
+    RETURN v_f;
+END //
+
+-- Bloquea el caso y devuelve su estado. Con p_abierto, rechaza un caso cerrado. Lo
+-- llaman los procedimientos de esta sección dentro de su savepoint.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.bloquear_caso_captacion(
+    IN p_id_caso BINARY(16), IN p_abierto BOOLEAN, OUT p_estado VARCHAR(15))
+    COMMENT 'Bloquea el caso de captación y devuelve su estado.'
+BEGIN
+    SET p_estado = NULL;
+    SELECT estado INTO p_estado FROM clientes.caso_captacion WHERE id_caso = p_id_caso FOR UPDATE;
+    IF p_estado IS NULL THEN
+        CALL core.fallar('BNA-CASO: el caso no existe');
+    END IF;
+    IF p_abierto AND p_estado IN ('HABILITADO', 'RECHAZADO', 'REVOCADO') THEN
+        CALL core.fallar('BNA-CASO-CERRADO: el caso ya no admite cambios');
+    END IF;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.exigir_consentimiento_captacion(
+    IN p_id_caso BINARY(16), IN p_tipo VARCHAR(20))
+    COMMENT 'Rechaza la operación si el último consentimiento de ese tipo no está aceptado.'
+BEGIN
+    IF NOT clientes.fn_consentido_captacion(p_id_caso, p_tipo) THEN
+        CALL core.fallar(CONCAT('BNA-CONSENTIMIENTO-REQUERIDO: falta el consentimiento ', p_tipo));
+    END IF;
+END //
+
+-- El estado tras cada paso. Una validación rechazada o un perfil MUY_ALTO cierran el
+-- caso como RECHAZADO; una observación (del asesor o de una validación) lo deja
+-- OBSERVADO; sin faltantes queda APROBADO. HABILITADO, RECHAZADO y REVOCADO no cambian.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.recalcular_caso_captacion(IN p_id_caso BINARY(16), OUT p_estado VARCHAR(15))
+    COMMENT 'Recalcula y guarda el estado del caso de captación.'
+BEGIN
+    DECLARE v_observacion VARCHAR(255);
+    DECLARE v_rechazadas VARCHAR(100);
+    DECLARE v_calificacion VARCHAR(10);
+    SELECT estado, observacion INTO p_estado, v_observacion FROM clientes.caso_captacion WHERE id_caso = p_id_caso;
+    IF p_estado NOT IN ('HABILITADO', 'RECHAZADO', 'REVOCADO') THEN
+        SET v_rechazadas = clientes.fn_validaciones_captacion(p_id_caso, 'RECHAZADO');
+        SELECT calificacion INTO v_calificacion FROM clientes.perfil_riesgo_captacion
+         WHERE id_caso = p_id_caso ORDER BY id_perfil DESC LIMIT 1;
+        IF v_rechazadas IS NOT NULL OR v_calificacion <=> 'MUY_ALTO' THEN
+            SET p_estado = 'RECHAZADO';
+            UPDATE clientes.caso_captacion
+               SET estado = p_estado, fecha_cierre = UTC_TIMESTAMP(6),
+                   motivo_cierre = IF(v_rechazadas IS NOT NULL, CONCAT('Validación rechazada: ', v_rechazadas),
+                                      'Perfil de riesgo MUY_ALTO')
+             WHERE id_caso = p_id_caso;
+        ELSE
+            IF v_observacion IS NOT NULL OR clientes.fn_validaciones_captacion(p_id_caso, 'OBSERVADO') IS NOT NULL THEN
+                SET p_estado = 'OBSERVADO';
+            ELSEIF JSON_LENGTH(clientes.fn_faltantes_captacion(p_id_caso)) = 0 THEN
+                SET p_estado = 'APROBADO';
+            ELSEIF EXISTS (SELECT 1 FROM clientes.validacion_captacion WHERE id_caso = p_id_caso)
+                OR EXISTS (SELECT 1 FROM clientes.consentimiento_captacion WHERE id_caso = p_id_caso)
+                OR EXISTS (SELECT 1 FROM clientes.consulta_riesgo_captacion WHERE id_caso = p_id_caso) THEN
+                SET p_estado = 'EN_VALIDACION';
+            ELSE
+                SET p_estado = 'INICIADO';
+            END IF;
+            UPDATE clientes.caso_captacion SET estado = p_estado WHERE id_caso = p_id_caso;
+        END IF;
+    END IF;
+END //
+
+-- Un documento repetido devuelve el mismo solicitante (p_duplicado) y no cambia sus datos.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.registrar_solicitante_captacion(
+    IN p_id BINARY(16), IN p_tipo_documento VARCHAR(10), IN p_numero_documento VARCHAR(12), IN p_nombres VARCHAR(100),
+    IN p_apellido_paterno VARCHAR(100), IN p_apellido_materno VARCHAR(100), IN p_celular CHAR(9), IN p_correo VARCHAR(150),
+    IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16), OUT p_id_solicitante BINARY(16), OUT p_duplicado BOOLEAN)
+    COMMENT 'Registra al prospecto de captación, o devuelve el que ya tiene ese documento.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_min, v_max SMALLINT;
+    DECLARE v_alfanumerico BOOLEAN;
+    DECLARE v_numero VARCHAR(12) DEFAULT UPPER(TRIM(p_numero_documento));
+    DECLARE v_correo VARCHAR(150) DEFAULT LOWER(TRIM(p_correo));
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT longitud_min, longitud_max, es_alfanumerico INTO v_min, v_max, v_alfanumerico
+          FROM clientes.tipo_documento WHERE cod_tipo_documento = p_tipo_documento;
+        IF v_min IS NULL THEN
+            CALL core.fallar('BNA-DOCUMENTO: tipo de documento desconocido');
+        END IF;
+        IF v_numero IS NULL OR CHAR_LENGTH(v_numero) NOT BETWEEN v_min AND v_max
+           OR NOT REGEXP_LIKE(v_numero, IF(v_alfanumerico, '^[A-Z0-9]+$', '^[0-9]+$'), 'c') THEN
+            CALL core.fallar('BNA-DOCUMENTO: el número no cumple el formato de su tipo de documento');
+        END IF;
+        SET p_id_solicitante = NULL, p_duplicado = FALSE;
+        SELECT id_solicitante INTO p_id_solicitante FROM clientes.solicitante_captacion
+         WHERE tipo_documento = p_tipo_documento AND numero_documento = v_numero FOR UPDATE;
+        IF p_id_solicitante IS NOT NULL THEN
+            SET p_duplicado = TRUE;
+            CALL core.registrar_evento('CLIENTES', 'solicitante_captacion', BIN_TO_UUID(p_id_solicitante),
+                                       'REGISTRAR_SOLICITANTE_DUPLICADO', p_actor, p_correlation_id,
+                                       JSON_OBJECT('tipo_documento', p_tipo_documento));
+            LEAVE proc_cuerpo;
+        END IF;
+        IF p_id IS NULL THEN
+            CALL core.fallar('BNA-SOLICITANTE-DATOS: falta el identificador');
+        END IF;
+        IF coalesce(TRIM(p_nombres), '') = '' OR coalesce(TRIM(p_apellido_paterno), '') = '' THEN
+            CALL core.fallar('BNA-SOLICITANTE-DATOS: faltan los nombres o el apellido paterno');
+        END IF;
+        IF p_celular IS NULL OR NOT REGEXP_LIKE(p_celular, '^9[0-9]{8}$') THEN
+            CALL core.fallar('BNA-SOLICITANTE-DATOS: el celular no es válido');
+        END IF;
+        IF v_correo IS NULL OR NOT REGEXP_LIKE(v_correo, '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$') THEN
+            CALL core.fallar('BNA-SOLICITANTE-DATOS: el correo no es válido');
+        END IF;
+        INSERT INTO clientes.solicitante_captacion (id_solicitante, tipo_documento, numero_documento, nombres, apellido_paterno,
+                                                    apellido_materno, celular, correo, creado_por)
+        VALUES (p_id, p_tipo_documento, v_numero, TRIM(p_nombres), TRIM(p_apellido_paterno),
+                NULLIF(TRIM(p_apellido_materno), ''), p_celular, v_correo, p_actor);
+        SET p_id_solicitante = p_id;
+        CALL core.registrar_evento('CLIENTES', 'solicitante_captacion', BIN_TO_UUID(p_id), 'REGISTRAR_SOLICITANTE', p_actor,
+                                   p_correlation_id, JSON_OBJECT('tipo_documento', p_tipo_documento));
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.abrir_caso_captacion(
+    IN p_id BINARY(16), IN p_id_solicitante BINARY(16), IN p_canal VARCHAR(10), IN p_id_agencia VARCHAR(10),
+    IN p_producto_interes VARCHAR(60), IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16))
+    COMMENT 'Abre el caso de captación de un solicitante.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_existe BINARY(16);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT id_solicitante INTO v_existe FROM clientes.solicitante_captacion WHERE id_solicitante = p_id_solicitante FOR UPDATE;
+        IF v_existe IS NULL THEN
+            CALL core.fallar('BNA-SOLICITANTE: el solicitante no existe');
+        END IF;
+        IF p_id IS NULL THEN
+            CALL core.fallar('BNA-CASO-DATOS: falta el identificador');
+        END IF;
+        IF p_canal IS NULL OR p_canal NOT IN ('AGENCIA', 'WEB', 'MOVIL', 'AGENTE', 'CAMPANA') THEN
+            CALL core.fallar('BNA-CASO-DATOS: el canal no es válido');
+        END IF;
+        IF p_id_agencia IS NOT NULL AND NOT EXISTS (SELECT 1 FROM core.agencia WHERE id_agencia = p_id_agencia) THEN
+            CALL core.fallar('BNA-AGENCIA: la agencia no existe');
+        END IF;
+        IF EXISTS (SELECT 1 FROM clientes.caso_captacion WHERE id_solicitante = p_id_solicitante AND estado IN ('INICIADO', 'EN_VALIDACION', 'OBSERVADO', 'APROBADO')) THEN
+            CALL core.fallar('BNA-CASO-ABIERTO: el solicitante ya tiene un caso abierto');
+        END IF;
+        INSERT INTO clientes.caso_captacion (id_caso, id_solicitante, canal, id_agencia, producto_interes, estado, creado_por)
+        VALUES (p_id, p_id_solicitante, p_canal, p_id_agencia, NULLIF(TRIM(p_producto_interes), ''), 'INICIADO', p_actor);
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id), 'ABRIR_CASO', p_actor, p_correlation_id,
+                                   JSON_OBJECT('id_solicitante', BIN_TO_UUID(p_id_solicitante), 'canal', p_canal));
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+-- Vale el último consentimiento de cada tipo; la versión se guarda solo en TERMINOS.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.registrar_consentimientos_captacion(
+    IN p_id_caso BINARY(16), IN p_consentimientos JSON, IN p_version_terminos VARCHAR(10), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_estado VARCHAR(15))
+    COMMENT 'Registra de uno a cuatro consentimientos del solicitante.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_malos INT;
+    DECLARE v_version VARCHAR(10) DEFAULT NULLIF(TRIM(p_version_terminos), '');
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, TRUE, v_estado);
+        IF p_consentimientos IS NULL OR JSON_TYPE(p_consentimientos) <> 'ARRAY' OR JSON_LENGTH(p_consentimientos) NOT BETWEEN 1 AND 4 THEN
+            CALL core.fallar('BNA-CONSENTIMIENTO-DATOS: tipo, aceptación o medio no válidos');
+        END IF;
+        SELECT COUNT(*) INTO v_malos
+          FROM JSON_TABLE(p_consentimientos, '$[*]' COLUMNS (tipo VARCHAR(30) PATH '$.tipo', aceptado JSON PATH '$.aceptado',
+                                                            medio VARCHAR(20) PATH '$.medio')) j
+         WHERE j.tipo IS NULL OR j.tipo NOT IN ('TRATAMIENTO_DATOS', 'CONSULTA_BUROS', 'TERMINOS', 'BIOMETRIA')
+            OR j.aceptado IS NULL OR JSON_TYPE(j.aceptado) <> 'BOOLEAN'
+            OR j.medio IS NULL OR j.medio NOT IN ('DIGITAL', 'FISICO', 'BIOMETRICO');
+        IF v_malos > 0 THEN
+            CALL core.fallar('BNA-CONSENTIMIENTO-DATOS: tipo, aceptación o medio no válidos');
+        END IF;
+        IF v_version IS NULL AND JSON_CONTAINS(JSON_EXTRACT(p_consentimientos, '$[*].tipo'), '"TERMINOS"') THEN
+            CALL core.fallar('BNA-CONSENTIMIENTO-DATOS: falta la versión de los términos');
+        END IF;
+        INSERT INTO clientes.consentimiento_captacion (id_caso, tipo, aceptado, medio, version, registrado_por)
+        SELECT p_id_caso, j.tipo, JSON_UNQUOTE(j.aceptado) = 'true', j.medio, IF(j.tipo = 'TERMINOS', v_version, NULL), p_actor
+          FROM JSON_TABLE(p_consentimientos, '$[*]' COLUMNS (n FOR ORDINALITY, tipo VARCHAR(30) PATH '$.tipo',
+                                                            aceptado JSON PATH '$.aceptado', medio VARCHAR(20) PATH '$.medio')) j
+         ORDER BY j.n;
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'REGISTRAR_CONSENTIMIENTOS', p_actor, p_correlation_id,
+                                   (SELECT JSON_OBJECTAGG(j.tipo, j.aceptado)
+                                      FROM JSON_TABLE(p_consentimientos, '$[*]' COLUMNS (tipo VARCHAR(30) PATH '$.tipo',
+                                                      aceptado JSON PATH '$.aceptado')) j));
+        CALL clientes.recalcular_caso_captacion(p_id_caso, p_estado);
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+-- El vencimiento sale de clientes.tipo_contacto (SMS o CORREO).
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.emitir_otp_captacion(
+    IN p_id_otp BINARY(16), IN p_id_caso BINARY(16), IN p_canal VARCHAR(5), IN p_codigo_hmac CHAR(64),
+    IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16), OUT p_expira DATETIME(6))
+    COMMENT 'Guarda un OTP nuevo del solicitante y vence el pendiente anterior del mismo canal.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_minutos SMALLINT;
+    DECLARE v_ahora DATETIME(6) DEFAULT UTC_TIMESTAMP(6);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, TRUE, v_estado);
+        IF p_id_otp IS NULL OR p_canal IS NULL OR p_canal NOT IN ('SMS', 'EMAIL') THEN
+            CALL core.fallar('BNA-OTP-DATOS: el canal no es válido');
+        END IF;
+        IF p_codigo_hmac IS NULL OR NOT REGEXP_LIKE(p_codigo_hmac, '^[0-9a-f]{64}$', 'c') THEN
+            CALL core.fallar('BNA-OTP-DATOS: el código no es válido');
+        END IF;
+        CALL clientes.exigir_consentimiento_captacion(p_id_caso, 'TRATAMIENTO_DATOS');
+        SELECT vigencia_minutos INTO v_minutos FROM clientes.tipo_contacto
+         WHERE cod_tipo_contacto = IF(p_canal = 'SMS', 'SMS', 'CORREO');
+        UPDATE clientes.otp_captacion SET estado = 'EXPIRADO'
+         WHERE id_caso = p_id_caso AND canal = p_canal AND estado = 'PENDIENTE';
+        SET p_expira = v_ahora + INTERVAL v_minutos MINUTE;
+        INSERT INTO clientes.otp_captacion (id_otp, id_caso, canal, codigo_hmac, estado, fecha_emision, fecha_expiracion)
+        VALUES (p_id_otp, p_id_caso, p_canal, p_codigo_hmac, 'PENDIENTE', v_ahora, p_expira);
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'ENVIAR_OTP', p_actor, p_correlation_id,
+                                   JSON_OBJECT('canal', p_canal, 'id_otp', BIN_TO_UUID(p_id_otp)));
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+-- El código errado suma un intento y el último (max_intentos de clientes.tipo_contacto)
+-- lo bloquea; vencido, queda EXPIRADO. Esos dos casos no son errores: se confirman y el
+-- llamador recibe el estado del código. El correcto registra la verificación del canal.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.verificar_otp_captacion(
+    IN p_id_otp BINARY(16), IN p_id_caso BINARY(16), IN p_codigo_hmac CHAR(64), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_estado_codigo VARCHAR(10), OUT p_intentos_restantes SMALLINT,
+    OUT p_estado VARCHAR(15))
+    COMMENT 'Compara el hash del código con el OTP pendiente y cuenta los intentos.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_canal VARCHAR(5);
+    DECLARE v_hmac CHAR(64);
+    DECLARE v_intentos, v_max SMALLINT;
+    DECLARE v_expira DATETIME(6);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, TRUE, v_estado);
+        SET p_estado = v_estado, p_estado_codigo = NULL;
+        SELECT canal, codigo_hmac, intentos_fallidos, estado, fecha_expiracion
+          INTO v_canal, v_hmac, v_intentos, p_estado_codigo, v_expira
+          FROM clientes.otp_captacion WHERE id_otp = p_id_otp AND id_caso = p_id_caso FOR UPDATE;
+        IF NOT (p_estado_codigo <=> 'PENDIENTE') THEN
+            CALL core.fallar('BNA-OTP: no hay un código pendiente');
+        END IF;
+        SELECT max_intentos INTO v_max FROM clientes.tipo_contacto
+         WHERE cod_tipo_contacto = IF(v_canal = 'SMS', 'SMS', 'CORREO');
+        IF UTC_TIMESTAMP(6) > v_expira THEN
+            SET p_estado_codigo = 'EXPIRADO', p_intentos_restantes = 0;
+            UPDATE clientes.otp_captacion SET estado = p_estado_codigo WHERE id_otp = p_id_otp;
+            CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'VERIFICAR_OTP', p_actor, p_correlation_id,
+                                   JSON_OBJECT('canal', v_canal, 'resultado', 'EXPIRADO'));
+        ELSEIF p_codigo_hmac <=> v_hmac THEN
+            SET p_estado_codigo = 'USADO', p_intentos_restantes = v_max - v_intentos;
+            UPDATE clientes.otp_captacion SET estado = p_estado_codigo WHERE id_otp = p_id_otp;
+            INSERT INTO clientes.validacion_captacion (id_caso, tipo, resultado, proveedor, detalle, registrado_por)
+            VALUES (p_id_caso, IF(v_canal = 'SMS', 'CELULAR', 'CORREO'), 'APROBADO', CONCAT('OTP-', v_canal),
+                    'Código verificado', p_actor);
+            CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'VERIFICAR_OTP', p_actor, p_correlation_id,
+                                   JSON_OBJECT('canal', v_canal, 'resultado', 'OK'));
+            CALL clientes.recalcular_caso_captacion(p_id_caso, p_estado);
+        ELSE
+            SET v_intentos = v_intentos + 1;
+            SET p_estado_codigo = IF(v_intentos >= v_max, 'BLOQUEADO', 'PENDIENTE'),
+                p_intentos_restantes = GREATEST(v_max - v_intentos, 0);
+            UPDATE clientes.otp_captacion SET intentos_fallidos = v_intentos, estado = p_estado_codigo WHERE id_otp = p_id_otp;
+            CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'VERIFICAR_OTP', p_actor, p_correlation_id,
+                                   JSON_OBJECT('canal', v_canal, 'resultado', 'FALLIDO', 'intentos', v_intentos));
+        END IF;
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+-- RENIEC, listas restrictivas, PEP o biometría, del proveedor o de una revisión manual
+-- (proveedor MANUAL), que reemplaza al resultado anterior del mismo tipo. El celular y
+-- el correo se verifican solo con verificar_otp_captacion.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.registrar_validacion_captacion(
+    IN p_id_caso BINARY(16), IN p_tipo VARCHAR(15), IN p_resultado VARCHAR(10), IN p_proveedor VARCHAR(40),
+    IN p_detalle VARCHAR(200), IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16), OUT p_estado VARCHAR(15))
+    COMMENT 'Registra una verificación de identidad del solicitante.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, TRUE, v_estado);
+        IF p_tipo IS NULL OR p_tipo NOT IN ('RENIEC', 'LISTAS_NEGRAS', 'PEP', 'BIOMETRIA')
+           OR p_resultado IS NULL OR p_resultado NOT IN ('APROBADO', 'OBSERVADO', 'RECHAZADO') THEN
+            CALL core.fallar('BNA-VALIDACION-CAPTACION: tipo o resultado no válidos');
+        END IF;
+        IF coalesce(TRIM(p_proveedor), '') = '' THEN
+            CALL core.fallar('BNA-VALIDACION-CAPTACION: falta el proveedor');
+        END IF;
+        CALL clientes.exigir_consentimiento_captacion(p_id_caso, 'TRATAMIENTO_DATOS');
+        IF p_tipo = 'BIOMETRIA' THEN
+            CALL clientes.exigir_consentimiento_captacion(p_id_caso, 'BIOMETRIA');
+        END IF;
+        INSERT INTO clientes.validacion_captacion (id_caso, tipo, resultado, proveedor, detalle, registrado_por)
+        VALUES (p_id_caso, p_tipo, p_resultado, TRIM(p_proveedor), NULLIF(TRIM(p_detalle), ''), p_actor);
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'REGISTRAR_VALIDACION', p_actor, p_correlation_id,
+                                   JSON_OBJECT('tipo', p_tipo, 'resultado', p_resultado, 'proveedor', TRIM(p_proveedor)));
+        CALL clientes.recalcular_caso_captacion(p_id_caso, p_estado);
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.registrar_consulta_riesgo_captacion(
+    IN p_id_caso BINARY(16), IN p_central VARCHAR(10), IN p_calificacion VARCHAR(12), IN p_deuda_total DECIMAL(15,2),
+    IN p_entidades SMALLINT, IN p_dias_mora SMALLINT, IN p_fuente VARCHAR(12), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_estado VARCHAR(15))
+    COMMENT 'Registra la respuesta de una central de riesgo para el solicitante.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, TRUE, v_estado);
+        IF p_central IS NULL OR p_central NOT IN ('SBS', 'INFOCORP', 'SENTINEL', 'EQUIFAX')
+           OR p_calificacion IS NULL OR p_calificacion NOT IN ('NORMAL', 'CPP', 'DEFICIENTE', 'DUDOSO', 'PERDIDA')
+           OR p_fuente IS NULL OR p_fuente NOT IN ('SIMULADO', 'MANUAL')
+           OR NOT (p_deuda_total >= 0) OR NOT (p_entidades BETWEEN 0 AND 99) OR NOT (p_dias_mora BETWEEN 0 AND 9999)
+           OR p_deuda_total IS NULL OR p_entidades IS NULL OR p_dias_mora IS NULL THEN
+            CALL core.fallar('BNA-RIESGO-DATOS: central, calificación o montos no válidos');
+        END IF;
+        CALL clientes.exigir_consentimiento_captacion(p_id_caso, 'CONSULTA_BUROS');
+        INSERT INTO clientes.consulta_riesgo_captacion (id_caso, central, calificacion, deuda_total, entidades, dias_mora, fuente,
+                                                        registrado_por)
+        VALUES (p_id_caso, p_central, p_calificacion, p_deuda_total, p_entidades, p_dias_mora, p_fuente, p_actor);
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'CONSULTAR_CENTRAL', p_actor, p_correlation_id,
+                                   JSON_OBJECT('central', p_central, 'calificacion', p_calificacion, 'fuente', p_fuente));
+        CALL clientes.recalcular_caso_captacion(p_id_caso, p_estado);
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+-- Un perfil MUY_ALTO rechaza el caso.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.registrar_perfil_captacion(
+    IN p_id_caso BINARY(16), IN p_puntaje SMALLINT, IN p_calificacion VARCHAR(10), IN p_observacion VARCHAR(200),
+    IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16), OUT p_estado VARCHAR(15))
+    COMMENT 'Registra el perfil de riesgo del solicitante calculado por CAPTACION.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_base BIGINT;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, TRUE, v_estado);
+        IF p_puntaje IS NULL OR p_puntaje NOT BETWEEN 0 AND 1000
+           OR p_calificacion IS NULL OR p_calificacion NOT IN ('BAJO', 'MEDIO', 'ALTO', 'MUY_ALTO') THEN
+            CALL core.fallar('BNA-RIESGO-DATOS: puntaje o calificación no válidos');
+        END IF;
+        SELECT MAX(id_consulta) INTO v_base FROM clientes.consulta_riesgo_captacion WHERE id_caso = p_id_caso;
+        IF v_base IS NULL THEN
+            CALL core.fallar('BNA-SIN-CONSULTA: consulte al menos una central de riesgo');
+        END IF;
+        INSERT INTO clientes.perfil_riesgo_captacion (id_caso, puntaje, calificacion, observacion, id_consulta_base, registrado_por)
+        VALUES (p_id_caso, p_puntaje, p_calificacion, NULLIF(TRIM(p_observacion), ''), v_base, p_actor);
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'CALCULAR_PERFIL', p_actor, p_correlation_id,
+                                   JSON_OBJECT('puntaje', p_puntaje, 'calificacion', p_calificacion));
+        CALL clientes.recalcular_caso_captacion(p_id_caso, p_estado);
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+-- Revocar retira una habilitación vigente; lo demás exige un caso abierto. La
+-- observación del asesor detiene el caso hasta que se levante.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.cambiar_estado_caso_captacion(
+    IN p_id_caso BINARY(16), IN p_accion VARCHAR(25), IN p_motivo VARCHAR(255), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_estado VARCHAR(15))
+    COMMENT 'Observa, levanta la observación, rechaza o revoca un caso de captación.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_motivo VARCHAR(255) DEFAULT TRIM(p_motivo);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_accion IS NULL OR p_accion NOT IN ('OBSERVAR', 'LEVANTAR_OBSERVACION', 'RECHAZAR', 'REVOCAR') THEN
+            CALL core.fallar('BNA-CASO-DATOS: la acción no es válida');
+        END IF;
+        IF CHAR_LENGTH(coalesce(v_motivo, '')) < 3 THEN
+            CALL core.fallar('BNA-CASO-DATOS: falta el motivo');
+        END IF;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, p_accion <> 'REVOCAR', v_estado);
+        IF p_accion = 'REVOCAR' THEN
+            IF v_estado <> 'HABILITADO' THEN
+                CALL core.fallar('BNA-CASO-ESTADO: solo se revoca un caso HABILITADO');
+            END IF;
+            UPDATE clientes.caso_captacion SET estado = 'REVOCADO', motivo_cierre = v_motivo WHERE id_caso = p_id_caso;
+        ELSEIF p_accion = 'OBSERVAR' THEN
+            UPDATE clientes.caso_captacion SET observacion = v_motivo WHERE id_caso = p_id_caso;
+        ELSEIF p_accion = 'LEVANTAR_OBSERVACION' THEN
+            UPDATE clientes.caso_captacion SET observacion = NULL WHERE id_caso = p_id_caso;
+        ELSE
+            UPDATE clientes.caso_captacion SET estado = 'RECHAZADO', motivo_cierre = v_motivo, fecha_cierre = UTC_TIMESTAMP(6)
+             WHERE id_caso = p_id_caso;
+        END IF;
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), p_accion, p_actor, p_correlation_id,
+                                   JSON_OBJECT('motivo', v_motivo));
+        CALL clientes.recalcular_caso_captacion(p_id_caso, p_estado);
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+-- El cliente lo registra (o lo encuentra) quien verificó la identidad, por
+-- clientes.registrar_cliente o verificar_documento; aquí solo se liga. Ligarlo de nuevo
+-- al mismo cliente no hace nada, así un reintento no falla.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.vincular_cliente_captacion(
+    IN p_id_caso BINARY(16), IN p_cod_cliente VARCHAR(12), IN p_cliente_nuevo BOOLEAN, IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16))
+    COMMENT 'Liga al caso APROBADO el cliente ACTIVO que tiene el documento del solicitante.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_actual VARCHAR(12);
+    DECLARE v_solicitante BINARY(16);
+    DECLARE v_tipo_sol, v_tipo_cli VARCHAR(10);
+    DECLARE v_num_sol, v_num_cli VARCHAR(12);
+    DECLARE v_estado_cli VARCHAR(25);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, TRUE, v_estado);
+        SELECT c.cod_cliente, c.id_solicitante, s.tipo_documento, s.numero_documento
+          INTO v_actual, v_solicitante, v_tipo_sol, v_num_sol
+          FROM clientes.caso_captacion c
+          JOIN clientes.solicitante_captacion s ON s.id_solicitante = c.id_solicitante
+         WHERE c.id_caso = p_id_caso;
+        IF v_actual IS NOT NULL THEN
+            IF v_actual <=> p_cod_cliente THEN
+                LEAVE proc_cuerpo;
+            END IF;
+            CALL core.fallar('BNA-CASO-CLIENTE: el caso ya tiene otro cliente');
+        END IF;
+        IF v_estado <> 'APROBADO' OR JSON_LENGTH(clientes.fn_faltantes_captacion(p_id_caso)) > 0 THEN
+            CALL core.fallar('BNA-CASO-NO-LISTO: el caso no cumple los requisitos para habilitarse');
+        END IF;
+        IF p_cliente_nuevo IS NULL THEN
+            CALL core.fallar('BNA-CASO-DATOS: falta indicar si el cliente es nuevo');
+        END IF;
+        SELECT tipo_documento, numero_documento, estado_cliente INTO v_tipo_cli, v_num_cli, v_estado_cli
+          FROM clientes.cliente WHERE cod_cliente = p_cod_cliente FOR SHARE;
+        IF v_tipo_cli IS NULL THEN
+            CALL core.fallar('BNA-CLIENTE: el cliente no existe');
+        END IF;
+        IF NOT (v_tipo_cli <=> v_tipo_sol AND v_num_cli <=> v_num_sol) THEN
+            CALL core.fallar('BNA-CLIENTE-DOCUMENTO: el cliente no tiene el documento del solicitante');
+        END IF;
+        IF v_estado_cli <> 'ACTIVO' THEN
+            CALL core.fallar('BNA-CLIENTE-NO-ACTIVO: el cliente no está ACTIVO');
+        END IF;
+        UPDATE clientes.caso_captacion SET cod_cliente = p_cod_cliente, cliente_nuevo = p_cliente_nuevo WHERE id_caso = p_id_caso;
+        UPDATE clientes.solicitante_captacion SET cod_cliente = p_cod_cliente WHERE id_solicitante = v_solicitante;
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'VINCULAR_CLIENTE', p_actor, p_correlation_id,
+                                   JSON_OBJECT('cod_cliente', p_cod_cliente, 'cliente_nuevo', p_cliente_nuevo IS TRUE));
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+-- La referencia queda vigente p_vigencia_dias desde la fecha de negocio de hoy (Lima).
+-- Habilitar un caso ya HABILITADO no cambia nada.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE clientes.habilitar_caso_captacion(
+    IN p_id_caso BINARY(16), IN p_vigencia_dias SMALLINT, IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16),
+    OUT p_estado VARCHAR(15))
+    COMMENT 'Habilita el caso con su cliente y deja en el cliente las verificaciones de contacto.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_cliente VARCHAR(12);
+    DECLARE v_estado_cli VARCHAR(25);
+    DECLARE v_fecha DATE;
+    DECLARE v_tipo VARCHAR(15);
+    DECLARE v_resultado VARCHAR(10);
+    DECLARE v_id BIGINT;
+    DECLARE v_i TINYINT DEFAULT 1;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    proc_cuerpo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL clientes.bloquear_caso_captacion(p_id_caso, FALSE, v_estado);
+        SET p_estado = v_estado;
+        IF v_estado = 'HABILITADO' THEN
+            LEAVE proc_cuerpo;
+        END IF;
+        IF v_estado IN ('HABILITADO', 'RECHAZADO', 'REVOCADO') THEN
+            CALL core.fallar('BNA-CASO-CERRADO: el caso ya no admite cambios');
+        END IF;
+        IF p_vigencia_dias IS NULL OR p_vigencia_dias NOT BETWEEN 1 AND 365 THEN
+            CALL core.fallar('BNA-CASO-DATOS: la vigencia va de 1 a 365 días');
+        END IF;
+        IF p_correlation_id IS NULL THEN
+            CALL core.fallar('BNA-CASO-DATOS: falta el correlation_id');
+        END IF;
+        IF v_estado <> 'APROBADO' OR JSON_LENGTH(clientes.fn_faltantes_captacion(p_id_caso)) > 0 THEN
+            CALL core.fallar('BNA-CASO-NO-LISTO: el caso no cumple los requisitos para habilitarse');
+        END IF;
+        SELECT cod_cliente INTO v_cliente FROM clientes.caso_captacion WHERE id_caso = p_id_caso;
+        IF v_cliente IS NULL THEN
+            CALL core.fallar('BNA-CASO-NO-LISTO: el caso no tiene un cliente ligado');
+        END IF;
+        SELECT estado_cliente INTO v_estado_cli FROM clientes.cliente WHERE cod_cliente = v_cliente FOR SHARE;
+        IF v_estado_cli <> 'ACTIVO' THEN
+            CALL core.fallar('BNA-CLIENTE-NO-ACTIVO: el cliente no está ACTIVO');
+        END IF;
+        -- Las verificaciones de contacto aprobadas por OTP quedan también en el cliente, como
+        -- las registraría clientes.registrar_validacion (aquí, sin anidar su savepoint).
+        WHILE v_i <= 2 DO
+            SET v_tipo = ELT(v_i, 'CELULAR', 'CORREO'), v_i = v_i + 1;
+            SET v_resultado = clientes.fn_validacion_captacion(p_id_caso, v_tipo);
+            IF v_resultado <=> 'APROBADO' THEN
+                INSERT INTO clientes.validacion_identidad (tipo_validacion, resultado, correlation_id, cod_cliente)
+                VALUES (v_tipo, 'APROBADO', p_correlation_id, v_cliente);
+                SET v_id = LAST_INSERT_ID();
+                CALL core.registrar_evento('CLIENTES', 'validacion_identidad', v_id, 'REGISTRAR_VALIDACION', p_actor,
+                                           p_correlation_id,
+                                           JSON_OBJECT('cod_cliente', v_cliente, 'tipo_validacion', v_tipo, 'resultado', 'APROBADO',
+                                                       'motivo', CONCAT('OTP CAPTACION ', LEFT(BIN_TO_UUID(p_id_caso), 8))));
+            END IF;
+        END WHILE;
+        SET v_fecha = core.fn_fecha_negocio(UTC_TIMESTAMP(6)), p_estado = 'HABILITADO';
+        UPDATE clientes.caso_captacion
+           SET estado = p_estado, fecha_verificacion = v_fecha, vigente_hasta = v_fecha + INTERVAL p_vigencia_dias DAY,
+               fecha_cierre = UTC_TIMESTAMP(6)
+         WHERE id_caso = p_id_caso;
+        CALL core.registrar_evento('CLIENTES', 'caso_captacion', BIN_TO_UUID(p_id_caso), 'HABILITAR', p_actor, p_correlation_id,
+                                   JSON_OBJECT('cod_cliente', v_cliente, 'vigente_hasta', DATE_FORMAT(v_fecha + INTERVAL p_vigencia_dias DAY, '%Y-%m-%d')));
+    END;
+    IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+END //
+
+DELIMITER ;
+
+-- Lecturas de la API. Sin el hash del OTP; el caso trae del cliente su verificación de
+-- captación y su estado vigente, y lo que falta para habilitarlo.
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW clientes.v_solicitante_captacion_api AS
+SELECT BIN_TO_UUID(s.id_solicitante) AS id_solicitante, s.tipo_documento, s.numero_documento, s.nombres,
+       s.apellido_paterno, s.apellido_materno, s.celular, s.correo, s.cod_cliente, s.creado_por, s.fecha_registro
+  FROM clientes.solicitante_captacion s;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW clientes.v_caso_captacion_api AS
+SELECT BIN_TO_UUID(c.id_caso) AS id_caso, BIN_TO_UUID(c.id_solicitante) AS id_solicitante, c.canal, c.id_agencia,
+       c.producto_interes, c.estado, c.observacion, c.motivo_cierre, c.cod_cliente, c.cliente_nuevo,
+       cl.id_verificacion_captacion, cl.estado_cliente, c.fecha_verificacion, c.vigente_hasta, c.creado_por,
+       c.fecha_apertura, c.fecha_cierre, clientes.fn_faltantes_captacion(c.id_caso) AS faltantes
+  FROM clientes.caso_captacion c
+  LEFT JOIN clientes.cliente cl ON cl.cod_cliente = c.cod_cliente;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW clientes.v_consentimiento_captacion_api AS
+SELECT id_consentimiento, BIN_TO_UUID(id_caso) AS id_caso, tipo, aceptado, medio, version, registrado_por, fecha
+  FROM clientes.consentimiento_captacion;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW clientes.v_otp_captacion_api AS
+SELECT BIN_TO_UUID(id_otp) AS id_otp, BIN_TO_UUID(id_caso) AS id_caso, canal, estado, intentos_fallidos,
+       fecha_emision, fecha_expiracion
+  FROM clientes.otp_captacion;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW clientes.v_validacion_captacion_api AS
+SELECT id_validacion, BIN_TO_UUID(id_caso) AS id_caso, tipo, resultado, proveedor, detalle, registrado_por, fecha
+  FROM clientes.validacion_captacion;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW clientes.v_consulta_riesgo_captacion_api AS
+SELECT id_consulta, BIN_TO_UUID(id_caso) AS id_caso, central, calificacion, deuda_total, entidades, dias_mora, fuente,
+       registrado_por, fecha
+  FROM clientes.consulta_riesgo_captacion;
+
+-- vigente: ninguna consulta posterior al perfil.
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW clientes.v_perfil_riesgo_captacion_api AS
+SELECT p.id_perfil, BIN_TO_UUID(p.id_caso) AS id_caso, p.puntaje, p.calificacion, p.observacion, p.registrado_por,
+       p.fecha,
+       NOT EXISTS (SELECT 1 FROM clientes.consulta_riesgo_captacion q
+                    WHERE q.id_caso = p.id_caso AND q.id_consulta > p.id_consulta_base) AS vigente
+  FROM clientes.perfil_riesgo_captacion p;
+
+GRANT EXECUTE ON PROCEDURE clientes.registrar_solicitante_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.abrir_caso_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.registrar_consentimientos_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.emitir_otp_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.verificar_otp_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.registrar_validacion_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.registrar_consulta_riesgo_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.registrar_perfil_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.cambiar_estado_caso_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.vincular_cliente_captacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE clientes.habilitar_caso_captacion TO bna_api;
+GRANT SELECT ON clientes.v_solicitante_captacion_api TO bna_api;
+GRANT SELECT ON clientes.v_caso_captacion_api TO bna_api;
+GRANT SELECT ON clientes.v_consentimiento_captacion_api TO bna_api;
+GRANT SELECT ON clientes.v_otp_captacion_api TO bna_api;
+GRANT SELECT ON clientes.v_validacion_captacion_api TO bna_api;
+GRANT SELECT ON clientes.v_consulta_riesgo_captacion_api TO bna_api;
+GRANT SELECT ON clientes.v_perfil_riesgo_captacion_api TO bna_api;
