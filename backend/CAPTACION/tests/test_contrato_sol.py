@@ -3,7 +3,8 @@
 SOL ya tiene el cliente HTTP que consulta a Captación (backend/SOL/integrations.py). Aquí
 ese mismo código, sin cambios, le pide a CAPTACION la búsqueda y la referencia y aplica sus
 propias reglas: campos, fechas, ACTIVO + HABILITADO y vigencia según la hora de Lima. Solo
-la imagen de SOL tiene sus dependencias: en las demás estas pruebas se omiten.
+la imagen de SOL tiene sus dependencias: en las demás estas pruebas se omiten. CAPTACION
+trabaja contra COREDB y la base integrada reales (scripts/pruebas_integracion.sh).
 """
 
 from types import SimpleNamespace
@@ -20,7 +21,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from SOL.integrations import Integrations  # noqa: E402
 
 from CAPTACION.main import app  # noqa: E402
-from CAPTACION.tests.conftest import ASESOR, BASE, TOKEN_SOL  # noqa: E402
+from CAPTACION.tests.conftest import BASE, TOKEN_SOL, dni  # noqa: E402
 
 
 def _sol(token=TOKEN_SOL):
@@ -34,28 +35,27 @@ def _sol(token=TOKEN_SOL):
     return Integrations(ajustes, transport=TestClient(app)._transport)
 
 
-def _habilitar(client, flujo, numero):
+def _habilitar(flujo, numero):
     id_caso = flujo.hasta_aprobado(numero)
-    r = client.post(f"{BASE}/casos/{id_caso}/habilitar", headers=ASESOR)
-    assert r.status_code == 200, r.text
-    return id_caso, r.json()["data"]["cod_cliente"]
+    return id_caso, flujo.habilitar(id_caso)["cod_cliente"]
 
 
 def test_sol_acepta_la_referencia_de_un_cliente_habilitado(client, flujo):
-    id_caso, cod = _habilitar(client, flujo, "45679101")
+    numero = dni()
+    id_caso, cod = _habilitar(flujo, numero)
     sol = _sol()
     referencia = sol.reference(cod, str(uuid4()))  # aplica validate_reference de SOL
     assert referencia["id_cliente"] == cod and referencia["id_caso"] == id_caso
     assert referencia["estado_habilitante"] == "HABILITADO"
     assert "celular" not in referencia  # SOL descarta todo lo que no está en CLIENT_FIELDS
 
-    encontrados = sol.clients("45679101", str(uuid4()))
+    encontrados = sol.clients(numero, str(uuid4()))
     assert [r["id_cliente"] for r in encontrados] == [cod]
 
 
-def test_sol_rechaza_una_habilitacion_revocada(client, flujo):
-    id_caso, cod = _habilitar(client, flujo, "45679102")
-    client.post(f"{BASE}/casos/{id_caso}/estado", headers=ASESOR,
+def test_sol_rechaza_una_habilitacion_revocada(client, flujo, asesor):
+    id_caso, cod = _habilitar(flujo, dni())
+    client.post(f"{BASE}/casos/{id_caso}/estado", headers=asesor[0],
                 json={"accion": "REVOCAR", "motivo": "Prueba de revocación"})
     with pytest.raises(HTTPException) as error:
         _sol().reference(cod, str(uuid4()))
@@ -69,7 +69,7 @@ def test_sol_trata_un_cliente_inexistente_como_rechazo_funcional(client):
 
 
 def test_con_otro_token_sol_ve_la_dependencia_caida(client, flujo):
-    _, cod = _habilitar(client, flujo, "45679103")
+    _, cod = _habilitar(flujo, dni())
     with pytest.raises(HTTPException) as error:
         _sol(token="x" * 40).reference(cod, str(uuid4()))
     assert error.value.status_code == 503
