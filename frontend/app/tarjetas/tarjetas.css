@@ -134,6 +134,94 @@
   margin-top: 2px;
 }
 
+/* Resultado de una autorización o de una validación de clave. */
+.tj-resultado {
+  margin: 0 24px 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--sol-line);
+  border-left: 4px solid #8a99a8;
+  border-radius: 10px;
+  display: grid;
+  gap: 16px;
+}
+.tj-resultado.ok {
+  border-left-color: #2f9e6e;
+}
+.tj-resultado.mal {
+  border-left-color: #c8503f;
+}
+.tj-resultado-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.tj-resultado-cabecera strong {
+  display: block;
+  color: var(--sol-navy);
+}
+.tj-resultado-cabecera small {
+  color: var(--sol-muted);
+}
+.tj-codigo {
+  min-width: 44px;
+  height: 44px;
+  padding: 0 8px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 600;
+  background: #eef2f5;
+  color: #4b6478;
+}
+.tj-resultado.ok .tj-codigo {
+  background: #e3f4ec;
+  color: #23784f;
+}
+.tj-resultado.mal .tj-codigo {
+  background: #fbe9e6;
+  color: #a33e2f;
+}
+.tj-monto {
+  margin-left: auto;
+  color: var(--sol-navy);
+  font-variant-numeric: tabular-nums;
+}
+.tj-extorno {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sol-line);
+}
+.tj-extorno .sol-field {
+  flex: 1;
+  margin: 0;
+}
+.tj-intentos {
+  display: flex;
+  gap: 5px;
+}
+.tj-intentos i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid #c8503f;
+}
+.tj-resultado.ok .tj-intentos i {
+  border-color: #2f9e6e;
+}
+.tj-intentos i.lleno {
+  background: currentColor;
+  border-color: currentColor;
+}
+.tj-resultado.ok .tj-intentos {
+  color: #2f9e6e;
+}
+.tj-resultado.mal .tj-intentos {
+  color: #c8503f;
+}
+
 .tj-buscador {
   padding: 0 24px 24px;
 }
@@ -162,8 +250,13 @@
   .tj-emision {
     padding: 0 16px 16px;
   }
-  .tj-nota {
+  .tj-nota,
+  .tj-resultado {
     margin: 0 16px 16px;
+  }
+  .tj-extorno {
+    flex-direction: column;
+    align-items: stretch;
   }
   .tj-datos {
     grid-template-columns: 1fr;
