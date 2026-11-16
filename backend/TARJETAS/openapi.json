@@ -1,6 +1,72 @@
 {
   "components": {
     "schemas": {
+      "AutorizacionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "id_canal": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ATM, AGE, VEN, HB o BD. O el canal o la terminal.",
+            "title": "Id Canal"
+          },
+          "id_terminal": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Terminal"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "tipo_operacion": {
+            "default": "RETIRO",
+            "enum": [
+              "RETIRO",
+              "PAGO",
+              "FONDEO_BILLETERA"
+            ],
+            "title": "Tipo Operacion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "num_cuenta",
+          "monto"
+        ],
+        "title": "AutorizacionIn",
+        "type": "object"
+      },
       "BloqueoIn": {
         "additionalProperties": false,
         "properties": {
@@ -15,6 +81,22 @@
           "motivo"
         ],
         "title": "BloqueoIn",
+        "type": "object"
+      },
+      "CredencialIn": {
+        "additionalProperties": false,
+        "properties": {
+          "valor": {
+            "format": "password",
+            "title": "Valor",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "valor"
+        ],
+        "title": "CredencialIn",
         "type": "object"
       },
       "EmisionIn": {
@@ -118,6 +200,22 @@
         "title": "EstadoIn",
         "type": "object"
       },
+      "ExtornoIn": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "title": "ExtornoIn",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -129,6 +227,49 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ValidacionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "id_canal": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ATM, AGE, VEN, HB o BD. O el canal o la terminal.",
+            "title": "Id Canal"
+          },
+          "id_terminal": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Terminal"
+          },
+          "valor": {
+            "format": "password",
+            "title": "Valor",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "valor"
+        ],
+        "title": "ValidacionIn",
         "type": "object"
       },
       "ValidationError": {
@@ -173,6 +314,129 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/tarjetas/autorizaciones/{uuid_autorizacion}": {
+      "get": {
+        "operationId": "ver_autorizacion_api_v1_tarjetas_autorizaciones__uuid_autorizacion__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid_autorizacion",
+            "required": true,
+            "schema": {
+              "title": "Uuid Autorizacion",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ver Autorizacion",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/extorno": {
+      "post": {
+        "description": "Libera el saldo retenido y el tope del día (RN-ATM-003). Repetirlo responde lo mismo.",
+        "operationId": "extornar_api_v1_tarjetas_autorizaciones__uuid_autorizacion__extorno_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid_autorizacion",
+            "required": true,
+            "schema": {
+              "title": "Uuid Autorizacion",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtornoIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Extornar",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
     "/api/v1/tarjetas/cliente/{cod_cliente}": {
       "get": {
         "operationId": "tarjetas_del_cliente_api_v1_tarjetas_cliente__cod_cliente__get",
@@ -361,6 +625,89 @@
         ]
       }
     },
+    "/api/v1/tarjetas/{id_tarjeta}/autorizaciones": {
+      "post": {
+        "description": "Autoriza un débito con la tarjeta o registra su rechazo. Una regla que no se cumple (saldo,\ntope, tarjeta, canal) responde 201 con `aprobada: false` y el código de respuesta.",
+        "operationId": "autorizar_api_v1_tarjetas__id_tarjeta__autorizaciones_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutorizacionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Autorizar",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
     "/api/v1/tarjetas/{id_tarjeta}/bloqueo": {
       "post": {
         "operationId": "bloquear_api_v1_tarjetas__id_tarjeta__bloqueo_post",
@@ -422,6 +769,165 @@
           }
         },
         "summary": "Bloquear",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/api/v1/tarjetas/{id_tarjeta}/credenciales/{tipo}": {
+      "put": {
+        "operationId": "registrar_credencial_api_v1_tarjetas__id_tarjeta__credenciales__tipo__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tipo",
+            "required": true,
+            "schema": {
+              "enum": [
+                "PIN_ATM",
+                "CLAVE_WEB"
+              ],
+              "title": "Tipo",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredencialIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Registrar Credencial",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/api/v1/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion": {
+      "post": {
+        "description": "Una clave equivocada responde 200 con FALLIDO; al tercer fallo seguido la tarjeta queda\nbloqueada (RN-TAR-004).",
+        "operationId": "validar_credencial_api_v1_tarjetas__id_tarjeta__credenciales__tipo__validacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tipo",
+            "required": true,
+            "schema": {
+              "enum": [
+                "PIN_ATM",
+                "CLAVE_WEB"
+              ],
+              "title": "Tipo",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidacionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validar Credencial",
         "tags": [
           "Tarjetas"
         ]
