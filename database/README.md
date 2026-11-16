@@ -206,6 +206,26 @@ uso. La extensión agrega cuatro tablas (`numerador_orden`, `numerador_credito`,
 cifras ni valores de entrada. Solo agrega objetos, pero una base existente necesita un
 volumen nuevo para tenerlos.
 
+### Autorizaciones y credenciales de tarjeta (desde `bd-v1.5-mysql`)
+
+El módulo Tarjetas autoriza, extorna y valida credenciales por COREDB. Las reglas son
+las de los triggers que ya estaban (`tg_autorizacion_validar_bi`, `tg_intento_contar`);
+estos procedimientos son la entrada de la API y se conceden a `bna_api`, `bna_app` y
+`bna_admin`.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `tarjetas.autorizar_operacion` | Registra la autorización con el uuid que envía quien llama (RN-BUS-002). Si se cumplen las reglas queda AUTORIZADA con `00`, retiene el saldo y compromete el tope. Si una regla falla queda RECHAZADA con su código ISO 8583 (`51`, `54`, `57`, `61`, `62`) y un motivo sin montos. El mismo uuid con los mismos datos devuelve lo registrado; con otros datos falla con `BNA-IDEMPOTENCIA` |
+| `tarjetas.extornar_autorizacion` | Pasa a EXTORNADA, con `EXT`, una autorización sin movimiento: los triggers liberan el saldo y el tope (RN-ATM-003). Repetirlo no cambia nada. Una rechazada o una que ya tiene su movimiento se rechaza con `BNA-EXTORNO` |
+| `tarjetas.registrar_credencial` | Asigna o cambia el PIN (4 dígitos) o la clave web (6), con una sal aleatoria, y reinicia los intentos |
+| `tarjetas.validar_credencial` | Compara el valor con el hash dentro de la base y registra el intento; el tercer fallo bloquea la tarjeta (RN-TAR-004). Con la tarjeta no operativa se rechaza sin registrar el intento |
+
+`bna_api` lee la autorización en `tarjetas.v_autorizacion_api`, sin la IP de origen ni
+el nivel de riesgo, y sigue sin leer `tarjetas.credencial`. El hash es
+`SHA2(CONCAT(sal, valor), 256)`; ningún evento ni mensaje de error repite el valor. La
+matriz de coordenadas queda para cuando haya un procedimiento que la emita. Solo agrega
+objetos y cuatro códigos de respuesta: una base anterior necesita un volumen nuevo.
+
 `pruebas/mysql/run_tests.sh` ejecuta toda la suite con la extensión cargada. Sus
 pruebas (ID `X`) quedan en `resultados/mysql/resultado-extension.tsv`, fuera de la
 matriz. `pruebas_sin_transaccion.sh` prueba cada procedimiento en autocommit, porque

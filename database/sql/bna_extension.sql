@@ -197,6 +197,13 @@ INSERT INTO core.cuenta_contable VALUES
     ('1101', 'Caja', 'DEUDORA', NULL), ('2101', 'Depósitos de ahorro', 'ACREEDORA', NULL) AS nueva
 ON DUPLICATE KEY UPDATE codigo_contable = nueva.codigo_contable;
 
+-- Códigos de respuesta de una autorización rechazada (v1.5), los de ISO 8583.
+INSERT INTO tarjetas.codigo_respuesta (cod_respuesta, descripcion, es_aprobacion) VALUES
+    ('51', 'Fondos insuficientes', FALSE),
+    ('57', 'Operación no permitida para la tarjeta o la cuenta', FALSE),
+    ('61', 'Excede el tope diario', FALSE),
+    ('62', 'Tarjeta restringida', FALSE);
+
 -- ---------------------------------------------------------------------
 -- 8. Procedimientos y reglas
 -- ---------------------------------------------------------------------
@@ -711,6 +718,280 @@ BEGIN
     END;
 END //
 
+-- Autorización de una operación con tarjeta (v1.5). Las reglas son las de
+-- tg_autorizacion_validar_bi: este procedimiento solo es la entrada de la API.
+-- DECISIÓN (v1.5): el uuid lo genera quien llama (RN-BUS-002). Repetirlo con los mismos
+--   datos devuelve el resultado ya registrado sin tocar el saldo ni el tope; con otros
+--   datos falla con BNA-IDEMPOTENCIA.
+-- DECISIÓN (v1.5): una regla de negocio que no se cumple no es un error de la llamada:
+--   queda la autorización RECHAZADA, con su código de respuesta y un motivo sin montos
+--   ni saldos, como evidencia del intento. Los demás errores se propagan.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE tarjetas.autorizar_operacion(
+    IN p_uuid BINARY(16), IN p_id_tarjeta BINARY(16), IN p_num_cuenta VARCHAR(20), IN p_id_canal VARCHAR(5),
+    IN p_id_terminal VARCHAR(30), IN p_tipo_operacion VARCHAR(25), IN p_monto DECIMAL(15,2),
+    IN p_ip_origen VARCHAR(45), IN p_actor VARCHAR(40), OUT p_estado VARCHAR(25), OUT p_codigo VARCHAR(4))
+    COMMENT 'Autoriza una operación con tarjeta o registra su rechazo.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_existe BOOLEAN DEFAULT FALSE;
+    DECLARE v_mismos BOOLEAN;
+    DECLARE v_regla VARCHAR(30);
+    DECLARE v_motivo VARCHAR(255);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT TRUE, estado_autorizacion, codigo_respuesta,
+               id_tarjeta <=> p_id_tarjeta AND num_cuenta <=> p_num_cuenta AND id_canal <=> p_id_canal
+               AND id_terminal <=> p_id_terminal AND tipo_operacion <=> p_tipo_operacion AND monto <=> p_monto
+          INTO v_existe, p_estado, p_codigo, v_mismos
+          FROM tarjetas.autorizacion WHERE uuid_autorizacion = p_uuid FOR UPDATE;
+        IF v_existe AND NOT v_mismos THEN
+            CALL core.fallar(CONCAT('BNA-IDEMPOTENCIA: la autorización ', BIN_TO_UUID(p_uuid),
+                                    ' se registró con otros datos'));
+        END IF;
+        IF NOT v_existe THEN
+            IF p_monto IS NULL OR p_monto <= 0 THEN
+                CALL core.fallar('BNA-MONTO: el monto debe ser mayor que cero');
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM tarjetas.tarjeta WHERE id_tarjeta = p_id_tarjeta) THEN
+                CALL core.fallar('BNA-TARJETA: la tarjeta no existe');
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM tarjetas.tarjeta_cuenta
+                            WHERE id_tarjeta = p_id_tarjeta AND num_cuenta = p_num_cuenta) THEN
+                CALL core.fallar('BNA-TARJETA: la tarjeta no opera esa cuenta');
+            END IF;
+            BEGIN
+                -- Las reglas de tg_autorizacion_validar_bi fallan con SIGNAL 45000. Los
+                -- códigos de respuesta son los de ISO 8583 (sección 7).
+                DECLARE EXIT HANDLER FOR SQLSTATE '45000'
+                BEGIN
+                    GET STACKED DIAGNOSTICS CONDITION 1 v_motivo = MESSAGE_TEXT;
+                    SET v_regla = SUBSTRING_INDEX(v_motivo, ':', 1);
+                    SET p_codigo = CASE
+                        WHEN v_regla = 'ERR-TAR-003' AND v_motivo LIKE '%venció%' THEN '54'
+                        WHEN v_regla = 'ERR-TAR-003' THEN '62'
+                        WHEN v_regla = 'ERR-TAR-007' THEN '61'
+                        WHEN v_regla = 'BNA-SALDO' THEN '51'
+                        WHEN v_regla IN ('ERR-TAR-006', 'ERR-TAR-008', 'BNA-ESTADO-CUENTA') THEN '57'
+                    END;
+                    IF p_codigo IS NULL THEN
+                        RESIGNAL;
+                    END IF;
+                    SET v_motivo = CASE v_regla
+                        WHEN 'ERR-TAR-003' THEN 'ERR-TAR-003: la tarjeta no está operativa o venció'
+                        WHEN 'ERR-TAR-006' THEN 'ERR-TAR-006: el canal o la terminal no opera'
+                        WHEN 'ERR-TAR-007' THEN 'ERR-TAR-007: tope diario excedido (RN-TOP-001)'
+                        WHEN 'ERR-TAR-008' THEN 'ERR-TAR-008: la cuenta no puede operarse en cajero (RN-ATM-005)'
+                        WHEN 'BNA-SALDO' THEN 'BNA-SALDO: saldo disponible insuficiente'
+                        ELSE 'BNA-ESTADO-CUENTA: la cuenta no admite débitos'
+                    END;
+                    INSERT INTO tarjetas.autorizacion (uuid_autorizacion, tipo_operacion, monto, estado_autorizacion,
+                                                       codigo_respuesta, motivo_rechazo, id_terminal, ip_origen,
+                                                       id_tarjeta, num_cuenta, id_canal)
+                    VALUES (p_uuid, p_tipo_operacion, p_monto, 'RECHAZADA', p_codigo, v_motivo, p_id_terminal,
+                            p_ip_origen, p_id_tarjeta, p_num_cuenta, p_id_canal);
+                    SET p_estado = 'RECHAZADA';
+                END;
+                INSERT INTO tarjetas.autorizacion (uuid_autorizacion, tipo_operacion, monto, estado_autorizacion,
+                                                   codigo_respuesta, id_terminal, ip_origen, id_tarjeta, num_cuenta,
+                                                   id_canal)
+                VALUES (p_uuid, p_tipo_operacion, p_monto, 'AUTORIZADA', '00', p_id_terminal, p_ip_origen,
+                        p_id_tarjeta, p_num_cuenta, p_id_canal);
+                SET p_estado = 'AUTORIZADA', p_codigo = '00';
+            END;
+            CALL core.registrar_evento('CORE', 'autorizacion', BIN_TO_UUID(p_uuid), 'AUTORIZAR_OPERACION', p_actor,
+                                       NULL, JSON_OBJECT('id_tarjeta', BIN_TO_UUID(p_id_tarjeta),
+                                                         'num_cuenta', p_num_cuenta, 'estado', p_estado,
+                                                         'codigo_respuesta', p_codigo));
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- DECISIÓN (v1.5): el extorno por la API es el de una autorización sin movimiento: los
+--   triggers liberan el tope y el saldo retenido (RN-ATM-003). Si la operación ya se
+--   contabilizó, se revierte con su movimiento inverso, que no es de este procedimiento.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE tarjetas.extornar_autorizacion(
+    IN p_uuid BINARY(16), IN p_motivo VARCHAR(255), IN p_actor VARCHAR(40), OUT p_estado VARCHAR(25))
+    COMMENT 'Extorna una autorización que aún no tiene movimiento.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_anterior VARCHAR(25);
+    DECLARE v_trx BINARY(16);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT estado_autorizacion, uuid_transaccion INTO v_anterior, v_trx
+          FROM tarjetas.autorizacion WHERE uuid_autorizacion = p_uuid FOR UPDATE;
+        IF v_anterior IS NULL THEN
+            CALL core.fallar('BNA-AUTORIZACION: la autorización no existe');
+        END IF;
+        IF v_anterior <> 'EXTORNADA' THEN
+            IF v_anterior = 'RECHAZADA' THEN
+                CALL core.fallar('BNA-EXTORNO: una autorización rechazada no se extorna');
+            END IF;
+            IF v_trx IS NOT NULL THEN
+                CALL core.fallar('BNA-EXTORNO: la operación ya tiene su movimiento');
+            END IF;
+            UPDATE tarjetas.autorizacion SET estado_autorizacion = 'EXTORNADA', codigo_respuesta = 'EXT'
+             WHERE uuid_autorizacion = p_uuid;
+            CALL core.registrar_evento('CORE', 'autorizacion', BIN_TO_UUID(p_uuid), 'EXTORNAR_AUTORIZACION', p_actor,
+                                       NULL, JSON_OBJECT('estado_anterior', v_anterior, 'motivo', p_motivo));
+        END IF;
+        SET p_estado = 'EXTORNADA';
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Credenciales de tarjeta (v1.5): PIN_ATM y CLAVE_WEB. La matriz de coordenadas queda
+-- para cuando haya un procedimiento que la emita.
+-- DECISIÓN (v1.5): el hash es SHA2(CONCAT(sal, valor), 256), con una sal aleatoria de 16
+--   bytes por credencial, y se calcula aquí para que la API no lea la tabla. Un PIN de 4
+--   dígitos se descubre por fuerza bruta desde su hash: lo protege que solo bna_owner
+--   lea tarjetas.credencial y el bloqueo al tercer intento (RN-TAR-004).
+-- DECISIÓN (v1.5): el valor llega como parámetro; no se registra en la bitácora ni en
+--   el mensaje de ningún error.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE tarjetas.formato_credencial(IN p_tipo VARCHAR(15), IN p_valor VARCHAR(64))
+    COMMENT 'Interno. Rechaza un tipo de credencial no admitido o un valor de otra longitud (RN-TAR-001).'
+BEGIN
+    DECLARE v_longitud SMALLINT;
+    IF p_tipo NOT IN ('PIN_ATM', 'CLAVE_WEB') THEN
+        CALL core.fallar(CONCAT('BNA-CREDENCIAL: tipo de credencial no admitido ', coalesce(p_tipo, '(nulo)')));
+    END IF;
+    SELECT longitud INTO v_longitud FROM tarjetas.tipo_credencial WHERE tipo_credencial = p_tipo;
+    IF NOT coalesce(REGEXP_LIKE(p_valor, CONCAT('^[0-9]{', v_longitud, '}$')), FALSE) THEN
+        CALL core.fallar(CONCAT('BNA-CREDENCIAL: ', p_tipo, ' debe tener ', v_longitud, ' dígitos'));
+    END IF;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE tarjetas.registrar_credencial(
+    IN p_id_tarjeta BINARY(16), IN p_tipo VARCHAR(15), IN p_valor VARCHAR(64), IN p_actor VARCHAR(40))
+    COMMENT 'Asigna o cambia el PIN o la clave web de una tarjeta y reinicia sus intentos.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(25);
+    DECLARE v_sal CHAR(32);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL tarjetas.formato_credencial(p_tipo, p_valor);
+        SELECT estado_tarjeta INTO v_estado FROM tarjetas.tarjeta WHERE id_tarjeta = p_id_tarjeta FOR UPDATE;
+        IF v_estado IS NULL THEN
+            CALL core.fallar('BNA-TARJETA: la tarjeta no existe');
+        END IF;
+        IF v_estado IN ('CANCELADA', 'VENCIDA') THEN
+            CALL core.fallar(CONCAT('BNA-TARJETA: la tarjeta está ', v_estado));
+        END IF;
+        SET v_sal = HEX(RANDOM_BYTES(16));
+        INSERT INTO tarjetas.credencial (id_tarjeta, tipo_credencial, hash_credencial, sal)
+        VALUES (p_id_tarjeta, p_tipo, SHA2(CONCAT(v_sal, p_valor), 256), v_sal) AS nueva
+        ON DUPLICATE KEY UPDATE hash_credencial = nueva.hash_credencial, sal = nueva.sal, intentos_fallidos = 0,
+                                fecha_ultimo_cambio = UTC_TIMESTAMP(6);
+        CALL core.registrar_evento('CORE', 'credencial', BIN_TO_UUID(p_id_tarjeta), 'REGISTRAR_CREDENCIAL', p_actor,
+                                   NULL, JSON_OBJECT('tipo_credencial', p_tipo));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Un valor equivocado no es un error: queda el intento FALLIDO y tg_intento_contar
+-- bloquea la tarjeta al tercero (RN-TAR-004). Una tarjeta no operativa se rechaza
+-- sin registrar el intento.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE tarjetas.validar_credencial(
+    IN p_id_tarjeta BINARY(16), IN p_tipo VARCHAR(15), IN p_valor VARCHAR(64), IN p_id_canal VARCHAR(5),
+    IN p_id_terminal VARCHAR(30), IN p_ip_origen VARCHAR(45), IN p_correlacion BINARY(16), IN p_actor VARCHAR(40),
+    OUT p_resultado VARCHAR(25), OUT p_intentos_restantes SMALLINT)
+    COMMENT 'Valida el PIN o la clave web de una tarjeta y registra el intento.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(25);
+    DECLARE v_hash CHAR(64);
+    DECLARE v_sal CHAR(32);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL tarjetas.formato_credencial(p_tipo, p_valor);
+        SELECT estado_tarjeta INTO v_estado FROM tarjetas.tarjeta WHERE id_tarjeta = p_id_tarjeta FOR UPDATE;
+        IF v_estado IS NULL THEN
+            CALL core.fallar('BNA-TARJETA: la tarjeta no existe');
+        END IF;
+        IF NOT (SELECT es_operativa FROM tarjetas.estado_tarjeta WHERE cod_estado = v_estado) THEN
+            CALL core.fallar(CONCAT('ERR-TAR-003: la tarjeta no es operativa (estado ', v_estado, ')'));
+        END IF;
+        SELECT hash_credencial, sal INTO v_hash, v_sal FROM tarjetas.credencial
+         WHERE id_tarjeta = p_id_tarjeta AND tipo_credencial = p_tipo FOR UPDATE;
+        IF v_hash IS NULL THEN
+            CALL core.fallar(CONCAT('BNA-CREDENCIAL: la tarjeta no tiene ', p_tipo));
+        END IF;
+        SET p_resultado = IF(SHA2(CONCAT(v_sal, p_valor), 256) = v_hash, 'EXITOSO', 'FALLIDO');
+        INSERT INTO tarjetas.intento_autenticacion (tipo_credencial, id_terminal, ip_origen, resultado, motivo_rechazo,
+                                                    uuid_correlacion, id_tarjeta, id_canal)
+        VALUES (p_tipo, p_id_terminal, p_ip_origen, p_resultado,
+                IF(p_resultado = 'FALLIDO', 'Credencial incorrecta', NULL), p_correlacion, p_id_tarjeta, p_id_canal);
+        SELECT 3 - intentos_fallidos INTO p_intentos_restantes FROM tarjetas.credencial
+         WHERE id_tarjeta = p_id_tarjeta AND tipo_credencial = p_tipo;
+        CALL core.registrar_evento('CORE', 'credencial', BIN_TO_UUID(p_id_tarjeta), 'VALIDAR_CREDENCIAL', p_actor,
+                                   p_correlacion, JSON_OBJECT('tipo_credencial', p_tipo, 'resultado', p_resultado,
+                                                              'intentos_restantes', p_intentos_restantes));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
 DELIMITER ;
 
 -- ---------------------------------------------------------------------
@@ -724,6 +1005,12 @@ SELECT t.id_tarjeta, t.bin, t.ultimos4, t.fecha_emision, t.fecha_vencimiento, t.
        tc.num_cuenta
   FROM tarjetas.tarjeta t
   LEFT JOIN tarjetas.tarjeta_cuenta tc ON tc.id_tarjeta = t.id_tarjeta AND tc.es_principal = 1;
+
+-- La autorización sin la IP de origen ni el nivel de riesgo (v1.5).
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW tarjetas.v_autorizacion_api AS
+SELECT uuid_autorizacion, id_tarjeta, num_cuenta, id_canal, id_terminal, tipo_operacion, monto, estado_autorizacion,
+       codigo_respuesta, motivo_rechazo, uuid_transaccion, fecha_hora, fecha_actualizacion
+  FROM tarjetas.autorizacion;
 
 CREATE ROLE IF NOT EXISTS bna_api, bna_seguridad;
 GRANT EXECUTE ON PROCEDURE tarjetas.desbloquear_tarjeta TO bna_seguridad;
@@ -740,6 +1027,7 @@ GRANT SELECT ON core.periodo_contable TO bna_api;
 GRANT SELECT ON cuentas.cuenta_ahorro TO bna_api;
 GRANT SELECT ON cuentas.idempotencia_movimiento TO bna_api;
 GRANT SELECT ON tarjetas.v_tarjeta_api TO bna_api;
+GRANT SELECT ON tarjetas.v_autorizacion_api TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.verificar_configuracion TO bna_api;
 GRANT EXECUTE ON FUNCTION core.fn_fecha_negocio TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.crear_usuario TO bna_api, bna_app, bna_admin;
@@ -750,6 +1038,10 @@ GRANT EXECUTE ON PROCEDURE cuentas.registrar_transferencia TO bna_api, bna_app, 
 GRANT EXECUTE ON PROCEDURE cuentas.abrir_cuenta TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.emitir_tarjeta TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.cambiar_estado_tarjeta TO bna_api, bna_app, bna_admin;
+GRANT EXECUTE ON PROCEDURE tarjetas.autorizar_operacion TO bna_api, bna_app, bna_admin;
+GRANT EXECUTE ON PROCEDURE tarjetas.extornar_autorizacion TO bna_api, bna_app, bna_admin;
+GRANT EXECUTE ON PROCEDURE tarjetas.registrar_credencial TO bna_api, bna_app, bna_admin;
+GRANT EXECUTE ON PROCEDURE tarjetas.validar_credencial TO bna_api, bna_app, bna_admin;
 
 -- ---------------------------------------------------------------------
 -- 10. Usuarios de servicio y clientes (v1.1)
