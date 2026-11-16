@@ -1,17 +1,17 @@
 """Créditos, área de desembolso (CONTRATO_CREDITOS.md §4) contra la base real."""
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from creditos_apoyo import BASE, calendario, empleado, expediente, sesion_servicio, usuario_con_empleado
+from creditos_apoyo import (
+    BASE, DOCUMENTO_C002, aprobada, empleado, expediente, hoy_lima, orden_validada, preparar, saldo,
+    sesion_servicio, usuario_con_empleado, verificar_documento,
+)
 from fastapi.testclient import TestClient
 
 from COREDB.main import app
-
-DOCUMENTO_C001 = "70000001"
-DOCUMENTO_C002 = "70000002"
 
 
 @pytest.fixture
@@ -49,61 +49,6 @@ def operador(autorizacion, datos_base):
     login = api.post("/coredb/auth/login", json={"username": username, "password": password})
     assert login.status_code == 200, login.text
     return {"Authorization": f"Bearer {login.json()['access_token']}"}, username
-
-
-def aprobada(api, servicio, analista, cod_cliente="C001", monto="15000.00", plazo=12, inicio=None):
-    """Una solicitud aprobada por la regla (R-A): (idSolicitud, idEvaluacion)."""
-    cuerpo = expediente(monto=monto, plazo=plazo, cod_cliente=cod_cliente)
-    if inicio is not None:
-        cuerpo["calendario"] = calendario(monto, plazo, inicio=inicio)
-    registrada = api.post(f"{BASE}/solicitudes", json=cuerpo, headers=servicio[0])
-    assert registrada.status_code == 201, registrada.text
-    evaluada = api.post(f"{BASE}/solicitudes/{cuerpo['idSolicitud']}/evaluaciones", headers=analista, json={
-        "versionSolicitud": 1, "ingresoMensual": "50000.00", "deudaMensual": "0.00", "riesgo": "BUENO",
-        "verificada": True})
-    assert evaluada.status_code == 200, evaluada.text
-    assert evaluada.json()["resultado"] == "APROBADO"
-    return cuerpo["idSolicitud"], evaluada.json()["idEvaluacion"]
-
-
-def preparar(api, encabezados, id_evaluacion, num_cuenta, llave=None, **cambios):
-    cuerpo = {"idEvaluacion": id_evaluacion, "numCuenta": num_cuenta, **cambios}
-    return api.post(f"{BASE}/ordenes", json=cuerpo,
-                    headers={**encabezados, "X-Idempotency-Key": str(llave or uuid.uuid4())})
-
-
-def verificar_documento(api, encabezados, documento=DOCUMENTO_C001, verificada=True):
-    respuesta = api.post("/coredb/clientes/validaciones/documento", headers=encabezados, json={
-        "tipo_documento": "DNI", "numero_documento": documento, "identidad_verificada": verificada})
-    assert respuesta.status_code == 201, respuesta.text
-    return respuesta.json()
-
-
-def validar_identidad(api, encabezados, id_orden, documento=DOCUMENTO_C001):
-    verificacion = verificar_documento(api, encabezados, documento)
-    return api.post(f"{BASE}/ordenes/{id_orden}/validaciones", headers=encabezados, json={
-        "tipo": "IDENTIDAD", "resultado": "APROBADA", "referenciaEvidencia": str(verificacion["id_validacion"])})
-
-
-def orden_validada(api, servicio, analista, operador, abrir_cuenta, **datos):
-    id_solicitud, id_evaluacion = aprobada(api, servicio, analista, **datos)
-    num_cuenta = abrir_cuenta()
-    orden = preparar(api, operador[0], id_evaluacion, num_cuenta)
-    assert orden.status_code == 201, orden.text
-    validada = validar_identidad(api, operador[0], orden.json()["idOrden"])
-    assert validada.status_code == 201, validada.text
-    assert validada.json()["estado"] == "VALIDADA"
-    return id_solicitud, orden.json(), num_cuenta
-
-
-def saldo(api, autorizacion, num_cuenta):
-    respuesta = api.get(f"/coredb/cuentas/{num_cuenta}", headers=autorizacion)
-    assert respuesta.status_code == 200, respuesta.text
-    return Decimal(respuesta.json()["saldo_disponible"])
-
-
-def hoy_lima():
-    return (datetime.now(timezone.utc) - timedelta(hours=5)).date()
 
 
 # ── Preparación ─────────────────────────────────────────────────────────────

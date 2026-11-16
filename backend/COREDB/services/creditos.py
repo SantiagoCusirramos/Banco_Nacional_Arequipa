@@ -48,6 +48,22 @@ REGLAS: dict[str, tuple[str, int, str | None]] = {
     "BNA-VALIDACION": ("VALIDACION_NO_ADMITIDA", 422, None),
     "BNA-CANAL": ("CANAL_NO_ADMITIDO", 422, "El canal no admite el desembolso."),
     "BNA-NUMERACION": ("NUMERACION_AGOTADA", 422, None),
+    # Cobranza. Sus mensajes no llevan valores, salvo el de la cuenta de origen.
+    "BNA-CREDITO": ("CREDITO_NO_ADMITIDO", 422, None),
+    "BNA-PAGO": ("PAGO_NO_ADMITIDO", 422, None),
+    "BNA-CUENTA-ORIGEN": ("CUENTA_NO_ELEGIBLE", 422, "La cuenta debe ser del titular del crédito y estar en su moneda."),
+    "BNA-MORA": ("MORA_NO_ADMITIDA", 422, None),
+    "BNA-CUOTA": ("CUOTA_NO_ADMITIDA", 422, None),
+}
+
+# Un pago RECHAZADO guarda la regla que rechazó el débito (creditos.registrar_pago_cuota); la
+# API la publica con un nombre del contrato.
+MOTIVOS_RECHAZO = {
+    "BNA-SALDO": "SALDO_INSUFICIENTE",
+    "BNA-ESTADO-CUENTA": "CUENTA_NO_OPERATIVA",
+    "RN-TOP-001": "TOPE_DIARIO_SUPERADO",
+    "RN-BD-002": "CANAL_NO_ADMITIDO",
+    "BNA-CANAL": "CANAL_NO_ADMITIDO",
 }
 
 
@@ -57,9 +73,12 @@ def _mensaje_de_la_base(mensaje: str) -> str:
 
 
 def traducir(exc: ErrorCoreDb) -> ErrorCoreDb:
-    # En esta área, solo registrar_analista puede dar un duplicado.
-    if exc.code == "REGISTRO_DUPLICADO" and getattr(exc, "restriccion", None) in {"PRIMARY", "uk_analista_1"}:
+    restriccion = getattr(exc, "restriccion", None)
+    if exc.code == "REGISTRO_DUPLICADO" and restriccion in {"PRIMARY", "uk_analista_1"}:
         return ErrorCoreDb("ANALISTA_DUPLICADO", "El empleado ya es analista de crédito.", 409)
+    # Dos pagos simultáneos con la misma referencia en créditos distintos.
+    if exc.code == "REGISTRO_DUPLICADO" and restriccion == "uk_pago_1":
+        return ErrorCoreDb("IDEMPOTENCIA_CONFLICTO", "La referencia ya se usó con otros datos.", 409)
     if exc.code in REGLAS:
         codigo, estado, fijo = REGLAS[exc.code]
         return ErrorCoreDb(codigo, fijo or _mensaje_de_la_base(exc.message), estado)
@@ -466,5 +485,208 @@ def conciliacion_desembolsos(db: Session, fecha: date | None) -> list[dict[str, 
     filas = db.execute(text(
         "SELECT fecha, moneda, ordenes_confirmadas, importe_ordenes, importe_abonado, ordenes_sin_abono "
         f"FROM creditos.v_conciliacion_diaria{donde} ORDER BY fecha DESC, moneda LIMIT 366"
+    ), parametros).all()
+    return [dict(f._mapping) for f in filas]
+
+
+# ── Cobranza (CONTRATO_CREDITOS.md §5) ──────────────────────────────────────
+
+_CENTIMO = Decimal("0.01")
+
+
+def motivo_de_rechazo(regla: str | None) -> str | None:
+    if regla is None:
+        return None
+    return MOTIVOS_RECHAZO.get(regla, "DEBITO_RECHAZADO")
+
+
+def credito_no_encontrado() -> ErrorCoreDb:
+    return ErrorCoreDb("CREDITO_NO_ENCONTRADO", "El crédito no existe.", 404)
+
+
+def _exigir_credito(db: Session, cod_credito: str) -> None:
+    if db.execute(text("SELECT 1 FROM creditos.v_credito_api WHERE cod_credito = :c"),
+                  {"c": cod_credito}).first() is None:
+        raise credito_no_encontrado()
+
+
+def huella_pago(cod_credito: str, datos) -> str:
+    """SHA-256 del pago: la misma referencia con otro contenido, o en otro crédito, es un conflicto."""
+    canonico = {"cod_credito": cod_credito, "num_cuenta": datos.num_cuenta, "monto": f"{datos.monto:.2f}",
+                "referencia": datos.referencia, "canal": datos.canal}
+    return hashlib.sha256(json.dumps(canonico, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+_CREDITO = (
+    "SELECT cod_credito, estado_credito AS estado, cod_cliente, BIN_TO_UUID(id_solicitud) AS id_solicitud, "
+    "BIN_TO_UUID(id_orden) AS id_orden, codigo_orden, moneda, monto_desembolsado, fecha_desembolso, numero_cuotas, "
+    "cuotas_pagadas, cuotas_vencidas, saldo_pendiente, proximo_vencimiento, mora_vigente FROM creditos.v_credito_api"
+)
+
+
+def _credito(fila) -> dict[str, Any]:
+    datos = dict(fila._mapping)
+    datos["fecha_desembolso"] = _utc(datos["fecha_desembolso"])
+    for campo in ("numero_cuotas", "cuotas_pagadas", "cuotas_vencidas"):
+        datos[campo] = int(datos[campo] or 0)
+    return datos
+
+
+def listar_creditos(db: Session, *, estado: str | None, cod_cliente: str | None, limite: int,
+                    offset: int) -> list[dict[str, Any]]:
+    filtros, parametros = [], {"limite": limite, "offset": offset}
+    if estado is not None:
+        filtros.append("estado_credito = :estado")
+        parametros["estado"] = estado
+    if cod_cliente is not None:
+        filtros.append("cod_cliente = :cliente")
+        parametros["cliente"] = cod_cliente
+    donde = f" WHERE {' AND '.join(filtros)}" if filtros else ""
+    filas = db.execute(
+        text(f"{_CREDITO}{donde} ORDER BY cod_credito DESC LIMIT :limite OFFSET :offset"), parametros
+    ).all()
+    return [_credito(f) for f in filas]
+
+
+def _resumen_credito(db: Session, cod_credito: str) -> dict[str, Any]:
+    fila = db.execute(text(f"{_CREDITO} WHERE cod_credito = :c"), {"c": cod_credito}).first()
+    if fila is None:
+        raise credito_no_encontrado()
+    return _credito(fila)
+
+
+def detalle_credito(db: Session, cod_credito: str) -> dict[str, Any]:
+    datos = _resumen_credito(db, cod_credito)
+    datos["cuotas"] = [
+        {**dict(c._mapping), "dias_atraso": int(c.dias_atraso)}
+        for c in db.execute(text(
+            "SELECT numero_cuota, fecha_vencimiento, capital, interes, otros_conceptos, cuota_total, saldo_pendiente, "
+            "estado_cuota AS estado, dias_atraso, mora_vigente FROM creditos.v_cuota_api WHERE cod_credito = :c "
+            "ORDER BY numero_cuota"
+        ), {"c": cod_credito}).all()
+    ]
+    # Los del crédito y los de sus cuotas («CRE-…:n»); los de cada pago están en el pago.
+    datos["eventos"] = [
+        {**dict(e._mapping), "fecha_hora": _utc(e.fecha_hora),
+         "detalle": None if e.detalle is None else json.loads(e.detalle, parse_float=Decimal)}
+        for e in db.execute(text(
+            "SELECT accion, resultado, numero_cuota, actor, BIN_TO_UUID(correlation_id) AS correlation_id, detalle, "
+            "fecha_hora FROM creditos.v_evento_credito_api WHERE id_entidad = :c OR id_entidad LIKE :cuotas "
+            "ORDER BY fecha_hora, id_evento"
+        ), {"c": cod_credito, "cuotas": f"{cod_credito}:%"}).all()
+    ]
+    return datos
+
+
+_PAGO = (
+    "SELECT BIN_TO_UUID(id_pago) AS id_pago, referencia, cod_credito, fecha_hora AS fecha, monto_pago AS monto, "
+    "estado_confirmacion AS estado, motivo_rechazo, id_canal AS canal, num_cuenta, "
+    "BIN_TO_UUID(uuid_transaccion) AS uuid_transaccion, monto_aplicado, aplicaciones FROM creditos.v_pago_api"
+)
+
+
+def _pago(fila) -> dict[str, Any]:
+    datos = dict(fila._mapping)
+    datos["fecha"] = _utc(datos["fecha"])
+    datos["motivo"] = motivo_de_rechazo(datos.pop("motivo_rechazo"))
+    # JSON_OBJECT de MySQL escribe 80.00 como 80.0: se vuelve a llevar al céntimo.
+    aplicaciones = json.loads(datos["aplicaciones"], parse_float=Decimal) if datos["aplicaciones"] else []
+    datos["aplicaciones"] = sorted(
+        ({"numero_cuota": int(a["numero_cuota"]),
+          "monto_aplicado": Decimal(str(a["monto_aplicado"])).quantize(_CENTIMO)} for a in aplicaciones),
+        key=lambda a: a["numero_cuota"])
+    return datos
+
+
+def pago_por_referencia(db: Session, referencia: str) -> dict[str, Any]:
+    fila = db.execute(text(f"{_PAGO} WHERE referencia = :r"), {"r": referencia}).first()
+    if fila is None:
+        raise ErrorCoreDb("PAGO_NO_ENCONTRADO", "El pago no existe.", 404)
+    return _pago(fila)
+
+
+def pagos_del_credito(db: Session, cod_credito: str, *, limite: int, offset: int) -> list[dict[str, Any]]:
+    _exigir_credito(db, cod_credito)
+    filas = db.execute(text(
+        f"{_PAGO} WHERE cod_credito = :c ORDER BY fecha_hora DESC, id_pago LIMIT :limite OFFSET :offset"
+    ), {"c": cod_credito, "limite": limite, "offset": offset}).all()
+    return [_pago(f) for f in filas]
+
+
+def registrar_pago(db: Session, cod_credito: str, datos, *, correlation_id: uuid.UUID,
+                   actor: str) -> tuple[dict[str, Any], bool]:
+    huella = huella_pago(cod_credito, datos)
+
+    def operacion():
+        _exigir_credito(db, cod_credito)
+        return llamar(
+            db, "creditos.registrar_pago_cuota",
+            cod_credito, datos.num_cuenta, datos.monto, datos.referencia, datos.canal, huella, actor, correlation_id,
+            salidas=5,
+        )
+
+    *_, repetido = _escribir(db, operacion, "registrar_pago_cuota")
+    pago = pago_por_referencia(db, datos.referencia)
+    credito = _resumen_credito(db, cod_credito)
+    return {**pago, "estado_credito": credito["estado"], "saldo_pendiente": credito["saldo_pendiente"]}, bool(repetido)
+
+
+# ── Mora y vencimientos ─────────────────────────────────────────────────────
+
+_MORA = (
+    "SELECT BIN_TO_UUID(id_mora) AS id_mora, cod_credito, numero_cuota, monto_calculado, fecha_calculo, dias_atraso, "
+    "vigente FROM creditos.v_mora_api"
+)
+
+
+def _mora(fila) -> dict[str, Any]:
+    datos = dict(fila._mapping)
+    datos["fecha_calculo"] = _utc(datos["fecha_calculo"])
+    datos["dias_atraso"] = int(datos["dias_atraso"])
+    datos["vigente"] = bool(datos["vigente"])
+    return datos
+
+
+def registrar_mora(db: Session, cod_credito: str, numero_cuota: int, *, monto: Decimal, correlation_id: uuid.UUID,
+                   actor: str) -> dict[str, Any]:
+    def operacion():
+        _exigir_credito(db, cod_credito)
+        return llamar(db, "creditos.registrar_mora", cod_credito, numero_cuota, monto, actor, correlation_id,
+                      salidas=1)
+
+    (id_mora,) = _escribir(db, operacion, "registrar_mora")
+    return _mora(db.execute(text(f"{_MORA} WHERE id_mora = :id"), {"id": id_mora}).one())
+
+
+def historial_mora(db: Session, cod_credito: str, numero_cuota: int) -> list[dict[str, Any]]:
+    _exigir_credito(db, cod_credito)
+    filas = db.execute(text(
+        f"{_MORA} WHERE cod_credito = :c AND numero_cuota = :n ORDER BY fecha_calculo DESC, id_mora"
+    ), {"c": cod_credito, "n": numero_cuota}).all()
+    return [_mora(f) for f in filas]
+
+
+def fecha_de_negocio(db: Session) -> date:
+    """Hoy en Lima, según la base."""
+    return db.execute(text("SELECT core.fn_fecha_negocio(UTC_TIMESTAMP(6))")).scalar_one()
+
+
+def actualizar_vencimientos(db: Session, fecha: date | None, *, actor: str) -> dict[str, Any]:
+    hoy = fecha_de_negocio(db)
+    if fecha is not None and fecha > hoy:
+        # Una fecha futura vencería cuotas que todavía no vencen.
+        raise ErrorCoreDb("FECHA_NO_ADMITIDA", "La fecha no puede ser posterior a la fecha de negocio.")
+    fecha = fecha or hoy
+    cuotas, creditos_ = _escribir(
+        db, lambda: llamar(db, "creditos.actualizar_vencimientos", fecha, actor, salidas=2), "actualizar_vencimientos"
+    )
+    return {"fecha": fecha, "cuotas_vencidas": int(cuotas or 0), "creditos_actualizados": int(creditos_ or 0)}
+
+
+def conciliacion_pagos(db: Session, fecha: date | None) -> list[dict[str, Any]]:
+    donde, parametros = ("", {}) if fecha is None else (" WHERE fecha = :fecha", {"fecha": fecha})
+    filas = db.execute(text(
+        "SELECT fecha, id_canal AS canal, moneda, pagos_confirmados, importe_cobrado, importe_aplicado, "
+        f"pagos_rechazados FROM creditos.v_conciliacion_cobranza{donde} ORDER BY fecha DESC, canal, moneda LIMIT 1000"
     ), parametros).all()
     return [dict(f._mapping) for f in filas]

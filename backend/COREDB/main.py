@@ -13,8 +13,8 @@ from COREDB import tokens
 from COREDB.database import verificar_configuracion
 from COREDB.errores import registrar_manejadores
 from COREDB.routers import (
-    auditoria, auth, autorizaciones, catalogos, clientes, creditos_desembolso, creditos_evaluacion, cuentas,
-    movimientos, salud, tarjetas, usuarios,
+    auditoria, auth, autorizaciones, catalogos, clientes, creditos_cobranza, creditos_desembolso,
+    creditos_evaluacion, cuentas, movimientos, salud, tarjetas, usuarios,
 )
 
 
@@ -45,5 +45,7 @@ app.include_router(tarjetas.router)
 app.include_router(autorizaciones.router)
 app.include_router(creditos_evaluacion.router)
 app.include_router(creditos_desembolso.router)
+# Después de evaluación y desembolso: sus rutas fijas van antes que /coredb/creditos/{cod_credito}.
+app.include_router(creditos_cobranza.router)
 app.include_router(catalogos.router)
 app.include_router(auditoria.router)

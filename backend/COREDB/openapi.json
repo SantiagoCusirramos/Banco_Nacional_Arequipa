@@ -83,6 +83,24 @@
         "title": "AnalistaRegistrar",
         "type": "object"
       },
+      "AplicacionPago": {
+        "properties": {
+          "montoAplicado": {
+            "title": "Montoaplicado",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "title": "Numerocuota",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "numeroCuota",
+          "montoAplicado"
+        ],
+        "title": "AplicacionPago",
+        "type": "object"
+      },
       "AprobacionRespuesta": {
         "properties": {
           "codCliente": {
@@ -924,6 +942,50 @@
         "title": "ConciliacionDesembolso",
         "type": "object"
       },
+      "ConciliacionPagos": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "importeAplicado": {
+            "title": "Importeaplicado",
+            "type": "string"
+          },
+          "importeCobrado": {
+            "title": "Importecobrado",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "pagosConfirmados": {
+            "title": "Pagosconfirmados",
+            "type": "integer"
+          },
+          "pagosRechazados": {
+            "title": "Pagosrechazados",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fecha",
+          "canal",
+          "moneda",
+          "pagosConfirmados",
+          "importeCobrado",
+          "importeAplicado",
+          "pagosRechazados"
+        ],
+        "title": "ConciliacionPagos",
+        "type": "object"
+      },
       "CredencialRegistrar": {
         "additionalProperties": false,
         "properties": {
@@ -1014,6 +1076,214 @@
           "valor"
         ],
         "title": "CredencialValidar",
+        "type": "object"
+      },
+      "CreditoDetalle": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "cuotas": {
+            "items": {
+              "$ref": "#/components/schemas/CuotaCreditoRespuesta"
+            },
+            "title": "Cuotas",
+            "type": "array"
+          },
+          "cuotasPagadas": {
+            "title": "Cuotaspagadas",
+            "type": "integer"
+          },
+          "cuotasVencidas": {
+            "title": "Cuotasvencidas",
+            "type": "integer"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "eventos": {
+            "items": {
+              "$ref": "#/components/schemas/EventoCreditoRespuesta"
+            },
+            "title": "Eventos",
+            "type": "array"
+          },
+          "fechaDesembolso": {
+            "format": "date-time",
+            "title": "Fechadesembolso",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoDesembolsado": {
+            "title": "Montodesembolsado",
+            "type": "string"
+          },
+          "moraVigente": {
+            "description": "Suma del último cálculo de mora de las cuotas con saldo. No se cobra.",
+            "title": "Moravigente",
+            "type": "string"
+          },
+          "numeroCuotas": {
+            "title": "Numerocuotas",
+            "type": "integer"
+          },
+          "proximoVencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La cuota más antigua con saldo; nulo si no queda deuda.",
+            "title": "Proximovencimiento"
+          },
+          "saldoPendiente": {
+            "title": "Saldopendiente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codCredito",
+          "estado",
+          "codCliente",
+          "idSolicitud",
+          "idOrden",
+          "codigoOrden",
+          "moneda",
+          "montoDesembolsado",
+          "fechaDesembolso",
+          "numeroCuotas",
+          "cuotasPagadas",
+          "cuotasVencidas",
+          "saldoPendiente",
+          "proximoVencimiento",
+          "moraVigente",
+          "cuotas",
+          "eventos"
+        ],
+        "title": "CreditoDetalle",
+        "type": "object"
+      },
+      "CreditoRespuesta": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "codigoOrden": {
+            "title": "Codigoorden",
+            "type": "string"
+          },
+          "cuotasPagadas": {
+            "title": "Cuotaspagadas",
+            "type": "integer"
+          },
+          "cuotasVencidas": {
+            "title": "Cuotasvencidas",
+            "type": "integer"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaDesembolso": {
+            "format": "date-time",
+            "title": "Fechadesembolso",
+            "type": "string"
+          },
+          "idOrden": {
+            "format": "uuid",
+            "title": "Idorden",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoDesembolsado": {
+            "title": "Montodesembolsado",
+            "type": "string"
+          },
+          "moraVigente": {
+            "description": "Suma del último cálculo de mora de las cuotas con saldo. No se cobra.",
+            "title": "Moravigente",
+            "type": "string"
+          },
+          "numeroCuotas": {
+            "title": "Numerocuotas",
+            "type": "integer"
+          },
+          "proximoVencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La cuota más antigua con saldo; nulo si no queda deuda.",
+            "title": "Proximovencimiento"
+          },
+          "saldoPendiente": {
+            "title": "Saldopendiente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codCredito",
+          "estado",
+          "codCliente",
+          "idSolicitud",
+          "idOrden",
+          "codigoOrden",
+          "moneda",
+          "montoDesembolsado",
+          "fechaDesembolso",
+          "numeroCuotas",
+          "cuotasPagadas",
+          "cuotasVencidas",
+          "saldoPendiente",
+          "proximoVencimiento",
+          "moraVigente"
+        ],
+        "title": "CreditoRespuesta",
         "type": "object"
       },
       "CuentaAbrir": {
@@ -1150,6 +1420,65 @@
           "titulares"
         ],
         "title": "CuentaRespuesta",
+        "type": "object"
+      },
+      "CuotaCreditoRespuesta": {
+        "properties": {
+          "capital": {
+            "title": "Capital",
+            "type": "string"
+          },
+          "cuotaTotal": {
+            "title": "Cuotatotal",
+            "type": "string"
+          },
+          "diasAtraso": {
+            "title": "Diasatraso",
+            "type": "integer"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaVencimiento": {
+            "format": "date",
+            "title": "Fechavencimiento",
+            "type": "string"
+          },
+          "interes": {
+            "title": "Interes",
+            "type": "string"
+          },
+          "moraVigente": {
+            "title": "Moravigente",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "title": "Numerocuota",
+            "type": "integer"
+          },
+          "otrosConceptos": {
+            "title": "Otrosconceptos",
+            "type": "string"
+          },
+          "saldoPendiente": {
+            "title": "Saldopendiente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "numeroCuota",
+          "fechaVencimiento",
+          "capital",
+          "interes",
+          "otrosConceptos",
+          "cuotaTotal",
+          "saldoPendiente",
+          "estado",
+          "diasAtraso",
+          "moraVigente"
+        ],
+        "title": "CuotaCreditoRespuesta",
         "type": "object"
       },
       "CuotaExpediente": {
@@ -1656,6 +1985,79 @@
         "title": "EvaluacionRespuesta",
         "type": "object"
       },
+      "EventoCreditoRespuesta": {
+        "properties": {
+          "accion": {
+            "title": "Accion",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlationid"
+          },
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "fechaHora": {
+            "format": "date-time",
+            "title": "Fechahora",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerocuota"
+          },
+          "resultado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado"
+          }
+        },
+        "required": [
+          "accion",
+          "resultado",
+          "numeroCuota",
+          "actor",
+          "correlationId",
+          "detalle",
+          "fechaHora"
+        ],
+        "title": "EventoCreditoRespuesta",
+        "type": "object"
+      },
       "EventoOrdenRespuesta": {
         "properties": {
           "accion": {
@@ -1978,6 +2380,75 @@
           "decimales"
         ],
         "title": "MonedaRespuesta",
+        "type": "object"
+      },
+      "MoraRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "montoCalculado": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Montocalculado"
+          }
+        },
+        "required": [
+          "montoCalculado"
+        ],
+        "title": "MoraRegistrar",
+        "type": "object"
+      },
+      "MoraRespuesta": {
+        "properties": {
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "diasAtraso": {
+            "description": "Días entre el vencimiento y la fecha del cálculo (Lima).",
+            "title": "Diasatraso",
+            "type": "integer"
+          },
+          "fechaCalculo": {
+            "format": "date-time",
+            "title": "Fechacalculo",
+            "type": "string"
+          },
+          "idMora": {
+            "format": "uuid",
+            "title": "Idmora",
+            "type": "string"
+          },
+          "montoCalculado": {
+            "title": "Montocalculado",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "title": "Numerocuota",
+            "type": "integer"
+          },
+          "vigente": {
+            "description": "Solo el último cálculo de la cuota está vigente.",
+            "title": "Vigente",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "idMora",
+          "codCredito",
+          "numeroCuota",
+          "montoCalculado",
+          "fechaCalculo",
+          "diasAtraso",
+          "vigente"
+        ],
+        "title": "MoraRespuesta",
         "type": "object"
       },
       "MovimientoDetalle": {
@@ -2520,6 +2991,270 @@
           "fechaActualizacion"
         ],
         "title": "OrdenRespuesta",
+        "type": "object"
+      },
+      "PagoRegistrado": {
+        "properties": {
+          "aplicaciones": {
+            "items": {
+              "$ref": "#/components/schemas/AplicacionPago"
+            },
+            "title": "Aplicaciones",
+            "type": "array"
+          },
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "estado": {
+            "enum": [
+              "CONFIRMADO",
+              "RECHAZADO",
+              "PENDIENTE"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "estadoCredito": {
+            "description": "Estado del crédito al responder.",
+            "title": "Estadocredito",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "idPago": {
+            "format": "uuid",
+            "title": "Idpago",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "montoAplicado": {
+            "title": "Montoaplicado",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Si el débito se rechazó: SALDO_INSUFICIENTE, CUENTA_NO_OPERATIVA, TOPE_DIARIO_SUPERADO o CANAL_NO_ADMITIDO.",
+            "title": "Motivo"
+          },
+          "numCuenta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numcuenta"
+          },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
+          "saldoPendiente": {
+            "description": "Deuda del crédito al responder.",
+            "title": "Saldopendiente",
+            "type": "string"
+          },
+          "uuidTransaccion": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El movimiento DEBITO_CUOTA; nulo si se rechazó.",
+            "title": "Uuidtransaccion"
+          }
+        },
+        "required": [
+          "idPago",
+          "codCredito",
+          "referencia",
+          "estado",
+          "motivo",
+          "monto",
+          "montoAplicado",
+          "numCuenta",
+          "canal",
+          "uuidTransaccion",
+          "fecha",
+          "aplicaciones",
+          "estadoCredito",
+          "saldoPendiente"
+        ],
+        "title": "PagoRegistrado",
+        "type": "object"
+      },
+      "PagoRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "default": "VEN",
+            "enum": [
+              "VEN",
+              "HB"
+            ],
+            "title": "Canal",
+            "type": "string"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "numCuenta": {
+            "description": "Cuenta de ahorros del titular, en la moneda del crédito.",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Numcuenta",
+            "type": "string"
+          },
+          "referencia": {
+            "description": "Llave del pago: la misma referencia con el mismo contenido devuelve el mismo pago.",
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Referencia",
+            "type": "string"
+          }
+        },
+        "required": [
+          "numCuenta",
+          "monto",
+          "referencia"
+        ],
+        "title": "PagoRegistrar",
+        "type": "object"
+      },
+      "PagoRespuesta": {
+        "properties": {
+          "aplicaciones": {
+            "items": {
+              "$ref": "#/components/schemas/AplicacionPago"
+            },
+            "title": "Aplicaciones",
+            "type": "array"
+          },
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "codCredito": {
+            "title": "Codcredito",
+            "type": "string"
+          },
+          "estado": {
+            "enum": [
+              "CONFIRMADO",
+              "RECHAZADO",
+              "PENDIENTE"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "idPago": {
+            "format": "uuid",
+            "title": "Idpago",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "montoAplicado": {
+            "title": "Montoaplicado",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Si el débito se rechazó: SALDO_INSUFICIENTE, CUENTA_NO_OPERATIVA, TOPE_DIARIO_SUPERADO o CANAL_NO_ADMITIDO.",
+            "title": "Motivo"
+          },
+          "numCuenta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numcuenta"
+          },
+          "referencia": {
+            "title": "Referencia",
+            "type": "string"
+          },
+          "uuidTransaccion": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El movimiento DEBITO_CUOTA; nulo si se rechazó.",
+            "title": "Uuidtransaccion"
+          }
+        },
+        "required": [
+          "idPago",
+          "codCredito",
+          "referencia",
+          "estado",
+          "motivo",
+          "monto",
+          "montoAplicado",
+          "numCuenta",
+          "canal",
+          "uuidTransaccion",
+          "fecha",
+          "aplicaciones"
+        ],
+        "title": "PagoRespuesta",
         "type": "object"
       },
       "PerfilRespuesta": {
@@ -3792,6 +4527,50 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VencimientosEjecutar": {
+        "additionalProperties": false,
+        "properties": {
+          "fecha": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Vence las cuotas anteriores a esta fecha; por omisión, hoy (Lima). No puede ser posterior a hoy.",
+            "title": "Fecha"
+          }
+        },
+        "title": "VencimientosEjecutar",
+        "type": "object"
+      },
+      "VencimientosResultado": {
+        "properties": {
+          "creditosActualizados": {
+            "title": "Creditosactualizados",
+            "type": "integer"
+          },
+          "cuotasVencidas": {
+            "title": "Cuotasvencidas",
+            "type": "integer"
+          },
+          "fecha": {
+            "format": "date",
+            "title": "Fecha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fecha",
+          "cuotasVencidas",
+          "creditosActualizados"
+        ],
+        "title": "VencimientosResultado",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -4793,6 +5572,117 @@
         ]
       }
     },
+    "/coredb/creditos": {
+      "get": {
+        "description": "Créditos desembolsados, del más reciente al más antiguo.",
+        "operationId": "listar_coredb_creditos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "AL_DIA",
+                    "EN_MORA",
+                    "CANCELADO"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CreditoRespuesta"
+                  },
+                  "title": "Response Listar Coredb Creditos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Listar",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
     "/coredb/creditos/analistas": {
       "post": {
         "description": "Registra a un empleado activo como analista de crédito. Para decidir, el usuario del\nanalista debe estar ligado a ese empleado (`id_empleado` de `POST /coredb/usuarios`).",
@@ -4989,6 +5879,72 @@
         "summary": "Conciliacion",
         "tags": [
           "créditos: desembolso"
+        ]
+      }
+    },
+    "/coredb/creditos/conciliacion/pagos": {
+      "get": {
+        "description": "Lo cobrado (movimientos DEBITO_CUOTA) frente a lo aplicado a cuotas, por día de\nnegocio (Lima), canal y moneda, con los pagos rechazados. Sin `fecha`, todos los días con\npagos.",
+        "operationId": "conciliacion_coredb_creditos_conciliacion_pagos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fecha",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fecha"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConciliacionPagos"
+                  },
+                  "title": "Response Conciliacion Coredb Creditos Conciliacion Pagos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Conciliacion",
+        "tags": [
+          "créditos: cobranza"
         ]
       }
     },
@@ -5638,6 +6594,65 @@
         ]
       }
     },
+    "/coredb/creditos/pagos/{referencia}": {
+      "get": {
+        "description": "El pago con esa referencia: su estado, el movimiento y el reparto entre cuotas.",
+        "operationId": "comprobante_coredb_creditos_pagos__referencia__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "referencia",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Referencia",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagoRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "PAGO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Comprobante",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
     "/coredb/creditos/solicitudes": {
       "get": {
         "description": "Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente.",
@@ -6028,6 +7043,447 @@
         "summary": "Revocar",
         "tags": [
           "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/vencimientos": {
+      "post": {
+        "description": "Marca VENCIDA cada cuota PENDIENTE o PARCIAL que venció antes de la fecha y deja cada\ncrédito no cancelado EN_MORA (con una cuota VENCIDA) o AL_DIA. La base lo corre también\nuna vez al día (00:10, Lima); repetirlo el mismo día no cambia nada. Es la tarea diaria de\n`svc-cobranza`.",
+        "operationId": "vencimientos_coredb_creditos_vencimientos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VencimientosEjecutar"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Datos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VencimientosResultado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "description": "FECHA_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Vencimientos",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/{cod_credito}": {
+      "get": {
+        "description": "El crédito con sus cuotas (saldo, días de atraso, mora vigente) y su bitácora.",
+        "operationId": "detalle_coredb_creditos__cod_credito__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditoDetalle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Detalle",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/{cod_credito}/cuotas/{numero_cuota}/mora": {
+      "get": {
+        "description": "Los cálculos de mora de la cuota, del más reciente al más antiguo.",
+        "operationId": "historial_mora_coredb_creditos__cod_credito__cuotas__numero_cuota__mora_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "numero_cuota",
+            "required": true,
+            "schema": {
+              "maximum": 600,
+              "minimum": 1,
+              "title": "Numero Cuota",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MoraRespuesta"
+                  },
+                  "title": "Response Historial Mora Coredb Creditos  Cod Credito  Cuotas  Numero Cuota  Mora Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Historial Mora",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      },
+      "post": {
+        "description": "Registra un cálculo de mora de una cuota vencida con saldo. Ninguna fuente define la\nfórmula: la calcula quien llama. Queda vigente el último cálculo; la mora se muestra en la\ndeuda, pero no se cobra (decisión 5 del contrato).",
+        "operationId": "registrar_mora_coredb_creditos__cod_credito__cuotas__numero_cuota__mora_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "numero_cuota",
+            "required": true,
+            "schema": {
+              "maximum": 600,
+              "minimum": 1,
+              "title": "Numero Cuota",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoraRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoraRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "description": "CUOTA_NO_ADMITIDA (no existe, no tiene saldo o aún no vence)"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Mora",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      }
+    },
+    "/coredb/creditos/{cod_credito}/pagos": {
+      "get": {
+        "description": "Los pagos del crédito, confirmados y rechazados, del más reciente al más antiguo.",
+        "operationId": "pagos_coredb_creditos__cod_credito__pagos_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PagoRespuesta"
+                  },
+                  "title": "Response Pagos Coredb Creditos  Cod Credito  Pagos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Pagos",
+        "tags": [
+          "créditos: cobranza"
+        ]
+      },
+      "post": {
+        "description": "Cobra un pago en una sola operación: debita la cuenta del titular (movimiento\nDEBITO_CUOTA) y lo aplica de la cuota más antigua a la más reciente. Si el débito se\nrechaza (saldo, cuenta no operativa, tope del canal), el pago queda RECHAZADO con su\n`motivo`, sin movimiento y sin tocar las cuotas, y responde 201. La misma referencia con\nel mismo contenido responde 200 con el mismo pago, sin debitar otra vez (también si fue\nRECHAZADO: otro intento lleva otra referencia); con otro contenido u otro crédito, 409. Un\nmonto mayor que la deuda total, una cuenta ajena o un crédito cancelado dan 422 sin\nregistrar nada.",
+        "operationId": "pagar_coredb_creditos__cod_credito__pagos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cod_credito",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Cod Credito",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagoRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "La misma referencia con el mismo contenido: el mismo pago"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagoRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
+          "422": {
+            "description": "PAGO_NO_ADMITIDO, CREDITO_NO_ADMITIDO o CUENTA_NO_ELEGIBLE"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Pagar",
+        "tags": [
+          "créditos: cobranza"
         ]
       }
     },
