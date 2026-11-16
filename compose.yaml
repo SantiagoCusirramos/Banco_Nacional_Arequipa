@@ -92,21 +92,23 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8012/coredb/salud", timeout=3)
 
-  # Crea el primer administrador si no hay ninguno, y termina.
+  # Crea el primer administrador si no hay ninguno y el usuario de servicio de
+  # Evaluación (svc-evaluacion) con el secreto de .env, y termina. Repetirlo no cambia nada.
   coredb-init:
     <<: *coredb
     command:
-      - python
-      - -m
-      - COREDB.scripts.crear_administrador
-      - --username
-      - ${BNA_ADMIN_USUARIO:-admin}
-      - --nombre
-      - Administrador inicial
-      - --si-falta
+      - sh
+      - -c
+      - >-
+        python -m COREDB.scripts.crear_administrador --username "$$BNA_ADMIN_USUARIO"
+        --nombre "Administrador inicial" --si-falta
+        && CORE_DB_SERVICIO_SECRETO="$$EVALUACION_COREDB_SECRETO"
+        python -m COREDB.scripts.crear_servicio --modulo EVALUACION --username svc-evaluacion --nombre Evaluación
     environment:
       <<: *coredb-entorno
+      BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
       CORE_DB_ADMIN_INICIAL_PASSWORD: ${BNA_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      EVALUACION_COREDB_SECRETO: ${EVALUACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
     depends_on:
       db:
         condition: service_healthy
@@ -186,26 +188,26 @@ services:
       db-aux:
         condition: service_healthy
 
-  # ── EVALUACIÓN: evaluación crediticia (Línea de Créditos) ───────────────
-  # Base propia en db-aux, como SOL. Recibe el expediente de SOL (CR-INT-02) y ofrece la
-  # aprobación a Desembolso (CR-INT-04). El personal entra con su token de COREDB, que valida
-  # COREDB. Mientras SOL siga en modo SIMULADO, EVALUACION_SOL_URL queda vacía y los
-  # resultados para SOL (CR-INT-03) esperan. Ver backend/EVALUACION/README.md.
+  # ── EVALUACIÓN: evaluación crediticia (Línea de Créditos), sobre COREDB ──
+  # Sin base propia: recibe el expediente de SOL (CR-INT-02) y lo registra en COREDB con su
+  # usuario de servicio (svc-evaluacion, que crea coredb-init); el analista entra con su
+  # token de COREDB, que Evaluación reenvía. Mientras SOL siga en modo SIMULADO,
+  # EVALUACION_SOL_URL queda vacía y CR-INT-03 no corre. Ver backend/EVALUACION/README.md.
   evaluacion:
     <<: *backend
     command: uvicorn EVALUACION.main:app --host 0.0.0.0 --port 8015
     environment:
-      EVALUACION_DATABASE_URL: mysql+pymysql://evaluacion_user:${EVALUACION_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}@db-aux:3306/bna_evaluacion?charset=utf8mb4
       COREDB_URL: http://coredb:8012
+      EVALUACION_COREDB_USUARIO: svc-evaluacion
+      EVALUACION_COREDB_SECRETO: ${EVALUACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       EVALUACION_TOKEN_SOL: ${EVALUACION_TOKEN_SOL:?Falta en .env. Ejecute ./bna up}
       EVALUACION_SOL_TOKEN_RESULTADOS: ${EVALUACION_SOL_TOKEN_RESULTADOS:?Falta en .env. Ejecute ./bna up}
       EVALUACION_SOL_URL: ${EVALUACION_SOL_URL:-}
-      EVALUACION_VIGENCIA_DIAS: ${EVALUACION_VIGENCIA_DIAS:-30}
     depends_on:
-      evaluacion-init:
-        condition: service_completed_successfully
       coredb:
         condition: service_healthy
+      coredb-init:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:${BNA_PUERTO_EVALUACION:-8015}:8015"
     healthcheck:
@@ -215,18 +217,6 @@ services:
         - python
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8015/salud", timeout=3)
-
-  # Crea la base de Evaluación en db-aux, con sus triggers y su usuario de permisos
-  # mínimos, y termina. Es idempotente: no borra datos.
-  evaluacion-init:
-    <<: *backend
-    command: python -m EVALUACION.scripts.preparar_base
-    environment:
-      AUX_DB_ROOT_PASSWORD: ${AUX_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
-      EVALUACION_DB_PASSWORD: ${EVALUACION_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
-    depends_on:
-      db-aux:
-        condition: service_healthy
 
   # ── Seguridad: prototipo sobre SQLite ───────────────────────────────────
   seguridad:

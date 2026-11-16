@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BNA · Evaluación Crediticia",
-    "description": "Módulo 12 de la Línea de Créditos. Recibe el expediente de Solicitud (CR-INT-02), registra la situación financiera, aplica la regla provisional RN-EVA-002-P, devuelve el resultado a Solicitud (CR-INT-03) y ofrece la aprobación vigente a Desembolso (CR-INT-04), con el calendario de SOL sin cambios. El personal entra con el token de COREDB; SOL, con su token de servicio; Desembolso, con su usuario de servicio de COREDB. Montos como texto decimal (\"500.00\").",
-    "version": "0.5.0"
+    "description": "Módulo 12 de la Línea de Créditos, sin base propia. Recibe el expediente de Solicitud (CR-INT-02) y lo registra en COREDB con su usuario de servicio; el analista consulta, registra la situación financiera (COREDB corre la regla RN-EVA-002-P) y decide los casos OBSERVADO con su propio token de COREDB, que Evaluación reenvía; el resultado final vuelve a Solicitud (CR-INT-03). Montos como texto decimal (\"500.00\").",
+    "version": "1.0.0"
   },
   "paths": {
     "/salud": {
@@ -11,7 +11,7 @@
         "tags": [
           "Estado"
         ],
-        "summary": "El proceso y su base responden",
+        "summary": "COREDB responde y el usuario de servicio inicia sesión",
         "operationId": "salud_salud_get",
         "responses": {
           "200": {
@@ -31,6 +31,7 @@
           "CR-INT-02 Solicitud a Evaluación"
         ],
         "summary": "Recibir el expediente de una versión de solicitud",
+        "description": "Registra la versión en COREDB y devuelve el acuse que SOL valida. COREDB reconoce la\nmisma versión con el mismo contenido (200, el mismo acuse), así que reenviar es seguro.",
         "operationId": "recibir_expediente_eva_applications_post",
         "security": [
           {
@@ -78,17 +79,10 @@
             "description": "Repetición: el mismo acuse"
           },
           "409": {
-            "description": "Operación reutilizada o versión ya recibida"
+            "description": "IDEMPOTENCIA_CONFLICTO: la misma versión con otro contenido"
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "EXPEDIENTE_INCONSISTENTE, CLIENTE_NO_HABILITADO, CALENDARIO_INVALIDO o SOLICITUD_NO_ADMITIDA"
           }
         }
       }
@@ -99,6 +93,7 @@
           "CR-INT-02 Solicitud a Evaluación"
         ],
         "summary": "Consultar la recepción de una operación",
+        "description": "Evaluación no guarda las operaciones de SOL: responde 404 y SOL reenvía el expediente, que\nCOREDB reconoce por su versión y contenido sin registrarlo dos veces (devuelve el mismo acuse).",
         "operationId": "consultar_operacion_eva_operations__id_operacion__get",
         "security": [
           {
@@ -126,7 +121,7 @@
             }
           },
           "404": {
-            "description": "No recibido: SOL puede enviarlo"
+            "description": "Sin registro de la operación: SOL puede enviarla"
           },
           "422": {
             "description": "Validation Error",
@@ -141,205 +136,13 @@
         }
       }
     },
-    "/eva/v1/aprobaciones": {
-      "get": {
-        "tags": [
-          "CR-INT-04 Evaluación a Desembolso"
-        ],
-        "summary": "Buscar aprobaciones por documento o crédito",
-        "operationId": "buscar_aprobaciones_eva_v1_aprobaciones_get",
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "numeroDocumento",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 20
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Numerodocumento"
-            }
-          },
-          {
-            "name": "codCredito",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 20
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Codcredito"
-            }
-          },
-          {
-            "name": "estado",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "VIGENTE",
-                    "VENCIDA",
-                    "DESEMBOLSADA",
-                    "REVOCADA"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Estado"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/eva/v1/aprobaciones/{id_aprobacion}": {
-      "get": {
-        "tags": [
-          "CR-INT-04 Evaluación a Desembolso"
-        ],
-        "summary": "Una aprobación, con el calendario de SOL",
-        "operationId": "obtener_aprobacion_eva_v1_aprobaciones__id_aprobacion__get",
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id_aprobacion",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Id Aprobacion"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/eva/v1/aprobaciones/{id_aprobacion}/desembolso": {
-      "post": {
-        "tags": [
-          "CR-INT-04 Evaluación a Desembolso"
-        ],
-        "summary": "Registrar que la aprobación se desembolsó (solo Desembolso)",
-        "operationId": "registrar_desembolso_eva_v1_aprobaciones__id_aprobacion__desembolso_post",
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id_aprobacion",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Id Aprobacion"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DesembolsoIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/eva/v1/evaluaciones": {
+    "/eva/v1/solicitudes": {
       "get": {
         "tags": [
           "Analista"
         ],
-        "summary": "Bandeja de evaluaciones",
-        "operationId": "listar_evaluaciones_eva_v1_evaluaciones_get",
+        "summary": "Bandeja de solicitudes de crédito",
+        "operationId": "bandeja_eva_v1_solicitudes_get",
         "security": [
           {
             "Bearer": []
@@ -354,11 +157,11 @@
               "anyOf": [
                 {
                   "enum": [
-                    "PENDIENTE",
-                    "EN_REVISION",
-                    "APROBADO",
-                    "OBSERVADO",
-                    "RECHAZADO"
+                    "REGISTRADA",
+                    "EN_EVALUACION",
+                    "APROBADA",
+                    "RECHAZADA",
+                    "DESEMBOLSADA"
                   ],
                   "type": "string"
                 },
@@ -370,20 +173,22 @@
             }
           },
           {
-            "name": "buscar",
+            "name": "codCliente",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
                   "type": "string",
-                  "maxLength": 80
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Buscar"
+              "title": "Codcliente"
             }
           },
           {
@@ -397,6 +202,17 @@
               "default": 50,
               "title": "Limite"
             }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
           }
         ],
         "responses": {
@@ -421,13 +237,13 @@
         }
       }
     },
-    "/eva/v1/evaluaciones/{id_evaluacion}": {
+    "/eva/v1/solicitudes/{id_solicitud}": {
       "get": {
         "tags": [
           "Analista"
         ],
-        "summary": "Expediente, evaluación e historial",
-        "operationId": "detalle_evaluacion_eva_v1_evaluaciones__id_evaluacion__get",
+        "summary": "Calendario, evaluaciones e historial",
+        "operationId": "detalle_eva_v1_solicitudes__id_solicitud__get",
         "security": [
           {
             "Bearer": []
@@ -435,12 +251,13 @@
         ],
         "parameters": [
           {
-            "name": "id_evaluacion",
+            "name": "id_solicitud",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Id Evaluacion"
+              "format": "uuid",
+              "title": "Id Solicitud"
             }
           }
         ],
@@ -466,13 +283,13 @@
         }
       }
     },
-    "/eva/v1/evaluaciones/{id_evaluacion}/situacion-financiera": {
+    "/eva/v1/solicitudes/{id_solicitud}/evaluaciones": {
       "post": {
         "tags": [
           "Analista"
         ],
         "summary": "Registrar la situación financiera y aplicar la regla",
-        "operationId": "registrar_situacion_eva_v1_evaluaciones__id_evaluacion__situacion_financiera_post",
+        "operationId": "evaluar_eva_v1_solicitudes__id_solicitud__evaluaciones_post",
         "security": [
           {
             "Bearer": []
@@ -480,12 +297,13 @@
         ],
         "parameters": [
           {
-            "name": "id_evaluacion",
+            "name": "id_solicitud",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Id Evaluacion"
+              "format": "uuid",
+              "title": "Id Solicitud"
             }
           }
         ],
@@ -526,7 +344,7 @@
         "tags": [
           "Analista"
         ],
-        "summary": "Decidir un caso EN_REVISION: aprobar, observar (SOL corrige) o rechazar",
+        "summary": "Decidir un resultado OBSERVADO: aprobar o rechazar",
         "operationId": "decidir_eva_v1_evaluaciones__id_evaluacion__decision_post",
         "security": [
           {
@@ -540,6 +358,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Id Evaluacion"
             }
           }
@@ -576,13 +395,13 @@
         }
       }
     },
-    "/eva/v1/aprobaciones/{id_aprobacion}/revocacion": {
+    "/eva/v1/solicitudes/{id_solicitud}/revocacion": {
       "post": {
         "tags": [
           "Analista"
         ],
-        "summary": "Revocar una aprobación vigente",
-        "operationId": "revocar_eva_v1_aprobaciones__id_aprobacion__revocacion_post",
+        "summary": "Revocar una aprobación sin desembolso",
+        "operationId": "revocar_eva_v1_solicitudes__id_solicitud__revocacion_post",
         "security": [
           {
             "Bearer": []
@@ -590,12 +409,13 @@
         ],
         "parameters": [
           {
-            "name": "id_aprobacion",
+            "name": "id_solicitud",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Id Aprobacion"
+              "format": "uuid",
+              "title": "Id Solicitud"
             }
           }
         ],
@@ -631,13 +451,13 @@
         }
       }
     },
-    "/eva/v1/envios": {
+    "/eva/v1/aprobaciones": {
       "get": {
         "tags": [
           "Analista"
         ],
-        "summary": "Resultados por entregar a Solicitud (CR-INT-03)",
-        "operationId": "listar_envios_eva_v1_envios_get",
+        "summary": "Aprobaciones vigentes sin desembolso",
+        "operationId": "aprobaciones_eva_v1_aprobaciones_get",
         "security": [
           {
             "Bearer": []
@@ -645,36 +465,39 @@
         ],
         "parameters": [
           {
-            "name": "estado",
+            "name": "codCliente",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "PENDIENTE",
-                    "ENTREGADO",
-                    "ERROR"
-                  ],
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Estado"
+              "title": "Codcliente"
             }
           },
           {
-            "name": "limite",
+            "name": "idSolicitud",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limite"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idsolicitud"
             }
           }
         ],
@@ -700,77 +523,13 @@
         }
       }
     },
-    "/eva/v1/envios/{id_operacion}/reintento": {
-      "post": {
-        "tags": [
-          "Analista"
-        ],
-        "summary": "Reintentar un envío en ERROR",
-        "operationId": "reintentar_envio_eva_v1_envios__id_operacion__reintento_post",
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id_operacion",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Id Operacion"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/eva/v1/historial": {
+    "/eva/v1/catalogo": {
       "get": {
         "tags": [
           "Analista"
         ],
-        "summary": "Últimos eventos del módulo",
-        "operationId": "historial_eva_v1_historial_get",
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limite",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 500,
-              "minimum": 1,
-              "default": 100,
-              "title": "Limite"
-            }
-          }
-        ],
+        "summary": "Estados, reglas y vigencia de la aprobación",
+        "operationId": "catalogo_eva_v1_catalogo_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -779,18 +538,37 @@
                 "schema": {}
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/eva/v1/resultados-sol": {
+      "get": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Resultados que se devuelven a Solicitud (CR-INT-03)",
+        "operationId": "resultados_sol_eva_v1_resultados_sol_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": {}
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
       }
     }
   },
@@ -798,12 +576,6 @@
     "schemas": {
       "CalendarioSol": {
         "properties": {
-          "estado": {
-            "type": "string",
-            "maxLength": 20,
-            "minLength": 1,
-            "title": "Estado"
-          },
           "cuotas": {
             "items": {
               "$ref": "#/components/schemas/CuotaSol"
@@ -812,30 +584,6 @@
             "maxItems": 600,
             "minItems": 1,
             "title": "Cuotas"
-          },
-          "cuota_referencial": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0.0
-              },
-              {
-                "type": "string"
-              }
-            ],
-            "title": "Cuota Referencial"
-          },
-          "intereses_totales": {
-            "anyOf": [
-              {
-                "type": "number",
-                "minimum": 0.0
-              },
-              {
-                "type": "string"
-              }
-            ],
-            "title": "Intereses Totales"
           },
           "total_pagar": {
             "anyOf": [
@@ -852,10 +600,7 @@
         },
         "type": "object",
         "required": [
-          "estado",
           "cuotas",
-          "cuota_referencial",
-          "intereses_totales",
           "total_pagar"
         ],
         "title": "CalendarioSol"
@@ -867,51 +612,11 @@
             "maxLength": 36,
             "minLength": 1,
             "title": "Id Cliente"
-          },
-          "cod_tipo_documento": {
-            "type": "string",
-            "maxLength": 10,
-            "minLength": 1,
-            "title": "Cod Tipo Documento",
-            "default": "DNI"
-          },
-          "numero_documento": {
-            "type": "string",
-            "maxLength": 20,
-            "minLength": 1,
-            "title": "Numero Documento"
-          },
-          "nombres": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Nombres"
-          },
-          "apellido_paterno": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Apellido Paterno"
-          },
-          "apellido_materno": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 100
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Apellido Materno"
           }
         },
         "type": "object",
         "required": [
-          "id_cliente",
-          "numero_documento",
-          "nombres",
-          "apellido_paterno"
+          "id_cliente"
         ],
         "title": "ClienteSol"
       },
@@ -953,7 +658,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 120
+                "maxLength": 255
               },
               {
                 "type": "null"
@@ -961,10 +666,10 @@
             ],
             "title": "Destino Credito"
           },
-          "fecha_base": {
-            "type": "string",
-            "format": "date",
-            "title": "Fecha Base"
+          "pago_doble": {
+            "type": "boolean",
+            "title": "Pago Doble",
+            "default": false
           }
         },
         "type": "object",
@@ -972,8 +677,7 @@
           "id_cliente",
           "monto_solicitado",
           "moneda",
-          "plazo_meses",
-          "fecha_base"
+          "plazo_meses"
         ],
         "title": "CondicionesSol"
       },
@@ -1068,62 +772,25 @@
             "type": "string",
             "enum": [
               "APROBADO",
-              "OBSERVADO",
               "RECHAZADO"
             ],
             "title": "Decision"
           },
-          "observaciones": {
+          "comentario": {
             "type": "string",
-            "maxLength": 1000,
+            "maxLength": 500,
             "minLength": 10,
-            "title": "Observaciones"
-          },
-          "version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Version"
+            "title": "Comentario"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "decision",
-          "observaciones",
-          "version"
+          "comentario"
         ],
         "title": "DecisionIn",
-        "description": "Decisión del analista sobre un caso EN_REVISION. OBSERVADO pide a SOL que corrija."
-      },
-      "DesembolsoIn": {
-        "properties": {
-          "version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Version"
-          },
-          "codigoOrden": {
-            "type": "string",
-            "maxLength": 30,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9._:-]+$",
-            "title": "Codigoorden"
-          },
-          "fechaDesembolso": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Fechadesembolso"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "version",
-          "codigoOrden",
-          "fechaDesembolso"
-        ],
-        "title": "DesembolsoIn",
-        "description": "CR-INT-04: Desembolso informa que la aprobación se usó en una orden confirmada."
+        "description": "Decisión del analista sobre un resultado OBSERVADO de la regla. Solo APROBADO o RECHAZADO:\npor omisión del equipo (T1), el analista no devuelve la solicitud a SOL."
       },
       "ExpedienteSol": {
         "properties": {
@@ -1164,18 +831,6 @@
       },
       "PoliticaSol": {
         "properties": {
-          "version": {
-            "type": "string",
-            "maxLength": 40,
-            "minLength": 1,
-            "title": "Version"
-          },
-          "producto_nombre": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Producto Nombre"
-          },
           "tea": {
             "anyOf": [
               {
@@ -1188,12 +843,17 @@
               }
             ],
             "title": "Tea"
+          },
+          "amortizacion": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Amortizacion",
+            "default": "FRANCES"
           }
         },
         "type": "object",
         "required": [
-          "version",
-          "producto_nombre",
           "tea"
         ],
         "title": "PoliticaSol"
@@ -1202,31 +862,31 @@
         "properties": {
           "motivo": {
             "type": "string",
-            "maxLength": 500,
+            "maxLength": 255,
             "minLength": 10,
             "title": "Motivo"
-          },
-          "version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Version"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "motivo",
-          "version"
+          "motivo"
         ],
         "title": "RevocacionIn"
       },
       "SituacionIn": {
         "properties": {
+          "versionSolicitud": {
+            "type": "integer",
+            "maximum": 32767.0,
+            "minimum": 1.0,
+            "title": "Versionsolicitud"
+          },
           "ingresoMensual": {
             "anyOf": [
               {
                 "type": "number",
-                "exclusiveMinimum": 0.0
+                "minimum": 0.0
               },
               {
                 "type": "string"
@@ -1258,24 +918,19 @@
           "verificada": {
             "type": "boolean",
             "title": "Verificada"
-          },
-          "version": {
-            "type": "integer",
-            "minimum": 1.0,
-            "title": "Version"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "versionSolicitud",
           "ingresoMensual",
           "deudaMensual",
           "riesgo",
-          "verificada",
-          "version"
+          "verificada"
         ],
         "title": "SituacionIn",
-        "description": "Situación financiera del cliente que registra el analista; con ella corre la regla."
+        "description": "Situación financiera del cliente que registra el analista; con ella COREDB corre la regla."
       },
       "SobreExpediente": {
         "properties": {
@@ -1287,12 +942,12 @@
           },
           "idSolicitud": {
             "type": "string",
-            "maxLength": 36,
-            "minLength": 1,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
             "title": "Idsolicitud"
           },
           "versionSolicitud": {
             "type": "integer",
+            "maximum": 32767.0,
             "minimum": 1.0,
             "title": "Versionsolicitud"
           },

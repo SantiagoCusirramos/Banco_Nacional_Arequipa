@@ -70,6 +70,12 @@ su módulo), nunca con una cuenta de persona:
    `POST /coredb/usuarios/{id}/estado {"activo": false}` corta el acceso en la siguiente
    petición.
 
+En el producto, el usuario de Evaluación (`svc-evaluacion`) no se crea por la API sino en el
+arranque: `CORE_DB_SERVICIO_SECRETO=<secreto> python -m COREDB.scripts.crear_servicio --modulo
+EVALUACION --username svc-evaluacion --nombre Evaluación` lo crea con el secreto que el despliegue
+ya tiene (`EVALUACION_COREDB_SECRETO` en `.env` o en el Secret de Kubernetes). Repetirlo no cambia
+nada; con otro secreto, reemplaza el anterior. No toca a una persona con ese nombre.
+
 **Primer administrador:** `python -m COREDB.scripts.crear_administrador` lo crea con las
 credenciales de la base y pide la contraseña en la terminal. Se niega si ya hay un
 administrador activo. Con `--si-falta` eso no es un error: así lo usa el arranque del

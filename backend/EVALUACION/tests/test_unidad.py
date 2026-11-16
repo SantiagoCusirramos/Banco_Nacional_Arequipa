@@ -153,3 +153,9 @@ def test_observado_sin_decision_no_se_envia_t1():
                            comentario="Ingresos sin sustento.")
     mensaje = resultado_para_sol(_detalle([decidido]))
     assert (mensaje["decision"], mensaje["observaciones"]) == ("RECHAZADO", "Ingresos sin sustento.")
+
+
+def test_spec_publicada_al_dia():
+    from pathlib import Path
+    publicada = json.loads((Path(__file__).resolve().parents[1] / "openapi.json").read_text(encoding="utf-8"))
+    assert publicada == crear_app().openapi(), "Regenerar con: python -m EVALUACION.scripts.exporta_openapi"
