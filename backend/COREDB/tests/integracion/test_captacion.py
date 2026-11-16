@@ -239,7 +239,7 @@ def test_observar_levantar_y_revocar(api, asesor):
                    headers=encabezados), 409, "ESTADO_INVALIDO")
 
 
-def test_ligar_exige_un_caso_listo_y_el_mismo_documento(api, asesor):
+def test_ligar_exige_un_caso_listo_y_el_mismo_documento(api, asesor, datos_base):
     encabezados, _ = asesor
     id_caso = caso(api, encabezados)
     error(api.post(f"{RUTA}/casos/{id_caso}/cliente", json={"cod_cliente": "C001", "cliente_nuevo": False},

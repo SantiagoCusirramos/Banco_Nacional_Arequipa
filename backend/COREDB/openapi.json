@@ -501,6 +501,432 @@
         "title": "CalendarioRespuesta",
         "type": "object"
       },
+      "CasoCaptacion": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "cliente_nuevo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Nuevo"
+          },
+          "cod_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cod Cliente"
+          },
+          "creado_por": {
+            "title": "Creado Por",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "estado_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El estado vigente del cliente ligado.",
+            "title": "Estado Cliente"
+          },
+          "faltantes": {
+            "description": "Lo que falta para habilitar; vacío si está listo o cerrado.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Faltantes",
+            "type": "array"
+          },
+          "fecha_apertura": {
+            "format": "date-time",
+            "title": "Fecha Apertura",
+            "type": "string"
+          },
+          "fecha_cierre": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Cierre"
+          },
+          "fecha_verificacion": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Verificacion"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "id_caso": {
+            "title": "Id Caso",
+            "type": "string"
+          },
+          "id_solicitante": {
+            "title": "Id Solicitante",
+            "type": "string"
+          },
+          "id_verificacion_captacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La del cliente ligado, en COREDB.",
+            "title": "Id Verificacion Captacion"
+          },
+          "motivo_cierre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Cierre"
+          },
+          "observacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion"
+          },
+          "producto_interes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producto Interes"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "id_caso",
+          "id_solicitante",
+          "canal",
+          "id_agencia",
+          "producto_interes",
+          "estado",
+          "observacion",
+          "motivo_cierre",
+          "cod_cliente",
+          "cliente_nuevo",
+          "id_verificacion_captacion",
+          "estado_cliente",
+          "fecha_verificacion",
+          "vigente_hasta",
+          "creado_por",
+          "fecha_apertura",
+          "fecha_cierre",
+          "faltantes"
+        ],
+        "title": "CasoCaptacion",
+        "type": "object"
+      },
+      "CasoCaptacionAbrir": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "enum": [
+              "AGENCIA",
+              "WEB",
+              "MOVIL",
+              "AGENTE",
+              "CAMPANA"
+            ],
+            "title": "Canal",
+            "type": "string"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "id_solicitante": {
+            "format": "uuid",
+            "title": "Id Solicitante",
+            "type": "string"
+          },
+          "producto_interes": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producto Interes"
+          }
+        },
+        "required": [
+          "id_solicitante",
+          "canal"
+        ],
+        "title": "CasoCaptacionAbrir",
+        "type": "object"
+      },
+      "CasoCaptacionEnBandeja": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "cliente_nuevo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Nuevo"
+          },
+          "cod_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cod Cliente"
+          },
+          "creado_por": {
+            "title": "Creado Por",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "estado_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El estado vigente del cliente ligado.",
+            "title": "Estado Cliente"
+          },
+          "faltantes": {
+            "description": "Lo que falta para habilitar; vacío si está listo o cerrado.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Faltantes",
+            "type": "array"
+          },
+          "fecha_apertura": {
+            "format": "date-time",
+            "title": "Fecha Apertura",
+            "type": "string"
+          },
+          "fecha_cierre": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Cierre"
+          },
+          "fecha_verificacion": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Verificacion"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "id_caso": {
+            "title": "Id Caso",
+            "type": "string"
+          },
+          "id_solicitante": {
+            "title": "Id Solicitante",
+            "type": "string"
+          },
+          "id_verificacion_captacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La del cliente ligado, en COREDB.",
+            "title": "Id Verificacion Captacion"
+          },
+          "motivo_cierre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Cierre"
+          },
+          "observacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion"
+          },
+          "producto_interes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producto Interes"
+          },
+          "solicitante": {
+            "$ref": "#/components/schemas/SolicitanteCaptacion"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "id_caso",
+          "id_solicitante",
+          "canal",
+          "id_agencia",
+          "producto_interes",
+          "estado",
+          "observacion",
+          "motivo_cierre",
+          "cod_cliente",
+          "cliente_nuevo",
+          "id_verificacion_captacion",
+          "estado_cliente",
+          "fecha_verificacion",
+          "vigente_hasta",
+          "creado_por",
+          "fecha_apertura",
+          "fecha_cierre",
+          "faltantes",
+          "solicitante"
+        ],
+        "title": "CasoCaptacionEnBandeja",
+        "type": "object"
+      },
       "CatalogosClientesRespuesta": {
         "properties": {
           "estados_cliente": {
@@ -600,6 +1026,28 @@
           "vigenciaAprobacionDias"
         ],
         "title": "CatalogosCreditoRespuesta",
+        "type": "object"
+      },
+      "ClienteCaptacionLigar": {
+        "additionalProperties": false,
+        "properties": {
+          "cliente_nuevo": {
+            "title": "Cliente Nuevo",
+            "type": "boolean"
+          },
+          "cod_cliente": {
+            "maxLength": 12,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9]+$",
+            "title": "Cod Cliente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "cliente_nuevo"
+        ],
+        "title": "ClienteCaptacionLigar",
         "type": "object"
       },
       "ClienteConEstadoAnterior": {
@@ -984,6 +1432,237 @@
           "pagosRechazados"
         ],
         "title": "ConciliacionPagos",
+        "type": "object"
+      },
+      "ConsentimientoCaptacion": {
+        "properties": {
+          "aceptado": {
+            "title": "Aceptado",
+            "type": "boolean"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "medio": {
+            "title": "Medio",
+            "type": "string"
+          },
+          "registrado_por": {
+            "title": "Registrado Por",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "tipo",
+          "aceptado",
+          "medio",
+          "version",
+          "registrado_por",
+          "fecha"
+        ],
+        "title": "ConsentimientoCaptacion",
+        "type": "object"
+      },
+      "ConsentimientoCaptacionItem": {
+        "additionalProperties": false,
+        "properties": {
+          "aceptado": {
+            "title": "Aceptado",
+            "type": "boolean"
+          },
+          "medio": {
+            "default": "DIGITAL",
+            "enum": [
+              "DIGITAL",
+              "FISICO",
+              "BIOMETRICO"
+            ],
+            "title": "Medio",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "TRATAMIENTO_DATOS",
+              "CONSULTA_BUROS",
+              "TERMINOS",
+              "BIOMETRIA"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo",
+          "aceptado"
+        ],
+        "title": "ConsentimientoCaptacionItem",
+        "type": "object"
+      },
+      "ConsentimientosCaptacion": {
+        "additionalProperties": false,
+        "properties": {
+          "consentimientos": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentimientoCaptacionItem"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Consentimientos",
+            "type": "array"
+          },
+          "version_terminos": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Obligatoria si viene TERMINOS.",
+            "title": "Version Terminos"
+          }
+        },
+        "required": [
+          "consentimientos"
+        ],
+        "title": "ConsentimientosCaptacion",
+        "type": "object"
+      },
+      "ConsultaRiesgoCaptacion": {
+        "properties": {
+          "calificacion": {
+            "title": "Calificacion",
+            "type": "string"
+          },
+          "central": {
+            "title": "Central",
+            "type": "string"
+          },
+          "deuda_total": {
+            "title": "Deuda Total",
+            "type": "string"
+          },
+          "dias_mora": {
+            "title": "Dias Mora",
+            "type": "integer"
+          },
+          "entidades": {
+            "title": "Entidades",
+            "type": "integer"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "fuente": {
+            "title": "Fuente",
+            "type": "string"
+          },
+          "registrado_por": {
+            "title": "Registrado Por",
+            "type": "string"
+          }
+        },
+        "required": [
+          "central",
+          "calificacion",
+          "deuda_total",
+          "entidades",
+          "dias_mora",
+          "fuente",
+          "registrado_por",
+          "fecha"
+        ],
+        "title": "ConsultaRiesgoCaptacion",
+        "type": "object"
+      },
+      "ConsultaRiesgoCaptacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "calificacion": {
+            "enum": [
+              "NORMAL",
+              "CPP",
+              "DEFICIENTE",
+              "DUDOSO",
+              "PERDIDA"
+            ],
+            "title": "Calificacion",
+            "type": "string"
+          },
+          "central": {
+            "enum": [
+              "SBS",
+              "INFOCORP",
+              "SENTINEL",
+              "EQUIFAX"
+            ],
+            "title": "Central",
+            "type": "string"
+          },
+          "deuda_total": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Deuda Total"
+          },
+          "dias_mora": {
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Dias Mora",
+            "type": "integer"
+          },
+          "entidades": {
+            "maximum": 99.0,
+            "minimum": 0.0,
+            "title": "Entidades",
+            "type": "integer"
+          },
+          "fuente": {
+            "enum": [
+              "SIMULADO",
+              "MANUAL"
+            ],
+            "title": "Fuente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "central",
+          "calificacion",
+          "deuda_total",
+          "entidades",
+          "dias_mora",
+          "fuente"
+        ],
+        "title": "ConsultaRiesgoCaptacionRegistrar",
         "type": "object"
       },
       "CredencialRegistrar": {
@@ -1873,6 +2552,33 @@
         "title": "EmpleadoRegistrar",
         "type": "object"
       },
+      "EstadoCaptacionCambiar": {
+        "additionalProperties": false,
+        "properties": {
+          "accion": {
+            "enum": [
+              "OBSERVAR",
+              "LEVANTAR_OBSERVACION",
+              "RECHAZAR",
+              "REVOCAR"
+            ],
+            "title": "Accion",
+            "type": "string"
+          },
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accion",
+          "motivo"
+        ],
+        "title": "EstadoCaptacionCambiar",
+        "type": "object"
+      },
       "EstadoClienteRespuesta": {
         "properties": {
           "codigo": {
@@ -2299,6 +3005,244 @@
         "title": "EventoRespuesta",
         "type": "object"
       },
+      "ExpedienteCaptacion": {
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "cliente_nuevo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cliente Nuevo"
+          },
+          "cod_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cod Cliente"
+          },
+          "consentimientos": {
+            "items": {
+              "$ref": "#/components/schemas/ConsentimientoCaptacion"
+            },
+            "title": "Consentimientos",
+            "type": "array"
+          },
+          "consultas": {
+            "items": {
+              "$ref": "#/components/schemas/ConsultaRiesgoCaptacion"
+            },
+            "title": "Consultas",
+            "type": "array"
+          },
+          "creado_por": {
+            "title": "Creado Por",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "estado_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El estado vigente del cliente ligado.",
+            "title": "Estado Cliente"
+          },
+          "faltantes": {
+            "description": "Lo que falta para habilitar; vacío si está listo o cerrado.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Faltantes",
+            "type": "array"
+          },
+          "fecha_apertura": {
+            "format": "date-time",
+            "title": "Fecha Apertura",
+            "type": "string"
+          },
+          "fecha_cierre": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Cierre"
+          },
+          "fecha_verificacion": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Verificacion"
+          },
+          "id_agencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Agencia"
+          },
+          "id_caso": {
+            "title": "Id Caso",
+            "type": "string"
+          },
+          "id_solicitante": {
+            "title": "Id Solicitante",
+            "type": "string"
+          },
+          "id_verificacion_captacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La del cliente ligado, en COREDB.",
+            "title": "Id Verificacion Captacion"
+          },
+          "listo_para_habilitar": {
+            "title": "Listo Para Habilitar",
+            "type": "boolean"
+          },
+          "motivo_cierre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo Cierre"
+          },
+          "observacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion"
+          },
+          "otps": {
+            "items": {
+              "$ref": "#/components/schemas/OtpCaptacion"
+            },
+            "title": "Otps",
+            "type": "array"
+          },
+          "perfil": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PerfilRiesgoCaptacion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El último perfil calculado."
+          },
+          "producto_interes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producto Interes"
+          },
+          "solicitante": {
+            "$ref": "#/components/schemas/SolicitanteCaptacion"
+          },
+          "validaciones": {
+            "items": {
+              "$ref": "#/components/schemas/ValidacionCaptacion"
+            },
+            "title": "Validaciones",
+            "type": "array"
+          },
+          "vigente_hasta": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigente Hasta"
+          }
+        },
+        "required": [
+          "id_caso",
+          "id_solicitante",
+          "canal",
+          "id_agencia",
+          "producto_interes",
+          "estado",
+          "observacion",
+          "motivo_cierre",
+          "cod_cliente",
+          "cliente_nuevo",
+          "id_verificacion_captacion",
+          "estado_cliente",
+          "fecha_verificacion",
+          "vigente_hasta",
+          "creado_por",
+          "fecha_apertura",
+          "fecha_cierre",
+          "faltantes",
+          "solicitante",
+          "consentimientos",
+          "otps",
+          "validaciones",
+          "consultas",
+          "perfil",
+          "listo_para_habilitar"
+        ],
+        "title": "ExpedienteCaptacion",
+        "type": "object"
+      },
       "ExpedienteRegistrar": {
         "additionalProperties": false,
         "properties": {
@@ -2404,6 +3348,23 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HabilitacionCaptacion": {
+        "additionalProperties": false,
+        "properties": {
+          "vigencia_dias": {
+            "description": "Días de vigencia de la referencia desde hoy (Lima).",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Vigencia Dias",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "vigencia_dias"
+        ],
+        "title": "HabilitacionCaptacion",
         "type": "object"
       },
       "HistorialRespuesta": {
@@ -3104,6 +4065,124 @@
         "title": "OrdenRespuesta",
         "type": "object"
       },
+      "OtpCaptacion": {
+        "description": "Sin el hash del código.",
+        "properties": {
+          "canal": {
+            "title": "Canal",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fecha_emision": {
+            "format": "date-time",
+            "title": "Fecha Emision",
+            "type": "string"
+          },
+          "fecha_expiracion": {
+            "format": "date-time",
+            "title": "Fecha Expiracion",
+            "type": "string"
+          },
+          "id_otp": {
+            "title": "Id Otp",
+            "type": "string"
+          },
+          "intentos_fallidos": {
+            "title": "Intentos Fallidos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id_otp",
+          "canal",
+          "estado",
+          "intentos_fallidos",
+          "fecha_emision",
+          "fecha_expiracion"
+        ],
+        "title": "OtpCaptacion",
+        "type": "object"
+      },
+      "OtpCaptacionEmitir": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "enum": [
+              "SMS",
+              "EMAIL"
+            ],
+            "title": "Canal",
+            "type": "string"
+          },
+          "codigo_hmac": {
+            "description": "HMAC-SHA256 en hexadecimal, calculado por CAPTACION.",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Codigo Hmac",
+            "type": "string"
+          },
+          "id_otp": {
+            "format": "uuid",
+            "title": "Id Otp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_otp",
+          "canal",
+          "codigo_hmac"
+        ],
+        "title": "OtpCaptacionEmitir",
+        "type": "object"
+      },
+      "OtpCaptacionVerificado": {
+        "properties": {
+          "estado": {
+            "description": "El estado del caso después de verificar.",
+            "title": "Estado",
+            "type": "string"
+          },
+          "estado_codigo": {
+            "enum": [
+              "USADO",
+              "PENDIENTE",
+              "BLOQUEADO",
+              "EXPIRADO"
+            ],
+            "title": "Estado Codigo",
+            "type": "string"
+          },
+          "intentos_restantes": {
+            "title": "Intentos Restantes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "estado_codigo",
+          "intentos_restantes",
+          "estado"
+        ],
+        "title": "OtpCaptacionVerificado",
+        "type": "object"
+      },
+      "OtpCaptacionVerificar": {
+        "additionalProperties": false,
+        "properties": {
+          "codigo_hmac": {
+            "description": "HMAC-SHA256 en hexadecimal, calculado por CAPTACION.",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Codigo Hmac",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo_hmac"
+        ],
+        "title": "OtpCaptacionVerificar",
+        "type": "object"
+      },
       "PagoRegistrado": {
         "properties": {
           "aplicaciones": {
@@ -3368,6 +4447,45 @@
         "title": "PagoRespuesta",
         "type": "object"
       },
+      "PerfilCaptacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "calificacion": {
+            "enum": [
+              "BAJO",
+              "MEDIO",
+              "ALTO",
+              "MUY_ALTO"
+            ],
+            "title": "Calificacion",
+            "type": "string"
+          },
+          "observacion": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion"
+          },
+          "puntaje": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Puntaje",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "puntaje",
+          "calificacion"
+        ],
+        "title": "PerfilCaptacionRegistrar",
+        "type": "object"
+      },
       "PerfilRespuesta": {
         "properties": {
           "acciones": {
@@ -3410,6 +4528,53 @@
           "acciones"
         ],
         "title": "PerfilRespuesta",
+        "type": "object"
+      },
+      "PerfilRiesgoCaptacion": {
+        "properties": {
+          "calificacion": {
+            "title": "Calificacion",
+            "type": "string"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "observacion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observacion"
+          },
+          "puntaje": {
+            "title": "Puntaje",
+            "type": "integer"
+          },
+          "registrado_por": {
+            "title": "Registrado Por",
+            "type": "string"
+          },
+          "vigente": {
+            "description": "Falso si hay una consulta a una central posterior al perfil.",
+            "title": "Vigente",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "puntaje",
+          "calificacion",
+          "observacion",
+          "registrado_por",
+          "fecha",
+          "vigente"
+        ],
+        "title": "PerfilRiesgoCaptacion",
         "type": "object"
       },
       "ProductoAhorroRespuesta": {
@@ -3699,6 +4864,164 @@
           "nombre"
         ],
         "title": "ServicioCrear",
+        "type": "object"
+      },
+      "SolicitanteCaptacion": {
+        "properties": {
+          "apellido_materno": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido Materno"
+          },
+          "apellido_paterno": {
+            "title": "Apellido Paterno",
+            "type": "string"
+          },
+          "celular": {
+            "title": "Celular",
+            "type": "string"
+          },
+          "cod_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cod Cliente"
+          },
+          "correo": {
+            "title": "Correo",
+            "type": "string"
+          },
+          "creado_por": {
+            "title": "Creado Por",
+            "type": "string"
+          },
+          "fecha_registro": {
+            "format": "date-time",
+            "title": "Fecha Registro",
+            "type": "string"
+          },
+          "id_solicitante": {
+            "title": "Id Solicitante",
+            "type": "string"
+          },
+          "nombres": {
+            "title": "Nombres",
+            "type": "string"
+          },
+          "numero_documento": {
+            "title": "Numero Documento",
+            "type": "string"
+          },
+          "tipo_documento": {
+            "title": "Tipo Documento",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_solicitante",
+          "tipo_documento",
+          "numero_documento",
+          "nombres",
+          "apellido_paterno",
+          "apellido_materno",
+          "celular",
+          "correo",
+          "cod_cliente",
+          "creado_por",
+          "fecha_registro"
+        ],
+        "title": "SolicitanteCaptacion",
+        "type": "object"
+      },
+      "SolicitanteCaptacionRegistrado": {
+        "properties": {
+          "duplicado": {
+            "title": "Duplicado",
+            "type": "boolean"
+          },
+          "solicitante": {
+            "$ref": "#/components/schemas/SolicitanteCaptacion"
+          }
+        },
+        "required": [
+          "solicitante",
+          "duplicado"
+        ],
+        "title": "SolicitanteCaptacionRegistrado",
+        "type": "object"
+      },
+      "SolicitanteCaptacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "apellido_materno": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido Materno"
+          },
+          "apellido_paterno": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Apellido Paterno",
+            "type": "string"
+          },
+          "celular": {
+            "description": "Nueve dígitos, empieza con 9. Sin +51.",
+            "pattern": "^9\\d{8}$",
+            "title": "Celular",
+            "type": "string"
+          },
+          "correo": {
+            "maxLength": 150,
+            "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+            "title": "Correo",
+            "type": "string"
+          },
+          "nombres": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Nombres",
+            "type": "string"
+          },
+          "numero_documento": {
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Numero Documento",
+            "type": "string"
+          },
+          "tipo_documento": {
+            "maxLength": 10,
+            "minLength": 1,
+            "title": "Tipo Documento",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo_documento",
+          "numero_documento",
+          "nombres",
+          "apellido_paterno",
+          "celular",
+          "correo"
+        ],
+        "title": "SolicitanteCaptacionRegistrar",
         "type": "object"
       },
       "SolicitudDetalle": {
@@ -4406,6 +5729,102 @@
           "creado_en"
         ],
         "title": "UsuarioSesion",
+        "type": "object"
+      },
+      "ValidacionCaptacion": {
+        "properties": {
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "fecha": {
+            "format": "date-time",
+            "title": "Fecha",
+            "type": "string"
+          },
+          "proveedor": {
+            "title": "Proveedor",
+            "type": "string"
+          },
+          "registrado_por": {
+            "title": "Registrado Por",
+            "type": "string"
+          },
+          "resultado": {
+            "title": "Resultado",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo",
+          "resultado",
+          "proveedor",
+          "detalle",
+          "registrado_por",
+          "fecha"
+        ],
+        "title": "ValidacionCaptacion",
+        "type": "object"
+      },
+      "ValidacionCaptacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "detalle": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalle"
+          },
+          "proveedor": {
+            "description": "SIMULADO, el del proveedor o MANUAL.",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Proveedor",
+            "type": "string"
+          },
+          "resultado": {
+            "enum": [
+              "APROBADO",
+              "OBSERVADO",
+              "RECHAZADO"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "RENIEC",
+              "LISTAS_NEGRAS",
+              "PEP",
+              "BIOMETRIA"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo",
+          "resultado",
+          "proveedor"
+        ],
+        "title": "ValidacionCaptacionRegistrar",
         "type": "object"
       },
       "ValidacionOrdenRegistrar": {
@@ -5116,6 +6535,1259 @@
         "summary": "Extornar",
         "tags": [
           "tarjetas"
+        ]
+      }
+    },
+    "/coredb/captacion/casos": {
+      "get": {
+        "description": "La bandeja, del caso más reciente al más antiguo, con los datos del solicitante.",
+        "operationId": "listar_casos_coredb_captacion_casos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "INICIADO",
+                    "EN_VALIDACION",
+                    "OBSERVADO",
+                    "APROBADO",
+                    "HABILITADO",
+                    "RECHAZADO",
+                    "REVOCADO"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "id_solicitante",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Id Solicitante"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cod_cliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cod Cliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CasoCaptacionEnBandeja"
+                  },
+                  "title": "Response Listar Casos Coredb Captacion Casos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Listar Casos",
+        "tags": [
+          "captación"
+        ]
+      },
+      "post": {
+        "description": "Abre el caso INICIADO. Un solicitante tiene a lo sumo un caso abierto.",
+        "operationId": "abrir_caso_coredb_captacion_casos_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CasoCaptacionAbrir"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CasoCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITANTE_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_ABIERTO"
+          },
+          "422": {
+            "description": "AGENCIA_NO_ENCONTRADA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Abrir Caso",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}": {
+      "get": {
+        "description": "El expediente completo y lo que falta para habilitarlo.",
+        "operationId": "ver_expediente_coredb_captacion_casos__id_caso__get",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpedienteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Ver Expediente",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/cliente": {
+      "post": {
+        "description": "Liga al caso APROBADO el cliente ACTIVO con el documento del solicitante, que quien\nverificó la identidad registró o encontró antes. Ligar otra vez el mismo no cambia nada.",
+        "operationId": "ligar_cliente_coredb_captacion_casos__id_caso__cliente_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClienteCaptacionLigar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpedienteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO o CLIENTE_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO o CASO_CON_OTRO_CLIENTE"
+          },
+          "422": {
+            "description": "CASO_NO_LISTO, CLIENTE_NO_COINCIDE o CLIENTE_NO_ACTIVO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Ligar Cliente",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/consentimientos": {
+      "post": {
+        "description": "Vale el último consentimiento de cada tipo; la versión se guarda solo en TERMINOS.",
+        "operationId": "registrar_consentimientos_coredb_captacion_casos__id_caso__consentimientos_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentimientosCaptacion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpedienteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO"
+          },
+          "422": {
+            "description": "DATOS_INVALIDOS"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Consentimientos",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/consultas-riesgo": {
+      "post": {
+        "description": "La respuesta de una central de riesgo. Exige CONSULTA_BUROS.",
+        "operationId": "registrar_consulta_coredb_captacion_casos__id_caso__consultas_riesgo_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsultaRiesgoCaptacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpedienteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO"
+          },
+          "422": {
+            "description": "CONSENTIMIENTO_REQUERIDO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Consulta",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/estado": {
+      "post": {
+        "description": "Observar o levantar la observación de un caso abierto, rechazarlo, o revocar uno HABILITADO.",
+        "operationId": "cambiar_estado_coredb_captacion_casos__id_caso__estado_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstadoCaptacionCambiar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpedienteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO o ESTADO_INVALIDO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Cambiar Estado",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/habilitacion": {
+      "post": {
+        "description": "HABILITADO con el cliente ligado, vigente `vigencia_dias` desde hoy (Lima). Las\nverificaciones de contacto quedan también en el cliente. Repetirlo no cambia nada.",
+        "operationId": "habilitar_coredb_captacion_casos__id_caso__habilitacion_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HabilitacionCaptacion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpedienteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO"
+          },
+          "422": {
+            "description": "CASO_NO_LISTO o CLIENTE_NO_ACTIVO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Habilitar",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/otps": {
+      "post": {
+        "description": "Guarda un OTP nuevo (el HMAC del código, que CAPTACION calcula con su clave y el\n`id_otp`) y vence el pendiente anterior del mismo canal. Vencimiento e intentos salen de\nclientes.tipo_contacto. Exige el consentimiento TRATAMIENTO_DATOS.",
+        "operationId": "emitir_otp_coredb_captacion_casos__id_caso__otps_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpCaptacionEmitir"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO"
+          },
+          "422": {
+            "description": "CONSENTIMIENTO_REQUERIDO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Emitir Otp",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/otps/{id_otp}/verificacion": {
+      "post": {
+        "description": "Compara el HMAC con el del OTP pendiente. El correcto deja el código USADO y verifica\nel celular (SMS) o el correo (EMAIL); el errado suma un intento y el último lo bloquea;\nvencido queda EXPIRADO. Un código ya usado, vencido o bloqueado es OTP_NO_ENCONTRADO.",
+        "operationId": "verificar_otp_coredb_captacion_casos__id_caso__otps__id_otp__verificacion_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id_otp",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Otp",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpCaptacionVerificar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpCaptacionVerificado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO u OTP_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Verificar Otp",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/perfil": {
+      "post": {
+        "description": "El perfil de 0 a 1000 que calcula CAPTACION. Exige una consulta; MUY_ALTO rechaza el caso.",
+        "operationId": "registrar_perfil_coredb_captacion_casos__id_caso__perfil_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PerfilCaptacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpedienteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO"
+          },
+          "422": {
+            "description": "SIN_CONSULTA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Perfil",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/casos/{id_caso}/validaciones": {
+      "post": {
+        "description": "RENIEC, listas, PEP o biometría (con su consentimiento), del proveedor o manual: la\núltima de cada tipo vale. Una RECHAZADA cierra el caso; una OBSERVADA lo detiene.",
+        "operationId": "registrar_validacion_coredb_captacion_casos__id_caso__validaciones_post",
+        "parameters": [
+          {
+            "description": "Identificador del caso",
+            "in": "path",
+            "name": "id_caso",
+            "required": true,
+            "schema": {
+              "description": "Identificador del caso",
+              "format": "uuid",
+              "title": "Id Caso",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidacionCaptacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpedienteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "CASO_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "CASO_CERRADO"
+          },
+          "422": {
+            "description": "CONSENTIMIENTO_REQUERIDO o DATOS_INVALIDOS"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Validacion",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/solicitantes": {
+      "get": {
+        "operationId": "buscar_solicitantes_coredb_captacion_solicitantes_get",
+        "parameters": [
+          {
+            "description": "Parte del número de documento.",
+            "in": "query",
+            "name": "documento",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Parte del número de documento.",
+              "title": "Documento"
+            }
+          },
+          {
+            "description": "Documento, nombres o apellidos.",
+            "in": "query",
+            "name": "texto",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Documento, nombres o apellidos.",
+              "title": "Texto"
+            }
+          },
+          {
+            "description": "Solo los que ya tienen un cliente ligado.",
+            "in": "query",
+            "name": "con_cliente",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Solo los que ya tienen un cliente ligado.",
+              "title": "Con Cliente",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SolicitanteCaptacion"
+                  },
+                  "title": "Response Buscar Solicitantes Coredb Captacion Solicitantes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Buscar Solicitantes",
+        "tags": [
+          "captación"
+        ]
+      },
+      "post": {
+        "description": "Registra al prospecto. Un documento ya registrado devuelve el mismo solicitante, sin\ncambiar sus datos, con 200 y `duplicado: true`.",
+        "operationId": "registrar_solicitante_coredb_captacion_solicitantes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitanteCaptacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "El documento ya estaba registrado (duplicado)"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitanteCaptacionRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "description": "DOCUMENTO_INVALIDO o DATOS_INVALIDOS"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Solicitante",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/solicitantes/{id_solicitante}": {
+      "get": {
+        "operationId": "ver_solicitante_coredb_captacion_solicitantes__id_solicitante__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitante",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitante",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitanteCaptacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITANTE_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Ver Solicitante",
+        "tags": [
+          "captación"
         ]
       }
     },

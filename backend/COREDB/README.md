@@ -111,6 +111,40 @@ Las rutas que usa el módulo Clientes, y el personal, están descritas en
 
 El segundo archivo carga datos solo de desarrollo; ver `database/README-UPSTREAM.md`.
 
+## Captación
+
+El expediente del **prospecto** antes de ser cliente, en las tablas de extensión
+`clientes.*_captacion` (desde `bd-v1.7-mysql`). Lo usa el módulo CAPTACION: con el token
+del asesor para lo que hace una persona y con su usuario de servicio (módulo CLIENTES) para
+ligar el cliente que registró y leer las referencias que consulta SOL.
+
+| Ruta | Permiso |
+|---|---|
+| `POST /coredb/captacion/solicitantes` (201; 200 con `duplicado` si el documento ya estaba) | `CREAR_CLIENTE` |
+| `GET /coredb/captacion/solicitantes` (`documento`, `texto`, `con_cliente`), `GET …/solicitantes/{id}` | `VER_CLIENTE` |
+| `POST /coredb/captacion/casos`, `GET /coredb/captacion/casos` (`estado`, `id_solicitante`, `cod_cliente`) | `CREAR_CLIENTE` / `VER_CLIENTE` |
+| `GET /coredb/captacion/casos/{id_caso}`: el expediente con `faltantes` y `listo_para_habilitar` | `VER_CLIENTE` |
+| `POST …/casos/{id_caso}/consentimientos`, `/validaciones`, `/consultas-riesgo`, `/perfil`, `/estado` | `CREAR_CLIENTE` |
+| `POST …/casos/{id_caso}/otps`, `POST …/otps/{id_otp}/verificacion` | `CREAR_CLIENTE` |
+| `POST …/casos/{id_caso}/cliente` (ligar el cliente), `POST …/casos/{id_caso}/habilitacion` | `CREAR_CLIENTE` |
+
+- La base aplica las reglas del expediente y recalcula el estado (INICIADO →
+  EN_VALIDACION → APROBADO → HABILITADO; OBSERVADO; RECHAZADO y REVOCADO finales). Cada
+  escritura devuelve el expediente completo.
+- El OTP: CAPTACION genera el código, calcula su HMAC con su clave y el `id_otp`, y manda
+  solo el HMAC; la base lo compara, cuenta los intentos y lo vence según
+  `clientes.tipo_contacto`. Ninguna respuesta incluye el hash.
+- El cliente `HABILITADO` lo sigue registrando solo el usuario de servicio de CLIENTES con
+  `POST /coredb/clientes` (punto R-01); `…/cliente` solo liga al caso APROBADO un cliente
+  ACTIVO con el documento del solicitante. Habilitar deja en el cliente las verificaciones
+  de celular y correo hechas por OTP.
+- Códigos: `DOCUMENTO_INVALIDO`, `SOLICITANTE_NO_ENCONTRADO`, `CASO_NO_ENCONTRADO`,
+  `CASO_ABIERTO`, `CASO_CERRADO`, `ESTADO_INVALIDO`, `CASO_NO_LISTO`,
+  `CASO_CON_OTRO_CLIENTE`, `AGENCIA_NO_ENCONTRADA`, `CONSENTIMIENTO_REQUERIDO`,
+  `OTP_NO_ENCONTRADO`, `SIN_CONSULTA`, `CLIENTE_NO_ENCONTRADO`, `CLIENTE_NO_COINCIDE`,
+  `CLIENTE_NO_ACTIVO`, `DATOS_INVALIDOS`. Ningún mensaje repite el documento ni los
+  contactos.
+
 ## Autorizaciones y credenciales de tarjeta
 
 Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica la base.
@@ -169,7 +203,7 @@ Las tres áreas: evaluación, desembolso y cobranza.
 - El expediente es idempotente por id, versión y contenido; la evaluación y la decisión se
   hacen una vez.
 - Para decidir, el usuario del analista debe estar ligado a un empleado de `core.empleado`
-  registrado como analista. COREDB no crea empleados: los carga el administrador de la base.
+  registrado como analista (`POST /coredb/empleados` y `POST /coredb/creditos/analistas`).
 - Confirmar un desembolso abona la cuenta, crea el crédito con su calendario OFICIAL y deja la
   solicitud DESEMBOLSADA en una sola transacción de la base. Repetir la confirmación devuelve el
   mismo crédito y el mismo abono, sin abonar otra vez.
