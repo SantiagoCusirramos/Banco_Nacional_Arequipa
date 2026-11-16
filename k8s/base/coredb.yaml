@@ -54,6 +54,19 @@ spec:
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BNA_ADMIN_PASSWORD } }
           resources: *recursos-arranque
           securityContext: *contenedor-seguro
+        # Crea o alinea el usuario de servicio de Evaluación con el secreto del Secret.
+        - name: servicio-evaluacion
+          image: bna/coredb:local
+          command: [python, -m, COREDB.scripts.crear_servicio, --modulo, EVALUACION, --username, svc-evaluacion, --nombre, Evaluación]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_SERVICIO_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: EVALUACION_COREDB_SECRETO } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
       containers:
         - name: coredb
           image: bna/coredb:local

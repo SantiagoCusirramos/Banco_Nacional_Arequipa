@@ -7,8 +7,9 @@ Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
 saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
 COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
-módulo TARJETAS (con un retiro autorizado y extornado) y todo por los puentes
-del frontend, que es el camino que sigue el navegador.
+módulo TARJETAS (con un retiro autorizado y extornado), una solicitud de crédito
+por EVALUACIÓN (expediente con el formato de SOL → evaluación → decisión, todo en
+COREDB) y todo por los puentes del frontend, que es el camino que sigue el navegador.
 """
 
 import json
@@ -19,16 +20,20 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from datetime import date, timedelta
+from decimal import Decimal
 
 COREDB = os.environ.get("E2E_COREDB", "http://127.0.0.1:8012")
 CUENTAS = os.environ.get("E2E_CUENTAS", "http://cuentas:8001")
 TARJETAS = os.environ.get("E2E_TARJETAS", "http://tarjetas:8002")
 FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
+EVALUACION = os.environ.get("E2E_EVALUACION", "http://evaluacion:8015")
 SERVICIOS = {
     "COREDB": (COREDB + "/coredb/salud", {}),
     "CUENTAS": (CUENTAS + "/health", {}),
     "TARJETAS": (TARJETAS + "/health", {}),
     "SOL": (os.environ.get("E2E_SOL", "http://sol:8011") + "/ready", {}),
+    "EVALUACIÓN": (EVALUACION + "/salud", {}),
     "Seguridad": (os.environ.get("E2E_SEGURIDAD", "http://seguridad:8013") + "/seguridad/estado",
                   {"X-Correlation-ID": "flujo-e2e"}),
     "frontend": (FRONTEND + "/login", {}),
@@ -44,6 +49,7 @@ USUARIO = os.environ.get("BNA_ADMIN_USUARIO", "admin")
 PASSWORD = os.environ.get("BNA_ADMIN_PASSWORD", "")
 SOL_USUARIO = "asesor.bna"  # usuario sembrado por SOL (backend/SOL/seed.py)
 SOL_PASSWORD = os.environ.get("SOL_INITIAL_PASSWORD", "")
+TOKEN_SOL_EVALUACION = os.environ.get("EVALUACION_TOKEN_SOL", "")
 AGENCIA = "AQP01"
 CANAL = "HB"
 
@@ -127,6 +133,34 @@ def coredb(metodo, ruta, esperado, cuerpo=None, token=None):
     estado, respuesta = pedir(metodo, COREDB + ruta, cuerpo, token)
     exigir(estado == esperado, f"{metodo} {ruta}: se esperaba {esperado} y respondió {estado}: {respuesta}")
     return respuesta
+
+
+def sobre_sol(cod_cliente, monto="15000.00", plazo=12):
+    """Un expediente CR-INT-02 con la forma que arma SOL: calendario con amortización
+    constante y 1 % de interés mensual, cuadrado al céntimo."""
+    monto, centimo = Decimal(monto), Decimal("0.01")
+    amortizacion = (monto / plazo).quantize(centimo)
+    saldo, cuotas, inicio = monto, [], date.today() + timedelta(days=30)
+    for n in range(1, plazo + 1):
+        capital = saldo if n == plazo else amortizacion
+        interes = (saldo * Decimal("0.01")).quantize(centimo)
+        cuotas.append({"numero_cuota": n, "fecha_vencimiento": (inicio + timedelta(days=30 * (n - 1))).isoformat(),
+                       "saldo_inicial": str(saldo), "amortizacion": str(capital), "interes": str(interes),
+                       "cuota_total": str(capital + interes), "saldo_final": str(saldo - capital)})
+        saldo -= capital
+    total = sum(Decimal(c["cuota_total"]) for c in cuotas)
+    return {
+        "versionContrato": "CR-INT-02-PROPUESTA-v2", "idSolicitud": str(uuid.uuid4()), "versionSolicitud": 1,
+        "idOperacion": str(uuid.uuid4()), "idCorrelacion": str(uuid.uuid4()), "simulado": False,
+        "actorEnvio": "flujo-e2e",
+        "expediente": {
+            "cliente": {"id_cliente": cod_cliente},
+            "condiciones": {"id_cliente": cod_cliente, "monto_solicitado": str(monto), "moneda": "PEN",
+                            "plazo_meses": plazo, "destino_credito": "Flujo de extremo a extremo", "pago_doble": False},
+            "politica": {"tea": "0.1268", "amortizacion": "FRANCES"},
+            "calendario": {"cuotas": cuotas, "total_pagar": str(total)},
+        },
+    }
 
 
 def flujo():
@@ -331,6 +365,64 @@ def flujo():
            f"Dos envíos con la misma llave debían dejar una sola tarjeta nueva: {antes} -> {len(respuesta['data'])}")
     paso(f"TARJETAS: emisión a {titular} (no a un cliente OBSERVADO), repetición con la misma llave "
          "sin duplicar, 409 con la misma llave y otra cuenta, activación, bloqueo, desbloqueo rechazado y tarjetas del cliente")
+
+    # ── EVALUACIÓN: expediente de SOL → evaluación → decisión, todo en COREDB ──
+    exigir(TOKEN_SOL_EVALUACION, "Falta EVALUACION_TOKEN_SOL para enviar el expediente a Evaluación")
+    base = EVALUACION + "/eva"
+
+    def enviar_expediente(sobre):
+        return pedir("POST", f"{base}/applications", sobre, TOKEN_SOL_EVALUACION,
+                     cabeceras={"X-Idempotency-Key": sobre["idOperacion"], "X-Correlation-ID": sobre["idCorrelacion"]})
+
+    sobre = sobre_sol(cliente)
+    estado, _ = pedir("POST", f"{base}/applications", sobre, token,
+                      cabeceras={"X-Idempotency-Key": sobre["idOperacion"]})
+    exigir(estado == 401, f"Evaluación debía rechazar un expediente sin el token de SOL: {estado}")
+    estado, acuse = enviar_expediente(sobre)
+    exigir(estado == 201 and acuse["idSolicitud"] == sobre["idSolicitud"] and acuse["ronda"] == 1
+           and acuse["acuse"] == f"ACK-{acuse['idEvaluacion']}",
+           f"Expediente de SOL por Evaluación: {estado} {acuse}")
+    estado, repetido = enviar_expediente(sobre)
+    exigir(estado == 200 and repetido == acuse, f"Repetir el expediente debía devolver el mismo acuse: {estado} {repetido}")
+    solicitud = sobre["idSolicitud"]
+    en_core = coredb("GET", f"/coredb/creditos/solicitudes/{solicitud}", 200, token=token)
+    exigir(en_core["estado"] == "EN_EVALUACION" and en_core["codCliente"] == cliente
+           and len(en_core["calendario"]["cuotas"]) == 12 and en_core["historial"][-1]["actor"] == "svc-evaluacion",
+           f"La solicitud en COREDB no es la esperada: {en_core}")
+    situacion = {"versionSolicitud": 1, "ingresoMensual": "5000.00", "deudaMensual": "0.00", "riesgo": "BUENO",
+                 "verificada": True}
+    estado, resultado = pedir("POST", f"{base}/v1/solicitudes/{solicitud}/evaluaciones", situacion, token)
+    exigir(estado == 200 and resultado["resultado"] == "APROBADO" and resultado["estadoSolicitud"] == "APROBADA"
+           and resultado["idEvaluacion"] == acuse["idEvaluacion"],
+           f"Evaluación por la regla: {estado} {resultado}")
+    aprobaciones = coredb("GET", f"/coredb/creditos/aprobaciones?idSolicitud={solicitud}", 200, token=token)
+    exigir([a["idEvaluacion"] for a in aprobaciones] == [acuse["idEvaluacion"]],
+           f"La aprobación debía quedar disponible para Desembolso: {aprobaciones}")
+    detalle = coredb("GET", f"/coredb/creditos/solicitudes/{solicitud}", 200, token=token)
+    exigir(detalle["historial"][-1]["actor"] == USUARIO,
+           f"El historial debía registrar a {USUARIO}, que evaluó con su token: {detalle['historial']}")
+    paso(f"EVALUACIÓN: expediente de SOL registrado en COREDB (acuse {acuse['acuse'][:12]}…, repetición sin "
+         f"duplicar), evaluado por {USUARIO} con su token y APROBADO por la regla; la aprobación queda para Desembolso")
+
+    sobre = sobre_sol(cliente)
+    enviar_expediente(sobre)
+    observada = sobre["idSolicitud"]
+    estado, resultado = pedir("POST", f"{base}/v1/solicitudes/{observada}/evaluaciones",
+                              {**situacion, "ingresoMensual": "4000.00"}, token)
+    exigir(estado == 200 and resultado["resultado"] == "OBSERVADO" and resultado["estadoSolicitud"] == "EN_EVALUACION",
+           f"La zona gris de la regla debía quedar OBSERVADO: {estado} {resultado}")
+    decision = f"{base}/v1/evaluaciones/{resultado['idEvaluacion']}/decision"
+    estado, _ = pedir("POST", decision, {"decision": "OBSERVADO", "comentario": "Precisar el destino declarado."}, token)
+    exigir(estado == 422, f"El analista no devuelve la solicitud a SOL (T1): respondió {estado}")
+    estado, respuesta = pedir("POST", decision, {"decision": "APROBADO", "comentario": "Sustento revisado."}, token)
+    exigir(estado == 422 and respuesta["error"]["code"] == "ANALISTA_REQUERIDO",
+           f"Decidir exige un analista registrado (el administrador no tiene empleado): {estado} {respuesta}")
+    paso("EVALUACIÓN: un caso OBSERVADO espera al analista; no se devuelve a SOL (T1) y decidir exige un "
+         "analista registrado")
+
+    estado, respuesta = pedir("GET", f"{FRONTEND}/api/evaluacion/solicitudes/{solicitud}", token=token)
+    exigir(estado == 200 and respuesta["estado"] == "APROBADA", f"Puente a Evaluación: {estado} {respuesta}")
+    paso("frontend: su puente llega a Evaluación con el token del usuario")
 
     # ── Por los puentes del frontend, como lo hace el navegador ─────────────
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
