@@ -68,6 +68,7 @@ X374	bna_app_user	Con la tarjeta bloqueada no se valida el PIN ni se registra el
 X375	bna_app_user	Un PIN de cinco dígitos se rechaza sin mostrarlo (RN-TAR-001)	pasa
 X376	bna_app_user	Cambiar el PIN reemplaza el anterior y reinicia los intentos	pasa
 X377	bna_app_user	La clave web de seis dígitos se valida por Home Banking	pasa
+X397	bna_app_user	bna_app no puede registrar empleados (solo bna_api)	pasa
 X110	bna_api_user	bna_api no puede: SELECT tarjetas.credencial	pasa
 X111	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_token	pasa
 X112	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_coordenada	pasa
@@ -260,6 +261,17 @@ X378	bna_api_user	bna_api autoriza por el procedimiento y lee la autorización e
 X379	bna_api_user	bna_api no puede: INSERT en autorizacion	pasa
 X380	bna_api_user	bna_api no puede: formato_credencial	pasa
 X381	bna_api_user	bna_api registra y valida un PIN sin leer las credenciales	pasa
+X386	bna_api_user	Un administrador registra un empleado y lo liga a un usuario sin empleado	pasa
+X387	bna_api_user	El registro del empleado se audita sin el nombre de la persona	pasa
+X388	bna_api_user	El empleado registrado por la API queda disponible como analista y decide una evaluación R-B	pasa
+X389	bna_api_user	Sin usuario, el empleado se registra y puede ser analista	pasa
+X390	bna_api_user	Un código de empleado repetido se rechaza sin mostrar el código	pasa
+X391	bna_api_user	Un usuario que ya tiene empleado no se liga a otro	pasa
+X392	bna_api_user	Un usuario de servicio no se liga a un empleado	pasa
+X393	bna_api_user	Un usuario inexistente se rechaza	pasa
+X394	bna_api_user	Una agencia inexistente se rechaza sin mostrarla	pasa
+X395	bna_api_user	El código, el nombre y el cargo son obligatorios	pasa
+X396	bna_api_user	bna_api no puede: INSERT en core.empleado	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
@@ -368,3 +380,6 @@ X382	bna_api_user	Una autorización en autocommit queda AUTORIZADA y retiene el 
 X383	bna_api_user	Un rechazo en autocommit deja la autorización RECHAZADA (v1.5)	pasa
 X384	bna_api_user	Un PIN equivocado en autocommit deja el intento FALLIDO (v1.5)	pasa
 X385	bna_api_user	Una autorización que falla a mitad no deja la fila ni retiene el saldo (v1.5)	pasa
+X398	bna_api_user	Un empleado registrado en autocommit queda ligado a su usuario (v1.6)	pasa
+X399	bna_api_user	registrar_empleado no deja el empleado ni el vínculo si falla el evento (v1.6)	pasa
+X400	bna_api_user	registrar_empleado deshace solo lo suyo dentro de una transacción (v1.6)	pasa
