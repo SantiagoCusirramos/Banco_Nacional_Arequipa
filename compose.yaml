@@ -38,6 +38,19 @@ x-sol: &sol
     SOL_DB_NAME: bna_sol_mvp
     SOL_INTEGRATION_MODE: SIMULADO
 
+x-captacion: &captacion
+  image: bna/backend:local
+  pull_policy: never
+  environment: &captacion-entorno
+    CORE_BASE_URL: http://coredb:8012
+    CAP_DB_HOST: db-aux
+    CAP_DB_PORT: "3306"
+    CAP_DB_USER: cap_user
+    CAP_DB_NAME: bna_captacion
+    CAP_DB_PASSWORD: ${CAP_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    CAP_CORE_USUARIO: svc-captacion
+    CAP_CORE_SECRETO_ARCHIVO: /datos/coredb_secreto
+
 x-sonda: &sonda
   interval: 5s
   timeout: 5s
@@ -154,6 +167,55 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8002/ready", timeout=3)
 
+  # ── CAPTACION: captación de clientes, sobre COREDB ──────────────────────
+  # Verifica la identidad del solicitante, lo registra como cliente en COREDB y
+  # publica la referencia que consulta SOL (CR-INT-01). Su base propia está en db-aux.
+  captacion:
+    <<: *captacion
+    command: uvicorn CAPTACION.main:app --host 0.0.0.0 --port 8014
+    environment:
+      <<: *captacion-entorno
+      CAP_SOL_TOKEN: ${CAP_SOL_TOKEN:?Falta en .env. Ejecute ./bna up}
+      CAP_OTP_CLAVE: ${CAP_OTP_CLAVE:?Falta en .env. Ejecute ./bna up}
+      # Sin proveedor de SMS ni de correo: el código OTP vuelve en la respuesta.
+      CAP_OTP_SIMULADO: "true"
+    volumes:
+      - captacion-datos:/datos:ro
+    depends_on:
+      captacion-init:
+        condition: service_completed_successfully
+      coredb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_CAPTACION:-8014}:8014"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8014/ready", timeout=3)
+
+  # Crea la base de CAPTACION en db-aux y sus tablas, y con el administrador de
+  # COREDB crea o renueva su usuario de servicio (módulo CLIENTES). No borra datos.
+  captacion-init:
+    <<: *captacion
+    command: python -m CAPTACION.manage init
+    environment:
+      <<: *captacion-entorno
+      AUX_DB_ROOT_PASSWORD: ${AUX_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
+      BNA_ADMIN_PASSWORD: ${BNA_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
+    volumes:
+      - captacion-datos:/datos
+    depends_on:
+      db-aux:
+        condition: service_healthy
+      coredb:
+        condition: service_healthy
+      coredb-init:
+        condition: service_completed_successfully
+
   # ── SOL: solicitud de crédito, con Captación y Evaluación simuladas ─────
   sol:
     <<: *sol
@@ -222,6 +284,7 @@ services:
       TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
       SOL_GATEWAY_URL: http://sol:8011/gateway/sol
       SOL_COOKIE_SECURE: "false"
+      CAPTACION_GATEWAY_URL: http://captacion:8014/api/v1/captacion
     depends_on:
       coredb:
         condition: service_healthy
@@ -230,6 +293,8 @@ services:
       tarjetas:
         condition: service_healthy
       sol:
+        condition: service_healthy
+      captacion:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BNA_PUERTO_FRONTEND:-3000}:3000"
@@ -265,7 +330,7 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8000/health", timeout=3)
 
-  # ── Base auxiliar: `bna` legada y `bna_sol_mvp` de SOL ──────────────────
+  # ── Base auxiliar: `bna` legada, `bna_sol_mvp` de SOL y `bna_captacion` ──
   # Aparte de la base integrada, que no recibe esquemas ni usuarios ajenos.
   db-aux:
     image: bna/db-aux:local
@@ -287,3 +352,4 @@ volumes:
   core-db-datos:
   db-aux-datos:
   seguridad-datos:
+  captacion-datos:

@@ -110,6 +110,8 @@ resumen() {
   CUENTAS           http://127.0.0.1:$(valor BNA_PUERTO_CUENTAS)/docs
   TARJETAS          http://127.0.0.1:$(valor BNA_PUERTO_TARJETAS)/docs
   SOL               http://127.0.0.1:$(valor BNA_PUERTO_SOL)/docs
+  CAPTACION         http://127.0.0.1:$(valor BNA_PUERTO_CAPTACION)/docs
+  Captación (asesor) http://localhost:$(valor BNA_PUERTO_FRONTEND)/captacion
   Seguridad         http://127.0.0.1:$(valor BNA_PUERTO_SEGURIDAD)
   MySQL (CORE)      127.0.0.1:$(valor BNA_PUERTO_DB)
 
@@ -132,6 +134,7 @@ humo() {
   compose exec -T \
     -e BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     -e BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
+    -e CAP_SOL_TOKEN="$(valor CAP_SOL_TOKEN)" \
     coredb python - < scripts/flujo_e2e.py
 }
 

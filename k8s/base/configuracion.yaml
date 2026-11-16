@@ -14,8 +14,16 @@ data:
   SOL_DB_NAME: bna_sol_mvp
   SOL_INTEGRATION_MODE: SIMULADO
   SEGURIDAD_DB: /datos/seguridad.sqlite3
+  CAP_DB_HOST: db-aux
+  CAP_DB_PORT: "3306"
+  CAP_DB_USER: cap_user
+  CAP_DB_NAME: bna_captacion
+  CAP_CORE_USUARIO: svc-captacion
+  CAP_CORE_SECRETO_ARCHIVO: /datos/coredb_secreto
+  CAP_OTP_SIMULADO: "true"
   COREDB_URL: http://coredb:8012
   CUENTAS_GATEWAY_URL: http://cuentas:8001/api/v1/cuentas
   TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
   SOL_GATEWAY_URL: http://sol:8011/gateway/sol
+  CAPTACION_GATEWAY_URL: http://captacion:8014/api/v1/captacion
   SOL_COOKIE_SECURE: "false"

@@ -40,6 +40,14 @@ export const apiTarjetas = axios.create({
 });
 apiTarjetas.interceptors.request.use(conToken);
 
+// CAPTACION por el puente de Next (/api/captacion), que reenvía el token.
+export const apiCaptacion = axios.create({
+  baseURL: "/api/captacion",
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000,
+});
+apiCaptacion.interceptors.request.use(conToken);
+
 const OPERACIONES = ["/deposito", "/retiro", "/transferencia"];
 
 /** Cabeceras que CUENTAS exige en toda operación que mueve dinero. */
@@ -65,7 +73,7 @@ export function mensajeError(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data;
     if (data?.error?.message) return data.error.message; // COREDB
-    if (typeof data?.message === "string" && data.message) return data.message; // CUENTAS
+    if (typeof data?.message === "string" && data.message) return data.message; // CUENTAS, TARJETAS, CAPTACION
     if (typeof data?.detail === "string") return data.detail;
     if (Array.isArray(data?.detail)) return "Revisa los datos enviados: algún campo no es válido.";
     if (err.response?.status === 401) return "Credenciales incorrectas o sesión vencida.";

@@ -1,0 +1,108 @@
+# CAPTACION: captación de clientes, sobre COREDB. Su base propia (bna_captacion) está
+# en db-aux; la credencial de su usuario de servicio en COREDB la escribe el
+# contenedor de arranque en un volumen del pod, que solo vive con el pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: captacion
+  labels: { app.kubernetes.io/name: captacion }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: captacion }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: captacion }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: datos
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+      initContainers:
+        - name: esperar-dependencias
+          image: bna/backend:local
+          command:
+            - python
+            - -c
+            - |
+              import socket, sys, time
+              for destino in (("db-aux", 3306), ("coredb", 8012)):
+                  for _ in range(150):
+                      try:
+                          socket.create_connection(destino, 2).close()
+                          break
+                      except OSError:
+                          time.sleep(2)
+                  else:
+                      sys.exit(f"{destino[0]} no respondió a tiempo.")
+          resources: &recursos-arranque
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: &contenedor-seguro
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+        # Crea la base y las tablas, y crea o renueva el usuario de servicio en COREDB.
+        - name: preparar
+          image: bna/backend:local
+          command: [python, -m, CAPTACION.manage, init]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CAP_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_DB_PASSWORD } }
+            - name: AUX_DB_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: AUX_DB_ROOT_PASSWORD } }
+            - name: BNA_ADMIN_USUARIO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BNA_ADMIN_USUARIO } }
+            - name: BNA_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BNA_ADMIN_PASSWORD } }
+          volumeMounts:
+            - { name: datos, mountPath: /datos }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
+      containers:
+        - name: captacion
+          image: bna/backend:local
+          command: [uvicorn, CAPTACION.main:app, --host, 0.0.0.0, --port, "8014"]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CAP_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_DB_PASSWORD } }
+            - name: CAP_SOL_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_SOL_TOKEN } }
+            - name: CAP_OTP_CLAVE
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_OTP_CLAVE } }
+          volumeMounts:
+            - { name: datos, mountPath: /datos, readOnly: true }
+          ports:
+            - { name: http, containerPort: 8014 }
+          startupProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: *contenedor-seguro
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: captacion
+spec:
+  selector: { app.kubernetes.io/name: captacion }
+  ports:
+    - { name: http, port: 8014, targetPort: http }

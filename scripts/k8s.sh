@@ -13,7 +13,7 @@ RED=kind
 NS=bna
 IMAGENES=(bna/core-db:local bna/db-aux:local bna/coredb:local bna/backend:local
           bna/sol:local bna/seguridad:local bna/frontend:local)
-DESPLIEGUES=(db db-aux coredb cuentas tarjetas sol seguridad frontend)
+DESPLIEGUES=(db db-aux coredb cuentas tarjetas sol captacion seguridad frontend)
 ESPERA="${BNA_ESPERA_SEGUNDOS:-600}"
 
 k() { kubectl --context "$CONTEXTO" "$@"; }
@@ -105,6 +105,7 @@ Producto desplegado en el clúster $CLUSTER (kind).
   CUENTAS       http://127.0.0.1:18001/docs
   TARJETAS      http://127.0.0.1:18002/docs
   SOL           http://127.0.0.1:18011/docs
+  CAPTACION     http://127.0.0.1:18014/docs
   Seguridad     http://127.0.0.1:18013
 
   Administrador de COREDB: usuario $(valor BNA_ADMIN_USUARIO); su contraseña está en .env.
@@ -118,6 +119,7 @@ humo() {
   k -n "$NS" exec -i deployment/coredb -c coredb -- env \
     BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
+    CAP_SOL_TOKEN="$(valor CAP_SOL_TOKEN)" \
     python - < scripts/flujo_e2e.py
 }
 

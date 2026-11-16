@@ -7,10 +7,12 @@ Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
 saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
 COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
-módulo TARJETAS y todo por los puentes del frontend, que es el camino que sigue el
-navegador.
+módulo TARJETAS, un prospecto captado y habilitado por CAPTACION (cliente nuevo en
+COREDB y referencia CR-INT-01 para SOL) y todo por los puentes del frontend, que es el
+camino que sigue el navegador.
 """
 
+import datetime
 import json
 import os
 import random
@@ -24,11 +26,14 @@ COREDB = os.environ.get("E2E_COREDB", "http://127.0.0.1:8012")
 CUENTAS = os.environ.get("E2E_CUENTAS", "http://cuentas:8001")
 TARJETAS = os.environ.get("E2E_TARJETAS", "http://tarjetas:8002")
 FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
+CAPTACION = os.environ.get("E2E_CAPTACION", "http://captacion:8014")
+TOKEN_SOL = os.environ.get("CAP_SOL_TOKEN", "")
 SERVICIOS = {
     "COREDB": (COREDB + "/coredb/salud", {}),
     "CUENTAS": (CUENTAS + "/health", {}),
     "TARJETAS": (TARJETAS + "/health", {}),
     "SOL": (os.environ.get("E2E_SOL", "http://sol:8011") + "/ready", {}),
+    "CAPTACION": (CAPTACION + "/ready", {}),
     "Seguridad": (os.environ.get("E2E_SEGURIDAD", "http://seguridad:8013") + "/seguridad/estado",
                   {"X-Correlation-ID": "flujo-e2e"}),
     "frontend": (FRONTEND + "/login", {}),
@@ -259,6 +264,74 @@ def flujo():
     paso(f"TARJETAS: emisión a {titular} (no a un cliente OBSERVADO), repetición con la misma llave "
          "sin duplicar, 409 con la misma llave y otra cuenta, activación, bloqueo, desbloqueo rechazado y tarjetas del cliente")
 
+    # ── CAPTACION: un prospecto, de la solicitud a cliente habilitado ──────
+    exigir(TOKEN_SOL, "Falta CAP_SOL_TOKEN")
+    cap = CAPTACION + "/api/v1/captacion"
+    dni = "4" + "".join(random.choices("0123456789", k=6)) + "1"  # termina en 1: central NORMAL
+
+    def captacion(metodo, ruta, esperado, cuerpo=None):
+        estado, respuesta = pedir(metodo, cap + ruta, cuerpo, token)
+        exigir(estado == esperado, f"CAPTACION {metodo} {ruta}: se esperaba {esperado} y respondió {estado}: {respuesta}")
+        return respuesta["data"]
+
+    solicitante = captacion("POST", "/solicitantes", 201, {
+        "tipo_documento": "DNI", "numero_documento": dni, "nombres": "Rosa", "apellido_paterno": "Huamán",
+        "apellido_materno": "Ccori", "celular": "9" + "".join(random.choices("0123456789", k=8)),
+        "correo": f"captacion.{dni}.{uuid.uuid4().hex[:6]}@example.com"})["solicitante"]
+    caso = captacion("POST", "/casos", 201, {"id_solicitante": solicitante["id_solicitante"],
+                                             "canal": "AGENCIA", "id_agencia": AGENCIA})["id_caso"]
+    estado, respuesta = pedir("POST", f"{cap}/casos/{caso}/habilitar", token=token)
+    exigir(estado == 400 and respuesta.get("error_code") == "ERR-CAP-CASO-NO-LISTO",
+           f"Habilitar sin requisitos debía responder 400 ERR-CAP-CASO-NO-LISTO: {estado} {respuesta}")
+    captacion("POST", f"/casos/{caso}/consentimientos", 201, {"consentimientos": [
+        {"tipo": t, "aceptado": True} for t in ("TRATAMIENTO_DATOS", "CONSULTA_BUROS", "TERMINOS")]})
+    codigo = captacion("POST", f"/casos/{caso}/otp", 201, {"canal": "SMS"})["codigo_simulado"]
+    exigir(captacion("POST", f"/casos/{caso}/otp/verificar", 200, {"codigo": codigo})["verificado"],
+           "CAPTACION no aceptó el código OTP que acaba de generar")
+    captacion("POST", f"/casos/{caso}/validaciones", 201, {"tipos": ["RENIEC", "LISTAS_NEGRAS", "PEP"]})
+    captacion("POST", f"/casos/{caso}/consultas-riesgo", 201, {"central": "SBS"})
+    captacion("POST", f"/casos/{caso}/perfil", 201)
+    expediente = captacion("GET", f"/casos/{caso}", 200)
+    exigir(expediente["estado"] == "APROBADO", f"El caso debía quedar APROBADO: {expediente}")
+    habilitado = captacion("POST", f"/casos/{caso}/habilitar", 200)
+    cod_cliente = habilitado["cod_cliente"]
+    exigir(habilitado["estado"] == "HABILITADO" and habilitado["cliente_nuevo"],
+           f"El caso debía quedar HABILITADO con un cliente nuevo: {habilitado}")
+    exigir(captacion("POST", f"/casos/{caso}/habilitar", 200)["cod_cliente"] == cod_cliente,
+           "Repetir la habilitación debía devolver el mismo cliente")
+    paso("CAPTACION: solicitante, caso, consentimientos, OTP, RENIEC/listas/PEP, central, perfil y "
+         "habilitación; habilitar sin requisitos se rechaza y repetirla no duplica")
+
+    cliente = coredb("GET", f"/coredb/clientes/{cod_cliente}", 200, token=token)
+    exigir(cliente["numero_documento"] == dni and cliente["estado_cliente"] == "ACTIVO"
+           and cliente["estado_habilitante"] == "HABILITADO",
+           f"COREDB debía tener al cliente ACTIVO y HABILITADO: {cliente}")
+    paso(f"COREDB: CAPTACION registró al cliente {cod_cliente}, ACTIVO y HABILITADO")
+
+    # Lo que consulta SOL (CR-INT-01), con las reglas de backend/SOL/integrations.py.
+    estado, referencia = pedir("GET", f"{CAPTACION}/cap/references/{cod_cliente}", token=TOKEN_SOL)
+    exigir(estado == 200, f"CR-INT-01: la referencia respondió {estado}: {referencia}")
+    requeridos = ["id_cliente", "numero_documento", "nombres", "apellido_paterno", "apellido_materno",
+                  "estado_cliente", "id_caso", "id_verificacion", "fecha_verificacion", "vigente_hasta",
+                  "estado_habilitante", "version_contrato"]
+    vacios = [k for k in requeridos if not isinstance(referencia.get(k), str) or not referencia[k].strip()]
+    exigir(not vacios, f"CR-INT-01: campos vacíos en la referencia: {vacios}")
+    hoy_lima = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=5)).date()
+    exigir(referencia["id_cliente"] == cod_cliente and referencia["id_caso"] == caso
+           and referencia["estado_cliente"] == "ACTIVO" and referencia["estado_habilitante"] == "HABILITADO"
+           and referencia["id_verificacion"] == cliente["id_verificacion_captacion"]
+           and datetime.date.fromisoformat(referencia["fecha_verificacion"]) <= hoy_lima
+           <= datetime.date.fromisoformat(referencia["vigente_hasta"]),
+           f"CR-INT-01: la referencia no habilita según las reglas de SOL: {referencia}")
+    exigir("celular" not in referencia and "correo" not in referencia,
+           "CR-INT-01: la referencia no debe llevar datos de contacto")
+    estado, _ = pedir("GET", f"{CAPTACION}/cap/references/{cod_cliente}", token=token)
+    exigir(estado == 401, f"CR-INT-01 con un token de persona debía responder 401 y respondió {estado}")
+    estado, lista = pedir("GET", f"{CAPTACION}/cap/references?search={dni}&limit=50", token=TOKEN_SOL)
+    exigir(estado == 200 and [r["id_cliente"] for r in lista] == [cod_cliente],
+           f"CR-INT-01: la búsqueda debía encontrar al cliente: {estado} {lista}")
+    paso("CR-INT-01: SOL recibe una referencia vigente y HABILITADA, con su búsqueda; un token de persona no entra")
+
     # ── Por los puentes del frontend, como lo hace el navegador ─────────────
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
     exigir(estado == 200 and respuesta["username"] == USUARIO, f"Puente a COREDB: {estado} {respuesta}")
@@ -268,9 +341,12 @@ def flujo():
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/tarjeta/{tarjeta}", token=token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
            f"Puente a TARJETAS: {estado} {respuesta}")
+    estado, respuesta = pedir("GET", f"{FRONTEND}/api/captacion/casos/{caso}", token=token)
+    exigir(estado == 200 and respuesta["data"]["cod_cliente"] == cod_cliente,
+           f"Puente a CAPTACION: {estado} {respuesta}")
     estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
     exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
-    paso("frontend: sus puentes llegan a COREDB, a CUENTAS y a TARJETAS con el token del usuario")
+    paso("frontend: sus puentes llegan a COREDB, a CUENTAS, a TARJETAS y a CAPTACION con el token del usuario")
 
 
 if __name__ == "__main__":

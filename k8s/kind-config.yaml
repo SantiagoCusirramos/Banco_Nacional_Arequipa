@@ -13,3 +13,4 @@ nodes:
       - { containerPort: 30011, hostPort: 18011, listenAddress: "127.0.0.1", protocol: TCP }  # SOL
       - { containerPort: 30012, hostPort: 18012, listenAddress: "127.0.0.1", protocol: TCP }  # COREDB
       - { containerPort: 30013, hostPort: 18013, listenAddress: "127.0.0.1", protocol: TCP }  # Seguridad
+      - { containerPort: 30014, hostPort: 18014, listenAddress: "127.0.0.1", protocol: TCP }  # CAPTACION
