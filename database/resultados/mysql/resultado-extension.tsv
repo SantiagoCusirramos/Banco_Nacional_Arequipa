@@ -142,6 +142,99 @@ X245	bna_api_user	bna_api no puede: escribir en cuentas.titularidad	pasa
 X246	bna_api_user	La vista de tarjetas tiene exactamente las columnas acordadas	pasa
 X247	bna_api_user	bna_api lee la cuenta principal de una tarjeta: una fila por tarjeta, NULL si no tiene cuenta	pasa
 X248	bna_api_user	Una tarjeta emitida por el procedimiento muestra su cuenta en la vista	pasa
+X249	bna_api_user	Un expediente nuevo queda EN_EVALUACION con su calendario PRELIMINAR y el id de evaluación determinista	pasa
+X250	bna_api_user	Repetir la misma versión con el mismo contenido devuelve lo mismo y no crea otro calendario	pasa
+X251	bna_api_user	La misma versión con otro contenido se rechaza	pasa
+X252	bna_api_user	Una versión nueva antes de evaluar abre la ronda 2 con su calendario; el anterior queda HISTORICO	pasa
+X253	bna_api_user	No se acepta una versión nueva cuando la ronda ya se evaluó	pasa
+X254	bna_api_user	Un expediente de un cliente inexistente se rechaza sin repetir el código	pasa
+X255	bna_api_user	Un expediente de un cliente que no puede operar se rechaza	pasa
+X256	bna_api_user	Un calendario con cuotas no consecutivas se rechaza	pasa
+X257	bna_api_user	Un calendario que no amortiza el monto solicitado se rechaza	pasa
+X258	bna_api_user	Un calendario con más cuotas que meses de plazo se rechaza	pasa
+X259	bna_api_user	Una versión anterior a la vigente se rechaza	pasa
+X260	bna_api_user	Ratio hasta 80 %: R-A, APROBADO y la solicitud APROBADA, con la evaluación en el id determinista	pasa
+X261	bna_api_user	Ratio entre 80 % y 100 %: R-B, OBSERVADO y la solicitud sigue EN_EVALUACION	pasa
+X262	bna_api_user	Ratio mayor que 100 %: R-C, RECHAZADO y la solicitud RECHAZADA	pasa
+X263	bna_api_user	Sin capacidad (límite cero): R-C	pasa
+X264	bna_api_user	Ratio exactamente 80 %: R-A	pasa
+X265	bna_api_user	Ratio exactamente 100 %: R-B	pasa
+X266	bna_api_user	Una ronda se evalúa una sola vez	pasa
+X267	bna_api_user	No se evalúa una versión que no es la vigente	pasa
+X268	bna_api_user	La evaluación guarda la situación financiera verificada y el score	pasa
+X269	bna_api_user	Un administrador registra a un empleado activo como analista	pasa
+X270	bna_api_user	Un empleado inactivo no se registra como analista	pasa
+X271	bna_api_user	Un empleado inexistente no se registra como analista	pasa
+X272	bna_api_user	El analista aprueba una evaluación R-B: decisión, analista y solicitud APROBADA	pasa
+X273	bna_api_user	El analista rechaza una evaluación R-B: solicitud RECHAZADA	pasa
+X274	bna_api_user	No se decide sobre una evaluación R-A	pasa
+X275	bna_api_user	Una evaluación R-B se decide una sola vez	pasa
+X276	bna_api_user	Decidir exige un usuario que sea analista registrado	pasa
+X277	bna_api_user	La decisión exige un comentario suficiente	pasa
+X278	bna_api_user	El analista no puede devolver OBSERVADO (diccionario de Evaluación)	pasa
+X279	bna_api_user	Revocar una aprobación la deja RECHAZADA con el motivo y rechaza su orden abierta	pasa
+X280	bna_api_user	Solo se revoca una solicitud APROBADA	pasa
+X281	bna_api_user	No se revoca un crédito ya desembolsado	pasa
+X282	bna_api_user	Revocar exige un motivo	pasa
+X283	bna_api_user	Las aprobaciones vigentes: la aprobada con 30 días de vigencia; ni la desembolsada ni la rechazada	pasa
+X284	bna_api_user	Preparar una orden: PREPARADA, código DES, importe aprobado y la validación CUENTA	pasa
+X285	bna_api_user	Repetir la preparación con la misma llave y contenido devuelve la misma orden	pasa
+X286	bna_api_user	La misma llave con otro contenido se rechaza	pasa
+X287	bna_api_user	Una aprobación tiene a lo sumo una orden abierta	pasa
+X288	bna_api_user	No se prepara una orden sin aprobación (R-B sin decidir)	pasa
+X289	bna_api_user	No se prepara una orden de un id de evaluación inexistente	pasa
+X290	bna_api_user	No se prepara una orden si la primera cuota ya venció	pasa
+X291	bna_api_user	La cuenta destino debe ser del cliente, y el mensaje no la repite	pasa
+X292	bna_api_user	La cuenta destino debe estar en la moneda del crédito	pasa
+X293	bna_api_user	La cuenta destino debe ser individual	pasa
+X294	bna_api_user	El desembolso es por ventanilla o Home Banking	pasa
+X295	bna_api_user	La identidad verificada hoy en ventanilla con la cuenta elegida deja la orden VALIDADA	pasa
+X296	bna_api_user	La validación de identidad de otro cliente no sirve como evidencia	pasa
+X297	bna_api_user	Una validación de identidad RECHAZADA no sirve como evidencia	pasa
+X298	bna_api_user	La validación CUENTA la registra la base, no quien llama	pasa
+X299	bna_api_user	Una identidad RECHAZADA queda registrada y la orden sigue PREPARADA	pasa
+X300	bna_api_user	Cambiar la cuenta de una orden VALIDADA a otra elegible deja una validación CUENTA nueva	pasa
+X301	bna_api_user	No se cambia la cuenta a una que no es elegible	pasa
+X302	bna_api_user	No se cambia la cuenta de una orden confirmada	pasa
+X303	bna_api_user	No se confirma una orden sin validar	pasa
+X304	bna_api_user	Confirmar abona la cuenta (DESEMBOLSO), crea el crédito AL_DIA y deja la solicitud DESEMBOLSADA	pasa
+X305	bna_api_user	El calendario OFICIAL es copia exacta del PRELIMINAR vigente (RN-SOL-006), que queda HISTORICO	pasa
+X306	bna_api_user	Repetir la confirmación devuelve el mismo crédito y el mismo abono, sin abonar otra vez	pasa
+X307	bna_api_user	La confirmación deja los eventos ORDEN y CREDITO en la bitácora de créditos y el del movimiento en la general	pasa
+X308	bna_api_user	Rechazar una orden PREPARADA la deja RECHAZADA con su motivo; ya no se confirma	pasa
+X309	bna_api_user	Rechazar una orden exige un motivo	pasa
+X310	bna_api_user	Una orden RECHAZADA no se confirma	pasa
+X311	bna_api_user	Un pago parcial debita la cuenta (DEBITO_CUOTA) y deja la cuota PARCIAL	pasa
+X312	bna_api_user	Un pago mayor que la cuota se aplica a la siguiente, de la más antigua a la más reciente	pasa
+X313	bna_api_user	Pagar toda la deuda deja las cuotas PAGADA y el crédito CANCELADO	pasa
+X314	bna_api_user	Un pago mayor que la deuda total se rechaza	pasa
+X315	bna_api_user	La cuenta que paga debe ser del titular del crédito, y el mensaje no la repite	pasa
+X316	bna_api_user	Un crédito CANCELADO no recibe pagos	pasa
+X317	bna_api_user	Sin fondos, el pago queda RECHAZADO con su motivo, sin movimiento y sin tocar las cuotas	pasa
+X318	bna_api_user	Repetir la referencia con el mismo contenido devuelve el mismo pago, sin debitar otra vez	pasa
+X319	bna_api_user	La misma referencia con otro contenido se rechaza	pasa
+X320	bna_api_user	Repetir la referencia de un pago RECHAZADO devuelve RECHAZADO y no intenta debitar otra vez	pasa
+X321	bna_api_user	Un crédito inexistente no recibe pagos	pasa
+X322	bna_api_user	El pago se lee con su cuenta, su movimiento y su reparto entre cuotas	pasa
+X323	bna_api_user	Se registra la mora de una cuota atrasada; queda vigente con sus días de atraso	pasa
+X324	bna_api_user	Un cálculo nuevo de mora deja vigente solo el último	pasa
+X325	bna_api_user	No se registra mora de una cuota que aún no vence	pasa
+X326	bna_api_user	La mora no puede ser negativa	pasa
+X327	bna_api_user	Los vencimientos del día marcan la cuota VENCIDA y el crédito EN_MORA; uno al día no cambia	pasa
+X328	bna_api_user	Pagar la cuota vencida devuelve el crédito a AL_DIA	pasa
+X329	bna_api_user	Los días de atraso se cuentan desde el vencimiento y son cero si la cuota no vence	pasa
+X330	bna_api_user	Los catálogos de créditos incluyen estados, reglas con umbrales, métodos, validaciones y canales	pasa
+X331	bna_api_user	El id de evaluación es determinista, distinto por ronda y un UUID válido (versión 8)	pasa
+X332	bna_api_user	Las vistas de créditos no exponen nombres, documentos ni contactos del cliente	pasa
+X333	bna_api_user	bna_api no puede: SELECT creditos.solicitud_credito	pasa
+X334	bna_api_user	bna_api no puede: SELECT creditos.orden_desembolso	pasa
+X335	bna_api_user	bna_api no puede: INSERT en creditos.pago	pasa
+X336	bna_api_user	bna_api no puede: registrar_evento_credito	pasa
+X337	bna_api_user	bna_api no puede: aplicar_pago	pasa
+X338	bna_api_user	bna_api no puede: verificar_aprobacion	pasa
+X339	bna_api_user	bna_api no puede: INSERT en creditos.numerador_orden	pasa
+X340	bna_api_user	bna_api no puede: escribir por la vista de créditos	pasa
+X341	bna_api_user	bna_api no puede: UPDATE de creditos.cuota	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
@@ -154,6 +247,7 @@ X56	bna_admin_user	Un canal inactivo se rechaza (I7)	pasa
 X205	bna_admin_user	Un usuario SERVICIO sin módulo se rechaza aun con privilegios	pasa
 X206	bna_admin_user	Una persona con módulo se rechaza aun con privilegios	pasa
 X207	bna_admin_user	bna_admin ejecuta los procedimientos de clientes por su privilegio sobre la base	pasa
+X342	bna_admin_user	bna_admin ejecuta los procedimientos de créditos	pasa
 X234	bna_app_user	Dos registros simultáneos con el mismo correo dejan un solo cliente	pasa
 X70	bna_api_user	Una transferencia a una cuenta bloqueada no deja nada (C1)	pasa
 X71	bna_api_user	Repetir la llave tras un fallo no informa éxito (C1)	pasa
@@ -231,3 +325,17 @@ X230	bna_api_user	renovar_credencial conserva 1213 en la transacción de quien l
 X231	bna_api_user	cambiar_estado_usuario conserva 1213 en la transacción de quien llama (R3)	pasa
 X232	bna_api_user	registrar_login conserva 1213 en la transacción de quien llama (R3)	pasa
 X233	bna_api_user	bna_app no ejecuta los procedimientos de clientes ni de usuarios de servicio (v1.1)	pasa
+X343	bna_api_user	registrar_solicitud no deja la solicitud, su calendario ni la recepción si falla el evento (C1)	pasa
+X344	bna_api_user	evaluar_solicitud no deja la evaluación ni cambia el estado si falla el evento (C1)	pasa
+X345	bna_api_user	confirmar_orden no deja abono, crédito ni calendario OFICIAL si falla después del movimiento (C1)	pasa
+X346	bna_api_user	registrar_pago_cuota no deja pago, débito ni aplicación si falla el evento (C1)	pasa
+X347	bna_api_user	registrar_pago_cuota deshace solo lo suyo dentro de una transacción (N2)	pasa
+X348	bna_api_user	Una aprobación de hace más de 30 días ya no admite órdenes ni figura como vigente	pasa
+X349	bna_api_user	Una cuenta bloqueada después de validar impide confirmar, sin movimiento	pasa
+X350	bna_api_user	bna_app no ejecuta los procedimientos de créditos (v1.4)	pasa
+X351	bna_api_user	registrar_solicitud conserva 1213 en la transacción de quien llama (R3)	pasa
+X352	bna_api_user	El deadlock en el débito de un pago llega a quien llama y no deja pago ni débito (R3)	pasa
+X353	bna_api_user	Dos confirmaciones simultáneas de una orden abonan una sola vez	pasa
+X354	bna_api_user	Dos pagos simultáneos con la misma referencia debitan una sola vez	pasa
+X355	bna_api_user	Dos preparaciones simultáneas con la misma llave dejan una sola orden	pasa
+X356	root	El evento diario de vencimientos de créditos existe y está activo	pasa
