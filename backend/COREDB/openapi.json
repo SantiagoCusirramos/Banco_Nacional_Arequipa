@@ -1,6 +1,42 @@
 {
   "components": {
     "schemas": {
+      "AcuseSolicitud": {
+        "properties": {
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "idEvaluacion": {
+            "description": "Id determinista de la evaluación de esta ronda.",
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "ronda": {
+            "title": "Ronda",
+            "type": "integer"
+          },
+          "versionSolicitud": {
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "ronda",
+          "idEvaluacion",
+          "estado"
+        ],
+        "title": "AcuseSolicitud",
+        "type": "object"
+      },
       "AgenciaRespuesta": {
         "properties": {
           "id_agencia": {
@@ -17,6 +53,110 @@
           "nombre"
         ],
         "title": "AgenciaRespuesta",
+        "type": "object"
+      },
+      "AnalistaRegistrado": {
+        "properties": {
+          "idAnalista": {
+            "title": "Idanalista",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idAnalista"
+        ],
+        "title": "AnalistaRegistrado",
+        "type": "object"
+      },
+      "AnalistaRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "idEmpleado": {
+            "format": "uuid",
+            "title": "Idempleado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEmpleado"
+        ],
+        "title": "AnalistaRegistrar",
+        "type": "object"
+      },
+      "AprobacionRespuesta": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "fechaAprobacion": {
+            "format": "date-time",
+            "title": "Fechaaprobacion",
+            "type": "string"
+          },
+          "idCalendario": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "El calendario PRELIMINAR vigente, sin cambios.",
+            "title": "Idcalendario"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "limiteAprobado": {
+            "title": "Limiteaprobado",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "plazoMeses": {
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "ronda": {
+            "title": "Ronda",
+            "type": "integer"
+          },
+          "vigenteHasta": {
+            "format": "date-time",
+            "title": "Vigentehasta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "idSolicitud",
+          "codCliente",
+          "ronda",
+          "monto",
+          "moneda",
+          "plazoMeses",
+          "limiteAprobado",
+          "fechaAprobacion",
+          "vigenteHasta",
+          "idCalendario"
+        ],
+        "title": "AprobacionRespuesta",
         "type": "object"
       },
       "COREDB__routers__clientes__EstadoCambiar": {
@@ -83,6 +223,88 @@
         "title": "EstadoCambiar",
         "type": "object"
       },
+      "CalendarioExpediente": {
+        "additionalProperties": false,
+        "properties": {
+          "cuotas": {
+            "items": {
+              "$ref": "#/components/schemas/CuotaExpediente"
+            },
+            "maxItems": 600,
+            "minItems": 1,
+            "title": "Cuotas",
+            "type": "array"
+          },
+          "metodo": {
+            "description": "FRANCES, ALEMAN o AMERICANO.",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Metodo",
+            "type": "string"
+          },
+          "tasa": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Fracción: 0.2200 es 22 %.",
+            "title": "Tasa"
+          }
+        },
+        "required": [
+          "metodo",
+          "tasa",
+          "cuotas"
+        ],
+        "title": "CalendarioExpediente",
+        "type": "object"
+      },
+      "CalendarioRespuesta": {
+        "properties": {
+          "cuotas": {
+            "items": {
+              "$ref": "#/components/schemas/CuotaRespuesta"
+            },
+            "title": "Cuotas",
+            "type": "array"
+          },
+          "idCalendario": {
+            "format": "uuid",
+            "title": "Idcalendario",
+            "type": "string"
+          },
+          "metodo": {
+            "title": "Metodo",
+            "type": "string"
+          },
+          "tasa": {
+            "title": "Tasa",
+            "type": "string"
+          },
+          "tipo": {
+            "enum": [
+              "PRELIMINAR",
+              "OFICIAL"
+            ],
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idCalendario",
+          "tipo",
+          "metodo",
+          "tasa",
+          "cuotas"
+        ],
+        "title": "CalendarioRespuesta",
+        "type": "object"
+      },
       "CatalogosClientesRespuesta": {
         "properties": {
           "estados_cliente": {
@@ -105,6 +327,83 @@
           "estados_cliente"
         ],
         "title": "CatalogosClientesRespuesta",
+        "type": "object"
+      },
+      "CatalogosCreditoRespuesta": {
+        "properties": {
+          "canalesDesembolso": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Canalesdesembolso",
+            "type": "array"
+          },
+          "estadosCredito": {
+            "items": {
+              "$ref": "#/components/schemas/CodigoCredito"
+            },
+            "title": "Estadoscredito",
+            "type": "array"
+          },
+          "estadosCuota": {
+            "items": {
+              "$ref": "#/components/schemas/CodigoCredito"
+            },
+            "title": "Estadoscuota",
+            "type": "array"
+          },
+          "estadosOrden": {
+            "items": {
+              "$ref": "#/components/schemas/EstadoCredito"
+            },
+            "title": "Estadosorden",
+            "type": "array"
+          },
+          "estadosSolicitud": {
+            "items": {
+              "$ref": "#/components/schemas/EstadoCredito"
+            },
+            "title": "Estadossolicitud",
+            "type": "array"
+          },
+          "metodosAmortizacion": {
+            "items": {
+              "$ref": "#/components/schemas/CodigoCredito"
+            },
+            "title": "Metodosamortizacion",
+            "type": "array"
+          },
+          "reglas": {
+            "items": {
+              "$ref": "#/components/schemas/ReglaEvaluacion"
+            },
+            "title": "Reglas",
+            "type": "array"
+          },
+          "tiposValidacion": {
+            "items": {
+              "$ref": "#/components/schemas/CodigoCredito"
+            },
+            "title": "Tiposvalidacion",
+            "type": "array"
+          },
+          "vigenciaAprobacionDias": {
+            "title": "Vigenciaaprobaciondias",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "estadosSolicitud",
+          "reglas",
+          "metodosAmortizacion",
+          "tiposValidacion",
+          "estadosOrden",
+          "estadosCuota",
+          "estadosCredito",
+          "canalesDesembolso",
+          "vigenciaAprobacionDias"
+        ],
+        "title": "CatalogosCreditoRespuesta",
         "type": "object"
       },
       "ClienteConEstadoAnterior": {
@@ -390,6 +689,24 @@
         "title": "ClienteRespuesta",
         "type": "object"
       },
+      "CodigoCredito": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "descripcion"
+        ],
+        "title": "CodigoCredito",
+        "type": "object"
+      },
       "CredencialRespuesta": {
         "properties": {
           "secreto": {
@@ -528,6 +845,202 @@
         "title": "CuentaRespuesta",
         "type": "object"
       },
+      "CuotaExpediente": {
+        "additionalProperties": false,
+        "properties": {
+          "amortizacion": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amortizacion"
+          },
+          "cuotaTotal": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Cuotatotal"
+          },
+          "fechaVencimiento": {
+            "format": "date",
+            "title": "Fechavencimiento",
+            "type": "string"
+          },
+          "interes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Interes"
+          },
+          "numeroCuota": {
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Numerocuota",
+            "type": "integer"
+          },
+          "saldoFinal": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Saldofinal"
+          },
+          "saldoInicial": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Saldoinicial"
+          }
+        },
+        "required": [
+          "numeroCuota",
+          "fechaVencimiento",
+          "saldoInicial",
+          "amortizacion",
+          "interes",
+          "cuotaTotal",
+          "saldoFinal"
+        ],
+        "title": "CuotaExpediente",
+        "type": "object"
+      },
+      "CuotaRespuesta": {
+        "properties": {
+          "capital": {
+            "title": "Capital",
+            "type": "string"
+          },
+          "cuotaTotal": {
+            "title": "Cuotatotal",
+            "type": "string"
+          },
+          "estadoCuota": {
+            "title": "Estadocuota",
+            "type": "string"
+          },
+          "fechaVencimiento": {
+            "format": "date",
+            "title": "Fechavencimiento",
+            "type": "string"
+          },
+          "interes": {
+            "title": "Interes",
+            "type": "string"
+          },
+          "numeroCuota": {
+            "title": "Numerocuota",
+            "type": "integer"
+          },
+          "otrosConceptos": {
+            "title": "Otrosconceptos",
+            "type": "string"
+          },
+          "saldoCapital": {
+            "title": "Saldocapital",
+            "type": "string"
+          },
+          "saldoPendiente": {
+            "title": "Saldopendiente",
+            "type": "string"
+          }
+        },
+        "required": [
+          "numeroCuota",
+          "fechaVencimiento",
+          "capital",
+          "interes",
+          "otrosConceptos",
+          "cuotaTotal",
+          "saldoCapital",
+          "saldoPendiente",
+          "estadoCuota"
+        ],
+        "title": "CuotaRespuesta",
+        "type": "object"
+      },
+      "DecisionRegistrada": {
+        "properties": {
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "estadoSolicitud": {
+            "title": "Estadosolicitud",
+            "type": "string"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "idSolicitud",
+          "decision",
+          "estadoSolicitud"
+        ],
+        "title": "DecisionRegistrada",
+        "type": "object"
+      },
+      "DecisionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "comentario": {
+            "maxLength": 500,
+            "minLength": 10,
+            "title": "Comentario",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "APROBADO",
+              "RECHAZADO"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "comentario"
+        ],
+        "title": "DecisionRegistrar",
+        "type": "object"
+      },
       "DocumentoVerificado": {
         "properties": {
           "cliente": {
@@ -636,6 +1149,206 @@
         "title": "EstadoClienteRespuesta",
         "type": "object"
       },
+      "EstadoCredito": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          },
+          "esFinal": {
+            "title": "Esfinal",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "codigo",
+          "descripcion",
+          "esFinal"
+        ],
+        "title": "EstadoCredito",
+        "type": "object"
+      },
+      "EvaluacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "deudaMensual": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Deudamensual"
+          },
+          "ingresoMensual": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Ingresomensual"
+          },
+          "riesgo": {
+            "enum": [
+              "BUENO",
+              "REGULAR",
+              "ALTO"
+            ],
+            "title": "Riesgo",
+            "type": "string"
+          },
+          "verificada": {
+            "title": "Verificada",
+            "type": "boolean"
+          },
+          "versionSolicitud": {
+            "maximum": 32767.0,
+            "minimum": 1.0,
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "versionSolicitud",
+          "ingresoMensual",
+          "deudaMensual",
+          "riesgo",
+          "verificada"
+        ],
+        "title": "EvaluacionRegistrar",
+        "type": "object"
+      },
+      "EvaluacionRespuesta": {
+        "properties": {
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "deudaMensual": {
+            "title": "Deudamensual",
+            "type": "string"
+          },
+          "esUltima": {
+            "title": "Esultima",
+            "type": "boolean"
+          },
+          "fechaDecision": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechadecision"
+          },
+          "fechaEvaluacion": {
+            "format": "date-time",
+            "title": "Fechaevaluacion",
+            "type": "string"
+          },
+          "idAnalista": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idanalista"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "ingresoMensual": {
+            "title": "Ingresomensual",
+            "type": "string"
+          },
+          "limite": {
+            "title": "Limite",
+            "type": "string"
+          },
+          "regla": {
+            "title": "Regla",
+            "type": "string"
+          },
+          "resultado": {
+            "description": "La decisión del analista si la hay; si no, el de la regla.",
+            "title": "Resultado",
+            "type": "string"
+          },
+          "resultadoRegla": {
+            "title": "Resultadoregla",
+            "type": "string"
+          },
+          "resultadoVerificacion": {
+            "title": "Resultadoverificacion",
+            "type": "string"
+          },
+          "ronda": {
+            "title": "Ronda",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "ronda",
+          "fechaEvaluacion",
+          "score",
+          "limite",
+          "regla",
+          "resultadoRegla",
+          "ingresoMensual",
+          "deudaMensual",
+          "resultadoVerificacion",
+          "decision",
+          "comentario",
+          "fechaDecision",
+          "idAnalista",
+          "resultado",
+          "esUltima"
+        ],
+        "title": "EvaluacionRespuesta",
+        "type": "object"
+      },
       "EventoRespuesta": {
         "properties": {
           "accion": {
@@ -705,6 +1418,84 @@
         "title": "EventoRespuesta",
         "type": "object"
       },
+      "ExpedienteRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "calendario": {
+            "$ref": "#/components/schemas/CalendarioExpediente"
+          },
+          "codCliente": {
+            "maxLength": 12,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9]+$",
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "condicionPagoDoble": {
+            "default": false,
+            "title": "Condicionpagodoble",
+            "type": "boolean"
+          },
+          "destino": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Forma parte de la huella del expediente; no se guarda.",
+            "title": "Destino"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoSolicitado": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Montosolicitado"
+          },
+          "plazoMeses": {
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "versionSolicitud": {
+            "maximum": 32767.0,
+            "minimum": 1.0,
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "codCliente",
+          "montoSolicitado",
+          "moneda",
+          "plazoMeses",
+          "calendario"
+        ],
+        "title": "ExpedienteRegistrar",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -716,6 +1507,42 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HistorialRespuesta": {
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaHora": {
+            "format": "date-time",
+            "title": "Fechahora",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          }
+        },
+        "required": [
+          "estado",
+          "fechaHora",
+          "actor",
+          "motivo"
+        ],
+        "title": "HistorialRespuesta",
         "type": "object"
       },
       "LoginPeticion": {
@@ -1047,6 +1874,156 @@
         "title": "ProductoCreditoRespuesta",
         "type": "object"
       },
+      "ReglaEvaluacion": {
+        "properties": {
+          "codigoRn": {
+            "title": "Codigorn",
+            "type": "string"
+          },
+          "descripcion": {
+            "title": "Descripcion",
+            "type": "string"
+          },
+          "idRegla": {
+            "title": "Idregla",
+            "type": "string"
+          },
+          "ratioMax": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratiomax"
+          },
+          "ratioMin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratiomin"
+          },
+          "resultado": {
+            "title": "Resultado",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idRegla",
+          "codigoRn",
+          "descripcion",
+          "ratioMin",
+          "ratioMax",
+          "resultado"
+        ],
+        "title": "ReglaEvaluacion",
+        "type": "object"
+      },
+      "ResultadoEvaluacion": {
+        "properties": {
+          "estadoSolicitud": {
+            "title": "Estadosolicitud",
+            "type": "string"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "limite": {
+            "title": "Limite",
+            "type": "string"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Monto / límite; null si no hay capacidad de pago.",
+            "title": "Ratio"
+          },
+          "regla": {
+            "title": "Regla",
+            "type": "string"
+          },
+          "resultado": {
+            "enum": [
+              "APROBADO",
+              "OBSERVADO",
+              "RECHAZADO"
+            ],
+            "title": "Resultado",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "idSolicitud",
+          "resultado",
+          "regla",
+          "score",
+          "limite",
+          "ratio",
+          "estadoSolicitud"
+        ],
+        "title": "ResultadoEvaluacion",
+        "type": "object"
+      },
+      "RevocacionRegistrada": {
+        "properties": {
+          "estadoSolicitud": {
+            "title": "Estadosolicitud",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "estadoSolicitud"
+        ],
+        "title": "RevocacionRegistrada",
+        "type": "object"
+      },
+      "RevocacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "title": "RevocacionRegistrar",
+        "type": "object"
+      },
       "RolAsignar": {
         "properties": {
           "rol": {
@@ -1095,6 +2072,241 @@
           "nombre"
         ],
         "title": "ServicioCrear",
+        "type": "object"
+      },
+      "SolicitudDetalle": {
+        "properties": {
+          "calendario": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalendarioRespuesta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "condicionPagoDoble": {
+            "title": "Condicionpagodoble",
+            "type": "boolean"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "evaluaciones": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluacionRespuesta"
+            },
+            "title": "Evaluaciones",
+            "type": "array"
+          },
+          "fechaCreacion": {
+            "format": "date-time",
+            "title": "Fechacreacion",
+            "type": "string"
+          },
+          "historial": {
+            "items": {
+              "$ref": "#/components/schemas/HistorialRespuesta"
+            },
+            "title": "Historial",
+            "type": "array"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoSolicitado": {
+            "title": "Montosolicitado",
+            "type": "string"
+          },
+          "numeroCuotas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerocuotas"
+          },
+          "plazoMeses": {
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "primerVencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primervencimiento"
+          },
+          "ronda": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ronda"
+          },
+          "totalCuotas": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalcuotas"
+          },
+          "versionSolicitud": {
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "ronda",
+          "codCliente",
+          "montoSolicitado",
+          "moneda",
+          "plazoMeses",
+          "condicionPagoDoble",
+          "estado",
+          "fechaCreacion",
+          "numeroCuotas",
+          "totalCuotas",
+          "primerVencimiento",
+          "calendario",
+          "evaluaciones",
+          "historial"
+        ],
+        "title": "SolicitudDetalle",
+        "type": "object"
+      },
+      "SolicitudResumen": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "condicionPagoDoble": {
+            "title": "Condicionpagodoble",
+            "type": "boolean"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "format": "date-time",
+            "title": "Fechacreacion",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoSolicitado": {
+            "title": "Montosolicitado",
+            "type": "string"
+          },
+          "numeroCuotas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerocuotas"
+          },
+          "plazoMeses": {
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "primerVencimiento": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primervencimiento"
+          },
+          "ronda": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ronda"
+          },
+          "totalCuotas": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalcuotas"
+          },
+          "versionSolicitud": {
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "versionSolicitud",
+          "ronda",
+          "codCliente",
+          "montoSolicitado",
+          "moneda",
+          "plazoMeses",
+          "condicionPagoDoble",
+          "estado",
+          "fechaCreacion",
+          "numeroCuotas",
+          "totalCuotas",
+          "primerVencimiento"
+        ],
+        "title": "SolicitudResumen",
         "type": "object"
       },
       "TarjetaEmitir": {
@@ -1993,6 +3205,33 @@
         ]
       }
     },
+    "/coredb/catalogos/creditos": {
+      "get": {
+        "description": "Estados, reglas de RN-EVA-002-P con sus umbrales (ratio monto / límite, en %), métodos\nde amortización, tipos de validación del desembolso, canales y vigencia de una aprobación.\nCampos en camelCase, como el resto de créditos (CONTRATO_CREDITOS.md).",
+        "operationId": "catalogos_de_creditos_coredb_catalogos_creditos_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogosCreditoRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Catalogos De Creditos",
+        "tags": [
+          "catálogos"
+        ]
+      }
+    },
     "/coredb/catalogos/monedas": {
       "get": {
         "operationId": "monedas_coredb_catalogos_monedas_get",
@@ -2470,6 +3709,609 @@
         "summary": "Registrar Validacion",
         "tags": [
           "clientes"
+        ]
+      }
+    },
+    "/coredb/creditos/analistas": {
+      "post": {
+        "description": "Registra a un empleado activo como analista de crédito. Para decidir, el usuario del\nanalista debe estar ligado a ese empleado (`id_empleado` de `POST /coredb/usuarios`).",
+        "operationId": "registrar_analista_coredb_creditos_analistas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalistaRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalistaRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "409": {
+            "description": "ANALISTA_DUPLICADO"
+          },
+          "422": {
+            "description": "EMPLEADO_NO_HABILITADO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Analista",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/aprobaciones": {
+      "get": {
+        "description": "Aprobaciones que todavía admiten un desembolso: la última ronda, aprobada por la regla o\npor el analista, dentro de su vigencia y sin orden confirmada. El calendario está en\n`GET /coredb/creditos/solicitudes/{idSolicitud}`.",
+        "operationId": "aprobaciones_coredb_creditos_aprobaciones_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "idSolicitud",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idsolicitud"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AprobacionRespuesta"
+                  },
+                  "title": "Response Aprobaciones Coredb Creditos Aprobaciones Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Aprobaciones",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/evaluaciones/{id_evaluacion}/decision": {
+      "post": {
+        "description": "El analista decide, una sola vez, una evaluación OBSERVADO de la ronda vigente. El\nusuario del token debe estar ligado a un empleado registrado como analista.",
+        "operationId": "decidir_coredb_creditos_evaluaciones__id_evaluacion__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_evaluacion",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Evaluacion",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionRegistrada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "EVALUACION_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "ANALISTA_REQUERIDO o EVALUACION_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Decidir",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/solicitudes": {
+      "get": {
+        "description": "Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente.",
+        "operationId": "bandeja_coredb_creditos_solicitudes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "estado",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "REGISTRADA",
+                    "EN_EVALUACION",
+                    "APROBADA",
+                    "RECHAZADA",
+                    "DESEMBOLSADA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SolicitudResumen"
+                  },
+                  "title": "Response Bandeja Coredb Creditos Solicitudes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Bandeja",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      },
+      "post": {
+        "description": "Registra una versión del expediente de SOL (CR-INT-02) con su calendario PRELIMINAR.\n\nUna versión nueva abre otra ronda y solo se acepta mientras la ronda vigente no esté\nevaluada. La misma versión con el mismo contenido responde 200 con el mismo acuse; con\notro contenido, 409. El `idEvaluacion` del acuse es el que tendrá la evaluación.",
+        "operationId": "registrar_solicitud_coredb_creditos_solicitudes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpedienteRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "El mismo expediente ya se había recibido"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcuseSolicitud"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
+          "422": {
+            "description": "CLIENTE_NO_HABILITADO, CALENDARIO_INVALIDO o SOLICITUD_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Solicitud",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/solicitudes/{id_solicitud}": {
+      "get": {
+        "description": "La solicitud con su calendario vigente (el PRELIMINAR de SOL o, ya desembolsada, el\nOFICIAL), sus evaluaciones por ronda y su historial de estados.",
+        "operationId": "detalle_coredb_creditos_solicitudes__id_solicitud__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitud",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitud",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudDetalle"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITUD_NO_ENCONTRADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Detalle",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/solicitudes/{id_solicitud}/evaluaciones": {
+      "post": {
+        "description": "Corre RN-EVA-002-P sobre la ronda vigente: COREDB calcula el score y el límite, y la\nbase elige la regla con sus umbrales. APROBADO deja la solicitud APROBADA, RECHAZADO la\ndeja RECHAZADA y OBSERVADO la deja EN_EVALUACION para el analista. Una ronda se evalúa una\nsola vez: si se pierde la respuesta, el resultado está en el detalle de la solicitud.",
+        "operationId": "evaluar_coredb_creditos_solicitudes__id_solicitud__evaluaciones_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitud",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitud",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoEvaluacion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITUD_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "SITUACION_NO_VERIFICADA, SOLICITUD_NO_ADMITIDA o EVALUACION_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Evaluar",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/solicitudes/{id_solicitud}/revocacion": {
+      "post": {
+        "description": "Revoca una aprobación sin desembolso: la solicitud queda RECHAZADA con el motivo y sus\nórdenes abiertas, RECHAZADA.",
+        "operationId": "revocar_coredb_creditos_solicitudes__id_solicitud__revocacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitud",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitud",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevocacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocacionRegistrada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITUD_NO_ENCONTRADA"
+          },
+          "422": {
+            "description": "SOLICITUD_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Revocar",
+        "tags": [
+          "créditos: evaluación"
         ]
       }
     },
