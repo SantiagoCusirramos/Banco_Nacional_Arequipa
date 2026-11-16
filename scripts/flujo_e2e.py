@@ -9,7 +9,9 @@ saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
 COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
 módulo TARJETAS (con un retiro autorizado y extornado), una solicitud de crédito
 por EVALUACIÓN (expediente con el formato de SOL → evaluación → decisión, todo en
-COREDB) y todo por los puentes del frontend, que es el camino que sigue el navegador.
+COREDB), su desembolso por DESEMBOLSO (identidad → orden → validación → confirmación,
+que abona una sola vez y crea el crédito) y todo por los puentes del frontend, que es el
+camino que sigue el navegador.
 """
 
 import json
@@ -28,12 +30,14 @@ CUENTAS = os.environ.get("E2E_CUENTAS", "http://cuentas:8001")
 TARJETAS = os.environ.get("E2E_TARJETAS", "http://tarjetas:8002")
 FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
 EVALUACION = os.environ.get("E2E_EVALUACION", "http://evaluacion:8015")
+DESEMBOLSO = os.environ.get("E2E_DESEMBOLSO", "http://desembolso:8016")
 SERVICIOS = {
     "COREDB": (COREDB + "/coredb/salud", {}),
     "CUENTAS": (CUENTAS + "/health", {}),
     "TARJETAS": (TARJETAS + "/health", {}),
     "SOL": (os.environ.get("E2E_SOL", "http://sol:8011") + "/ready", {}),
     "EVALUACIÓN": (EVALUACION + "/salud", {}),
+    "DESEMBOLSO": (DESEMBOLSO + "/salud", {}),
     "Seguridad": (os.environ.get("E2E_SEGURIDAD", "http://seguridad:8013") + "/seguridad/estado",
                   {"X-Correlation-ID": "flujo-e2e"}),
     "frontend": (FRONTEND + "/login", {}),
@@ -423,6 +427,75 @@ def flujo():
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/evaluacion/solicitudes/{solicitud}", token=token)
     exigir(estado == 200 and respuesta["estado"] == "APROBADA", f"Puente a Evaluación: {estado} {respuesta}")
     paso("frontend: su puente llega a Evaluación con el token del usuario")
+
+    # ── Por el módulo DESEMBOLSO, con el token de un operador ───────────────
+    # La verificación del documento solo aprueba a un cliente ACTIVO: el cliente del flujo se
+    # registró OBSERVADO (lo habilita el módulo Clientes, que no está), así que lo activa el
+    # administrador. El abono va a una cuenta nueva, para no tocar los saldos de arriba.
+    coredb("POST", f"/coredb/clientes/{cliente}/estado", 200,
+           {"estado": "ACTIVO", "motivo": "Identidad confirmada en ventanilla (flujo de extremo a extremo)."}, token)
+    operador = "op" + uuid.uuid4().hex[:12]
+    clave_operador = "clave-" + uuid.uuid4().hex
+    coredb("POST", "/coredb/usuarios", 201, {"username": operador, "nombre": "Operador del flujo",
+                                             "password": clave_operador, "rol": "OPERADOR"}, token)
+    token_op = coredb("POST", "/coredb/auth/login", 200,
+                      {"username": operador, "password": clave_operador})["access_token"]
+    n = int(time.time() * 1000) % 10**15 * 10 + 5
+    abono = coredb("POST", "/coredb/cuentas", 201, {
+        "num_cuenta": f"CTA-{n:016d}", "cci": f"{n:020d}", "moneda": "PEN", "regimen": "INDIVIDUAL",
+        "id_agencia": AGENCIA, "titulares": [cliente]}, token)["num_cuenta"]
+    des = DESEMBOLSO + "/api/v1"
+
+    estado, verificacion = pedir("POST", f"{des}/identidad", {"tipoDocumento": "DNI", "numeroDocumento": sufijo,
+                                                              "identidadVerificada": True}, token_op)
+    exigir(estado == 201 and verificacion["resultado"] == "APROBADO" and verificacion["codCliente"] == cliente,
+           f"Verificación del documento por Desembolso: {estado} {verificacion}")
+    estado, aprobaciones = pedir("GET", f"{des}/aprobaciones?codCliente={cliente}", token=token_op)
+    exigir(estado == 200 and [a["idEvaluacion"] for a in aprobaciones] == [acuse["idEvaluacion"]],
+           f"Desembolso debía leer de COREDB la aprobación de Evaluación: {estado} {aprobaciones}")
+    estado, cuentas_abono = pedir("GET", f"{des}/clientes/{cliente}/cuentas?moneda=PEN", token=token_op)
+    exigir(estado == 200 and {c["numCuenta"] for c in cuentas_abono if c["elegible"]} >= {abono},
+           f"La cuenta nueva debía admitir el abono: {estado} {cuentas_abono}")
+    llave = {"X-Idempotency-Key": str(uuid.uuid4())}
+    pedido = {"idEvaluacion": acuse["idEvaluacion"], "numCuenta": abono}
+    estado, orden = pedir("POST", f"{des}/ordenes", pedido, token_op, cabeceras=llave)
+    exigir(estado == 201 and orden["estado"] == "PREPARADA" and orden["importe"] == "15000.00"
+           and orden["usuarioPreparacion"] == operador, f"Orden de desembolso: {estado} {orden}")
+    estado, repetida = pedir("POST", f"{des}/ordenes", pedido, token_op, cabeceras=llave)
+    exigir(estado == 200 and repetida["idOrden"] == orden["idOrden"],
+           f"La misma llave debía devolver la misma orden: {estado} {repetida}")
+    id_orden = orden["idOrden"]
+    estado, validada = pedir("POST", f"{des}/ordenes/{id_orden}/validaciones", {
+        "tipo": "IDENTIDAD", "resultado": "APROBADA", "referenciaEvidencia": str(verificacion["idValidacion"])},
+        token_op)
+    exigir(estado == 201 and validada["estado"] == "VALIDADA", f"Identidad de la orden: {estado} {validada}")
+    estado, confirmada = pedir("POST", f"{des}/ordenes/{id_orden}/confirmacion", token=token_op)
+    exigir(estado == 201 and confirmada["estado"] == "CONFIRMADA" and confirmada["codCredito"].startswith("CRE-"),
+           f"Confirmación del desembolso: {estado} {confirmada}")
+    estado, otra = pedir("POST", f"{des}/ordenes/{id_orden}/confirmacion", token=token_op)
+    exigir(estado == 200 and otra["codCredito"] == confirmada["codCredito"]
+           and otra["uuidTransaccionAbono"] == confirmada["uuidTransaccionAbono"],
+           f"Confirmar otra vez debía devolver lo mismo: {estado} {otra}")
+    saldo_abono = coredb("GET", f"/coredb/cuentas/{abono}", 200, token=token)["saldo_disponible"]
+    abonos = coredb("GET", f"/coredb/movimientos/cuenta/{abono}", 200, token=token)
+    exigir(saldo_abono == "15000.00" and len(abonos) == 1,
+           f"El abono debía hacerse una sola vez: saldo {saldo_abono}, movimientos {abonos}")
+    credito = coredb("GET", f"/coredb/creditos/{confirmada['codCredito']}", 200, token=token)
+    exigir(credito["estado"] == "AL_DIA" and credito["codCliente"] == cliente and len(credito["cuotas"]) == 12,
+           f"El crédito debía nacer AL_DIA con sus 12 cuotas: {credito}")
+    desembolsada = coredb("GET", f"/coredb/creditos/solicitudes/{solicitud}", 200, token=token)
+    exigir(desembolsada["estado"] == "DESEMBOLSADA" and desembolsada["calendario"]["tipo"] == "OFICIAL",
+           f"La solicitud debía quedar DESEMBOLSADA con su calendario OFICIAL: {desembolsada['estado']}")
+    estado, sin_aprobaciones = pedir("GET", f"{des}/aprobaciones?codCliente={cliente}", token=token_op)
+    exigir(estado == 200 and sin_aprobaciones == [], f"La aprobación ya no debía estar disponible: {sin_aprobaciones}")
+    paso(f"DESEMBOLSO: {operador} (OPERADOR) verifica el documento, prepara la orden {orden['codigoOrden']} "
+         f"(repetición sin duplicar), la valida y la confirma: abono único de 15000.00, crédito "
+         f"{confirmada['codCredito']} AL_DIA con calendario OFICIAL y solicitud DESEMBOLSADA; confirmar otra vez "
+         "no abona de nuevo")
+
+    estado, respuesta = pedir("GET", f"{FRONTEND}/api/desembolso/ordenes/{id_orden}", token=token_op)
+    exigir(estado == 200 and respuesta["estado"] == "CONFIRMADA", f"Puente a Desembolso: {estado} {respuesta}")
+    paso("frontend: su puente llega a Desembolso con el token del operador")
 
     # ── Por los puentes del frontend, como lo hace el navegador ─────────────
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
