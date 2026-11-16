@@ -124,7 +124,7 @@ Si el producto no estaba levantado, `./bna test` elimina al terminar los contene
 
 `./bna smoke` inicia sesión como administrador, registra un cliente, le abre dos cuentas, deposita, transfiere, repite la transferencia para comprobar la idempotencia y lee saldos, movimientos y bitácora por COREDB; después consulta las mismas cuentas por CUENTAS; por TARJETAS emite una tarjeta al cliente de desarrollo `DEV001`, la activa, la bloquea y comprueba que el desbloqueo se rechaza; y al final llega a los tres servicios por los puentes del frontend. Cada ejecución crea un cliente nuevo y una tarjeta nueva.
 
-La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue.
+La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue o del flujo de extremo a extremo (`scripts/flujo_e2e.py`).
 
 ## Kubernetes
 
