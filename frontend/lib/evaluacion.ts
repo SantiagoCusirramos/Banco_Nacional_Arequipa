@@ -1,180 +1,134 @@
 import { apiEvaluacion as api, mensajeError } from "@/lib/api";
 
-// Contratos de EVALUACIÓN (backend/EVALUACION). Los montos llegan como texto decimal ("15000.00").
+// Contratos de EVALUACIÓN (backend/EVALUACION), que devuelve lo que responde COREDB
+// (backend/COREDB/CONTRATO_CREDITOS.md §3). Los montos llegan como texto decimal ("15000.00").
 
-export type EstadoEvaluacion = "PENDIENTE" | "EN_REVISION" | "APROBADO" | "OBSERVADO" | "RECHAZADO";
+export type EstadoSolicitud = "REGISTRADA" | "EN_EVALUACION" | "APROBADA" | "RECHAZADA" | "DESEMBOLSADA";
 export type Riesgo = "BUENO" | "REGULAR" | "ALTO";
-export type Decision = "APROBADO" | "OBSERVADO" | "RECHAZADO";
+// Por omisión del equipo (T1) el analista aprueba o rechaza: no devuelve la solicitud a SOL.
+export type Decision = "APROBADO" | "RECHAZADO";
 
-export const ESTADOS: EstadoEvaluacion[] = ["PENDIENTE", "EN_REVISION", "APROBADO", "OBSERVADO", "RECHAZADO"];
+export const ESTADOS: EstadoSolicitud[] = ["EN_EVALUACION", "APROBADA", "RECHAZADA", "DESEMBOLSADA"];
 export const RIESGOS: Riesgo[] = ["BUENO", "REGULAR", "ALTO"];
 
-export interface Evaluacion {
-  idEvaluacion: string;
+export interface Solicitud {
   idSolicitud: string;
   versionSolicitud: number;
-  ronda: number;
-  estado: EstadoEvaluacion;
-  version: number;
-  cliente: { idCliente: string; nombre: string; tipoDocumento: string; numeroDocumento: string };
-  producto: string;
-  destino: string | null;
+  ronda: number | null;
+  codCliente: string;
   montoSolicitado: string;
   moneda: string;
   plazoMeses: number;
-  tasaTea: string;
-  motor: { resultado: string; score: number; limite: string; ratio: string | null; regla: string } | null;
-  motivo: string | null;
-  decididoPor: string | null;
-  decididoEn: string | null;
-  recibidoEn: string;
-  actualizadoEn: string;
+  condicionPagoDoble: boolean;
+  estado: EstadoSolicitud;
+  fechaCreacion: string;
+  numeroCuotas: number | null;
+  totalCuotas: string | null;
+  primerVencimiento: string | null;
 }
 
 export interface Cuota {
   numeroCuota: number;
   fechaVencimiento: string;
-  amortizacion: string;
+  capital: string;
   interes: string;
   cuotaTotal: string;
-  saldoFinal: string;
+  saldoCapital: string;
 }
 
-export interface Aprobacion {
-  idAprobacion: string;
-  version: number;
-  codCredito: string;
-  estado: "VIGENTE" | "VENCIDA" | "DESEMBOLSADA" | "REVOCADA";
-  montoAprobado: string;
-  moneda: string;
-  plazoMeses: number;
-  tasaTea: string;
-  vigenteHasta: string;
-  aprobadaPor: string;
-  aprobadaEn: string;
-  desembolso: { codigoOrden: string; fechaDesembolso: string; registradoPor: string } | null;
-  revocacion: { motivo: string; revocadaPor: string; fecha: string } | null;
-}
-
-export interface Envio {
-  idOperacion: string;
+export interface Evaluacion {
   idEvaluacion: string;
-  interfaz: string;
-  decision: string;
-  estado: "PENDIENTE" | "ENTREGADO" | "ERROR";
-  intentos: number;
-  siguienteIntento: string;
-  ultimoError: string | null;
-  creadoEn: string;
-  entregadoEn: string | null;
+  ronda: number;
+  fechaEvaluacion: string;
+  score: string;
+  limite: string;
+  regla: string;
+  resultadoRegla: string;
+  ingresoMensual: string;
+  deudaMensual: string;
+  decision: string | null;
+  comentario: string | null;
+  fechaDecision: string | null;
+  resultado: string;
+  esUltima: boolean;
 }
 
-export interface Evento {
-  id: number;
-  fecha: string;
-  evento: string;
+export interface Estado {
+  estado: string;
+  fechaHora: string;
   actor: string;
-  idEvaluacion: string | null;
-  idAprobacion: string | null;
-  idCorrelacion: string | null;
-  detalle: Record<string, unknown> | null;
+  motivo: string | null;
 }
 
-export interface DetalleEvaluacion extends Evaluacion {
-  expediente: {
-    idOperacion: string;
-    acuse: string;
-    versionContrato: string;
-    actorEnvio: string | null;
-    simulado: boolean;
-    recibidoEn: string;
-    fechaBase: string | null;
-    garantias: { tipo: string; descripcion: string; valorTasacion: string }[];
-    fiadores: number;
-    politica: { version: string | null; estadoAprobacion: string | null };
-    calendario: {
-      estado: string | null;
-      cuotaReferencial: string | null;
-      interesesTotales: string | null;
-      totalPagar: string | null;
-      cuotas: Cuota[];
-    };
-  };
-  situacionFinanciera: {
-    ingresoMensual: string;
-    deudaMensual: string;
-    riesgo: Riesgo;
-    verificada: boolean;
-    registradoPor: string;
-    registradoEn: string;
-  } | null;
-  aprobacion: Aprobacion | null;
-  envioSol: Envio | null;
-  historial: Evento[];
+export interface DetalleSolicitud extends Solicitud {
+  calendario: { tipo: "PRELIMINAR" | "OFICIAL"; metodo: string; tasa: string; cuotas: Cuota[] } | null;
+  evaluaciones: Evaluacion[];
+  historial: Estado[];
 }
 
-export interface Bandeja {
-  items: Evaluacion[];
-  conteos: Partial<Record<EstadoEvaluacion, number>>;
+export interface ResultadoEvaluacion {
+  idEvaluacion: string;
+  resultado: "APROBADO" | "OBSERVADO" | "RECHAZADO";
+  regla: string;
+  score: number;
+  limite: string;
+  ratio: string | null;
+  estadoSolicitud: EstadoSolicitud;
+}
+
+export interface MensajeSol {
+  idSolicitud: string;
+  idEvaluacion: string;
+  ronda: number;
+  idOperacion: string;
+  decision: string;
+  observaciones: string;
 }
 
 export const mensajeDeError = mensajeError;
 
-export async function bandeja(filtros: { estado?: string; buscar?: string } = {}): Promise<Bandeja> {
+export async function bandeja(filtros: { estado?: string; codCliente?: string } = {}): Promise<Solicitud[]> {
   const params: Record<string, string> = {};
   if (filtros.estado) params.estado = filtros.estado;
-  if (filtros.buscar) params.buscar = filtros.buscar;
-  const { data } = await api.get<Bandeja>("/evaluaciones", { params });
+  if (filtros.codCliente) params.codCliente = filtros.codCliente;
+  const { data } = await api.get<Solicitud[]>("/solicitudes", { params });
   return data;
 }
 
-export async function verEvaluacion(id: string): Promise<DetalleEvaluacion> {
-  const { data } = await api.get<DetalleEvaluacion>(`/evaluaciones/${encodeURIComponent(id)}`);
+export async function verSolicitud(id: string): Promise<DetalleSolicitud> {
+  const { data } = await api.get<DetalleSolicitud>(`/solicitudes/${encodeURIComponent(id)}`);
   return data;
 }
 
-export async function registrarSituacion(
+export async function evaluar(
   id: string,
-  datos: { ingresoMensual: string; deudaMensual: string; riesgo: Riesgo; verificada: boolean; version: number },
-): Promise<DetalleEvaluacion> {
-  const { data } = await api.post<DetalleEvaluacion>(`/evaluaciones/${encodeURIComponent(id)}/situacion-financiera`, datos);
+  datos: { versionSolicitud: number; ingresoMensual: string; deudaMensual: string; riesgo: Riesgo; verificada: boolean },
+): Promise<ResultadoEvaluacion> {
+  const { data } = await api.post<ResultadoEvaluacion>(`/solicitudes/${encodeURIComponent(id)}/evaluaciones`, datos);
   return data;
 }
 
-export async function decidir(
-  id: string,
-  datos: { decision: Decision; observaciones: string; version: number },
-): Promise<DetalleEvaluacion> {
-  const { data } = await api.post<DetalleEvaluacion>(`/evaluaciones/${encodeURIComponent(id)}/decision`, datos);
+export async function decidir(idEvaluacion: string, datos: { decision: Decision; comentario: string }) {
+  const { data } = await api.post<{ estadoSolicitud: EstadoSolicitud }>(
+    `/evaluaciones/${encodeURIComponent(idEvaluacion)}/decision`, datos);
   return data;
 }
 
-export async function revocar(idAprobacion: string, datos: { motivo: string; version: number }): Promise<Aprobacion> {
-  const { data } = await api.post<Aprobacion>(`/aprobaciones/${encodeURIComponent(idAprobacion)}/revocacion`, datos);
+export async function revocar(id: string, datos: { motivo: string }) {
+  const { data } = await api.post<{ estadoSolicitud: EstadoSolicitud }>(
+    `/solicitudes/${encodeURIComponent(id)}/revocacion`, datos);
   return data;
 }
 
-export async function listarEnvios(estado?: string): Promise<{ items: Envio[]; configurado: boolean }> {
-  const { data } = await api.get<{ items: Envio[]; configurado: boolean }>("/envios", {
-    params: estado ? { estado } : {},
-  });
+export async function resultadosSol(): Promise<{ configurado: boolean; ventanaDias: number; items: MensajeSol[] }> {
+  const { data } = await api.get<{ configurado: boolean; ventanaDias: number; items: MensajeSol[] }>("/resultados-sol");
   return data;
-}
-
-export async function reintentarEnvio(idOperacion: string): Promise<Envio> {
-  const { data } = await api.post<Envio>(`/envios/${encodeURIComponent(idOperacion)}/reintento`);
-  return data;
-}
-
-export async function historial(): Promise<Evento[]> {
-  const { data } = await api.get<{ items: Evento[] }>("/historial");
-  return data.items;
 }
 
 /** "15000.00" → "15,000.00", sin pasar por float. */
 export function formatoMonto(texto: string | null | undefined): string {
   if (texto == null || texto === "") return "—";
-  const [entero, decimales = "00"] = texto.split(".");
+  const [entero, decimales = "00"] = String(texto).split(".");
   return `${entero.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${decimales.padEnd(2, "0")}`;
 }
 
@@ -198,4 +152,10 @@ export function fecha(iso: string | null | undefined): string {
   if (!iso) return "—";
   const [anio, mes, dia] = iso.slice(0, 10).split("-");
   return `${dia}/${mes}/${anio}`;
+}
+
+/** La suma de montos en texto, en céntimos enteros (sin errores de coma flotante). */
+export function sumar(montos: string[]): string {
+  const centimos = montos.reduce((total, m) => total + Math.round(Number(m) * 100), 0);
+  return (centimos / 100).toFixed(2);
 }
