@@ -4,7 +4,7 @@ Manifiestos del producto integrado, con [kustomize](https://kustomize.io/).
 
 | Carpeta | Qué contiene |
 |---|---|
-| `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `db-aux`, `coredb`, `cuentas`, `tarjetas`, `sol`, `seguridad` y `frontend`. Un ConfigMap con las direcciones internas |
+| `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `db-aux`, `coredb`, `cuentas`, `tarjetas`, `sol`, `evaluacion`, `seguridad` y `frontend`. Un ConfigMap con las direcciones internas |
 | `overlays/local/` | Ajustes para un clúster local de [kind](https://kind.sigs.k8s.io/): cada servicio como NodePort y las imágenes cargadas en el clúster |
 | `kind-config.yaml` | El clúster local, que publica esos NodePort en `127.0.0.1` |
 
@@ -28,6 +28,7 @@ Al terminar, `./bna k8s-up` muestra las direcciones. Usan puertos distintos de l
 | CUENTAS | http://127.0.0.1:18001/docs |
 | TARJETAS | http://127.0.0.1:18002/docs |
 | SOL | http://127.0.0.1:18011/docs |
+| Evaluación | http://localhost:13000/evaluacion (API: http://127.0.0.1:18015/docs) |
 | Seguridad | http://127.0.0.1:18013 |
 
 `scripts/k8s.sh` solo usa el contexto `kind-bna`: no toca ningún otro clúster configurado en la máquina.
@@ -41,8 +42,8 @@ Para cambiar una clave: editarla en `.env`, volver a ejecutar `./bna k8s-up` y r
 ## Cómo está armado
 
 - **Bases de datos:** Deployment con un PVC y estrategia `Recreate`. No es un StatefulSet para que la base sirva también en clústeres donde la cuenta no puede crearlos.
-- **Arranque en orden:** COREDB y SOL esperan a su base con un contenedor de inicio. Otro contenedor de inicio crea el primer administrador de COREDB si no existe, y prepara la base de SOL.
-- **Sondas:** cada servicio tiene sonda de arranque, de disponibilidad y de vida. Las de las bases leen la contraseña del entorno del contenedor, no de la línea de órdenes.
+- **Arranque en orden:** COREDB y SOL esperan a su base con un contenedor de inicio. Otros contenedores de inicio crean el primer administrador de COREDB si no existe y el usuario de servicio de Evaluación (`svc-evaluacion`, con `EVALUACION_COREDB_SECRETO` del Secret), y preparan la base de SOL. Evaluación espera a que COREDB responda.
+- **Sondas:** cada servicio tiene sonda de arranque, de disponibilidad y de vida. La de vida de Evaluación solo mira el puerto: su `/salud` depende de COREDB y no debe reiniciarla si COREDB cae. Las de las bases leen la contraseña del entorno del contenedor, no de la línea de órdenes.
 - **Límites:** cada contenedor declara CPU y memoria pedidas y máximas.
 - **Sin root:** todos los contenedores corren con un usuario sin privilegios, sin escalamiento y sin capacidades.
 - **Imágenes:** las mismas de `compose.yaml` (`bna/*:local`), construidas en la máquina y cargadas con `kind load`. Ninguna usa la etiqueta `latest`.
