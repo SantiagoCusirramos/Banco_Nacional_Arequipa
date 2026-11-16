@@ -1,142 +1,188 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { AlertaError, Boton, Encabezado, FilaVacia, InsigniaEstado, Tarjeta, estiloEntrada, td, th } from "@/app/desembolso/_componentes/ui";
+import { VerificarDocumento } from "@/app/desembolso/_componentes/Identidad";
+import { Alerta, AlertaError, Boton, Encabezado, FilaVacia, Insignia, InsigniaEstado, Tarjeta, estiloEntrada, td, th } from "@/app/desembolso/_componentes/ui";
 import { api, nuevaClave } from "@/lib/desembolso/api";
-import { dinero, fecha } from "@/lib/desembolso/formato";
-import { puede, useSesion } from "@/lib/desembolso/sesion";
-import type { CreditoHabilitado, OrdenDetalle } from "@/lib/desembolso/tipos";
+import { ETIQUETA_ESTADO, MOTIVOS_CUENTA, dinero, fecha } from "@/lib/desembolso/formato";
+import { useSesion } from "@/lib/desembolso/sesion";
+import type { Aprobacion, Cuenta, Orden, Verificacion } from "@/lib/desembolso/tipos";
 
-const esquema = z.object({
-  criterio: z.enum(["documento", "credito_id"]),
-  valor: z.string().trim().min(3, "Ingrese al menos 3 caracteres").max(36),
-});
-type Busqueda = z.infer<typeof esquema>;
-
-export default function Creditos() {
+// Pantalla 1. El operador verifica el documento del titular; con su cod_cliente se leen de COREDB las
+// aprobaciones vigentes (CR-INT-04) y las cuentas que admiten el abono. Preparar crea la orden y le
+// registra la identidad verificada hoy, así que queda VALIDADA y lista para confirmar.
+export default function Desembolsar() {
   const sesion = useSesion();
   const router = useRouter();
-  const [creditos, setCreditos] = useState<CreditoHabilitado[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const [verificacion, setVerificacion] = useState<Verificacion | null>(null);
+  const [aprobaciones, setAprobaciones] = useState<Aprobacion[] | null>(null);
+  const [cuentas, setCuentas] = useState<Cuenta[]>([]);
+  const [elegidas, setElegidas] = useState<Record<string, string>>({});
   const [preparando, setPreparando] = useState<string | null>(null);
-  const claves = useRef(new Map<string, string>()); // una clave por aprobacion mientras dure el intento
-  const { register, handleSubmit, formState } = useForm<Busqueda>({
-    resolver: zodResolver(esquema),
-    defaultValues: { criterio: "documento", valor: "" },
-  });
+  const [error, setError] = useState<unknown>(null);
+  // Una llave por aprobación mientras dure el intento: repetirlo devuelve la misma orden.
+  const llaves = useRef(new Map<string, string>());
 
-  async function buscar(datos: Busqueda) {
-    setError(null);
-    try {
-      const r = await api.get<CreditoHabilitado[]>("creditos-habilitados", { params: { [datos.criterio]: datos.valor } });
-      setCreditos(r.data);
-    } catch (e) {
-      setError(e);
-      setCreditos(null);
-    }
+  async function alVerificar(v: Verificacion) {
+    setVerificacion(v);
+    setAprobaciones(null);
+    if (v.resultado !== "APROBADO" || !v.codCliente) return;
+    const [a, c] = await Promise.all([
+      api.get<Aprobacion[]>("aprobaciones", { params: { codCliente: v.codCliente } }),
+      api.get<Cuenta[]>(`clientes/${encodeURIComponent(v.codCliente)}/cuentas`),
+    ]);
+    setAprobaciones(a.data);
+    setCuentas(c.data);
   }
 
-  async function preparar(c: CreditoHabilitado) {
+  function elegiblesPara(a: Aprobacion): Cuenta[] {
+    return cuentas.filter((c) => c.elegible && c.moneda === a.moneda);
+  }
+
+  async function preparar(a: Aprobacion) {
+    if (!verificacion) return;
+    const numCuenta = elegidas[a.idEvaluacion] ?? elegiblesPara(a)[0]?.numCuenta;
+    if (!numCuenta) return;
     setError(null);
-    setPreparando(c.aprobacion_id);
-    const clave = claves.current.get(c.aprobacion_id) ?? nuevaClave();
-    claves.current.set(c.aprobacion_id, clave);
+    setPreparando(a.idEvaluacion);
+    const llave = llaves.current.get(a.idEvaluacion) ?? nuevaClave();
+    llaves.current.set(a.idEvaluacion, llave);
     try {
-      const r = await api.post<OrdenDetalle>("ordenes", { aprobacion_id: c.aprobacion_id }, { headers: { "X-Idempotency-Key": clave } });
-      claves.current.delete(c.aprobacion_id);
-      router.push(`/desembolso/ordenes/${r.data.id}`);
+      const r = await api.post<Orden>("ordenes", { idEvaluacion: a.idEvaluacion, numCuenta }, { headers: { "X-Idempotency-Key": llave } });
+      llaves.current.delete(a.idEvaluacion);
+      try {
+        await api.post(`ordenes/${r.data.idOrden}/validaciones`, {
+          tipo: "IDENTIDAD",
+          resultado: "APROBADA",
+          referenciaEvidencia: String(verificacion.idValidacion),
+          detalle: "Documento original verificado en ventanilla.",
+        });
+      } catch {
+        // La orden queda PREPARADA: en su pantalla se verifica la identidad otra vez.
+      }
+      router.push(`/desembolso/ordenes/${r.data.idOrden}`);
     } catch (e) {
       setError(e);
       setPreparando(null);
     }
   }
 
+  if (!sesion.puedeOperar) {
+    return (
+      <>
+        <Encabezado titulo="Desembolso de créditos" />
+        <Alerta tipo="info" titulo="Tu perfil solo consulta">
+          Puedes revisar las órdenes y sus constancias en{" "}
+          <Link href="/desembolso/ordenes" className="font-semibold underline">
+            Órdenes
+          </Link>
+          .
+        </Alerta>
+      </>
+    );
+  }
+
+  const aprobado = verificacion?.resultado === "APROBADO";
   return (
     <>
-      <Encabezado titulo="Consulta de créditos habilitados" descripcion="Pantalla 1 · Aprobaciones emitidas por Evaluación (CR-INT-04)" />
-      <Tarjeta className="mb-6">
-        <form onSubmit={handleSubmit(buscar)} className="flex flex-wrap items-end gap-3" noValidate>
-          <div>
-            <label htmlFor="criterio" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Buscar por
-            </label>
-            <select id="criterio" className={`${estiloEntrada} w-48`} {...register("criterio")}>
-              <option value="documento">Documento del cliente</option>
-              <option value="credito_id">Código de crédito</option>
-            </select>
+      <Encabezado titulo="Desembolso de créditos" descripcion="Identidad del titular, aprobación vigente y cuenta de abono" />
+      <Tarjeta titulo="1 · Identidad del titular" className="mb-6">
+        <p className="mb-4 text-sm text-slate-600">
+          Revise el documento original y a la persona. La verificación queda registrada en COREDB y vale para desembolsar hoy.
+        </p>
+        <VerificarDocumento onVerificado={alVerificar} onError={setError} />
+        {verificacion && (
+          <div className="mt-4">
+            {aprobado ? (
+              <Alerta tipo="exito" titulo={`${verificacion.nombre ?? "Titular"} · ${verificacion.codCliente}`}>
+                Identidad verificada hoy (verificación n.° {verificacion.idValidacion}).
+              </Alerta>
+            ) : (
+              <Alerta tipo="aviso" titulo="No se pudo verificar la identidad">
+                {verificacion.motivo ?? "El documento no corresponde a un cliente activo."}
+              </Alerta>
+            )}
           </div>
-          <div className="min-w-64 flex-1">
-            <label htmlFor="valor" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Valor
-            </label>
-            <input id="valor" placeholder="DNI o CRE-2026-0001" className={estiloEntrada} {...register("valor")} />
-          </div>
-          <Boton type="submit" cargando={formState.isSubmitting}>
-            Buscar
-          </Boton>
-          {formState.errors.valor && <p className="w-full text-xs text-rose-600">{formState.errors.valor.message}</p>}
-        </form>
+        )}
       </Tarjeta>
-      {error ? <div className="mb-6"><AlertaError error={error} /></div> : null}
-      {creditos && (
-        <Tarjeta titulo={`Resultados (${creditos.length})`}>
+      {error ? (
+        <div className="mb-6">
+          <AlertaError error={error} />
+        </div>
+      ) : null}
+      {aprobado && aprobaciones && (
+        <Tarjeta titulo={`2 · Aprobaciones vigentes (${aprobaciones.length})`}>
           <div className="-m-5 overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className={th}>Crédito</th>
-                  <th className={th}>Cliente</th>
-                  <th className={th}>Producto</th>
+                  <th className={th}>Solicitud</th>
                   <th className={`${th} text-right`}>Importe</th>
-                  <th className={th}>Vigencia</th>
-                  <th className={th}>Aprobación</th>
+                  <th className={th}>Plazo</th>
+                  <th className={th}>Vigente hasta</th>
+                  <th className={th}>Cuenta de abono</th>
                   <th className={th}></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {creditos.length === 0 && <FilaVacia columnas={7}>No existen aprobaciones para el criterio de búsqueda.</FilaVacia>}
-                {creditos.map((c) => (
-                  <tr key={c.aprobacion_id} className="align-top">
-                    <td className={td}>
-                      <p className="font-semibold text-slate-900">{c.credito_id}</p>
-                      <p className="text-xs text-slate-500">
-                        {c.aprobacion_id} · v{c.version}
-                      </p>
-                    </td>
-                    <td className={td}>
-                      <p className="font-medium text-slate-900">{c.cliente_nombre}</p>
-                      <p className="text-xs text-slate-500">DNI {c.cliente_documento}</p>
-                    </td>
-                    <td className={td}>
-                      {c.producto}
-                      <p className="text-xs text-slate-500">
-                        {c.plazo_meses} meses · TEA {c.tasa_tea}%
-                      </p>
-                    </td>
-                    <td className={`${td} tabular text-right font-semibold text-slate-900`}>{dinero(c.importe, c.moneda)}</td>
-                    <td className={td}>{fecha(c.vigente_hasta, false)}</td>
-                    <td className={td}>
-                      <InsigniaEstado estado={c.estado} />
-                      {c.motivo && <p className="mt-1 max-w-48 text-xs text-slate-500">{c.motivo}</p>}
-                    </td>
-                    <td className={`${td} text-right`}>
-                      {c.orden_existente ? (
-                        <Link href={`/desembolso/ordenes/${c.orden_existente.id}`} className="text-sm font-semibold text-marca-600 hover:underline">
-                          Ver {c.orden_existente.codigo_orden}
-                        </Link>
-                      ) : c.habilitada && puede(sesion, "DESEMBOLSO_EJECUTAR") ? (
-                        <Boton onClick={() => preparar(c)} cargando={preparando === c.aprobacion_id}>
-                          Preparar desembolso
-                        </Boton>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
+                {aprobaciones.length === 0 && <FilaVacia columnas={6}>El cliente no tiene aprobaciones pendientes de desembolso.</FilaVacia>}
+                {aprobaciones.map((a) => {
+                  const elegibles = elegiblesPara(a);
+                  const otras = cuentas.filter((c) => !elegibles.includes(c));
+                  return (
+                    <tr key={a.idEvaluacion} className="align-top">
+                      <td className={td}>
+                        <p className="font-mono text-xs text-slate-900">{a.idSolicitud}</p>
+                        <p className="text-xs text-slate-500">Ronda {a.ronda}</p>
+                      </td>
+                      <td className={`${td} tabular text-right font-semibold text-slate-900`}>{dinero(a.monto, a.moneda)}</td>
+                      <td className={td}>{a.plazoMeses} meses</td>
+                      <td className={td}>{fecha(a.vigenteHasta, false)}</td>
+                      <td className={td}>
+                        {a.ordenAbierta ? (
+                          <span className="text-slate-500">—</span>
+                        ) : elegibles.length === 0 ? (
+                          <Insignia tono="aviso">Sin cuenta elegible</Insignia>
+                        ) : (
+                          <select
+                            aria-label="Cuenta de abono"
+                            className={`${estiloEntrada} w-64 font-mono`}
+                            value={elegidas[a.idEvaluacion] ?? elegibles[0].numCuenta}
+                            onChange={(e) => setElegidas({ ...elegidas, [a.idEvaluacion]: e.target.value })}
+                          >
+                            {elegibles.map((c) => (
+                              <option key={c.numCuenta} value={c.numCuenta}>
+                                {c.numCuenta} · {c.moneda}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {!a.ordenAbierta &&
+                          otras.map((c) => (
+                            <p key={c.numCuenta} className="mt-1 text-xs text-slate-500">
+                              <span className="font-mono">{c.numCuenta}</span>: {MOTIVOS_CUENTA[c.motivo ?? ""] ?? c.motivo ?? "otra moneda"}
+                            </p>
+                          ))}
+                      </td>
+                      <td className={`${td} text-right`}>
+                        {a.ordenAbierta ? (
+                          <Link href={`/desembolso/ordenes/${a.ordenAbierta.idOrden}`} className="text-sm font-semibold text-marca-600 hover:underline">
+                            Ver {a.ordenAbierta.codigoOrden}
+                            <span className="ml-2">
+                              <InsigniaEstado estado={a.ordenAbierta.estado} etiqueta={ETIQUETA_ESTADO[a.ordenAbierta.estado]} />
+                            </span>
+                          </Link>
+                        ) : (
+                          <Boton onClick={() => preparar(a)} cargando={preparando === a.idEvaluacion} disabled={elegibles.length === 0}>
+                            Preparar desembolso
+                          </Boton>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -1,143 +1,87 @@
 "use client";
 
-import { useState } from "react";
-import { Alerta, AlertaError, Boton, Encabezado, FilaVacia, InsigniaEstado, Tarjeta, estiloEntrada, td, th } from "@/app/desembolso/_componentes/ui";
+import { useCallback, useEffect, useState } from "react";
+import { Alerta, AlertaError, Boton, Encabezado, FilaVacia, Tarjeta, estiloEntrada, td, th } from "@/app/desembolso/_componentes/ui";
 import { api } from "@/lib/desembolso/api";
-import { dinero, hoyLima } from "@/lib/desembolso/formato";
+import { dinero, fecha } from "@/lib/desembolso/formato";
+import { useSesion } from "@/lib/desembolso/sesion";
+import type { Conciliacion } from "@/lib/desembolso/tipos";
 
-interface Reporte {
-  fecha: string;
-  moneda: string | null;
-  estado: "CONCILIADO" | "CON_DIFERENCIAS";
-  totales: { ordenes: number; importe_ordenes: string; abonos_cuentas: number; importe_cuentas: string; acuses_cobranza: number };
-  ordenes: { codigo_orden: string; credito_id: string; importe: string; moneda: string; estado: string; entrega_estado: string; operacion_financiera_id: string }[];
-  diferencias: { tipo: string; codigo_orden: string | null; detalle: string }[];
-}
-
-export default function Conciliacion() {
-  const [fecha, setFecha] = useState(hoyLima());
-  const [moneda, setMoneda] = useState("PEN");
-  const [reporte, setReporte] = useState<Reporte | null>(null);
+// Órdenes confirmadas frente a lo abonado en las cuentas, por día de negocio (Lima) y moneda. Sin
+// fecha, los últimos días con desembolsos. Es del supervisor y del auditor (GENERAR_REPORTES).
+export default function PaginaConciliacion() {
+  const sesion = useSesion();
+  const [dia, setDia] = useState("");
+  const [filas, setFilas] = useState<Conciliacion[] | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [cargando, setCargando] = useState(false);
 
-  async function conciliar() {
+  const cargar = useCallback(async (valor: string) => {
     setError(null);
-    setCargando(true);
     try {
-      setReporte((await api.post<Reporte>("conciliaciones", { fecha, moneda: moneda || null })).data);
+      const r = await api.get<Conciliacion[]>("conciliacion", { params: valor ? { fecha: valor } : {} });
+      setFilas(r.data);
     } catch (e) {
       setError(e);
-      setReporte(null);
-    } finally {
-      setCargando(false);
     }
-  }
+  }, []);
 
-  const m = reporte?.moneda ?? "PEN";
+  // Carga inicial: el estado se fija al llegar la respuesta, no durante el efecto.
+  useEffect(() => {
+    if (!sesion.puedeConciliar) return;
+    api.get<Conciliacion[]>("conciliacion").then((r) => setFilas(r.data)).catch(setError);
+  }, [sesion.puedeConciliar]);
+
+  if (!sesion.puedeConciliar) {
+    return <Alerta tipo="info" titulo="La conciliación es del supervisor y del auditor." />;
+  }
   return (
     <>
-      <Encabezado titulo="Conciliación diaria" descripcion="Órdenes de Desembolso frente a abonos de Cuentas y acuses de Cobranza (RF-09)" />
+      <Encabezado titulo="Conciliación de desembolsos" descripcion="Órdenes confirmadas frente a lo abonado, por día y moneda" />
       <Tarjeta className="mb-6">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label htmlFor="fecha" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Fecha efectiva
-            </label>
-            <input id="fecha" type="date" className={estiloEntrada} value={fecha} onChange={(e) => setFecha(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="moneda" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
-              Moneda
-            </label>
-            <select id="moneda" className={`${estiloEntrada} w-40`} value={moneda} onChange={(e) => setMoneda(e.target.value)}>
-              <option value="PEN">Soles (PEN)</option>
-              <option value="USD">Dólares (USD)</option>
-            </select>
-          </div>
-          <Boton onClick={conciliar} cargando={cargando}>
-            Conciliar
-          </Boton>
-        </div>
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            cargar(dia);
+          }}
+        >
+          <input aria-label="Fecha" type="date" className={`${estiloEntrada} w-48`} value={dia} onChange={(e) => setDia(e.target.value)} />
+          <Boton type="submit">Conciliar</Boton>
+        </form>
       </Tarjeta>
       {error ? <div className="mb-4"><AlertaError error={error} /></div> : null}
-      {reporte && (
-        <>
-          <div className="mb-6">
-            {reporte.estado === "CONCILIADO" ? (
-              <Alerta tipo="exito" titulo={`Conciliado: los tres orígenes coinciden para el ${reporte.fecha}.`} />
-            ) : (
-              <Alerta tipo="aviso" titulo={`Se encontraron ${reporte.diferencias.length} diferencias para revisión.`} />
-            )}
-          </div>
-          <div className="mb-6 grid gap-3 md:grid-cols-5">
-            {[
-              ["Órdenes confirmadas", String(reporte.totales.ordenes)],
-              ["Importe en Desembolso", dinero(reporte.totales.importe_ordenes, m)],
-              ["Abonos en Cuentas", String(reporte.totales.abonos_cuentas)],
-              ["Importe en Cuentas", dinero(reporte.totales.importe_cuentas, m)],
-              ["Acuses de Cobranza", String(reporte.totales.acuses_cobranza)],
-            ].map(([etiqueta, valor]) => (
-              <div key={etiqueta} className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{etiqueta}</p>
-                <p className="tabular mt-1 text-xl font-semibold text-slate-900">{valor}</p>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-6 lg:grid-cols-3">
-            <Tarjeta titulo="Órdenes del día" className="lg:col-span-2">
-              <div className="-m-5 overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-100">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className={th}>Orden</th>
-                      <th className={th}>Crédito</th>
-                      <th className={`${th} text-right`}>Importe</th>
-                      <th className={th}>Operación</th>
-                      <th className={th}>Estado</th>
-                      <th className={th}>Entrega</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {reporte.ordenes.length === 0 && <FilaVacia columnas={6}>No hay desembolsos confirmados en la fecha.</FilaVacia>}
-                    {reporte.ordenes.map((o) => (
-                      <tr key={o.codigo_orden}>
-                        <td className={`${td} font-mono font-semibold`}>{o.codigo_orden}</td>
-                        <td className={td}>{o.credito_id}</td>
-                        <td className={`${td} tabular text-right`}>{dinero(o.importe, o.moneda)}</td>
-                        <td className={`${td} font-mono text-xs`}>{o.operacion_financiera_id}</td>
-                        <td className={td}>
-                          <InsigniaEstado estado={o.estado} />
-                        </td>
-                        <td className={td}>
-                          <InsigniaEstado estado={o.entrega_estado} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Tarjeta>
-            <Tarjeta titulo="Diferencias">
-              {reporte.diferencias.length === 0 ? (
-                <p className="text-sm text-slate-500">Sin diferencias.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {reporte.diferencias.map((d, i) => (
-                    <li key={i} className="text-sm">
-                      <InsigniaEstado estado="FALLIDO" etiqueta={d.tipo.replaceAll("_", " ")} />
-                      <p className="mt-1 text-slate-700">
-                        {d.codigo_orden && <span className="font-mono font-semibold">{d.codigo_orden} · </span>}
-                        {d.detalle}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Tarjeta>
-          </div>
-        </>
-      )}
+      <Tarjeta titulo="Resultado">
+        <div className="-m-5 overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className={th}>Fecha</th>
+                <th className={th}>Moneda</th>
+                <th className={`${th} text-right`}>Órdenes</th>
+                <th className={`${th} text-right`}>Importe de las órdenes</th>
+                <th className={`${th} text-right`}>Abonado</th>
+                <th className={`${th} text-right`}>Sin abono</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filas?.length === 0 && <FilaVacia columnas={6}>No hay desembolsos confirmados en ese día.</FilaVacia>}
+              {filas?.map((f) => {
+                const cuadra = f.ordenesSinAbono === 0 && f.importeOrdenes === f.importeAbonado;
+                return (
+                  <tr key={`${f.fecha}-${f.moneda}`} className={cuadra ? "" : "bg-rose-50"}>
+                    <td className={td}>{fecha(f.fecha, false)}</td>
+                    <td className={td}>{f.moneda}</td>
+                    <td className={`${td} tabular text-right`}>{f.ordenesConfirmadas}</td>
+                    <td className={`${td} tabular text-right`}>{dinero(f.importeOrdenes, f.moneda)}</td>
+                    <td className={`${td} tabular text-right`}>{dinero(f.importeAbonado, f.moneda)}</td>
+                    <td className={`${td} tabular text-right font-semibold ${cuadra ? "" : "text-rose-700"}`}>{f.ordenesSinAbono}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Tarjeta>
     </>
   );
 }

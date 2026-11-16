@@ -14,11 +14,3 @@ export function useSesion(): Sesion {
   if (!sesion) throw new Error("useSesion debe usarse dentro de ProveedorSesion");
   return sesion;
 }
-
-export function puede(sesion: Sesion, permiso: string): boolean {
-  return sesion.permisos.includes(permiso);
-}
-
-export function esSupervision(sesion: Sesion): boolean {
-  return sesion.rol === "SUPERVISOR" || sesion.rol === "AUDITOR";
-}

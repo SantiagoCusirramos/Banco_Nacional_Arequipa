@@ -3,29 +3,17 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cerrarSesion } from "@/lib/auth";
-import { esSupervision, useSesion } from "@/lib/desembolso/sesion";
-
-// Perfil en Desembolso según el rol de COREDB (ADMINISTRADOR hace de supervisor).
-const ROL: Record<string, string> = {
-  OPERADOR: "Operador de agencia",
-  SUPERVISOR: "Supervisor",
-  AUDITOR: "Auditor",
-};
+import { PERFIL } from "@/lib/desembolso/formato";
+import { useSesion } from "@/lib/desembolso/sesion";
 
 export function Marco({ children }: { children: React.ReactNode }) {
   const sesion = useSesion();
   const ruta = usePathname();
   const router = useRouter();
   const enlaces = [
-    { href: "/desembolso", texto: "Créditos" },
+    { href: "/desembolso", texto: "Desembolsar" },
     { href: "/desembolso/ordenes", texto: "Órdenes" },
-    ...(esSupervision(sesion)
-      ? [
-          { href: "/desembolso/operacion", texto: "Operación" },
-          { href: "/desembolso/conciliacion", texto: "Conciliación" },
-        ]
-      : []),
-    { href: "/desembolso/reversiones", texto: "Reversiones" },
+    ...(sesion.puedeConciliar ? [{ href: "/desembolso/conciliacion", texto: "Conciliación" }] : []),
   ];
 
   function salir() {
@@ -61,10 +49,8 @@ export function Marco({ children }: { children: React.ReactNode }) {
             })}
           </nav>
           <div className="text-right leading-tight">
-            <p className="text-sm font-semibold">{sesion.nombre}</p>
-            <p className="text-xs text-marca-100">
-              {ROL[sesion.rol] ?? sesion.rol} · {sesion.agencia_nombre ?? "Sin agencia"}
-            </p>
+            <p className="text-sm font-semibold">{sesion.usuario}</p>
+            <p className="text-xs text-marca-100">{PERFIL[sesion.perfil] ?? sesion.perfil}</p>
           </div>
           <button
             onClick={salir}
