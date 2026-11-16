@@ -70,6 +70,15 @@ RUTAS_CREDITO = {
     ("POST", "/coredb/creditos/ordenes/{id_orden}/confirmacion"): "DESEMBOLSAR_CREDITO",
     ("POST", "/coredb/creditos/ordenes/{id_orden}/rechazo"): "DESEMBOLSAR_CREDITO",
     ("GET", "/coredb/creditos/conciliacion/desembolsos"): "GENERAR_REPORTES",
+    ("GET", "/coredb/creditos"): "CONSULTAR_DEUDA",
+    ("GET", "/coredb/creditos/{cod_credito}"): "CONSULTAR_DEUDA",
+    ("GET", "/coredb/creditos/{cod_credito}/pagos"): "CONSULTAR_DEUDA",
+    ("POST", "/coredb/creditos/{cod_credito}/pagos"): "REGISTRAR_PAGO",
+    ("GET", "/coredb/creditos/pagos/{referencia}"): "CONSULTAR_DEUDA",
+    ("POST", "/coredb/creditos/{cod_credito}/cuotas/{numero_cuota}/mora"): "REGISTRAR_MORA",
+    ("GET", "/coredb/creditos/{cod_credito}/cuotas/{numero_cuota}/mora"): "CONSULTAR_DEUDA",
+    ("POST", "/coredb/creditos/vencimientos"): "REGISTRAR_MORA",
+    ("GET", "/coredb/creditos/conciliacion/pagos"): "GENERAR_REPORTES",
 }
 
 
@@ -117,6 +126,26 @@ def test_usuarios_de_servicio_de_creditos():
     assert permisos.PERMISOS["SERVICIO:EVALUACION"] == {"CREAR_SOLICITUD_CREDITO", "VER_CREDITO"}
     assert permisos.PERMISOS["SERVICIO:DESEMBOLSO"] == {"VER_CREDITO", "VER_CUENTA"}
     assert permisos.PERMISOS["SERVICIO:COBRANZA"] == {"VER_CREDITO", "CONSULTAR_DEUDA", "REGISTRAR_MORA"}
+
+
+def test_quien_cobra_y_quien_registra_la_mora():
+    # El pago lo registra una persona en ventanilla; svc-cobranza solo corre las tareas diarias.
+    con_pago = {rol for rol, acciones in permisos.PERMISOS.items() if "REGISTRAR_PAGO" in acciones}
+    assert con_pago == {"ADMINISTRADOR", "OPERADOR"}
+    con_mora = {rol for rol, acciones in permisos.PERMISOS.items() if "REGISTRAR_MORA" in acciones}
+    assert con_mora == {"ADMINISTRADOR", "SERVICIO:COBRANZA"}
+
+
+def test_las_rutas_fijas_de_cobranza_van_antes_que_las_del_credito():
+    # /conciliacion/pagos y /pagos/{referencia} coinciden también con /{cod_credito}/pagos y
+    # /{cod_credito}: deben declararse antes para que no las tape la ruta del crédito.
+    orden = [(sorted(r.methods)[0], r.path) for r in app.routes
+             if isinstance(r, APIRoute) and r.path.startswith("/coredb/creditos")]
+    for fija in [("GET", "/coredb/creditos/conciliacion/pagos"), ("GET", "/coredb/creditos/pagos/{referencia}"),
+                 ("GET", "/coredb/creditos/solicitudes"), ("GET", "/coredb/creditos/ordenes"),
+                 ("GET", "/coredb/creditos/aprobaciones")]:
+        assert orden.index(fija) < orden.index(("GET", "/coredb/creditos/{cod_credito}/pagos"))
+        assert orden.index(fija) < orden.index(("GET", "/coredb/creditos/{cod_credito}"))
 
 
 def test_el_servicio_de_evaluacion_no_evalua_ni_decide():
@@ -184,6 +213,51 @@ def test_los_mensajes_del_desembolso_no_repiten_valores(mensaje):
     traducido = creditos.traducir(ErrorCoreDb(mensaje.split(":")[0], mensaje))
     for valor in ("CTA-0000000000001234", "C001", "15000", "12000", "0b6f0000", "XYZ"):
         assert valor not in traducido.message
+
+
+# Los de registrar_pago_cuota, registrar_mora y actualizar_vencimientos.
+CODIGOS_COBRANZA = {
+    "BNA-CREDITO": "CREDITO_NO_ADMITIDO",
+    "BNA-PAGO": "PAGO_NO_ADMITIDO",
+    "BNA-CUENTA-ORIGEN": "CUENTA_NO_ELEGIBLE",
+    "BNA-MORA": "MORA_NO_ADMITIDA",
+    "BNA-CUOTA": "CUOTA_NO_ADMITIDA",
+}
+
+
+@pytest.mark.parametrize(("regla", "codigo"), CODIGOS_COBRANZA.items())
+def test_cada_codigo_de_la_cobranza_tiene_su_error(regla, codigo):
+    traducido = creditos.traducir(ErrorCoreDb(regla, f"{regla}: algo sin valores"))
+    assert (traducido.code, traducido.status_code) == (codigo, 422)
+    assert regla not in traducido.message
+
+
+def test_una_referencia_usada_a_la_vez_en_otro_credito_es_409():
+    # Dos pagos simultáneos con la misma referencia en créditos distintos: la base rechaza el
+    # segundo por la restricción única de la referencia.
+    error = ErrorCoreDb("REGISTRO_DUPLICADO", "x", 409)
+    error.restriccion = "uk_pago_1"
+    traducido = creditos.traducir(error)
+    assert (traducido.code, traducido.status_code) == ("IDEMPOTENCIA_CONFLICTO", 409)
+
+
+# El motivo de un pago RECHAZADO: el código de la regla que rechazó el débito.
+MOTIVOS_RECHAZO = {
+    "BNA-SALDO": "SALDO_INSUFICIENTE",
+    "BNA-ESTADO-CUENTA": "CUENTA_NO_OPERATIVA",
+    "RN-TOP-001": "TOPE_DIARIO_SUPERADO",
+    "RN-BD-002": "CANAL_NO_ADMITIDO",
+    "BNA-CANAL": "CANAL_NO_ADMITIDO",
+}
+
+
+@pytest.mark.parametrize(("regla", "motivo"), MOTIVOS_RECHAZO.items())
+def test_motivo_de_un_pago_rechazado(regla, motivo):
+    assert creditos.motivo_de_rechazo(regla) == motivo
+
+
+def test_un_pago_confirmado_no_tiene_motivo():
+    assert creditos.motivo_de_rechazo(None) is None
 
 
 def test_un_analista_duplicado_es_409():
@@ -301,3 +375,46 @@ def test_cuerpo_de_la_validacion(cuerpo):
 def test_sin_token_401_en_creditos():
     respuesta = TestClient(app).get("/coredb/creditos/solicitudes")
     assert respuesta.status_code == 401
+
+
+def _pago(**cambios):
+    from COREDB.routers.creditos_cobranza import PagoRegistrar
+
+    cuerpo = {"numCuenta": "CTA-1", "monto": "1030.00", "referencia": "REF-0001"}
+    cuerpo.update(cambios)
+    return PagoRegistrar.model_validate(cuerpo)
+
+
+def test_el_pago_usa_camel_case_y_ventanilla_por_omision():
+    from pydantic import ValidationError
+
+    assert _pago().canal == "VEN"
+    assert _pago(canal="HB").canal == "HB"
+    for cambio in ({"otro": 1}, {"num_cuenta": "CTA-1"}, {"canal": "ATM"}, {"monto": "0"}, {"monto": "-1"},
+                   {"monto": "10.001"}, {"referencia": ""}, {"referencia": "R" * 41}, {"referencia": "con espacio"},
+                   {"numCuenta": ""}):
+        with pytest.raises(ValidationError):
+            _pago(**cambio)
+
+
+def test_la_huella_del_pago_cambia_con_su_contenido_y_su_credito():
+    base = creditos.huella_pago("CRE-2026-000001", _pago())
+    assert base == creditos.huella_pago("CRE-2026-000001", _pago(monto=1030))
+    assert base != creditos.huella_pago("CRE-2026-000002", _pago())
+    assert base != creditos.huella_pago("CRE-2026-000001", _pago(monto="1030.01"))
+    assert base != creditos.huella_pago("CRE-2026-000001", _pago(numCuenta="CTA-2"))
+    assert base != creditos.huella_pago("CRE-2026-000001", _pago(canal="HB"))
+
+
+def test_cuerpos_de_mora_y_vencimientos():
+    from pydantic import ValidationError
+
+    from COREDB.routers.creditos_cobranza import MoraRegistrar, VencimientosEjecutar
+
+    assert MoraRegistrar.model_validate({"montoCalculado": "0"}).monto_calculado == Decimal("0")
+    for cuerpo in ({"montoCalculado": "-0.01"}, {"montoCalculado": "1.001"}, {"monto": "1"}, {}):
+        with pytest.raises(ValidationError):
+            MoraRegistrar.model_validate(cuerpo)
+    assert VencimientosEjecutar.model_validate({}).fecha is None
+    with pytest.raises(ValidationError):
+        VencimientosEjecutar.model_validate({"dia": "2026-11-16"})
