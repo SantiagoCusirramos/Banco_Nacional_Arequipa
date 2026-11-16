@@ -115,7 +115,9 @@ TEXTO
 humo() {
   requisitos
   exigir_cluster
+  # E2E_INTENTOS: el Service puede tardar en enrutar a un pod que acaba de quedar listo.
   k -n "$NS" exec -i deployment/coredb -c coredb -- env \
+    E2E_INTENTOS=5 E2E_ESPERA=2 \
     BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
     python - < scripts/flujo_e2e.py
