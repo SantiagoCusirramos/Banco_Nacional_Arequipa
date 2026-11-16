@@ -717,3 +717,28 @@ simultaneo X355 'Dos preparaciones simultáneas con la misma llave dejan una sol
 evento="$(root_ -N -e "SELECT COUNT(*) FROM information_schema.events WHERE event_schema = 'creditos' AND event_name = 'ev_actualizar_vencimientos' AND status = 'ENABLED' AND interval_value = '1' AND interval_field = 'DAY'")"
 registrar X356 root Extensión 'Vencimientos' 'El evento diario de vencimientos de créditos existe y está activo' trigger 1 "$evento" \
   "$([ "$evento" = 1 ] && echo 1 || echo 0)"
+
+# Autorizaciones y credenciales de tarjeta (v1.5) en autocommit. T2 es la tarjeta de C002
+# y opera CTA-PEN-2.
+T2="UUID_TO_BIN('a0000000-0000-4000-8000-000000000002')"
+caso X382 'Una autorización en autocommit queda AUTORIZADA y retiene el saldo (v1.5)' \
+  "SELECT (SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a4000000-0000-4000-8000-000000000001')) = 'AUTORIZADA'
+      AND (SELECT saldo_contable - saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2') >= 10" <<SQL
+CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a4000000-0000-4000-8000-000000000001'), $T2, 'CTA-PEN-2', 'VEN', NULL, 'RETIRO', 10, NULL, 'pruebas', @e, @c);
+SQL
+caso X383 'Un rechazo en autocommit deja la autorización RECHAZADA (v1.5)' \
+  "SELECT codigo_respuesta = '51' FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a4000000-0000-4000-8000-000000000002')" <<SQL
+CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a4000000-0000-4000-8000-000000000002'), $T2, 'CTA-PEN-2', 'VEN', NULL, 'RETIRO', 999999, NULL, 'pruebas', @e, @c);
+SQL
+caso X384 'Un PIN equivocado en autocommit deja el intento FALLIDO (v1.5)' \
+  "SELECT COUNT(*) = 1 FROM tarjetas.intento_autenticacion WHERE id_tarjeta = $T2 AND resultado = 'FALLIDO'" <<SQL
+CALL tarjetas.registrar_credencial($T2, 'PIN_ATM', '2468', 'pruebas');
+CALL tarjetas.validar_credencial($T2, 'PIN_ATM', '1357', NULL, 'ATM-AQP-001', NULL, NULL, 'pruebas', @r, @i);
+SQL
+# Un actor nulo rechaza el evento, el último paso, después de las escrituras.
+disponible="$(root_ -N -e "SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2'")"
+caso X385 'Una autorización que falla a mitad no deja la fila ni retiene el saldo (v1.5)' \
+  "SELECT (SELECT COUNT(*) FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a4000000-0000-4000-8000-000000000003')) = 0
+      AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2') = $disponible" <<SQL
+CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a4000000-0000-4000-8000-000000000003'), $T2, 'CTA-PEN-2', 'VEN', NULL, 'RETIRO', 20, NULL, NULL, @e, @c);
+SQL
