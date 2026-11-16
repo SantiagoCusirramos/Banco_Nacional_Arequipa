@@ -62,9 +62,14 @@ class Integrations:
             # No devolver URLs, cuerpo remoto o secretos en errores/logs.
             raise IntegrationError("RECHAZO_CONTRATO_BUS", permanent=True)
         try:
-            return response.json()
+            data = response.json()
         except ValueError:
             raise IntegrationError("RESPUESTA_BUS_INVALIDA", permanent=True) from None
+        # Solo un 404 explícito significa ausencia. JSON null no es un acuse
+        # ni una referencia válidos y no debe confundirse con ese resultado.
+        if data is None:
+            raise IntegrationError("RESPUESTA_BUS_INVALIDA", permanent=True)
+        return data
 
     def read(self, path, correlation, params=None, deadline=None, allow_missing=False):
         deadline = deadline or monotonic() + self.settings.request_budget
@@ -139,7 +144,8 @@ class Integrations:
                                     payload, deadline=deadline)
                 if (not isinstance(data, dict) or data.get("idEvento") != payload["idEvento"]
                         or data.get("confirmado") is not True
-                        or not isinstance(data.get("acuse"), str) or not 1 <= len(data["acuse"]) <= 80):
+                        or not isinstance(data.get("acuse"), str) or not 1 <= len(data["acuse"]) <= 80
+                        or not data["acuse"].strip()):
                     raise IntegrationError("ACUSE_AUDITORIA_INVALIDO", True)
                 return data["acuse"]
             except IntegrationError as exc:
@@ -151,11 +157,18 @@ def normalize_reference(data):
     if not isinstance(data, dict):
         raise ValueError("Referencia inválida")
     required = CLIENT_FIELDS - {"simulado", "cod_tipo_documento"}
-    if any(not isinstance(data.get(k), str) or not data[k] for k in required):
+    if any(not isinstance(data.get(k), str) or not data[k].strip() for k in required):
         raise ValueError("Campos de Captación incompletos")
+    if "cod_tipo_documento" in data and (
+            not isinstance(data["cod_tipo_documento"], str) or not data["cod_tipo_documento"].strip()):
+        raise ValueError("Tipo de documento de Captación inválido")
+    if "simulado" in data and type(data["simulado"]) is not bool:
+        raise ValueError("Indicador de simulación inválido")
     if len(data["id_cliente"]) > 36 or len(data["numero_documento"]) > 20:
         raise ValueError("Identificador de Captación inválido")
     verified, expires = date.fromisoformat(data["fecha_verificacion"]), date.fromisoformat(data["vigente_hasta"])
+    if verified.isoformat() != data["fecha_verificacion"] or expires.isoformat() != data["vigente_hasta"]:
+        raise ValueError("Captación requiere fechas YYYY-MM-DD")
     # Nunca almacenar campos adicionales del maestro que SOL no necesita.
     return {key: data[key] for key in CLIENT_FIELDS if key in data}
 
@@ -176,6 +189,9 @@ def validate_reference(data, identifier):
 def captacion_reference(db, identifier):
     integration = db.info.get("integrations")
     trace = db.info.get("correlation", str(uuid4()))
+    if db.info.get("integration_mode") == "REAL" and (
+            integration is None or integration.settings.mode != "REAL"):
+        raise HTTPException(503, "El adaptador de Captación REAL no está configurado.")
     if integration and integration.settings.mode == "REAL":
         data = integration.reference(identifier, trace)
         ref = db.get(ClientReference, identifier)
@@ -191,12 +207,33 @@ def captacion_reference(db, identifier):
     return validate_reference(ref.snapshot, identifier)
 
 
+def guarantor_reference(db, identifier):
+    """Borde de identidad RF008: solo referencia local explícitamente simulada.
+
+    No reutiliza CR-INT-01 como verificación institucional de un fiador. El
+    contrato y el adaptador REAL deben homologarse antes de habilitarlo.
+    """
+    if db.info.get("integration_mode") == "REAL":
+        raise HTTPException(422, "La referencia institucional de fiadores requiere homologar su contrato; no se usan datos simulados en REAL.")
+    ref = db.get(ClientReference, identifier)
+    if not ref or ref.snapshot.get("estado_cliente") != "ACTIVO":
+        raise HTTPException(422, "El fiador requiere una referencia de identidad activa.")
+    return {
+        "id_cliente": identifier,
+        "identidad": {key: value for key, value in ref.snapshot.items() if key in CLIENT_FIELDS},
+        "validacion": "SIMULADA",
+    }
+
+
 def validate_receipt(data, envelope):
     if (not isinstance(data, dict)
+            or type(data.get("versionSolicitud")) is not int
             or any(data.get(k) != envelope[k] for k in ["idSolicitud", "versionSolicitud", "idOperacion"])
             or not isinstance(data.get("idEvaluacion"), str) or not 1 <= len(data["idEvaluacion"]) <= 80
+            or not data["idEvaluacion"].strip() or data["idEvaluacion"] != data["idEvaluacion"].strip()
             or type(data.get("ronda")) is not int or data["ronda"] < 1
-            or not isinstance(data.get("acuse"), str) or not 1 <= len(data["acuse"]) <= 60):
+            or not isinstance(data.get("acuse"), str) or not 1 <= len(data["acuse"]) <= 60
+            or not data["acuse"].strip()):
         raise IntegrationError("ACUSE_EVALUACION_INVALIDO", True)
     return data
 

@@ -38,12 +38,19 @@ def process_delivery(factory, integrations, operation):
             return False
         row.lease_until = now() + timedelta(seconds=30)
         row.attempts += 1
+        attempt = row.attempts
         envelope = row.payload
     try:
         receipt = integrations.deliver(envelope)
     except IntegrationError as exc:
         with factory.begin() as db:
-            row = db.get(Delivery, operation)
+            row = db.scalar(select(Delivery).where(Delivery.operation == operation).with_for_update())
+            if row.status == "CONFIRMADO":
+                return True
+            # Una respuesta tardía no puede liberar ni reprogramar la reserva
+            # que otro worker recuperó. attempts es la generación persistida.
+            if row.status != "PENDIENTE" or row.attempts != attempt:
+                return False
             row.status = "ERROR_CONTRATO" if exc.permanent else "PENDIENTE"
             row.last_error, row.lease_until = exc.code, None
             row.next_attempt = now() + timedelta(seconds=min(300, 5 * 2**min(row.attempts, 6)))
@@ -53,6 +60,8 @@ def process_delivery(factory, integrations, operation):
         row = db.scalar(select(Delivery).where(Delivery.operation == operation).with_for_update())
         if row.status == "CONFIRMADO":
             return True
+        if row.status != "PENDIENTE" or row.attempts != attempt:
+            return False
         application = db.scalar(select(Application).where(Application.id == row.application_id).with_for_update())
         # Reserva congelada; otras operaciones no pueden modificarla durante HTTP.
         if application.current_version != row.version or application.state != "BORRADOR":
@@ -81,12 +90,15 @@ def process_audit(factory, integrations, identifier):
             return False
         row.lease_until = now() + timedelta(seconds=30)
         row.attempts += 1
+        attempt = row.attempts
         payload = row.payload
     try:
         receipt = integrations.audit(payload)
     except IntegrationError as exc:
         with factory.begin() as db:
-            row = db.get(AuditOutbox, identifier)
+            row = db.scalar(select(AuditOutbox).where(AuditOutbox.id == identifier).with_for_update())
+            if row.status != "PENDIENTE" or row.attempts != attempt:
+                return False
             row.last_error, row.lease_until = exc.code, None
             row.next_attempt = now() + timedelta(seconds=min(300, 5 * 2**min(row.attempts, 6)))
             if exc.permanent:
@@ -94,7 +106,9 @@ def process_audit(factory, integrations, identifier):
         log("AUDITORIA_PENDIENTE", payload["idCorrelacion"], payload["idEvento"], causa=exc.code)
         return False
     with factory.begin() as db:
-        row = db.get(AuditOutbox, identifier)
+        row = db.scalar(select(AuditOutbox).where(AuditOutbox.id == identifier).with_for_update())
+        if row.status != "PENDIENTE" or row.attempts != attempt:
+            return False
         row.status = "SIMULADO" if integrations.settings.mode == "SIMULADO" else "CONFIRMADO"
         row.receipt, row.lease_until, row.last_error = receipt, None, None
     log("AUDITORIA_CONFIRMADA", payload["idCorrelacion"], payload["idEvento"], simulado=integrations.settings.mode == "SIMULADO")

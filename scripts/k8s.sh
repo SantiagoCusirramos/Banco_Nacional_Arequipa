@@ -120,6 +120,7 @@ humo() {
     E2E_INTENTOS=5 E2E_ESPERA=2 \
     BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
+    SOL_INITIAL_PASSWORD="$(valor SOL_INITIAL_PASSWORD)" \
     python - < scripts/flujo_e2e.py
 }
 
