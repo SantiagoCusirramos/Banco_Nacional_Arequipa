@@ -36,6 +36,10 @@ SERVICIOS = {
 # Solo si se levantó con el perfil `legado`.
 if os.environ.get("E2E_CORE_LEGADO"):
     SERVICIOS["CORE legado"] = (os.environ["E2E_CORE_LEGADO"] + "/health", {})
+# Intentos de la primera consulta a cada servicio. En Kubernetes un pod recién listo
+# puede tardar un momento en recibir tráfico de su Service (`./bna k8s-smoke` pide 5).
+INTENTOS = max(1, int(os.environ.get("E2E_INTENTOS", "1")))
+ESPERA = float(os.environ.get("E2E_ESPERA", "2"))
 USUARIO = os.environ.get("BNA_ADMIN_USUARIO", "admin")
 PASSWORD = os.environ.get("BNA_ADMIN_PASSWORD", "")
 AGENCIA = "AQP01"
@@ -69,6 +73,22 @@ def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
         return estado, texto
 
 
+def sano(nombre, url, cabeceras):
+    """Exige un 200; reintenta INTENTOS veces si no hay respuesta o no es 200."""
+    for intento in range(1, INTENTOS + 1):
+        try:
+            estado, _ = pedir("GET", url, cabeceras=cabeceras)
+            error = None if estado == 200 else f"{nombre} no está sano: {url} respondió {estado}"
+        except Fallo as fallo:
+            error = str(fallo)
+        if error is None:
+            return
+        if intento < INTENTOS:
+            print(f"  ..  {error}; nuevo intento en {ESPERA:g} s", flush=True)
+            time.sleep(ESPERA)
+    raise Fallo(error)
+
+
 def exigir(condicion, mensaje):
     if not condicion:
         raise Fallo(mensaje)
@@ -88,8 +108,7 @@ def flujo():
     exigir(PASSWORD, "Falta BNA_ADMIN_PASSWORD")
 
     for nombre, (url, cabeceras) in SERVICIOS.items():
-        estado, _ = pedir("GET", url, cabeceras=cabeceras)
-        exigir(estado == 200, f"{nombre} no está sano: {url} respondió {estado}")
+        sano(nombre, url, cabeceras)
         paso(f"{nombre} responde")
 
     estado, _ = pedir("GET", COREDB + "/coredb/auth/me")
