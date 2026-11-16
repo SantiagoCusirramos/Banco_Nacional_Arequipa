@@ -9,10 +9,7 @@ Configuración de SOL para usarlas, cuando haya Bus:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from sqlalchemy.orm import Session
-
 from CAPTACION.core_client import CoreDb
-from CAPTACION.database import db_session
 from CAPTACION.dependencies import get_core, servicio_sol
 from CAPTACION.errores import CaptacionError
 from CAPTACION.services import captacion as svc
@@ -21,16 +18,18 @@ router = APIRouter(prefix="/cap", tags=["CR-INT-01 (Solicitud de Crédito)"], de
 
 
 @router.get("/references", summary="Búsqueda acotada de referencias (hasta 50)")
-def buscar(search: str = Query(default="", max_length=100), limit: int = Query(default=50, ge=1, le=50),
-           db: Session = Depends(db_session)) -> list[dict]:
-    return svc.buscar_referencias(db, search, limit)
+def buscar(request: Request, search: str = Query(default="", max_length=100),
+           limit: int = Query(default=50, ge=1, le=50), core: CoreDb = Depends(get_core)) -> list[dict]:
+    try:
+        return svc.buscar_referencias(core, search, limit, request.state.uuid_transaccion)
+    except CaptacionError as exc:
+        raise HTTPException(503, "Búsqueda no disponible.") from exc
 
 
 @router.get("/references/{id_cliente}", summary="Referencia vigente de un cliente")
-def referencia(request: Request, id_cliente: str = Path(max_length=36), db: Session = Depends(db_session),
-               core: CoreDb = Depends(get_core)) -> dict:
+def referencia(request: Request, id_cliente: str = Path(max_length=36), core: CoreDb = Depends(get_core)) -> dict:
     try:
-        datos = svc.referencia(db, core, id_cliente, request.state.uuid_transaccion)
+        datos = svc.referencia(core, id_cliente, request.state.uuid_transaccion)
     except CaptacionError as exc:
         # SOL trata 503 como dependencia caída y reintenta; no se le envían detalles internos.
         raise HTTPException(503, "Referencia no disponible.") from exc

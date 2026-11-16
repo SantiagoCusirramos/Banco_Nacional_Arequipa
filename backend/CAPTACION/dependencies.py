@@ -2,7 +2,8 @@
 
 - Personal del banco (pantalla /captacion o /docs): token JWT de COREDB. CAPTACION lo
   valida con `GET /coredb/auth/me` y usa los permisos de COREDB: VER_CLIENTE para leer,
-  CREAR_CLIENTE para trabajar un expediente (ASESOR y ADMINISTRADOR los tienen).
+  CREAR_CLIENTE para trabajar un expediente (ASESOR y ADMINISTRADOR los tienen). El mismo
+  token va a /coredb/captacion, que vuelve a exigir esos permisos.
 - Solicitud de Crédito (servicio): token fijo CAP_SOL_TOKEN, solo en /cap/references.
 """
 
@@ -29,6 +30,8 @@ class Actor:
     rol: str
     acciones: frozenset[str]
     correlation_id: str
+    # El token del asesor: lo que hace en el expediente va a COREDB a su nombre.
+    token: str
 
 
 def get_core() -> CoreDb:
@@ -50,9 +53,10 @@ def _bearer(request: Request) -> str:
 
 
 def _actor(request: Request, core: CoreDb) -> Actor:
-    perfil = core.perfil(_bearer(request), request.state.uuid_transaccion)
+    token = _bearer(request)
+    perfil = core.perfil(token, request.state.uuid_transaccion)
     return Actor(perfil["username"], perfil["rol"], frozenset(perfil.get("acciones", [])),
-                 request.state.uuid_transaccion)
+                 request.state.uuid_transaccion, token)
 
 
 def requiere(accion: str):

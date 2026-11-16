@@ -90,12 +90,13 @@ def test_cliente_bloqueado_en_coredb_deja_el_caso_observado(client, flujo, aseso
     assert any("BLOQUEADO" in f for f in caso["faltantes"])
 
 
-def test_habilitar_se_puede_repetir_sin_registrar_dos_veces(client, flujo, admin):
+def test_habilitar_se_puede_repetir_sin_registrar_dos_veces(client, flujo, persona):
     id_caso = flujo.hasta_aprobado()
     primero = flujo.habilitar(id_caso)
     assert flujo.habilitar(id_caso) == primero
     numero = flujo.ver(id_caso)["solicitante"]["numero_documento"]
-    verificacion = coredb("POST", "/coredb/clientes/validaciones/documento", admin, 201, json={
+    operador, _ = persona("OPERADOR")  # tiene VALIDAR_IDENTIDAD
+    verificacion = coredb("POST", "/coredb/clientes/validaciones/documento", operador["Authorization"][7:], 201, json={
         "tipo_documento": "DNI", "numero_documento": numero, "identidad_verificada": True}).json()
     assert verificacion["cliente"]["cod_cliente"] == primero["cod_cliente"]
 
@@ -177,7 +178,7 @@ def test_reporte_manual_de_una_central(client, flujo, asesor):
                                           "dias_mora": 12}})
     assert r.status_code == 201, r.text
     assert r.json()["data"] | {"fecha": None} == {
-        "central": "EQUIFAX", "calificacion": "CPP", "deuda_total": "1250.50", "entidades": 2, "dias_mora": 12,
+        "central": "EQUIFAX", "calificacion": "CPP", "deuda_total": 1250.5, "entidades": 2, "dias_mora": 12,
         "fuente": "MANUAL", "fecha": None}
 
 

@@ -1,7 +1,6 @@
 from fastapi import FastAPI
-from sqlalchemy import text
+from fastapi.responses import JSONResponse
 
-from CAPTACION import database
 from CAPTACION.api import montar_en
 from CAPTACION.config import settings
 from CAPTACION.core_client import coredb
@@ -12,7 +11,8 @@ app = FastAPI(
         "Registra al solicitante, verifica su identidad (consentimientos, OTP, RENIEC, listas "
         "restrictivas, PEP), consulta centrales de riesgo, calcula su perfil y lo **habilita**: "
         "lo registra en COREDB como cliente y deja la referencia que consulta Solicitud de "
-        "Crédito (contrato CR-INT-01).\n\n"
+        "Crédito (contrato CR-INT-01). No tiene base propia: el expediente vive en la base "
+        "integrada y se trabaja por COREDB.\n\n"
         "**Cómo probar desde /docs**\n"
         "1. Token en COREDB: `POST http://127.0.0.1:8012/coredb/auth/login` con un usuario "
         "ADMINISTRADOR o ASESOR.\n"
@@ -35,18 +35,13 @@ def health():
 
 @app.get("/ready", tags=["Salud"])
 def ready():
-    """503 si la base propia o COREDB no responden, o si falta la credencial de servicio."""
+    """503 si COREDB no responde o si falta la credencial de servicio. CAPTACION no tiene
+    base propia: el expediente vive en la base integrada."""
     problemas = []
-    try:
-        with database.engine().connect() as conexion:
-            conexion.execute(text("SELECT 1"))
-    except Exception:  # noqa: BLE001
-        problemas.append("base")
     if not coredb().salud():
         problemas.append("coredb")
-    if not settings.secreto_coredb():
+    if not settings.cap_core_secreto:
         problemas.append("credencial_coredb")
     if problemas:
-        from fastapi.responses import JSONResponse
         return JSONResponse(status_code=503, content={"status": "not_ready", "faltan": problemas})
     return {"status": "ready", "modulo": "captacion"}
