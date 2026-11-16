@@ -179,6 +179,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 
 - Por módulo: los README enlazados en [Servicios y puertos](#servicios-y-puertos).
 - Contrato de COREDB para el módulo Clientes: [`backend/COREDB/CONTRATO_CLIENTES.md`](backend/COREDB/CONTRATO_CLIENTES.md).
+- Contrato de COREDB para la línea de créditos (Evaluación, Desembolso y Cobranza): [`backend/COREDB/CONTRATO_CREDITOS.md`](backend/COREDB/CONTRATO_CREDITOS.md).
 - Cómo se actualiza `database/`: [`database/README-UPSTREAM.md`](database/README-UPSTREAM.md).
 - Autenticación del CORE legado: [`backend/CORE/AUTH_JWT.md`](backend/CORE/AUTH_JWT.md) y [`backend/CORE/AUTENTICACION.md`](backend/CORE/AUTENTICACION.md).
 - Seguimiento de los hallazgos del CORE legado: [`Documents/08-seguimiento-hallazgos.md`](Documents/08-seguimiento-hallazgos.md).

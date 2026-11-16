@@ -13,8 +13,8 @@ from COREDB import tokens
 from COREDB.database import verificar_configuracion
 from COREDB.errores import registrar_manejadores
 from COREDB.routers import (
-    auditoria, auth, autorizaciones, catalogos, clientes, cuentas, movimientos, salud, tarjetas,
-    usuarios,
+    auditoria, auth, autorizaciones, catalogos, clientes, creditos_evaluacion, cuentas, movimientos,
+    salud, tarjetas, usuarios,
 )
 
 
@@ -43,5 +43,6 @@ app.include_router(movimientos.router)
 app.include_router(cuentas.router)
 app.include_router(tarjetas.router)
 app.include_router(autorizaciones.router)
+app.include_router(creditos_evaluacion.router)
 app.include_router(catalogos.router)
 app.include_router(auditoria.router)
