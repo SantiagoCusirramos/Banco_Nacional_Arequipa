@@ -1,5 +1,8 @@
 # Demo SOL con un comando
 
+> Estado: VIGENTE como guía de recursos; los registros de etapas anteriores se conservan con su contexto. Última verificación documental:2026-11-16, SHA988dc0776da282fbef306632fc86426b6e372376. Principal: [README SOL](../README.md); guía consolidada: [05-despliegue](../05-despliegue/README.md).
+
+
 Desde la raíz del repositorio:
 
 ```bash

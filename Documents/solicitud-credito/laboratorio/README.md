@@ -1,6 +1,18 @@
 # Laboratorio CAP/SOL/EVA — preparación sin arranque
 
-Consultar [informe y puertas de autorización](../sol-laboratorio-build.md) antes de usar estos archivos. No hay autorización de build, arranque o SQL en SOL-LAB-BUILD.
+> Estado: VIGENTE como guía de recursos; los registros de etapas anteriores se conservan con su contexto. Última verificación documental:2026-11-16, SHA988dc0776da282fbef306632fc86426b6e372376. Principal: [README SOL](../README.md); guía consolidada: [05-despliegue](../05-despliegue/README.md).
+
+
+## Integración ejecutable P20 — estado actual
+
+La integración real HTTP CAP→COREDB→CAP→SOL→EVA→SOL ya tiene launcher y evidencias. Ejecutar desde la raíz `python3 Documents/solicitud-credito/laboratorio/demo_integracion.py`; ver [guía](../04-pruebas/p20/05-guia-demostracion.md), [resultados](../04-pruebas/p20/03-pruebas-y-evidencias.md) y [límites REAL/SIMULADO](../04-pruebas/p20/04-matriz-real-simulado.md). Este launcher habilita explícitamente la auditoría académica y el DDL solo en su proyecto efímero; no cambia los defaults del Compose base.
+
+## Registro histórico de preparación SOL-LAB-BUILD
+
+El contenido siguiente conserva las restricciones y evidencias de aquella etapa; no describe el cierre P20 ni revoca su autorización académica posterior.
+
+
+Consultar [informe y puertas de autorización](../06-historico/planes/sol-laboratorio-build.md) antes de usar estos archivos. No hay autorización de build, arranque o SQL en SOL-LAB-BUILD.
 
 - `prepare.py`: captura código permitido y genera secretos sintéticos fuera de Git; no usa Docker ni conexiones de base.
 - `compose.yaml`: 12 servicios; proyecto exclusivo, dos MySQL tmpfs, redes internas, sin puertos públicos. Formato JSON, válido como YAML de Compose.
@@ -24,4 +36,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 Documents/solicitud-credito/laboratorio/test_s
 
 Para otra captura, elegir identificador alfanumérico minúsculo exclusivo de 8–24 caracteres y ejecutar `prepare.py --run-id <identificador>`. Solo imprime la ruta privada. No reutilizar identificadores de un ensayo existente; comprobar colisiones antes de construir o arrancar. No usar `source` sobre archivos externos ni versionar secretos.
 
-Cierre SOL-LAB-CLOSE: ver [entrega](../sol-integracion-entrega-final.md) y [selección exacta del commit](../sol-integracion-archivos-commit.txt). `test_close_contracts.py` comprueba DTO/OpenAPI y caracteriza el riesgo2xx EVA sin SQL ni red. Las fuentes/registros temporales y todo `runtime/` quedan fuera de Git.
+Cierre SOL-LAB-CLOSE: ver [entrega](../06-historico/entregas/sol-integracion-entrega-final.md) y [selección exacta del commit](../06-historico/entregas/sol-integracion-archivos-commit.txt). `test_close_contracts.py` comprueba DTO/OpenAPI y caracteriza el riesgo2xx EVA sin SQL ni red. Las fuentes/registros temporales y todo `runtime/` quedan fuera de Git.

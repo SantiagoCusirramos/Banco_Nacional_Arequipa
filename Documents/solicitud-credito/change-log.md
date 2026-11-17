@@ -462,3 +462,203 @@
 - Selección29 verificada contra todos los cambios seguidos y archivos nuevos: únicamente cuatro untracked deliberadamente excluidos (AGENTS.md, README-INICIO.md y dos JSON generados). Archivos existentes y enlaces publicables correctos, sin referencias Markdown a archivos excluidos; AST/espacios/conflictos/patrones/secretos actuales correctos. Callback desde su decorador hasta final de app.py idéntico a de4ace6; finanzas/política/operaciones/migraciones/modelos/dependencias/Compose compartido y18 fuentes SOL/test_providers.py preservados por hash.
 - git diff --check salida0 e índice vacío; diff seguido acumulado siete archivos/261 inserciones/31 eliminaciones antes de esta entrada (incluye historia segunda etapa), nuevos archivos revisados mediante manifiesto. Se movieron instrucciones de staging/publicación manual del cuerpo PR al informe de entrega para mantener descripción orientada al revisor; ningún comando de publicación ejecutado. Validación final documental después de este ajuste.
 - Evidencia nueva definitiva: SOL SQLite219 y ejecución con MySQL219 aprobadas; CAP33 más4 en segunda imagen, contratos/OpenAPI/motor22, estáticos9, frontend114/2 expected fail, TS/lint/build0. CR10 y RF005/008 siguen bloqueados; pruebas institucionales/TCP conjunto/fixtures destructivas EVA/main nuevo NO VERIFICADAS. Listo con limitaciones documentadas, no integrado_real. Laboratorio y esquema de regresión conservados sin eliminar recursos.
+
+## 2026-11-16 — SOL-DEMO, lote 1: demostración independiente
+
+- Rama feature/sol-integracion-cap-eva, HEAD encontrado a125298 (commit del usuario posterior al cierre), índice vacío; cambios anteriores preservados. Creados demo/compose.yaml, Dockerfile.backend, Dockerfile.frontend y seed_demo.py, exclusivamente Documents/solicitud-credito/. Antes arranque manual; ahora recetas para MySQL/API/frontend propios y seis escenarios por APIs/proxy existentes. Modo SIMULADO explícito, sin CAP/EVA/COREDB/Auditoría reales ni cambios funcionales/financieros/frontend.
+- MySQL tmpfs sin puertos, red interna nueva, imágenes con namespace demo, frontend/API solo loopback; usuario SQL propio. Seed prepara borrador/en evaluación/observada/aprobada/rechazada/subsanaciónv2 con calendario/garantía/fiador sintéticos y preservación v1; no acuse ni decisión institucional. Sin credenciales versionadas. Launcher/documentación y pruebas todavía pendientes; no servicios nuevos ejecutados en este lote. RF001–010, bloqueos005/008 conservados, CR10 no se habilita en REAL.
+
+## 2026-11-16 — SOL-DEMO, lote 2: comando único
+
+- Creado demo/demo.py: up por defecto, check/status/stop, captura saneada de SOL/frontend workspace sin .env/caches/BD, manifiesto externo, secretos0600/estado0700, clave interactiva oculta o aleatoria en ejecuciones no interactivas. Proyecto/imagenes nuevos por workspace+estado, verificación daemon local/red interna/labels/puertos loopback y colisiones; no utiliza Compose global ni modifica índice Git.
+- Un comando prepara/build/inicializa/espera salud y carga escenarios via frontend proxy. Stop solo detiene recursos propios, sin down-v ni eliminación de volúmenes; se documentará pérdida de MySQL tmpfs. Conserva modo SIMULADO, datos/roles y reglas ya existentes; no activa CR10 institucional ni cambia código funcional. Pruebas sintácticas/aislamiento/arranque y guía de demostración pendientes.
+
+## 2026-11-16 — SOL-DEMO, revisión de credenciales
+
+- Ajustados demo.py/compose.yaml antes del arranque: clave de acceso en archivo externo login.key0600 y entorno del proceso Compose, sin interpolación recursiva de una clave escrita en envfile. Init/scenarios la reciben explícitamente; API/frontend nunca reciben clave inicial. Se valida coincidencia exacta del valor renderizado sin imprimirlo. Rango12–128 caracteres para coincidir con login sin cambiar autenticación SOL. No servicios ejecutados aún; pendiente comprobar configuración y flujo.
+
+## 2026-11-16 — SOL-DEMO, lote 3: controles y prueba inicial
+
+- Check inicial sandbox falló por acceso Docker, repetido con autorización salida0 sin servicios. Arranque de verificación en proceso con estado externo exclusivo, no instancia por defecto del usuario. Creados demo/test_demo.py (11 controles estáticos de red/modo/credenciales/fuentes/estado) y reforzados demo.py (rechazo metadata de otro proyecto) y seed_demo.py (assert cookie HttpOnly). No módulos bancarios editados.
+- Credenciales complejas se conservan mediante login.key/entorno, no se imprimen. La demostración solo usa SIMULADO y endpoints demo existentes; falta resultado build/HTTP y guía de uso. El índice Git sigue sin tocarse por el agente.
+
+## 2026-11-16 — SOL-DEMO, lote 4: corrección de preparación SIMULADA
+
+- Build/API/frontend/MySQL de verificación saludables; primera carga salió1 porque el runner esperaba202 en envío SIMULADO, cuyo contrato real devuelve200. Corregido únicamente seed_demo.py a200, sin cambiar SOL. Seed ahora reanuda expedientes parciales según estado y evita duplicados; demo.py registra identidad/StartedAt de MySQL tras carga exitosa y no vuelve a sembrar encima de cambios del expositor al relanzar.
+- Once pruebas estáticas aprobadas0,067s salida0. Falta repetir arranque/carga completa, comprobar segundo lanzamiento y parada exclusiva. No fallback ni proveedores REAL habilitados; componentes CAP/EVA/E06 preservados.
+
+## 2026-11-16 — SOL-DEMO, lote 5: acceso efectivo desde navegador
+
+- Carga completa SIMULADA aprobada, pero prueba host detectó conexión rechazada: Docker no publicó puertos efectivos con todos los servicios únicamente en red internal (PortBindings configurado, NetworkSettings.Ports vacío). No se declaró demo lista para navegador a partir de health interna.
+- Corregidos solo compose.yaml/demo.py/test_demo.py: red datos demo internal para MySQL/init/SOL, puente edge propio para frontend/SOL/seed y publicación exclusivamente127.0.0.1. Frontend no accede a red datos; MySQL sin puertos ni red edge. Puente web puede tener salida de red, no se promete aislamiento sin egreso; SIMULADO fijo y sin configuraciones institucionales. Launcher ahora verifica HTTP desde host además de health Docker. Se añaden dos negativos,13 controles totales. No recursos compartidos modificados; revalidación pendiente.
+- SOL-DEMO, validador edge: Compose omite internal:false al normalizar JSON; primera revalidación13 casos dio9 errores/launcherKeyError antes de mutaciones Docker. Ajustado demo.py a get(internal,False), sin relajar aislamiento de datos. Repetición a continuación; no se atribuye fallo a SOL.
+
+## 2026-11-16 — SOL-DEMO, lote 6: guía y evidencia del comando
+
+- Creado demo/README.md con comando único, requisitos, acceso/perfiles, guion5–8min, escenarios, relanzamiento, stop/puertos alternativos y límites SIMULADO. Secretos/estado siempre externos y privados; se documenta puente web con egreso y datos tmpfs temporales. No se cambió manifiesto histórico del PR anterior ni se añadieron archivos al índice.
+- Nuevo arranque/carga tras corregir contratos salida0; backend/frontend construidos y saludables. Relanzamiento salida0 reconoce misma instancia y conserva seis casos. Verificación HTTP desde host salida0: seis casos/estados previstos, cookie HttpOnly, v1 congelada/v2 presente y escritura supervisor403. Docker muestra puertos efectivos127.0.0.1:13017/18017; MySQL ports={} y solo red interna; frontend solo edge.13 negativos/controles estáticos0,048s salida0.
+- Parada y nuevo arranque de la instancia de verificación en proceso para confirmar inicialización limpia y liberar después puertos. No parar MySQL de otros proyectos; CAP/EVA/E06 no forman parte de esta demo. No declarar integración REAL, políticas aprobadas ni pruebas bancarias históricas como nuevas.
+
+## 2026-11-16 — SOL-DEMO, cierre verificado
+
+- Parada y arranque limpio de verificación salida0; seed reconstruyó seis casos después de MySQL tmpfs, y HTTP host volvió a confirmar conteos previstos/cookie HttpOnly/v1 congelada-v2/supervisor403. Parada final solo de la instancia de verificación para liberar13017/18017; estado final de otros proyectos consultado sin mutaciones. No se inició la instancia por defecto del usuario: podrá elegir su clave en el primer comando interactivo.
+- Trece controles estáticos finales aprobados0,045s salida0; README actualizado con esa ejecución. Siete archivos nuevos demo revisados AST/JSON/espacios/conflictos/secretos; ninguna clave en Git. git diff --check salida0, fuentes SOL/frontend/Docker/Compose compartido e índice intactos. Único tracked cambiado: change-log.md; demo/ sin staging, aportes anteriores preservados. Sin commits/push/merge.
+- Listo: python3 Documents/solicitud-credito/demo/demo.py; guía y escenarios SIMULADOS. No se declara E2E institucional ni se modifican bloqueos financieros/identidad/CR10. No se repitió suite bancaria219 al no cambiar código funcional; se comprobó la nueva infraestructura y recorrido demo HTTP/build con evidencia propia.
+
+## 2026-11-16 — P20 integración final, lote 1
+
+- Motivo: ejecutar CR-INT-01/02/03 por aplicaciones originales y cerrar callback; RF001/002/003/004/006/007/009/010, RF005/008 y decisiones DA-SOL conservadas.
+- Creados laboratorio/patch_eva.py y demo_integracion.py: parche aislado de EVA valida HTTP200, JSON, recibido:true y operación exacta; antes aceptaba cualquier2xx. Launcher exporta fuentes SHA fijos, configura callback, overlay académico explícito, secretos privados, puertos Swagger loopback y MySQL tmpfs sin puertos; no cambia módulos institucionales ni Compose compartido.
+- Pruebas todavía pendientes; Docker inventario ejecutado tras permiso de sandbox, sin mutaciones. Riesgos: inicialización efímera, acuse y recuperación por verificar; no se afirma E2E. Pendiente runner HTTP, pruebas parche, arranque y documentación.
+
+## 2026-11-16 — P20 integración final, lote 2
+
+- Creados laboratorio/flow_http.py y test_callback_ack.py. Runner usa APIs originales para captación, asesor SOL, analista COREDB/EVA, tres decisiones y subsanaciónv2; verifica SQL propio, identidad, acuses, idempotencia, versión/token erróneos y referencias revocada/vencida. Fecha vencida se inyecta/restaura solo en caso CAP sintético propio; ningún write COREDB desde SOL. Nueve pruebas unitarias del parche complementan TCP.
+- CR01/02/03/10, RF001–004/006/007/009/010. Pruebas/arranque pendientes a continuación, sin afirmar éxito. Riesgos: contratos de usuario/detalle y pruebas de recuperación por verificar; no se modifican políticas DA-SOL ni módulos originales.
+
+## 2026-11-16 — P20 integración final, lote 3
+
+- Añadido failure_http.py y preparación de borrador/cliente CAP independiente en flow_http.py para caída/reinicio solo API EVA; confirma reserva202, error persistido y recuperación de la misma operación sin reiniciar MySQL. CR02/RF009.
+- AST cuatro fuentes nuevas salida0. Primer build desde sandbox falló por Docker, relanzado con permiso y actualmente en inicialización del proyecto exclusivo finalce660a7f. No se declara prueba aprobada hasta obtener resultado; pendientes reportes y verificación negativa del acuse.
+
+## 2026-11-16 — P20 integración final, lote 4
+
+- Primer arranque salió1: healthcheck socket MySQL aceptó servidor temporal de init y coredb-init falló conexión TCP111. Corregido demo_integracion.py para overlay con sondas TCP (COREDB también verifica configuración), sin tocar Compose compartido. Captura privada propia actualizada con runners/manifiesto.
+- Launcher conserva diagnóstico privado externo ante fallo y ejecuta prueba de caída/recuperación de API EVA con finally de restauración. Sin secretos en informes. CR02/03/10; riesgos de recuperación y test todavía pendientes; no éxito E2E declarado.
+
+## 2026-11-16 — P20 integración final, lote 5
+
+- Creado laboratorio/test_ack_tcp.py: seis fallos/acuses con servidor HTTP de prueba en proceso independiente para parche EVA; verifica TCP real pero intercepta persistencia del dispatcher, por lo que es complemento y no reemplazo del circuito de módulos reales. Pruebas pendientes de ejecutar en imagen con dependencias.
+- CR03; no nuevos servicios bancarios falsos, ni fallback ni modificaciones de producción.
+
+## 2026-11-16 — P20 integración final, lote 6
+
+- Arranque tras sonda TCP llegó a APIs saludables; runner salió2 por permisos0600 de archivos nuevos bajo umask privado. Corregida copia de fuentes en demo_integracion.py a archivos0644/directorios0755 dentro de raíz externa0700, manteniendo secretos0600. Captura propia corregida y hash renovado.
+- No defecto bancario ni E2E aprobado aún; se repetirá runner con imagen reconstruida. CR01/02/03, riesgo de exposición acotado por raíz privada y ausencia de secretos en contextos.
+
+## 2026-11-16 — P20 integración final, lote 7
+
+- Launcher incorpora acción regressions: SOL SQLite, COREDB sin BD, CAP SQLite, motor EVA y pruebas de acuse unitarias/TCP en procesos separados. No ejecuta fixtures MySQL destructivas EVA ni ./bna global. Fuente original preservada, no cambios de negocio.
+- Pendiente resultado de cada suite; cifras históricas219/114 no se reutilizan como evidencia actual. Se conserva modo SIMULADO explícito únicamente para regresiones locales; circuito principal continúa REAL HTTP.
+
+## 2026-11-16 — P20 integración final, lote 8
+
+- Runner ya legible, salió1 por importación SOL al ejecutar script desde /app/lab; añadido PYTHONPATH=/app solo al servicio flow-runner del overlay generado. APIs originales no modificadas. Pendiente repetición HTTP y regresiones; no se disfraza error de infraestructura como éxito.
+
+## 2026-11-16 — P20 integración final, lote 9
+
+- Primera ejecución TCP financiera confirmó cuatro evaluaciones: APROBADA, OBSERVADA, subsanaciónv2/APROBADA y RECHAZADA; IDs COREDB/CAP/SOL/EVA coincidentes, acuse EVA y Outcome único por SQL, callbacks repetidos200 y negativos409/401 comprobados. Ejecución global salió1 después por ResourceClosedError del helper al leer filas de UPDATE de fixture vencida, no del negocio.
+- Corregido helper SQL de flow_http.py para DML sin filas. Estado global aún pendiente hasta repetir y terminar negativos/recuperación; no se declara suite completa aprobada. CR01/02/03 y RF001/009/010.
+
+## 2026-11-16 — P20 integración final, lote 10
+
+- Primera regresión SOL:217 passed/2 failed/1 warning45,87s salida1. Las dos pruebas de reinicio requieren SQLite en archivo; launcher imponía SOL_TEST_DATABASE_URL=sqlite:// y perdían tablas al recrear engine. Eliminada esa imposición; fixtures conservan su selección por defecto aislada y sus tmp_path. No se alteran tests ni aplicación para ocultar fallos. Pendiente repetición/regresiones restantes.
+
+## 2026-11-16 — P20 integración final, lote 11
+
+- Runner principal completo:150 checks aprobados por HTTP/SQL, cuatro evaluaciones (tres solicitudes con subsanación), vencida/revocada rechazadas422 y sin duplicados. Evidencia saneada fuera de Git en proyecto propio. Prueba posterior de caída EVA salió1 porque esperaba error final del worker a los8s durante resolución DNS; finally restauró EVA y SQL confirmó CONFIRMADO/intentos2.
+- failure_http.py ahora espera condición persistida hasta60s en vez de asumir duración DNS. Pendiente repetir prueba negativa con esa espera y cierre de regresiones. Ninguna sustitución silenciosa ni dato institucional; CR01/02/03.
+
+## 2026-11-16 — P20 integración final, lote 12
+
+- SOL repetido219 passed/1 warning45,20s salida0. COREDB no recolectó por ausencia de PyJWT en imagen providers; launcher corregido para usar imagen COREDB propia, sin red ni credenciales de BD. Añadido --suite para repetir solo comprobaciones pendientes y conservar resultados previos.
+- No dependencia instalada en módulos ajenos ni tests modificados; CAP/EVA/parche pendientes. CR01/02/03, demo original preservada mediante regresiones SIMULADO.
+
+## 2026-11-16 — P20 integración final, lote 13
+
+- demo_integracion.py añade captura saneada de frontend actual y servicio Next.js opcional/reutilizado por up, con SOL_GATEWAY_URL al SOL REAL, cookie HttpOnly y puerto loopback; no se edita frontend, ni estilos ni validaciones. Prueba desde host del proxy/login/política/bandeja incorporada; pendiente ejecución.
+- Red web propia con egreso para publicación Docker, bases solo redes internas; no se promete aislamiento sin egreso de APIs. CR01/02/03 y canal digital, riesgo exposición limitado a127.0.0.1.
+
+## 2026-11-16 — P20 integración final, lote 14
+
+- Circuito completo y fallos:150 controles principales + caída EVA/reintento durable y recuperación misma operación/intentos2, launcher salida0. Swagger cuatro APIs accesibles desde host18120–18123. MySQL se mantuvo durante caída API.
+- Regresiones actuales: COREDB57 passed/3 warnings0,85s; CAP35 passed/1 skipped/1 warning1,34s; motor EVA12 passed0,01s. Tests nuevos de acuse9 errores por fixture sin idCorrelacion; corregidas fixtures test_callback_ack.py/test_ack_tcp.py, sin relajar parche ni contrato. Launcher añade refresh-tools explícito para reconstruir solo herramientas/manifiesto de captura propia. Pendiente repetir15 controles acuse y frontend.
+
+## 2026-11-16 — P20 integración final, lote 15
+
+- Frontend original desplegado18124: proxy REAL, sesión cookie HttpOnly y bandeja comprobados por HTTP host, sin editar código frontend.
+- Launcher añade regresión EVA completa sobre tercer MySQL tmpfs exclusivo/mysql-tests y red interna test-data, sin acceso de runner a bases del flujo; fixtures DROP/TRUNCATE revisadas y limitadas a bna_evaluacion_pruebas/usuario de ese servidor propio. Añade frontend-regressions en imagen temporal sin credenciales/red y CAP_SOL en imagen SOL con tzdata para pruebas omitidas por providers. Ejecuciones pendientes; CR01/02/03 y regresiones.
+
+## 2026-11-16 — P20 integración final, lote 16
+
+- Quince controles nuevos del acuse aprobados salida0 (9 unitarios,6 TCP); CAP_SOL4 passed/1 warning0,31s. EVA completa en MySQL exclusivo:62 passed/3 failed/3 warnings3,90s; los tres fallos esperaban éxito de SolFalso cuyo acuse omite idOperacion, incompatible con el contrato endurecido y el SOL real comprobado.
+- patch_eva.py añade parche de fixture aislada ayudas.py para devolver idOperacion original; no cambia aserciones ni módulos institucionales. demo_integracion.py lo aplica a exportación/refresh y registra hashes separados. No se relaja validación nueva. Repetición suite EVA y reproducción limpia pendientes.
+
+## 2026-11-16 — P20 integración final, lote 17
+
+- Frontend regresión nueva: lint/TypeScript/build salida0,114 passed/2 expected fail5,86s (no cifra histórica). Añadido timeout real TCP al servidor de fallos test_ack_tcp.py (ahora7 casos), complementando timeout unitario y caída real EVA ya comprobada. Pendiente ejecutar caso adicional y suite EVA con fixture parcheada.
+- CR03; servidor de fallos solo en tests del dispatcher, no sustituye ningún servicio del circuito.
+
+## 2026-11-16 — P20 integración final, lote 18
+
+- EVA MySQL65 passed/3 warnings3,78s salida0 con parche aislado y fixture contractual. Launcher stop ahora registra parada; siguiente up crea proyecto/secretos/bases nuevos y conserva ruta anterior, evitando reutilizar inicializadores completados sobre tmpfs vacío. Rechaza DOCKER_HOST remoto explícito y resume evidencia stdout sin150 filas repetidas.
+- Pendiente reproducción limpia final, control infraestructura, timeoutTCP adicional y documentos. No homologación CR10 ni cambios RF005/008/DA-SOL.
+
+## 2026-11-16 — P20 integración final, lote 19
+
+- Creados integracion-final/01-implementacion.md,02-endpoints-y-contratos.md,03-pruebas-y-evidencias.md,04-matriz-real-simulado.md,05-guia-demostracion.md,06-resumen-final.md y evidencias.json con resultados reales/IDs saneados. Sin secretos/PII ni logs brutos. Explican APIs, parches, MySQL, simulaciones, pendientes y comando de demo/parada.
+- Documentado circuito150+2 aprobado, regresiones actuales y fallos previos; reproducción limpia e infraestructura/privacidad finales todavía pendientes. RF001–004/006/007/009/010 y CR01/02/03/10, DA-SOL y RF005/008 sin homologación ficticia.
+
+## 2026-11-16 — P20 integración final, lote 20
+
+- Reproducción desde cero final674ffaa3 salió0:150+2 checks, tres solicitudes/cuatro evaluaciones, cuatro Swagger18130–18133 y Next18134 con proxy/cookie/bandeja REAL. TimeoutTCP adicional7 passed0,77s salida0. Validador base nuevo97 hashes/AST/gates salida0 y nueve negativos infraestructura0,827s salida0.
+- Añadidas a failure_http.py/demo_integracion.py comprobaciones HTTP explícitas403 supervisor,422 callback mal formado y caída/restauración solo COREDB→CAPready503/SOLpreview503. No afecta fuentes bancarias ni MySQL. Pendiente ejecutar ese complemento y cierre documental/privacidad.
+
+## 2026-11-16 — P20 integración final, lote 21
+
+- Complemento dependency-checks salida0: supervisor403,callback mal formado422 y caída COREDB propagada por HTTP503 a CAPready y SOLpreview; COREDB restaurado en finally, MySQL preservado. AST6 fuentes/enlaces/diff-check salida0.
+- Launcher añade verify-running para comprobar labels/puertos/tmpfs/secretos de logs en memoria y conteo SQL integrado; ejecución pendiente. README laboratorio compartido actualizado solo con enlaces al cierre P20, manteniendo íntegra la preparación histórica. Justificación: hacer descubrible el nuevo comando y evitar presentar restricciones históricas como estado actual; regresión documental de enlaces prevista.
+
+## 2026-11-16 — P20 integración final, lote 22
+
+- Actualizados informes01/03/05/06 y evidencias.json a IDs de reproducción limpia final674ffaa3; conservado resumen del ensayo anterior y resultados de regresión reales. Añadidos7 testsTCP,9 negativos infra, complementos403/422/503 y verify-running salida0. SQL COREDB2 clientes sintéticos; MySQL sin puertos/tmpfs y APIs loopback efectivos; logs sin secretos privados/JWT examinados sin exportar valores.
+- Instancia limpia activa18130–18134. Se prepara parada exclusiva del proyecto inicial de depuración; ninguna BD ajena modificada. Pendiente revisión final de secretos/enlaces/hashes/diff. No se declara homologación institucional ni se alteran RF005/008/DA-SOL.
+
+## 2026-11-16 — P20 integración final, cierre verificado
+
+- Final150 controles principales+2 recuperación EVA+complementos403/422/503 por HTTP real; MySQL COREDB/CAP/SOL/EVA verificadas; APROBADA,OBSERVADA→v2→APROBADA,RECHAZADA y acuses/idempotencia correctos. Instancia limpia final674ffaa3 activa18130–18134; proyecto inicial detenido salida0 sin down-v, capturas/evidencias preservadas.
+- Regresiones nuevas: SOL219,COREDB57,CAP35+4 contrato (skip módulo en providers resuelto en imagenSOL),EVA65 MySQL exclusivo,acuse9 unitarios+7 TCP,infra9 negativos,frontend114/2 expected fail y lint/tsc/build0. Suites con mocks claramente separadas de TCP intermodular; no ./bna global ni pruebas institucionales.
+- Revisión AST6/enlaces/hashes/622 archivos por secretos/diff-check salida0; backend/frontend/Compose/Docker/BD/k8s e índice intactos. Solo scripts nuevos de laboratorio, seis informes/JSON, navegación README y este changelog; cambios previos conservados. Sin commits/push/merge.
+- RF001–004/006/007/009/010 y CR01/02/03 demostrados en laboratorio; CR10/verificadores CAP explícitamente simulados. RF005/008/políticas DA-SOL/Seguridad/TLS/SSO y operación institucional siguen pendientes; no se declara homologado ni productivo. Guía integracion-final/05-guia-demostracion.md y resultados03/evidencias.json reproducibles.
+
+## 2026-11-16 — P21 documentación, lote 1: inventario y separación
+
+- Inventario previo completo213 archivos (hash/bytes/tipo), preservado fuera de Git para trazabilidad. Reorganizados informes históricos por tema, evidencia P20 y capturas v2 por ejecución; git mv para versionados y rename para no seguidos, índice devuelto a estado inicial sin revertir archivos. Sin eliminaciones.
+- Cabeceras HISTÓRICO añadidas sin cambiar resultados originales; enlaces recalculados desde rutas originales, manifiestos/JSON conservados. Changelog estable y entradas previas intactas. Laboratorio/demo, scripts E06 y seis OpenAPI fijados conservan rutas por imports/Path/builds. Tres puentes mínimos compatibles para plan/contrato/validador.
+- RF001–010/CR01/02/03/10: cambio documental, sin lógica bancaria ni homologaciones. Validaciones todavía pendientes; riesgo enlaces externos/históricos por resolver en lotes siguientes.
+
+## 2026-11-16 — P21 documentación, lote 2: consolidación vigente
+
+- Creados índices vigentes01-arquitectura,02-funcionalidades y matriz-rf,03-contratos,04-pruebas,05-despliegue. Consolidan conocimiento sin borrar originales, con procedencia y límites institucionales explícitos. Contratos detallados parten de P20/código; pruebas se separan por ejecución, mocks/TCP/MySQL/subconjuntos, sin sumas ficticias.
+- Corrigida lectura vigente de RF001/009/010 a INTEGRADO EN LABORATORIO con P20; RF005/008 y DA-SOL conservan bloqueos. Estado de contenedores antiguo se presenta como histórico, no promesa de disponibilidad. No suites bancarias reejecutadas ni bases modificadas; validación de enlaces/AST/config pendiente.
+
+## 2026-11-16 — P21 documentación, lote 3: fuente principal y navegación
+
+- Creado README principal con identificación/SHA, estados uniformes, arquitectura, diezRF, integraciones, cifras contrastadas P20, simulaciones, comandos y límites. Creado índice histórico e inventario JSON de213 originales con hash/categoría/vigencia/destino/acción/superposición.
+- README del proyecto y guías de entrada previas reciben enlace al estado vigente y contexto del Compose principal, sin borrar sus contenidos. Archivos compartidos modificados solo para navegación; regresión documental/byte-hashes de código pendiente de cierre. Ninguna funcionalidad, frontend ni despliegue modificado.
+- RF/CR/DA: síntesis académica actual no declara aprobaciones ni producción; pruebas P20 son evidencia anterior verificada, no ejecución nueva.
+
+## 2026-11-16 — P21 documentación, lote 4: trazabilidad y validador
+
+- Creado06-historico/REORGANIZACION_DOCUMENTAL.md con tabla213 originales y decisiones de consolidación/compatibilidad/contradicciones; creado validar_documentacion.py de análisis estático sin BD/servicios. READMEs laboratorio/demo reciben metadatos/enlaces a síntesis actual, sin modificar ejecutables.
+- Evidencias/JSON/manifiestos mantienen bytes y procedencia; se identifica test histórico que caracteriza defecto EVA original frente a tests actuales del parche. Validación real a continuación, sin reutilizar resultados P20 como si se ejecutaran ahora.
+
+## 2026-11-16 — P21 documentación, lote 5: enlaces heredados
+
+- Primer validador:359 enlaces Markdown,109 recursos HTML,16 JSON,20 AST Python,56 PNG y213 originales comprobados; detectó12 enlaces heredados ../backend y../Documents incorrectos en sol-apis-disponibles. Corregidos a archivos existentes del repositorio sin tocar backend/configuración ni conclusiones históricas.
+- No se inventan destinos ni nuevas APIs. Pendientes repetir validación, Compose config, auditoría de referencias desde código y reporte final. Sin pruebas funcionales/BD ejecutadas.
+
+## 2026-11-16 — P21 documentación, lote 6: validación y precisión contractual
+
+- Segundo validador salida0:359 enlaces Markdown/109 recursos HTML sin roturas;16 JSON,20 AST,53 HTML,56 PNG y hashes de originales E/F correctos. Compose config E06/demo/laboratorio base/overlay salida0 con4/5/12/13 servicios, variables de renderizado ficticias externas y sin daemon/arranque/BD. XML2 válidos y prefijo original del changelog íntegro; backend/frontend/infra/CI e índice intactos.
+- Contrato vigente amplía tabla de restricciones DTO/acuse/configuración contrastada con schemas/integrations/settings, distinguiendo rango DTO de política y propuesta de homologación. Validador incorpora XML para reproducción del control; sin cambiar scripts bancarios ni recursos originales.
+
+## 2026-11-16 — P21 cierre y preparación de commit/PR solicitados
+
+- Informe de reorganización actualizado con resultados reales:361 enlaces Markdown/109 HTML sin roturas,16JSON/2XML/20AST/56PNG y213 originales; Compose config4/5/12/13 servicios salida0. Sin cambios backend/frontend/infra/BD ni nuevas pruebas bancarias. P20 mantiene150+2 y regresiones documentadas, no se atribuyen a P21.
+- Usuario solicita cerrar rápidamente hasta lo trabajado y preparar commit/PR final. Selección incluye integración P20 y consolidación P21; excluye AGENTS/README-INICIO preexistentes y JSON locales laboratorio/sources-manifest.json y evidencias-http-independientes.json, caches/dotenv/secretos. RF/CR/DA sin nuevas homologaciones. Publicación pendiente de credenciales/conectividad, sin número de PR ficticio.
+
+## 2026-11-16 — P21 selección final publicable
+
+- Inventario marca cuatro originales locales opcionales (dos pyc/dos JSON generados) y validador los omite en checkout limpio sin perder trazabilidad. Creada descripción de PR en06-historico/entregas/PR_FINAL_P20_P21.md, alcance final integración+documentación y límites institucionales.
+- Remoto feature/sol-integracion-cap-eva confirmado988dc07, mainc872da3 por consulta solo lectura. gh no instalado y credencial Git interactiva no disponible; publicación se intentará tras commit preparado. Ningún PR creado todavía ni resultado inventado.
