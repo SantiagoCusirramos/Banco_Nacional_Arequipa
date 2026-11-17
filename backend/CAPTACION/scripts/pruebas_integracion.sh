@@ -20,6 +20,7 @@ IMAGEN_SOL="${CAPTACION_IMAGEN_SOL:-bna/sol:local}"
 PROYECTO="captacion-pruebas-$$"
 RED="${PROYECTO}_default"
 COREDB="${PROYECTO}-coredb"
+BUS="${PROYECTO}-bus"
 PUERTO="${CAPTACION_PUERTO_PRUEBAS:-3330}"
 ENTORNO="$(mktemp)"
 
@@ -29,7 +30,7 @@ compose() {
 }
 limpiar() {
   # -v: el contenedor de COREDB no deja volúmenes anónimos.
-  docker rm -fv "$COREDB" >/dev/null 2>&1 || true
+  docker rm -fv "$COREDB" "$BUS" >/dev/null 2>&1 || true
   compose down -v >/dev/null 2>&1 || true
   rm -f "$ENTORNO"
 }
@@ -81,11 +82,17 @@ if [ "$listo" != 1 ]; then
   exit 1
 fi
 
+# Como en el producto (fase 2 del Bus): CAPTACION y las pruebas llegan a COREDB a través del Bus.
+. "$RAIZ/scripts/bus_de_pruebas.sh"
+bus_de_pruebas_levantar "$RED" "$BUS" "$IMAGEN" "http://$COREDB:8012" CAPTACION
+
 pruebas() {
   local imagen="$1"
   shift
   docker run --rm --network "$RED" \
-    -e CAPTACION_TEST_COREDB="http://$COREDB:8012" \
+    -e CAPTACION_TEST_COREDB="$BUS_PRUEBAS_COREDB" \
+    -e CAPTACION_TEST_BUS_TOKEN="$BUS_PRUEBAS_TOKEN_MODULO" \
+    -e CAPTACION_TEST_BUS_TOKEN_PRUEBAS="$BUS_PRUEBAS_TOKEN_PRUEBAS" \
     -e CAPTACION_TEST_ADMIN_USUARIO=admin \
     -e CAPTACION_TEST_ADMIN_PASSWORD="$BNA_ADMIN_PASSWORD" \
     -e CAPTACION_TEST_SERVICIO_USUARIO=svc-captacion \
@@ -96,3 +103,4 @@ pruebas() {
 pruebas "$IMAGEN" CAPTACION/tests "$@"
 echo "== Contrato CR-INT-01 con el adaptador real de SOL"
 pruebas "$IMAGEN_SOL" CAPTACION/tests/test_contrato_sol.py
+bus_de_pruebas_comprobar "$BUS" CAPTACION

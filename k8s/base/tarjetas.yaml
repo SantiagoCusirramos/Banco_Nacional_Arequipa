@@ -22,8 +22,11 @@ spec:
           image: bna/backend:local
           command: [uvicorn, TARJETAS.main:app, --host, 0.0.0.0, --port, "8002"]
           env:
+            # COREDB, a través del Bus, con la credencial de TARJETAS.
             - name: CORE_BASE_URL
               valueFrom: { configMapKeyRef: { name: bna-configuracion, key: CORE_BASE_URL } }
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_TARJETAS } }
           ports:
             - { name: http, containerPort: 8002 }
           startupProbe:

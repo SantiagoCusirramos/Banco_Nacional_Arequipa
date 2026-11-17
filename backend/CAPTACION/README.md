@@ -23,9 +23,10 @@ Puerto **8017**. Pantalla del asesor: **http://localhost:3000/captacion**.
 
 ```mermaid
 flowchart LR
-  ase["Asesor en /captacion"] --> fe["frontend /api/captacion"] --> cap["CAPTACION :8017"]
-  cap -->|"token del asesor: /coredb/auth/me y /coredb/captacion"| coredb["COREDB :8012"]
-  cap -->|"usuario de servicio: alta del cliente, vínculo, referencias"| coredb
+  ase["Asesor en /captacion"] --> fe["frontend /api/captacion"] --> bus1["Bus :8018"] --> cap["CAPTACION :8017"]
+  cap -->|"token del asesor: /coredb/auth/me y /coredb/captacion"| bus["Bus /bus/coredb"]
+  cap -->|"usuario de servicio: alta del cliente, vínculo, referencias"| bus
+  bus --> coredb["COREDB :8012"]
   coredb --> db[("base integrada: clientes.*_captacion")]
   sol["SOL :8011"] -.->|"CR-INT-01: GET /cap/references (cuando haya Bus)"| cap
 ```
@@ -114,7 +115,8 @@ están contratados: `proveedores.py` responde de forma determinista, y la refere
 
 | Variable | Para qué |
 |---|---|
-| `CORE_BASE_URL` | COREDB (`http://coredb:8012`) |
+| `CORE_BASE_URL` | COREDB, a través del Bus (`http://bus:8018/bus/coredb`) |
+| `BUS_TOKEN` | Credencial de CAPTACION ante el Bus (`X-Bus-Token`; en el producto, `BUS_TOKEN_CAPTACION`) |
 | `CAP_CORE_USUARIO`, `CAP_CORE_SECRETO` | Usuario de servicio en COREDB (`svc-captacion`; el secreto es `CAPTACION_COREDB_SECRETO` de `.env`) |
 | `CAP_SOL_TOKEN` | Token de SOL para CR-INT-01 (32 caracteres o más) |
 | `CAP_OTP_CLAVE`, `CAP_OTP_SIMULADO` | HMAC de los OTP; devolver el código en laboratorio |

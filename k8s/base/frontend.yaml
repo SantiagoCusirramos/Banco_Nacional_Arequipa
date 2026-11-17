@@ -24,9 +24,6 @@ spec:
           envFrom:
             - configMapRef: { name: bna-configuracion }
           env:
-            # El COREDB_URL del ConfigMap es el directo, el de los módulos; el frontend va por el Bus.
-            - name: COREDB_URL
-              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: FRONTEND_COREDB_URL } }
             - name: BUS_TOKEN
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_FRONTEND } }
           ports:

@@ -42,7 +42,9 @@ x-captacion: &captacion
   image: bna/backend:local
   pull_policy: never
   environment: &captacion-entorno
-    CORE_BASE_URL: http://coredb:8012
+    # COREDB, a través del Bus (fase 2), con la credencial de CAPTACION.
+    CORE_BASE_URL: http://bus:8018/bus/coredb
+    BUS_TOKEN: ${BUS_TOKEN_CAPTACION:?Falta en .env. Ejecute ./bna up}
     CAP_CORE_USUARIO: svc-captacion
     CAP_CORE_SECRETO: ${CAPTACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
 
@@ -69,6 +71,7 @@ services:
       CORE_DB_SEGURIDAD_PASSWORD: ${CORE_DB_SEGURIDAD_PASSWORD:?Falta en .env. Ejecute ./bna up}
     volumes:
       - core-db-datos:/var/lib/mysql
+    networks: [core]
     ports:
       - "127.0.0.1:${BNA_PUERTO_DB:-3307}:3306"
     healthcheck:
@@ -80,6 +83,8 @@ services:
         - MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -uroot -h127.0.0.1 --protocol=TCP -e 'CALL core.verificar_configuracion()'
 
   # ── COREDB: la API del CORE sobre la base integrada ─────────────────────
+  # Solo en la red `core`, con la base y el Bus: los módulos llegan a COREDB a través del
+  # Bus (fase 2), nunca directo. scripts/comprobar_rutas_coredb.py lo comprueba.
   coredb:
     <<: *coredb
     build:
@@ -87,6 +92,7 @@ services:
       args:
         REQUISITOS: requirements-coredb.txt
     command: uvicorn COREDB.main:app --host 0.0.0.0 --port 8012
+    networks: [core]
     depends_on:
       db:
         condition: service_healthy
@@ -124,6 +130,7 @@ services:
       EVALUACION_COREDB_SECRETO: ${EVALUACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       DESEMBOLSO_COREDB_SECRETO: ${DESEMBOLSO_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       CAPTACION_COREDB_SECRETO: ${CAPTACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+    networks: [core]
     depends_on:
       db:
         condition: service_healthy
@@ -138,8 +145,12 @@ services:
         REQUISITOS: requirements.txt
     command: uvicorn CUENTAS.main:app --host 0.0.0.0 --port 8001
     environment:
-      CORE_BASE_URL: http://coredb:8012
+      # COREDB, a través del Bus (fase 2), con la credencial de CUENTAS.
+      CORE_BASE_URL: http://bus:8018/bus/coredb
+      BUS_TOKEN: ${BUS_TOKEN_CUENTAS:?Falta en .env. Ejecute ./bna up}
     depends_on:
+      bus:
+        condition: service_healthy
       coredb:
         condition: service_healthy
     ports:
@@ -157,8 +168,12 @@ services:
     <<: *backend
     command: uvicorn TARJETAS.main:app --host 0.0.0.0 --port 8002
     environment:
-      CORE_BASE_URL: http://coredb:8012
+      # COREDB, a través del Bus (fase 2), con la credencial de TARJETAS.
+      CORE_BASE_URL: http://bus:8018/bus/coredb
+      BUS_TOKEN: ${BUS_TOKEN_TARJETAS:?Falta en .env. Ejecute ./bna up}
     depends_on:
+      bus:
+        condition: service_healthy
       coredb:
         condition: service_healthy
     ports:
@@ -186,6 +201,8 @@ services:
       # Sin proveedor de SMS ni de correo: el código OTP vuelve en la respuesta.
       CAP_OTP_SIMULADO: "true"
     depends_on:
+      bus:
+        condition: service_healthy
       coredb-init:
         condition: service_completed_successfully
       coredb:
@@ -241,13 +258,17 @@ services:
     <<: *backend
     command: uvicorn EVALUACION.main:app --host 0.0.0.0 --port 8015
     environment:
-      COREDB_URL: http://coredb:8012
+      # COREDB, a través del Bus (fase 2), con la credencial de EVALUACION.
+      COREDB_URL: http://bus:8018/bus/coredb
+      BUS_TOKEN: ${BUS_TOKEN_EVALUACION:?Falta en .env. Ejecute ./bna up}
       EVALUACION_COREDB_USUARIO: svc-evaluacion
       EVALUACION_COREDB_SECRETO: ${EVALUACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       EVALUACION_TOKEN_SOL: ${EVALUACION_TOKEN_SOL:?Falta en .env. Ejecute ./bna up}
       EVALUACION_SOL_TOKEN_RESULTADOS: ${EVALUACION_SOL_TOKEN_RESULTADOS:?Falta en .env. Ejecute ./bna up}
       EVALUACION_SOL_URL: ${EVALUACION_SOL_URL:-}
     depends_on:
+      bus:
+        condition: service_healthy
       coredb:
         condition: service_healthy
       coredb-init:
@@ -271,10 +292,14 @@ services:
     <<: *backend
     command: uvicorn DESEMBOLSO.main:app --host 0.0.0.0 --port 8016
     environment:
-      COREDB_URL: http://coredb:8012
+      # COREDB, a través del Bus (fase 2), con la credencial de DESEMBOLSO.
+      COREDB_URL: http://bus:8018/bus/coredb
+      BUS_TOKEN: ${BUS_TOKEN_DESEMBOLSO:?Falta en .env. Ejecute ./bna up}
       DESEMBOLSO_COREDB_USUARIO: svc-desembolso
       DESEMBOLSO_COREDB_SECRETO: ${DESEMBOLSO_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
     depends_on:
+      bus:
+        condition: service_healthy
       coredb:
         condition: service_healthy
       coredb-init:
@@ -312,10 +337,11 @@ services:
         - -c
         - import urllib.request as u; u.urlopen(u.Request("http://127.0.0.1:8013/seguridad/estado", headers={"X-Correlation-ID":"sonda"}), timeout=3)
 
-  # ── Bus de Servicios: los canales llegan a los módulos solo a través de él ─
+  # ── Bus de Servicios: los canales y los módulos llegan a otros módulos solo por él ─
   # /bus/<módulo>/<ruta> → el módulo, sin tocar cabeceras, cuerpo ni códigos. Cada
   # consumidor presenta su credencial (X-Bus-Token). El frontend está en la red
-  # `canales` con el Bus y nada más: no puede llamar a un módulo directo.
+  # `canales` con el Bus y nada más: no puede llamar a un módulo directo. COREDB está
+  # en la red `core` con el Bus y nada más: los módulos llegan a COREDB por el Bus (fase 2).
   bus:
     <<: *backend
     command: uvicorn BUS_SERVICIOS.main:app --host 0.0.0.0 --port 8018
@@ -328,11 +354,17 @@ services:
       BUS_URL_EVALUACION: http://evaluacion:8015
       BUS_URL_DESEMBOLSO: http://desembolso:8016
       BUS_URL_SEGURIDAD: http://seguridad:8013
-      # FRONTEND: los puentes del frontend. PRUEBAS: el flujo de extremo a extremo.
-      BUS_CONSUMIDORES: FRONTEND,PRUEBAS
+      # FRONTEND: los puentes del frontend. PRUEBAS: el flujo de extremo a extremo. El resto:
+      # cada módulo que llama a COREDB (fase 2).
+      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO
       BUS_TOKEN_FRONTEND: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_PRUEBAS: ${BUS_TOKEN_PRUEBAS:?Falta en .env. Ejecute ./bna up}
-    networks: [default, canales]
+      BUS_TOKEN_CUENTAS: ${BUS_TOKEN_CUENTAS:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_TARJETAS: ${BUS_TOKEN_TARJETAS:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_CAPTACION: ${BUS_TOKEN_CAPTACION:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_EVALUACION: ${BUS_TOKEN_EVALUACION:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_DESEMBOLSO: ${BUS_TOKEN_DESEMBOLSO:?Falta en .env. Ejecute ./bna up}
+    networks: [default, canales, core]
     ports:
       - "127.0.0.1:${BNA_PUERTO_BUS:-8018}:8018"
     healthcheck:
@@ -434,6 +466,8 @@ networks:
   default:
   # Solo el frontend y el Bus: el frontend no ve los módulos.
   canales:
+  # Solo la base, COREDB, su arranque y el Bus: los módulos no ven COREDB.
+  core:
 
 volumes:
   core-db-datos:
