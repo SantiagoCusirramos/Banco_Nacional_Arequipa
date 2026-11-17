@@ -23,12 +23,15 @@ class CoreClient:
                  params: dict | None = None,
                  correlation_id: str | None = None,
                  authorization: str | None = None,
-                 sin_cuerpo: bool = False):
+                 sin_cuerpo: bool = False,
+                 extra_headers: dict | None = None):
         headers = {}
         if authorization:
             headers["Authorization"] = authorization
         if correlation_id:
             headers["X-Correlation-ID"] = correlation_id
+        if extra_headers:
+            headers.update(extra_headers)
         try:
             resp = self._http.request(method, path, json=json, params=params, headers=headers)
         except httpx.ConnectError:
@@ -95,9 +98,10 @@ class CoreClient:
                              correlation_id=correlation_id, authorization=authorization)
 
     def confirmar_autorizacion(self, uuid_autorizacion: str, payload: dict, correlation_id: str | None = None,
-                               authorization: str | None = None):
+                               authorization: str | None = None, idempotency_key: str | None = None):
+        extra_headers = {"X-Idempotency-Key": idempotency_key} if idempotency_key else None
         return self._request("POST", f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion", json=payload,
-                             correlation_id=correlation_id, authorization=authorization)
+                             correlation_id=correlation_id, authorization=authorization, extra_headers=extra_headers)
 
     def registrar_credencial(self, id_tarjeta: str, tipo: str, payload: dict,
                              correlation_id: str | None = None, authorization: str | None = None):

@@ -25,7 +25,8 @@ class Captura:
         self.payload = payload
         return {}
 
-    def confirmar_autorizacion(self, uuid_autorizacion, payload, cid, authorization=None):
+    def confirmar_autorizacion(self, uuid_autorizacion, payload, cid, authorization=None,
+                                idempotency_key=None):
         self.payload = payload
         return {}
 
@@ -50,11 +51,7 @@ def test_bloqueo_cumple_esquema_de_coredb():
 
 
 def test_confirmar_autorizacion_cumple_esquema_de_coredb():
-    import hashlib
     c = Captura()
-    svc.confirmar_autorizacion(c, AUT, ConfirmacionIn(
-        llave_idempotencia="550e8400-e29b-41d4-a716-446655440000",
-        huella=hashlib.sha256(b"550e8400-e29b-41d4-a716-446655440000").hexdigest(),
-        id_terminal="DEV-ATM-01"
-    ), "corr", "Bearer x")
+    svc.confirmar_autorizacion(c, AUT, ConfirmacionIn(id_terminal="DEV-ATM-01"),
+                               "corr", "Bearer x", "550e8400-e29b-41d4-a716-446655440000")
     ConfirmacionRegistrar(**c.payload)

@@ -203,17 +203,18 @@ Pasa la autorización a `EXTORNADA` (`codigo_respuesta` `EXT`) y libera el saldo
 
 ### 4.9 Confirmar una autorización: `POST /api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/confirmacion`
 
-Cuando el cajero dispensa el efectivo, confirma la autorización retenida: registra el movimiento real (débito) y pasa la autorización a `DISPENSADA`. Exige `X-Idempotency-Key` (UUIDv4) y la **huella** (SHA-256 hex de 64 caracteres) de la llave, para idempotencia fuerte.
+Cuando el cajero dispensa el efectivo, confirma la autorización retenida: registra el movimiento real (débito) y pasa la autorización a `DISPENSADA`. Exige `X-Idempotency-Key` (UUIDv4) en cabecera. La **huella** (SHA-256 hex de 64 caracteres) la calcula COREDB a partir de `uuid_autorizacion`, `id_canal` e `id_terminal`; no se envía en el cuerpo.
 
 ```json
-{"llave_idempotencia": "550e8400-e29b-41d4-a716-446655440000",
- "huella": "a1b2c3d4e5f6... (64 hex)",
- "id_terminal": "DEV-ATM-01"}
+{"id_terminal": "DEV-ATM-01"}
 ```
 
+Cabecera obligatoria: `X-Idempotency-Key: <UUIDv4>`.
+
 - `id_canal` (`ATM`, `AGE`, `VEN`, `HB`, `BD`) o `id_terminal`: uno de los dos (o ambos). Deben coincidir con la autorización.
-- Repetir con la **misma llave y huella** devuelve el mismo resultado sin segundo débito.
+- Repetir con la **misma llave** devuelve el mismo resultado sin segundo débito.
 - Repetir con **otra llave** falla: la autorización ya cambió a `DISPENSADA`.
+- La misma llave con diferente canal/terminal falla con 409 `ERR-TAR-IDEMPOTENCIA` (huella distinta).
 
 ```json
 {"uuid_autorizacion": "…", "id_tarjeta": "…", "num_cuenta": "10100000000001",
@@ -225,10 +226,11 @@ Cuando el cajero dispensa el efectivo, confirma la autorización retenida: regis
 | Estado | `error_code` | Cuándo |
 |---|---|---|
 | 200 | | `message`: `Operación confirmada` |
-| 400 | `ERR-TAR-HEADER-REQUERIDO`, `ERR-TAR-VALIDACION` | Falta la llave, la huella no es 64 hex, o falta canal/terminal |
+| 400 | `ERR-TAR-HEADER-REQUERIDO`, `ERR-TAR-HEADER-INVALIDO` | Falta la cabecera `X-Idempotency-Key` o no es un UUIDv4 |
+| 400 | `ERR-VALIDACION-ESQUEMA` | Falta canal/terminal, o vienen ambos a la vez |
 | 404 | `ERR-TAR-AUTORIZACION-NO-ENCONTRADA` | No existe |
 | 409 | `ERR-TAR-CONFIRMACION-NO-PERMITIDA` | Fue rechazada, extornada, o ya dispensada |
-| 409 | `ERR-TAR-IDEMPOTENCIA` | La llave se usó en otra operación |
+| 409 | `ERR-TAR-IDEMPOTENCIA` | La llave se usó en otra operación (incluye misma llave con diferente canal/terminal) |
 
 ### 4.10 Claves de la tarjeta: `PUT /api/v1/tarjetas/{id_tarjeta}/credenciales/{tipo}` y `POST .../{tipo}/validacion`
 

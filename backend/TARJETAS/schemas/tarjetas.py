@@ -92,8 +92,6 @@ class ExtornoIn(_Entrada):
 
 
 class ConfirmacionIn(_Entrada):
-    llave_idempotencia: str = Field(min_length=1, max_length=64)
-    huella: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
     id_canal: str | None = Field(default=None, min_length=1, max_length=5)
     id_terminal: str | None = Field(default=None, min_length=1, max_length=30)
 

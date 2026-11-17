@@ -70,11 +70,13 @@ def extornar(request: Request, uuid_autorizacion: str, datos: ExtornoIn, core: C
 
 @router.post("/autorizaciones/{uuid_autorizacion}/confirmacion")
 def confirmar(request: Request, uuid_autorizacion: str, datos: ConfirmacionIn, core: CoreClient = Depends(get_core_client),
-              cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
+              cid: str = Depends(correlation_id), token: str = Depends(autorizacion),
+              key: str = Depends(idempotency_key)):
     """Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.
-    La llave de idempotencia es obligatoria; repetirla devuelve el mismo resultado sin
-    segundo débito. El canal o terminal deben coincidir con la autorización."""
-    resultado = _autorizacion(svc.confirmar_autorizacion(core, uuid_autorizacion, datos, cid, token))
+    La llave de idempotencia (X-Idempotency-Key, UUIDv4) es obligatoria; repetirla devuelve
+    el mismo resultado sin segundo débito. La huella la calcula COREDB. El canal o terminal
+    deben coincidir con la autorización."""
+    resultado = _autorizacion(svc.confirmar_autorizacion(core, uuid_autorizacion, datos, cid, token, key))
     return exito(request, resultado, message=_mensaje_autorizacion(resultado))
 
 

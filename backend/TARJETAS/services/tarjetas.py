@@ -159,15 +159,14 @@ def extornar(core: CoreClient, uuid_autorizacion: str, datos: ExtornoIn, correla
 
 
 def confirmar_autorizacion(core: CoreClient, uuid_autorizacion: str, datos: ConfirmacionIn,
-                           correlation_id: str, authorization: str | None = None) -> dict:
+                           correlation_id: str, authorization: str | None = None,
+                           idempotency_key: str | None = None) -> dict:
     payload = {
-        "llave_idempotencia": datos.llave_idempotencia,
-        "huella": datos.huella,
         **({"id_canal": datos.id_canal} if datos.id_canal else {}),
         **({"id_terminal": datos.id_terminal} if datos.id_terminal else {}),
     }
     return core.confirmar_autorizacion(_uuid_autorizacion(uuid_autorizacion), payload,
-                                       _uuid(correlation_id), authorization)
+                                       _uuid(correlation_id), authorization, idempotency_key)
 
 
 def registrar_credencial(core: CoreClient, id_tarjeta: str, tipo: TipoCredencial, datos: CredencialIn,
