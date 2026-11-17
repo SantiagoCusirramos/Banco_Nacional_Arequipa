@@ -1,6 +1,6 @@
 # Bus de Servicios
 
-Punto único por el que los canales llegan a los módulos del producto y los módulos llegan a COREDB, como pide [`Documents/01-stack-tecnologico.md`](../../Documents/01-stack-tecnologico.md) («Módulos de negocio → CORE: REST interno vía Bus»). Lo usan los puentes del frontend, el flujo de extremo a extremo y cada módulo que llama a COREDB (CUENTAS, TARJETAS, CAPTACION, Evaluación, Desembolso y COBRANZA; fase 2) y el cajero automático (ATM, que llama a TARJETAS y CUENTAS), cada uno con su credencial.
+Punto único por el que los canales llegan a los módulos del producto y los módulos llegan a COREDB, como pide [`Documents/01-stack-tecnologico.md`](../../Documents/01-stack-tecnologico.md) («Módulos de negocio → CORE: REST interno vía Bus»). Lo usan los puentes del frontend, el flujo de extremo a extremo y cada módulo que llama a COREDB (CUENTAS, TARJETAS, CAPTACION, Evaluación y Desembolso; fase 2), cada uno con su credencial.
 
 Parte del aporte de Gabriel Tapia (PR #91): la idea de un Bus con credencial por consumidor y el reenvío de `Authorization` y de la llave de idempotencia.
 
@@ -17,9 +17,16 @@ Parte del aporte de Gabriel Tapia (PR #91): la idea de un Bus con credencial por
 | `/bus/sol/...` | SOL | `BUS_URL_SOL` |
 | `/bus/evaluacion/...` | EVALUACIÓN | `BUS_URL_EVALUACION` |
 | `/bus/desembolso/...` | DESEMBOLSO | `BUS_URL_DESEMBOLSO` |
-| `/bus/cobranza/...` | COBRANZA | `BUS_URL_COBRANZA` |
 | `/bus/seguridad/...` | Seguridad | `BUS_URL_SEGURIDAD` |
-| `/bus/atm/...` | ATM (cajero automático) | `BUS_URL_ATM` |
+
+Además, módulos opcionales: solo se publican si su variable tiene valor. En compose, ATM y BILLETERA están siempre; CLIENTES y CORE vienen de `bna-bus-servicios` y viven fuera de este compose:
+
+| Ruta del Bus | Módulo | Variable con su dirección |
+|---|---|---|
+| `/bus/atm/...` | Cajero ATM: adaptador del canal (`/autenticar`, `/consulta-saldo`, `/retiro`, `/confirmar-dispensacion`, `/extorno`) sobre Cuentas y Tarjetas simulados del prototipo | `BUS_URL_ATM` |
+| `/bus/billetera/...` | Billetera Digital Chaski (rutas `/api/...`) | `BUS_URL_BILLETERA` |
+| `/bus/clientes/...` | CLIENTES | `BUS_URL_CLIENTES` |
+| `/bus/core/...` | CORE (rutas `/interno/...`) | `BUS_URL_CORE` |
 
 Por ejemplo, `GET /bus/cuentas/api/v1/cuentas/001-...` llega a CUENTAS como `GET /api/v1/cuentas/001-...`.
 
@@ -32,10 +39,16 @@ Por ejemplo, `GET /bus/cuentas/api/v1/cuentas/001-...` llega a CUENTAS como `GET
 | Código | `codigo` | Cuándo |
 |---|---|---|
 | 401 | `BUS_CREDENCIAL_INVALIDA` | Falta `X-Bus-Token` o no es de ningún consumidor. No reenvía nada |
+| 403 | `BUS_CONSUMIDOR_NO_AUTORIZADO` | El módulo tiene `BUS_PERMITIDOS_<MÓDULO>` y el consumidor no está. No reenvía nada |
 | 404 | `MODULO_DESCONOCIDO` | El módulo no está en la tabla |
 | 503 | `MODULO_NO_DISPONIBLE` | El módulo no acepta la conexión (caído) |
 | 504 | `MODULO_SIN_RESPUESTA` | El módulo no responde en `BUS_TIMEOUT_SEG` |
 | 502 | `MODULO_RESPUESTA_INVALIDA` | El módulo cortó la respuesta a medias |
+
+Para ver qué módulos están integrados:
+
+- `GET /docs`: el Swagger del Bus muestra una sección por módulo con **sus rutas reales**, leídas en vivo del `/openapi.json` de cada uno y publicadas bajo `/bus/<módulo>`. Con **Authorize** se presenta `X-Bus-Token` (y, si el módulo la pide, su propia credencial, como el bearer de COREDB). Un módulo que no publica su OpenAPI aparece como «NO DISPONIBLE».
+- `GET /modulos` (con credencial): contacta cada módulo y responde `DISPONIBLE` (con milisegundos) o `NO_DISPONIBLE` (con el motivo), y cuántos contestan del total.
 
 Además: `GET /salud` (sin credencial, no depende de los módulos) y `GET /metricas` (con credencial): cuántas peticiones reenvió por consumidor y módulo desde que arrancó. El flujo de extremo a extremo la usa para comprobar que todo pasó por el Bus.
 
@@ -47,9 +60,14 @@ Sin valores por omisión para direcciones ni credenciales: si falta algo, no arr
 
 | Variable | Qué es |
 |---|---|
-| `BUS_URL_<MÓDULO>` | Dirección de cada módulo de la tabla, `http(s)://host:puerto[/prefijo]`, sin credenciales ni consulta. Las diez son obligatorias |
-| `BUS_CONSUMIDORES` | Nombres de los consumidores, separados por comas (mayúsculas, dígitos y `_`). En el producto: `FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM` |
-| `BUS_TOKEN_<CONSUMIDOR>` | Credencial de cada consumidor, que presenta en `X-Bus-Token`. Al menos 32 caracteres, distinta de las demás. `./bna up` las genera en `.env` (`BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS` y una por módulo: `BUS_TOKEN_CUENTAS`…) |
+| `BUS_URL_<MÓDULO>` | Dirección de cada módulo de la tabla, `http(s)://host:puerto[/prefijo]`, sin credenciales ni consulta. Las ocho son obligatorias |
+| `BUS_CONSUMIDORES` | Nombres de los consumidores, separados por comas (mayúsculas, dígitos y `_`). En el producto: `FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,ATM` (ATM es la pantalla del cajero) |
+| `BUS_TOKEN_<CONSUMIDOR>` | Credencial de cada consumidor, que presenta en `X-Bus-Token`. Al menos 32 caracteres, distinta de las demás. `./bna up` las genera en `.env` (`BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS`, una por módulo: `BUS_TOKEN_CUENTAS`…, y `BUS_TOKEN_ATM`) |
+| `BUS_CONSUMIDORES_EXTRA` | Opcional. Consumidores que se suman a `BUS_CONSUMIDORES` sin reemplazarla (por ejemplo `CLIENTES`, del stack de clientes) |
+| `BUS_URL_CLIENTES`, `BUS_URL_CORE`, `BUS_URL_BILLETERA` | Opcionales. Vacías, el módulo no se publica |
+| `BUS_CREDENCIAL_<MÓDULO>` | Opcional. Credencial que el Bus presenta al módulo en `X-Service-Token` (al menos 32 caracteres). La que traiga el consumidor se descarta. Sin ella, `X-Service-Token` pasa tal cual |
+| `BUS_PERMITIDOS_<MÓDULO>` | Opcional. Consumidores (de `BUS_CONSUMIDORES`) que pueden usar ese módulo. Sin ella, todos |
+| `BUS_MODULOS_PUBLICOS` | Opcional. Módulos a los que se llega sin `X-Bus-Token`, como consumidor `PUBLICO` (en compose: `BILLETERA`, para la app móvil, que no puede guardar un secreto, y `SEGURIDAD`, para su consola en http://127.0.0.1:8018/bus/seguridad/; los dos autentican a sus usuarios). Una credencial presente pero inválida sigue siendo 401 |
 | `BUS_TIMEOUT_SEG` | Segundos que espera la respuesta de un módulo. Por omisión 9, menos que los 10 del puente del frontend, para que el navegador vea el 504 del Bus |
 | `BUS_TIMEOUT_CONEXION_SEG` | Segundos para conectar con un módulo. Por omisión 2 |
 
@@ -70,3 +88,20 @@ docker run --rm bna/backend:local python -m pytest -q -o addopts= BUS_SERVICIOS/
 `tests/test_bus.py` simula los módulos con `httpx.MockTransport` para ver exactamente lo que les llega, y usa sockets reales para un módulo caído, uno que no responde y un recorrido completo con uvicorn delante y un servidor HTTP detrás. Comprueba: configuración obligatoria; credencial; una ruta por módulo; cabeceras, cuerpo, ruta y consulta iguales en los dos sentidos; errores del módulo con su código y su cuerpo; idempotencia sin reintentos; 503 y 504 claros sin colgar; métricas.
 
 El flujo de `./bna smoke` corre en el contenedor del Bus y solo conoce el Bus y el frontend. Al terminar comprueba con `/metricas` que cada módulo llegó a COREDB a través del Bus. Las suites de integración de CAPTACION, Evaluación y Desembolso levantan un Bus de pruebas delante de su COREDB (`scripts/bus_de_pruebas.sh`) y hacen la misma comprobación.
+
+## Migración desde `bna-bus-servicios`
+
+El Bus anterior publicaba rutas fijas con `X-Service-Token` como credencial del consumidor. Aquí la credencial es `X-Bus-Token` y la ruta es la del módulo tal cual:
+
+| Antes | Ahora |
+|---|---|
+| `POST /bus/clientes/registrar` | `POST /bus/clientes/clientes/registrar` |
+| `POST /bus/clientes/validar-documento` | `POST /bus/clientes/clientes/validar-documento` |
+| `POST /bus/core/registrar-cliente` | `POST /bus/core/interno/registrar-cliente` |
+| `GET /bus/core/solicitudes-registro` | `GET /bus/core/interno/solicitudes-registro` |
+| `POST /bus/cuentas/deposito` | `POST /bus/cuentas/api/v1/cuentas/deposito` |
+| `GET /bus/atm/consulta-saldo/{cuenta}` | `GET /bus/cuentas/api/v1/cuentas/{cuenta}` |
+| `/bus/seguridad/<ruta>` | `/bus/seguridad/seguridad/<ruta>` |
+| `/api/<módulo>/...` con `X-API-Key` | `/bus/<módulo>/...` con `X-Bus-Token` |
+
+Equivalencias de configuración: `CLIENTES_TOKEN` → `BUS_CREDENCIAL_CLIENTES`, `CORE_TOKEN` → `BUS_CREDENCIAL_CORE`, `BUS_CORE_TOKEN` (solo CLIENTES llega a CORE) → consumidor `CLIENTES` con `BUS_TOKEN_CLIENTES` y `BUS_PERMITIDOS_CORE=CLIENTES`.
