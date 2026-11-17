@@ -172,6 +172,45 @@ concurrente C03 'RN-TOP-001 (bug 5)' 'Dos autorizaciones simultáneas sin movimi
   'autorizadas 1; segunda operación: ERR-TAR-007' \
   "SELECT CONCAT('autorizadas ', count(*)) FROM tarjetas.autorizacion WHERE num_cuenta = 'CTA-USD-1' AND estado_autorizacion = 'AUTORIZADA'"
 
+# X508 (v1.8): dos confirmaciones simultáneas de la misma autorización con LLAVES DIFERENTES.
+# Primero se autoriza en una llamada normal; luego la sesión A confirma con 'llave-x508-a'
+# y la sesión B confirma con 'llave-x508-b'. B debe fallar con BNA-CONFIRMACION y debe
+# haber exactamente 1 movimiento.
+# Autorización previa para X508.
+app_ -e "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000009'), UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 60, NULL, 'pruebas', @e, @c)" >/dev/null
+printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\n' \
+  "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000009'), 'llave-x508-a', REPEAT('x', 64), 'pruebas', 'ATM', NULL, @trx, @estado)" | app_ > "$OUT/X508-a.log" 2>&1 &
+a=$!
+sleep 1
+b="$(printf 'START TRANSACTION;\n%s;\nCOMMIT;\n' \
+  "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000009'), 'llave-x508-b', REPEAT('y', 64), 'pruebas', 'ATM', NULL, @trx, @estado)" | app_ 2>&1 || true)"
+wait "$a" || true
+echo "$b" > "$OUT/X508-b.log"
+ok=0
+if [ "$(root_ -N -e "SELECT count(*) = 1 FROM cuentas.movimiento WHERE uuid_transaccion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000009')")" = 1 ] && echo "$b" | grep -q 'BNA-CONFIRMACION'; then ok=1; fi
+registrar X508 bna_app_user Concurrencia 'Extensión v1.8' 'Dos confirmaciones simultáneas con llaves distintas: la segunda falla con BNA-CONFIRMACION' procedimiento \
+  'un solo débito; segunda operación: BNA-CONFIRMACION' "$(root_ -N -e "SELECT CONCAT('débitos: ', count(*)) FROM cuentas.movimiento WHERE uuid_transaccion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000009')"); segunda: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+
+# X509 (v1.8): dos confirmaciones simultáneas de la misma autorización con la MISMA llave.
+# Primero se autoriza en una llamada normal; luego la sesión A confirma con 'llave-x509'
+# y la sesión B confirma con la MISMA llave 'llave-x509'. B NO debe fallar, debe
+# devolver el mismo uuid_transaccion y debe haber exactamente 1 movimiento.
+# Autorización previa para X509.
+app_ -e "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000010'), UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 70, NULL, 'pruebas', @e, @c)" >/dev/null
+printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\n' \
+  "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000010'), 'llave-x509', REPEAT('x', 64), 'pruebas', 'ATM', NULL, @trx1, @estado1)" | app_ > "$OUT/X509-a.log" 2>&1 &
+a=$!
+sleep 1
+b="$(printf 'START TRANSACTION;\n%s;\nCOMMIT;\n' \
+  "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000010'), 'llave-x509', REPEAT('x', 64), 'pruebas', 'ATM', NULL, @trx2, @estado2)" | app_ 2>&1 || true)"
+wait "$a" || true
+echo "$b" > "$OUT/X509-b.log"
+# Verifica: 1 movimiento, B sin error, y ambas transacciones tienen el mismo uuid (el de la autorización).
+ok=0
+if [ "$(root_ -N -e "SELECT count(*) = 1 FROM cuentas.movimiento WHERE uuid_transaccion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000010')")" = 1 ] && ! echo "$b" | grep -q ERROR; then ok=1; fi
+registrar X509 bna_app_user Concurrencia 'Extensión v1.8' 'Dos confirmaciones simultáneas con la misma llave: la segunda es idempotente' procedimiento \
+  'un solo débito; segunda operación: aceptada' "$(root_ -N -e "SELECT CONCAT('débitos: ', count(*)) FROM cuentas.movimiento WHERE uuid_transaccion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000010')"); segunda: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+
 # X234 (v1.1): dos registros simultáneos con el mismo correo; el segundo espera en el
 # índice único y se rechaza cuando el primero confirma.
 CLIENTE=api_ concurrente X234 'Extensión v1.1' 'Dos registros simultáneos con el mismo correo dejan un solo cliente' \
