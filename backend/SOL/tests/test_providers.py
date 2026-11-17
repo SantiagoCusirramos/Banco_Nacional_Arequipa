@@ -121,6 +121,17 @@ def test_bus_legacy_and_explicit_whole_pair_override():
         assert seen == ["bus.test", "bus.test", "eva.test"]
     finally:
         adapter.close()
+    # Un par propio de auditoría prevalece sobre el Bus; no se mezclan tokens.
+    seen_audit = []
+    def audit_provider(request):
+        seen_audit.append((request.url.host, request.headers["Authorization"]))
+        return httpx.Response(200, json={"idEvento": "evento-sintetico", "confirmado": True, "acuse": "ACK-audit"})
+    audit_adapter = Integrations(settings(), httpx.MockTransport(audit_provider))
+    try:
+        assert audit_adapter.audit({"idEvento": "evento-sintetico", "idCorrelacion": "trace"}) == "ACK-audit"
+    finally:
+        audit_adapter.close()
+    assert seen_audit == [("audit.test", "Bearer " + settings().audit_token)]
 
 
 @pytest.mark.parametrize("failure", [401, 503, "timeout"])
