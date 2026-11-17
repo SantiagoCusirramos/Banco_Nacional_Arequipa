@@ -361,3 +361,63 @@ CALL prueba.rechaza('X397', 'Extensión', 'Empleados', 'bna_app no puede registr
 CALL prueba.rechaza('X444', 'Extensión', 'Captación', 'bna_app no puede registrar solicitantes (solo bna_api)',
   JSON_ARRAY("CALL clientes.registrar_solicitante_captacion(UUID_TO_BIN(UUID()), 'DNI', '71000444', 'R', 'P', NULL, '951000444', 'r@example.com', 'pruebas', UUID_TO_BIN(UUID()), @id, @dup)"),
   'denied', 'privilegio');
+
+-- Confirmación de autorización (v1.8): convierte la retención en débito real al dispensar.
+SET @t1 = UUID_TO_BIN('a0000000-0000-4000-8000-000000000001');
+
+CALL prueba.verifica('X500', 'Extensión', 'Confirmación', 'Confirmación feliz: débito real, saldo contable y disponible iguales (retención liberada), tope ya comprometido',
+  JSON_ARRAY("SET @s0 = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @d0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @k0 = (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM')",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000001'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 100, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000001'), 'llave-confirmar-001', REPEAT('x', 64), 'pruebas', 'ATM', NULL, @trx, @estado)"),
+  "SELECT @estado = 'DISPENSADA' AND @trx IS NOT NULL AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 - 100 AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @d0 - 100 AND (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM') = @k0 + 100 AND (SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000001')) = 'DISPENSADA' AND (SELECT uuid_transaccion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000001')) = @trx",
+  'DISPENSADA, contable -100, disponible -100, tope +100', "SELECT CONCAT(@estado, ', ', HEX(@trx))", 'procedimiento');
+
+CALL prueba.verifica('X501', 'Extensión', 'Confirmación', 'Repetición idempotente con la misma llave devuelve el mismo resultado sin debitar dos veces',
+  JSON_ARRAY("SET @s0 = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @d0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @k0 = (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM')",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000002'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 200, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000002'), 'llave-confirmar-002', REPEAT('y', 64), 'pruebas', 'ATM', NULL, @trx1, @estado1)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000002'), 'llave-confirmar-002', REPEAT('y', 64), 'pruebas', 'ATM', NULL, @trx2, @estado2)"),
+  "SELECT @estado2 = 'DISPENSADA' AND @trx1 = @trx2 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 - 200 AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @d0 - 200 AND (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM') = @k0 + 200",
+  'una sola aplicación', "SELECT CONCAT(@estado2, ', ', HEX(@trx1), ' = ', HEX(@trx2))", 'procedimiento');
+
+CALL prueba.rechaza('X502', 'Extensión', 'Confirmación', 'Otra llave sobre autorización ya confirmada da error',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000003'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 50, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000003'), 'llave-confirmar-003', REPEAT('z', 64), 'pruebas', 'ATM', NULL, @trx, @estado)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000003'), 'otra-llave-003', REPEAT('w', 64), 'pruebas', 'ATM', NULL, @trx, @estado)"),
+  'BNA-IDEMPOTENCIA|BNA-CONFIRMACION', 'procedimiento');
+
+CALL prueba.rechaza('X503', 'Extensión', 'Confirmación', 'No se confirma una autorización extornada',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000004'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 75, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.extornar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000004'), 'Cajero sin efectivo', 'pruebas', @x)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000004'), 'llave-confirmar-004', REPEAT('a', 64), 'pruebas', 'ATM', NULL, @trx, @estado)"),
+  'BNA-CONFIRMACION: la autorización no está en estado vigente', 'procedimiento');
+
+CALL prueba.verifica('X504', 'Extensión', 'Confirmación', 'Repetir con la misma llave sobre autorización ya confirmada es idempotente',
+  JSON_ARRAY("SET @s0 = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @d0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @k0 = (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM')",
+             "CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000005'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 30, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000005'), 'llave-confirmar-005', REPEAT('b', 64), 'pruebas', 'ATM', NULL, @trx1, @estado1)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000005'), 'llave-confirmar-005', REPEAT('b', 64), 'pruebas', 'ATM', NULL, @trx2, @estado2)"),
+  "SELECT @estado2 = 'DISPENSADA' AND @trx1 = @trx2 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 - 30 AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @d0 - 30 AND (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM') = @k0 + 30",
+  'idempotente: mismo resultado', "SELECT CONCAT(@estado2, ', ', HEX(@trx1), ' = ', HEX(@trx2))", 'procedimiento');
+
+CALL prueba.rechaza('X505', 'Extensión', 'Confirmación', 'No se confirma una autorización rechazada',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000006'), @t1, 'CTA-USD-1', 'VEN', NULL, 'RETIRO', 999999, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000006'), 'llave-confirmar-006', REPEAT('c', 64), 'pruebas', 'VEN', NULL, @trx, @estado)"),
+  'BNA-CONFIRMACION: la autorización no está en estado vigente', 'procedimiento');
+
+CALL prueba.rechaza('X506', 'Extensión', 'Confirmación', 'Extorno tras confirmar falla (el extorno es solo sin movimiento)',
+  JSON_ARRAY("CALL tarjetas.autorizar_operacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000007'), @t1, 'CTA-PEN-1', NULL, 'ATM-AQP-001', 'RETIRO', 40, NULL, 'pruebas', @e, @c)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000007'), 'llave-confirmar-007', REPEAT('d', 64), 'pruebas', 'ATM', NULL, @trx, @estado)",
+             "CALL tarjetas.extornar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000007'), 'Intento de extorno', 'pruebas', @x)"),
+  'BNA-EXTORNO: la operación ya tiene su movimiento', 'procedimiento');
+
+CALL prueba.rechaza('X507', 'Extensión', 'Confirmación', 'No se confirma una autorización INICIADA (sin haber pasado a AUTORIZADA)',
+  JSON_ARRAY("INSERT INTO tarjetas.autorizacion (uuid_autorizacion, tipo_operacion, monto, estado_autorizacion, codigo_respuesta, id_terminal, ip_origen, id_tarjeta, num_cuenta, id_canal) VALUES (UUID_TO_BIN('a3000000-0000-4000-8000-000000000008'), 'RETIRO', 10, 'INICIADA', NULL, 'ATM-AQP-001', NULL, @t1, 'CTA-PEN-1', NULL)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000008'), 'llave-confirmar-008', REPEAT('e', 64), 'pruebas', 'ATM', NULL, @trx, @estado)"),
+  'BNA-CONFIRMACION: la autorización no está en estado vigente', 'procedimiento');

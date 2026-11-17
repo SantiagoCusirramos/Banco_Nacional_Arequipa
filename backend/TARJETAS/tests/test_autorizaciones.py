@@ -35,7 +35,7 @@ def test_autorizar_envia_el_uuid_de_la_llave(client, core):
     assert cuerpo["message"] == "Operación autorizada"
     assert cuerpo["data"]["aprobada"] is True
     assert cuerpo["data"]["codigo_respuesta"] == "00"
-    assert "uuid_transaccion" not in cuerpo["data"]
+    assert cuerpo["data"]["uuid_transaccion"] is None
     llamada = core.llamadas[0]
     assert (llamada["metodo"], llamada["ruta"]) == ("POST", "/coredb/autorizaciones")
     assert llamada["json"] == {
@@ -169,3 +169,130 @@ def test_validar_con_la_tarjeta_bloqueada_400(client, core):
     r = client.post(f"{BASE}/{ID}/credenciales/PIN_ATM/validacion",
                     json={"valor": "4821", "id_canal": "ATM"}, headers=AUTH)
     assert (r.status_code, r.json()["error_code"]) == (400, "ERR-TAR-003")
+
+
+def autorizacion_confirmada():
+    base = autorizacion_core()
+    base.update({
+        "estado_autorizacion": "DISPENSADA",
+        "uuid_transaccion": AUT,
+    })
+    return base
+
+
+def test_confirmar_envia_solo_canal_terminal_y_header(client, core):
+    core.respuesta = httpx.Response(200, json=autorizacion_confirmada())
+    llave = "550e8400-e29b-41d4-a716-446655440001"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_terminal": "DEV-ATM-01"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert r.status_code == 200
+    assert r.json()["message"] == "Operación confirmada"
+    assert r.json()["data"]["estado_autorizacion"] == "DISPENSADA"
+    assert r.json()["data"]["uuid_transaccion"] == AUT
+    llamada = core.llamadas[0]
+    assert (llamada["metodo"], llamada["ruta"]) == ("POST", f"/coredb/autorizaciones/{AUT}/confirmacion")
+    assert llamada["json"] == {"id_terminal": "DEV-ATM-01"}
+    # La cabecera X-Idempotency-Key se reenvía a COREDB (httpx normaliza a minúsculas)
+    assert llamada["headers"].get("x-idempotency-key") == llave
+
+
+def test_confirmar_con_id_canal(client, core):
+    core.respuesta = httpx.Response(200, json=autorizacion_confirmada())
+    llave = "550e8400-e29b-41d4-a716-446655440002"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_canal": "ATM"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert r.status_code == 200
+    llamada = core.llamadas[0]
+    assert llamada["json"] == {"id_canal": "ATM"}
+    assert llamada["headers"].get("x-idempotency-key") == llave
+
+
+def test_confirmar_sin_header_400_sin_llamar_a_core(client, core):
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert r.status_code == 400
+    assert r.json()["error_code"] == "ERR-TAR-HEADER-REQUERIDO"
+    assert core.llamadas == []
+
+
+def test_confirmar_sin_canal_ni_terminal_400_sin_llamar_a_core(client, core):
+    llave = "550e8400-e29b-41d4-a716-446655440003"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={}, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert r.status_code == 400
+    assert r.json()["error_code"] == "ERR-VALIDACION-ESQUEMA"
+    assert core.llamadas == []
+
+
+def test_confirmar_header_invalido_400_sin_llamar_a_core(client, core):
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_terminal": "DEV-ATM-01"
+    }, headers={**AUTH, "X-Idempotency-Key": "no-es-uuid"})
+    assert r.status_code == 400
+    assert r.json()["error_code"] == "ERR-TAR-HEADER-INVALIDO"
+    assert core.llamadas == []
+
+
+def test_confirmar_autorizacion_inexistente_404(client, core):
+    core.respuesta = error_core(404, "BNA-AUTORIZACION")
+    llave = "550e8400-e29b-41d4-a716-446655440005"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_terminal": "DEV-ATM-01"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert (r.status_code, r.json()["error_code"]) == (404, "ERR-TAR-AUTORIZACION-NO-ENCONTRADA")
+
+
+def test_confirmar_ya_dispensada_409(client, core):
+    core.respuesta = error_core(409, "BNA-CONFIRMACION", "BNA-CONFIRMACION: la autorización no está en estado vigente")
+    llave = "550e8400-e29b-41d4-a716-446655440006"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_terminal": "DEV-ATM-01"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-CONFIRMACION-NO-PERMITIDA")
+
+
+def test_confirmar_extornada_409(client, core):
+    core.respuesta = error_core(409, "BNA-CONFIRMACION", "BNA-CONFIRMACION: la autorización no está en estado vigente")
+    llave = "550e8400-e29b-41d4-a716-446655440007"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_terminal": "DEV-ATM-01"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-CONFIRMACION-NO-PERMITIDA")
+
+
+def test_confirmar_canal_no_coincide_409(client, core):
+    core.respuesta = error_core(409, "BNA-CONFIRMACION", "BNA-CONFIRMACION: el canal no coincide con la autorización")
+    llave = "550e8400-e29b-41d4-a716-446655440008"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_canal": "VEN"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-CONFIRMACION-NO-PERMITIDA")
+
+
+def test_confirmar_terminal_no_coincide_409(client, core):
+    core.respuesta = error_core(409, "BNA-CONFIRMACION", "BNA-CONFIRMACION: la terminal no coincide con la autorización")
+    llave = "550e8400-e29b-41d4-a716-446655440009"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_terminal": "OTRA-TERMINAL"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-CONFIRMACION-NO-PERMITIDA")
+
+
+def test_confirmar_idempotencia_conflicto_409(client, core):
+    core.respuesta = error_core(409, "BNA-IDEMPOTENCIA", "BNA-IDEMPOTENCIA: la llave se usó en otra operación")
+    llave = "550e8400-e29b-41d4-a716-446655440010"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "id_terminal": "DEV-ATM-01"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-IDEMPOTENCIA")
+
+
+def test_un_id_de_autorizacion_invalido_en_confirmacion_400_sin_llamar_a_core(client, core):
+    llave = "550e8400-e29b-41d4-a716-446655440011"
+    r = client.post(f"{BASE}/autorizaciones/no-es-uuid/confirmacion", json={
+        "id_terminal": "DEV-ATM-01"
+    }, headers={**AUTH, "X-Idempotency-Key": llave})
+    assert (r.status_code, r.json()["error_code"]) == (400, "ERR-TAR-ID-INVALIDO")
+    assert core.llamadas == []

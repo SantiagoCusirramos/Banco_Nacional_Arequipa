@@ -871,6 +871,137 @@ BEGIN
     END;
 END //
 
+-- Confirmación de autorización (v1.8): convierte una autorización retenida en el débito
+-- real al dispensar el cajero. Solo autorizaciones AUTORIZADA o DISPENSADA sin movimiento
+-- (uuid_transaccion IS NULL). Usa la llave de idempotencia para que repetir la
+-- confirmación no debite dos veces. El movimiento lleva el mismo uuid que la
+-- autorización (RN-BUS-002) y se registra con cuentas.aplicar_movimiento (el
+-- procedimiento interno que usa la base), no con INSERT directo.
+-- DECISIÓN (v1.8): el estado final de la autorización es DISPENSADA, que es la
+--   transición válida desde AUTORIZADA según tg_autorizacion_validar_bu. La
+--   retención se libera porque el movimiento descuenta saldo_contable y el
+--   disponible ya se descontó al autorizar; tras confirmar, ambos coinciden.
+-- DECISIÓN (v1.8): después de confirmar, extornar_autorizacion falla porque la
+--   autorización ya tiene su movimiento (uuid_transaccion NOT NULL).
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE tarjetas.confirmar_autorizacion(
+    IN p_uuid_autorizacion BINARY(16), IN p_llave_idempotencia VARCHAR(64), IN p_huella CHAR(64),
+    IN p_actor VARCHAR(40), IN p_id_canal VARCHAR(5), IN p_id_terminal VARCHAR(30),
+    OUT p_uuid_transaccion BINARY(16), OUT p_estado VARCHAR(25))
+    COMMENT 'Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_anterior VARCHAR(25);
+    DECLARE v_tipo_operacion VARCHAR(25);
+    DECLARE v_monto DECIMAL(15,2);
+    DECLARE v_num_cuenta VARCHAR(20);
+    DECLARE v_id_canal VARCHAR(5);
+    DECLARE v_id_terminal VARCHAR(30);
+    DECLARE v_fecha_hora DATETIME(6);
+    DECLARE v_trx BINARY(16);
+    DECLARE v_repetido BOOLEAN DEFAULT FALSE;
+    DECLARE v_abono BINARY(16);
+    DECLARE v_glosa VARCHAR(200);
+    DECLARE v_correlation_id BINARY(16);
+    DECLARE v_asiento BINARY(16);
+    DECLARE v_nat CHAR(1);
+    DECLARE v_moneda CHAR(3);
+    DECLARE v_aut_canal VARCHAR(5);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    bna_confirmar: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        -- Bloquea la fila de la autorización para serializar confirmaciones concurrentes.
+        SELECT estado_autorizacion, tipo_operacion, monto, num_cuenta, id_canal, id_terminal,
+               fecha_hora, uuid_transaccion
+          INTO v_anterior, v_tipo_operacion, v_monto, v_num_cuenta, v_id_canal, v_id_terminal,
+               v_fecha_hora, v_trx
+          FROM tarjetas.autorizacion WHERE uuid_autorizacion = p_uuid_autorizacion FOR UPDATE;
+        IF v_anterior IS NULL THEN
+            CALL core.fallar('BNA-AUTORIZACION: la autorización no existe');
+        END IF;
+        -- Reserva la llave de idempotencia primero: si es repetida, devolvemos el
+        -- resultado existente sin validar el estado (idempotencia).
+        CALL cuentas.reservar_llave(p_llave_idempotencia, p_huella, v_repetido, p_uuid_transaccion, v_abono);
+        IF v_repetido THEN
+            -- La llave ya se usó: verificamos que el movimiento existente pertenezca
+            -- a esta autorización y devolvemos el mismo resultado.
+            IF p_uuid_transaccion IS NULL OR NOT EXISTS (
+                SELECT 1 FROM tarjetas.autorizacion
+                WHERE uuid_autorizacion = p_uuid_autorizacion AND uuid_transaccion = p_uuid_transaccion
+            ) THEN
+                CALL core.fallar('BNA-IDEMPOTENCIA: la llave se usó en otra operación');
+            END IF;
+            SET p_estado = 'DISPENSADA';
+            IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+            LEAVE bna_confirmar;
+        END IF;
+        -- Solo se confirma una autorización vigente (AUTORIZADA o DISPENSADA) sin movimiento.
+        IF v_anterior NOT IN ('AUTORIZADA', 'DISPENSADA') OR v_trx IS NOT NULL THEN
+            CALL core.fallar('BNA-CONFIRMACION: la autorización no está en estado vigente');
+        END IF;
+        -- Valida que el canal/terminal coincida con la autorización (seguridad).
+        -- La autorización tiene either id_canal OR id_terminal (CHECK constraint).
+        -- Aceptamos si el canal proporcionado coincide con el de la autorización
+        -- (derivado de la terminal si la autorización usó terminal).
+        IF p_id_canal IS NOT NULL THEN
+            SELECT coalesce(v_id_canal, (SELECT id_canal FROM core.terminal WHERE id_terminal = v_id_terminal)) INTO v_aut_canal;
+            IF NOT (p_id_canal <=> v_aut_canal) THEN
+                CALL core.fallar('BNA-CONFIRMACION: el canal no coincide con la autorización');
+            END IF;
+        END IF;
+        IF p_id_terminal IS NOT NULL AND NOT (p_id_terminal <=> v_id_terminal) THEN
+            CALL core.fallar('BNA-CONFIRMACION: la terminal no coincide con la autorización');
+        END IF;
+        -- Genera correlation_id y glosa para el movimiento.
+        SET v_correlation_id = core.uuid_v4();
+        SET v_glosa = CONCAT('Confirmación ', BIN_TO_UUID(p_uuid_autorizacion));
+        -- Registra el movimiento con el MISMO uuid que la autorización (RN-BUS-002).
+        -- Usamos cuentas.aplicar_movimiento (interno) para poder fijar el uuid.
+        -- La fecha contable usa la fecha de negocio ACTUAL (como cuentas.aplicar_movimiento),
+        -- no la de la autorización.
+        SELECT naturaleza INTO v_nat FROM cuentas.tipo_operacion WHERE tipo_operacion = v_tipo_operacion;
+        SELECT moneda INTO v_moneda FROM cuentas.cuenta_ahorro WHERE num_cuenta = v_num_cuenta;
+        CALL core.registrar_asiento(NULL, CONCAT('A-', HEX(RANDOM_BYTES(8))), core.fn_fecha_negocio(UTC_TIMESTAMP(6)), core.fn_fecha_negocio(UTC_TIMESTAMP(6)),
+                                    v_glosa, v_moneda, v_correlation_id, NULL,
+                                    JSON_ARRAY(JSON_OBJECT('partida', IF(v_nat = 'C', 'DEBE', 'HABER'), 'importe', v_monto, 'cuenta', '1101'),
+                                               JSON_OBJECT('partida', IF(v_nat = 'C', 'HABER', 'DEBE'), 'importe', v_monto, 'cuenta', '2101')),
+                                    v_asiento);
+        SET p_uuid_transaccion = p_uuid_autorizacion;
+        INSERT INTO cuentas.movimiento (uuid_transaccion, tipo_operacion, monto, glosa, estado_transaccion,
+                                        id_asiento, num_cuenta, id_canal)
+        VALUES (p_uuid_transaccion, v_tipo_operacion, v_monto, v_glosa, 'APROBADO', v_asiento, v_num_cuenta,
+                coalesce(v_id_canal, (SELECT id_canal FROM core.terminal WHERE id_terminal = v_id_terminal)));
+        -- Actualiza la autorización: estado DISPENSADA y referencia al movimiento.
+        UPDATE tarjetas.autorizacion
+           SET estado_autorizacion = 'DISPENSADA', uuid_transaccion = p_uuid_transaccion, fecha_actualizacion = UTC_TIMESTAMP(6)
+         WHERE uuid_autorizacion = p_uuid_autorizacion;
+        -- El trigger tg_movimiento_aplicar_ai descuenta saldo_contable y el trigger
+        -- tg_autorizacion_aplicar_au (por el cambio a DISPENSADA) no vuelve a comprometer
+        -- porque uuid_transaccion ya no es NULL.
+        IF p_llave_idempotencia IS NOT NULL THEN
+            UPDATE cuentas.idempotencia_movimiento SET uuid_transaccion = p_uuid_transaccion WHERE llave = p_llave_idempotencia;
+        END IF;
+        CALL core.registrar_evento('CORE', 'autorizacion', BIN_TO_UUID(p_uuid_autorizacion), 'CONFIRMAR_AUTORIZACION', p_actor,
+                                   v_correlation_id, JSON_OBJECT('estado_anterior', v_anterior, 'tipo_operacion', v_tipo_operacion,
+                                                                 'monto', v_monto, 'num_cuenta', v_num_cuenta));
+        SET p_estado = 'DISPENSADA';
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
 -- Credenciales de tarjeta (v1.5): PIN_ATM y CLAVE_WEB. La matriz de coordenadas queda
 -- para cuando haya un procedimiento que la emita.
 -- DECISIÓN (v1.5): el hash es SHA2(CONCAT(sal, valor), 256), con una sal aleatoria de 16
@@ -1040,6 +1171,7 @@ GRANT EXECUTE ON PROCEDURE tarjetas.emitir_tarjeta TO bna_api, bna_app, bna_admi
 GRANT EXECUTE ON PROCEDURE tarjetas.cambiar_estado_tarjeta TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.autorizar_operacion TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.extornar_autorizacion TO bna_api, bna_app, bna_admin;
+GRANT EXECUTE ON PROCEDURE tarjetas.confirmar_autorizacion TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.registrar_credencial TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.validar_credencial TO bna_api, bna_app, bna_admin;
 
