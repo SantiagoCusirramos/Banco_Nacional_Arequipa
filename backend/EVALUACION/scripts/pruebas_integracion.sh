@@ -17,6 +17,7 @@ IMAGEN_COREDB="${EVALUACION_IMAGEN_COREDB:-bna/coredb:local}"
 PROYECTO="evaluacion-pruebas-$$"
 RED="${PROYECTO}_default"
 COREDB="${PROYECTO}-coredb"
+BUS="${PROYECTO}-bus"
 PUERTO="${EVALUACION_PUERTO_PRUEBAS:-3328}"
 ENTORNO="$(mktemp)"
 
@@ -26,7 +27,7 @@ compose() {
 }
 limpiar() {
   # -v: el contenedor de COREDB no deja volúmenes anónimos.
-  docker rm -fv "$COREDB" >/dev/null 2>&1 || true
+  docker rm -fv "$COREDB" "$BUS" >/dev/null 2>&1 || true
   compose down -v >/dev/null 2>&1 || true
   rm -f "$ENTORNO"
 }
@@ -78,8 +79,14 @@ if [ "$listo" != 1 ]; then
   exit 1
 fi
 
+# Como en el producto (fase 2 del Bus): Evaluacion y las pruebas llegan a COREDB a través del Bus.
+. "$RAIZ/scripts/bus_de_pruebas.sh"
+bus_de_pruebas_levantar "$RED" "$BUS" "$IMAGEN" "http://$COREDB:8012" EVALUACION
+
 docker run --rm --network "$RED" \
-  -e EVALUACION_TEST_COREDB="http://$COREDB:8012" \
+  -e EVALUACION_TEST_COREDB="$BUS_PRUEBAS_COREDB" \
+  -e EVALUACION_TEST_BUS_TOKEN="$BUS_PRUEBAS_TOKEN_MODULO" \
+  -e EVALUACION_TEST_BUS_TOKEN_PRUEBAS="$BUS_PRUEBAS_TOKEN_PRUEBAS" \
   -e EVALUACION_TEST_ADMIN_USUARIO=admin \
   -e EVALUACION_TEST_ADMIN_PASSWORD="$BNA_ADMIN_PASSWORD" \
   -e EVALUACION_TEST_SERVICIO_USUARIO=svc-evaluacion \
@@ -87,3 +94,4 @@ docker run --rm --network "$RED" \
   -e EVALUACION_TEST_DB_HOST=bna-core-db \
   -e EVALUACION_TEST_DB_ADMIN_PASSWORD="$CORE_DB_ADMIN_PASSWORD" \
   "$IMAGEN" python -m pytest -p no:cacheprovider -q -o addopts= EVALUACION/tests "$@"
+bus_de_pruebas_comprobar "$BUS" EVALUACION

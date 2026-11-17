@@ -1,7 +1,7 @@
-# Bus de Servicios: los canales llegan a los módulos a través de él. /bus/<módulo>/<ruta> se
-# reenvía al módulo sin tocar cabeceras, cuerpo ni códigos. Las direcciones de los módulos
-# (BUS_URL_*) y la lista de consumidores salen del ConfigMap; sus credenciales, del Secret.
-# Sin ellas no arranca.
+# Bus de Servicios: los canales llegan a los módulos, y los módulos a COREDB, a través de él.
+# /bus/<módulo>/<ruta> se reenvía al módulo sin tocar cabeceras, cuerpo ni códigos. Las
+# direcciones de los módulos (BUS_URL_*) y la lista de consumidores salen del ConfigMap
+# bna-bus, que solo lee el Bus; sus credenciales, del Secret. Sin ellas no arranca.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,12 +25,22 @@ spec:
           image: bna/backend:local
           command: [uvicorn, BUS_SERVICIOS.main:app, --host, 0.0.0.0, --port, "8018"]
           envFrom:
-            - configMapRef: { name: bna-configuracion }
+            - configMapRef: { name: bna-bus }
           env:
             - name: BUS_TOKEN_FRONTEND
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_FRONTEND } }
             - name: BUS_TOKEN_PRUEBAS
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_PRUEBAS } }
+            - name: BUS_TOKEN_CUENTAS
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_CUENTAS } }
+            - name: BUS_TOKEN_TARJETAS
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_TARJETAS } }
+            - name: BUS_TOKEN_CAPTACION
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_CAPTACION } }
+            - name: BUS_TOKEN_EVALUACION
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_EVALUACION } }
+            - name: BUS_TOKEN_DESEMBOLSO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_DESEMBOLSO } }
           ports:
             - { name: http, containerPort: 8018 }
           # /salud solo dice que el Bus atiende: no depende de los módulos.

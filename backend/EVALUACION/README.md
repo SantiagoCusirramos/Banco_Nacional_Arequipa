@@ -58,7 +58,8 @@ analista. Evaluar solo exige `EVALUAR_CREDITO`.
 |---|---|
 | `EVALUACION_COREDB_SECRETO` | Secreto de `svc-evaluacion`. En el producto lo crea `coredb-init` con `COREDB.scripts.crear_servicio` |
 | `EVALUACION_COREDB_USUARIO` | `svc-evaluacion` por omisión |
-| `COREDB_URL` | `http://coredb:8012` en compose |
+| `COREDB_URL` | COREDB, a través del Bus: `http://bus:8018/bus/coredb` en compose y k8s |
+| `BUS_TOKEN` | Credencial del módulo ante el Bus (`X-Bus-Token`; en el producto, `BUS_TOKEN_EVALUACION`) |
 | `EVALUACION_TOKEN_SOL` | Token de SOL para CR-INT-02 |
 | `EVALUACION_SOL_URL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | CR-INT-03; la URL queda vacía mientras SOL sea SIMULADO |
 | `EVALUACION_ENVIO_INTERVALO_SEG`, `EVALUACION_ENVIO_VENTANA_DIAS` | Cada cuánto y hasta cuántos días atrás se reenvían resultados (30 s, 7 días) |

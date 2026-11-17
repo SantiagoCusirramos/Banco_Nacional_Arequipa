@@ -16,7 +16,8 @@ por los puentes del frontend, que es el camino que sigue el navegador.
 
 Todo pasa por el Bus de Servicios: el flujo solo conoce el Bus (E2E_BUS, con su credencial
 BUS_TOKEN) y el frontend, y al final comprueba con las métricas del Bus que el flujo y cada
-puente del frontend llegaron a los módulos a través de él.
+puente del frontend llegaron a los módulos a través de él, y que cada módulo que usa COREDB
+(CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO) llegó a COREDB por el Bus (fase 2).
 """
 
 import datetime
@@ -682,7 +683,12 @@ def flujo():
     faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION",
                           "SEGURIDAD") if not crecio("PRUEBAS", m)]
     exigir(not faltan, f"El flujo no llegó por el Bus a: {faltan}")
-    paso("Bus de Servicios: el flujo y los siete puentes del frontend llegaron a los módulos por el Bus")
+    # Fase 2: cada módulo llegó a COREDB a través del Bus, con su propia credencial.
+    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO")
+              if not crecio(m, "COREDB")]
+    exigir(not faltan, f"Estos módulos no llegaron a COREDB por el Bus: {faltan}")
+    paso("Bus de Servicios: el flujo y los siete puentes del frontend llegaron a los módulos por el Bus, "
+         "y CUENTAS, TARJETAS, CAPTACION, EVALUACION y DESEMBOLSO llegaron a COREDB por él")
 
 
 if __name__ == "__main__":

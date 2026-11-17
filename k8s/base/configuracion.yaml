@@ -7,7 +7,8 @@ data:
   CORE_DB_HOST: db
   CORE_DB_PORT: "3306"
   CORE_DB_APP_USER: bna_app_user
-  CORE_BASE_URL: http://coredb:8012
+  # COREDB, a través del Bus (fase 2): ningún módulo tiene la dirección directa.
+  CORE_BASE_URL: http://bus:8018/bus/coredb
   SOL_DB_HOST: db-aux
   SOL_DB_PORT: "3306"
   SOL_DB_USER: sol_user
@@ -16,9 +17,25 @@ data:
   SEGURIDAD_DB: /datos/seguridad.sqlite3
   CAP_CORE_USUARIO: svc-captacion
   CAP_OTP_SIMULADO: "true"
-  # Los módulos llaman a COREDB directo (fase 2: por el Bus).
-  COREDB_URL: http://coredb:8012
-  # Bus de Servicios: dirección de cada módulo y consumidores (sus credenciales, en el Secret).
+  # Evaluación, Desembolso y el frontend: COREDB, también a través del Bus.
+  COREDB_URL: http://bus:8018/bus/coredb
+  # Puentes del frontend: todos por el Bus.
+  CUENTAS_GATEWAY_URL: http://bus:8018/bus/cuentas/api/v1/cuentas
+  TARJETAS_GATEWAY_URL: http://bus:8018/bus/tarjetas/api/v1/tarjetas
+  SOL_GATEWAY_URL: http://bus:8018/bus/sol/gateway/sol
+  EVALUACION_GATEWAY_URL: http://bus:8018/bus/evaluacion/eva/v1
+  DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
+  CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
+  SOL_COOKIE_SECURE: "false"
+---
+# Solo del Bus: la dirección de cada módulo (la directa de COREDB, entre ellas) y la lista de
+# consumidores (sus credenciales, en el Secret). Ningún otro Deployment lo lee:
+# scripts/comprobar_rutas_coredb.py lo comprueba.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bna-bus
+data:
   BUS_URL_COREDB: http://coredb:8012
   BUS_URL_CUENTAS: http://cuentas:8001
   BUS_URL_TARJETAS: http://tarjetas:8002
@@ -27,13 +44,4 @@ data:
   BUS_URL_EVALUACION: http://evaluacion:8015
   BUS_URL_DESEMBOLSO: http://desembolso:8016
   BUS_URL_SEGURIDAD: http://seguridad:8013
-  BUS_CONSUMIDORES: FRONTEND,PRUEBAS
-  # Puentes del frontend: todos por el Bus.
-  FRONTEND_COREDB_URL: http://bus:8018/bus/coredb
-  CUENTAS_GATEWAY_URL: http://bus:8018/bus/cuentas/api/v1/cuentas
-  TARJETAS_GATEWAY_URL: http://bus:8018/bus/tarjetas/api/v1/tarjetas
-  SOL_GATEWAY_URL: http://bus:8018/bus/sol/gateway/sol
-  EVALUACION_GATEWAY_URL: http://bus:8018/bus/evaluacion/eva/v1
-  DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
-  CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
-  SOL_COOKIE_SECURE: "false"
+  BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO

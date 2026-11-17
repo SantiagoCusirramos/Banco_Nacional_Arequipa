@@ -23,18 +23,26 @@ spec:
         # COREDB crea svc-captacion antes de arrancar: cuando responde, el usuario ya existe.
         - name: esperar-coredb
           image: bna/backend:local
+          # A través del Bus, con la credencial del módulo, como todas sus llamadas a COREDB.
           command:
             - python
             - -c
             - |
-              import sys, time, urllib.request as u
+              import os, sys, time, urllib.request as u
+              pedido = u.Request(os.environ["CORE_BASE_URL"] + "/coredb/salud",
+                                 headers={"X-Bus-Token": os.environ["BUS_TOKEN"]})
               for _ in range(150):
                   try:
-                      u.urlopen("http://coredb:8012/coredb/salud", timeout=2)
+                      u.urlopen(pedido, timeout=2)
                       sys.exit(0)
                   except OSError:
                       time.sleep(2)
-              sys.exit("COREDB no respondió a tiempo.")
+              sys.exit("COREDB no respondió a tiempo a través del Bus.")
+          env:
+            - name: CORE_BASE_URL
+              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: CORE_BASE_URL } }
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_CAPTACION } }
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 500m, memory: 256Mi }
@@ -48,6 +56,9 @@ spec:
           envFrom:
             - configMapRef: { name: bna-configuracion }
           env:
+            # COREDB (CORE_BASE_URL, del ConfigMap) a través del Bus, con la credencial de CAPTACION.
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_CAPTACION } }
             - name: CAP_CORE_SECRETO
               valueFrom: { secretKeyRef: { name: bna-secretos, key: CAPTACION_COREDB_SECRETO } }
             - name: CAP_SOL_TOKEN
