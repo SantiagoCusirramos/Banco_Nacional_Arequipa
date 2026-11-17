@@ -1,60 +1,13 @@
+"""Arranque del Bus de Servicios: uvicorn BUS_SERVICIOS.main:app --port 8018.
 
-import hmac
+La configuración sale del entorno (ver README.md). Si falta algo, no arranca."""
 
-from fastapi import FastAPI, Header, Depends, HTTPException
-from fastapi.responses import JSONResponse
+import logging
+import os
 
-from app.config import API_KEY
-from app.router import router
-from app.integration import router_integracion
+from BUS_SERVICIOS.config import cargar
+from BUS_SERVICIOS.proxy import crear_app
 
-app = FastAPI(
-    title="BNA - Bus de Servicios",
-    description=(
-        "API Gateway de integración del "
-        "Banco Nacional de Arequipa"
-    ),
-    version="1.0.0",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-
-def verificar_api_key(
-    x_api_key: str = Header(default=""),
-):
-    if not hmac.compare_digest(x_api_key, API_KEY):
-        raise HTTPException(
-            status_code=401,
-            detail="Credenciales inválidas",
-        )
-
-
-@app.get("/health", tags=["Sistema"])
-def health():
-    return {
-        "banco": "BNA",
-        "modulo": "Bus de Servicios",
-        "estado": "operativo",
-    }
-
-
-app.include_router(
-    router,
-    dependencies=[Depends(verificar_api_key)],
-)
-
-
-@app.exception_handler(HTTPException)
-async def manejar_error(request, exc):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "sistema": "BNA",
-            "error": exc.detail,
-            "codigo": exc.status_code,
-        },
-        headers=getattr(exc, "headers", None),
-    )
-
-
-# Integracion oficial BNA
-app.include_router(router_integracion)
+app = crear_app(cargar(os.environ))

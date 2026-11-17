@@ -5,6 +5,7 @@ y, para la caída y el tiempo de espera, con sockets reales en 127.0.0.1.
 """
 
 import gzip
+import json
 import os
 import socket
 import subprocess
@@ -34,17 +35,39 @@ def entorno(**cambios):
     return {k: v for k, v in valores.items() if v is not None}
 
 
+class Flujo(httpx.AsyncByteStream):
+    """Cuerpo que llega por partes, como por la red (httpx lee de una vez un cuerpo en bytes)."""
+
+    def __init__(self, contenido):
+        self.contenido = contenido
+
+    async def __aiter__(self):
+        for i in range(0, len(self.contenido), 512):
+            yield self.contenido[i:i + 512]
+
+
+def R(estado, content=b"", json=None, headers=()):
+    """Respuesta del módulo simulado; se arma de nuevo en cada petición."""
+    return estado, content, json, headers
+
+
 class Modulo:
     """Módulo simulado: guarda cada petición que recibe y responde lo que se le pida."""
 
     def __init__(self, *respuestas):
         self.recibidas = []
-        self.respuestas = list(respuestas) or [httpx.Response(200, json={"ok": True})]
+        self.respuestas = list(respuestas) or [R(200, json={"ok": True})]
 
     def __call__(self, peticion):
         peticion.read()
         self.recibidas.append(peticion)
-        return self.respuestas.pop(0) if len(self.respuestas) > 1 else self.respuestas[0]
+        estado, contenido, cuerpo_json, cabeceras = (
+            self.respuestas.pop(0) if len(self.respuestas) > 1 else self.respuestas[0])
+        cabeceras = list(cabeceras.items()) if isinstance(cabeceras, dict) else list(cabeceras)
+        if cuerpo_json is not None:
+            contenido = json.dumps(cuerpo_json).encode()
+            cabeceras.append(("Content-Type", "application/json"))
+        return httpx.Response(estado, headers=cabeceras, stream=Flujo(contenido))
 
 
 def cliente(modulo, **cambios):
@@ -196,7 +219,7 @@ def test_ruta_y_consulta_crudas():
 
 
 def test_cabeceras_de_respuesta_iguales_y_set_cookie_repetida():
-    modulo = Modulo(httpx.Response(
+    modulo = Modulo(R(
         200, content=b'{"ok":true}',
         headers=[("Content-Type", "application/json"), ("X-Correlation-ID", "del-modulo"),
                  ("Set-Cookie", "a=1; HttpOnly"), ("Set-Cookie", "b=2; HttpOnly"),
@@ -212,7 +235,7 @@ def test_cabeceras_de_respuesta_iguales_y_set_cookie_repetida():
 
 
 def test_no_sigue_redirecciones():
-    modulo = Modulo(httpx.Response(307, headers={"Location": "http://otro:1/x"}))
+    modulo = Modulo(R(307, headers={"Location": "http://otro:1/x"}))
     with cliente(modulo) as c:
         respuesta = c.get("/bus/coredb/docs", headers=AUT, follow_redirects=False)
     assert respuesta.status_code == 307
@@ -223,7 +246,7 @@ def test_no_sigue_redirecciones():
 def test_cuerpo_comprimido_pasa_tal_cual():
     original = b'{"datos": "' + b"x" * 2000 + b'"}'
     comprimido = gzip.compress(original)
-    modulo = Modulo(httpx.Response(200, content=comprimido,
+    modulo = Modulo(R(200, content=comprimido,
                                    headers={"Content-Encoding": "gzip", "Content-Type": "application/json"}))
     with cliente(modulo) as c:
         respuesta = c.get("/bus/coredb/x", headers={**AUT, "Accept-Encoding": "gzip"})
@@ -236,7 +259,7 @@ def test_cuerpo_comprimido_pasa_tal_cual():
 @pytest.mark.parametrize("estado", [400, 401, 403, 404, 409, 422, 429, 500, 502, 503])
 def test_errores_del_modulo_con_su_codigo_y_cuerpo(estado):
     cuerpo = b'{"detail": "mensaje del modulo", "codigo": "X"}'
-    modulo = Modulo(httpx.Response(estado, content=cuerpo, headers={"Content-Type": "application/json"}))
+    modulo = Modulo(R(estado, content=cuerpo, headers={"Content-Type": "application/json"}))
     with cliente(modulo) as c:
         respuesta = c.post("/bus/desembolso/api/v1/ordenes", headers={**AUT, "X-Idempotency-Key": "k1"},
                            content=b"{}")
@@ -246,7 +269,7 @@ def test_errores_del_modulo_con_su_codigo_y_cuerpo(estado):
 
 
 def test_cuerpo_que_no_es_json_pasa_igual():
-    modulo = Modulo(httpx.Response(500, content=b"Internal Server Error",
+    modulo = Modulo(R(500, content=b"Internal Server Error",
                                    headers={"Content-Type": "text/plain; charset=utf-8"}))
     with cliente(modulo) as c:
         respuesta = c.get("/bus/tarjetas/x", headers=AUT)
@@ -258,8 +281,8 @@ def test_cuerpo_que_no_es_json_pasa_igual():
 # ── Idempotencia ─────────────────────────────────────────────────────────
 
 def test_repeticion_idempotente_llega_igual_y_la_respuesta_del_modulo_no_cambia():
-    primera = httpx.Response(201, json={"uuid_transaccion": "t-1", "repetida": False})
-    segunda = httpx.Response(200, json={"uuid_transaccion": "t-1", "repetida": True},
+    primera = R(201, json={"uuid_transaccion": "t-1", "repetida": False})
+    segunda = R(200, json={"uuid_transaccion": "t-1", "repetida": True},
                              headers={"Idempotent-Replayed": "true"})
     modulo = Modulo(primera, segunda)
     cabeceras = {**AUT, "Authorization": "Bearer t", "X-Idempotency-Key": "op-123"}
@@ -357,3 +380,61 @@ def test_metricas_por_consumidor_y_modulo():
         metricas = c.get("/metricas", headers=AUT).json()
     assert metricas["reenvios"]["FRONTEND"] == {"COREDB": 2}
     assert metricas["reenvios"]["PRUEBAS"] == {"CUENTAS": 1}
+
+
+# ── Con sockets reales: uvicorn delante y un módulo HTTP de verdad detrás ─
+
+def test_por_la_red_real_llega_y_vuelve_igual():
+    import http.server
+    import json as js
+
+    import uvicorn
+
+    class Eco(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            cuerpo = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            respuesta = js.dumps({"ruta": self.path, "cuerpo": cuerpo.decode(),
+                                  "cabeceras": {k.lower(): v for k, v in self.headers.items()}}).encode()
+            self.send_response(409)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Set-Cookie", "a=1")
+            self.send_header("Set-Cookie", "b=2")
+            self.send_header("X-Correlation-ID", "eco")
+            self.send_header("Content-Length", str(len(respuesta)))
+            self.end_headers()
+            self.wfile.write(respuesta)
+
+        def log_message(self, *args):
+            pass
+
+    modulo = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Eco)
+    threading.Thread(target=modulo.serve_forever, daemon=True).start()
+    puerto = puerto_cerrado()
+    app = crear_app(cargar(entorno(BUS_URL_SOL=f"http://127.0.0.1:{modulo.server_address[1]}/gateway")))
+    servidor = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=puerto, log_level="warning"))
+    hilo = threading.Thread(target=servidor.run, daemon=True)
+    hilo.start()
+    try:
+        for _ in range(100):
+            if servidor.started:
+                break
+            time.sleep(0.05)
+        respuesta = httpx.post(
+            f"http://127.0.0.1:{puerto}/bus/sol/sol/A%2FB?search=caf%C3%A9&a=1&a=2",
+            headers={**AUT, "Authorization": "Bearer t", "X-Idempotency-Key": "k-7",
+                     "X-Correlation-ID": "c-7", "Content-Type": "application/json"},
+            content=b'{"x": 1}', timeout=10)
+    finally:
+        servidor.should_exit = True
+        hilo.join(10)
+        modulo.shutdown()
+    assert respuesta.status_code == 409
+    assert respuesta.headers.get_list("set-cookie") == ["a=1", "b=2"]
+    assert respuesta.headers["x-correlation-id"] == "eco"
+    eco = respuesta.json()
+    assert eco["ruta"] == "/gateway/sol/A%2FB?search=caf%C3%A9&a=1&a=2"
+    assert eco["cuerpo"] == '{"x": 1}'
+    assert eco["cabeceras"]["authorization"] == "Bearer t"
+    assert eco["cabeceras"]["x-idempotency-key"] == "k-7"
+    assert eco["cabeceras"]["x-correlation-id"] == "c-7"
+    assert "x-bus-token" not in eco["cabeceras"]
