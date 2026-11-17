@@ -16,6 +16,8 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | Seguridad | `backend/seguridad` | Prototipo de login, topes, auditoría encadenada e incidentes | Laboratorio: SQLite, sin conexión con el CORE |
 | CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene su propia evaluación de créditos; COREDB ya ofrece la evaluación, el desembolso y la cobranza sobre la base integrada | Opcional: ningún servicio lo llama |
 
+Para contribuir, ver [`CONTRIBUTING.md`](CONTRIBUTING.md): rama, PR y CI en verde; nada directo a `main`.
+
 Lo que no está: el módulo Clientes (en revisión en el PR #25) y el Bus de Servicios, que no existe todavía. Los servicios se llaman entre sí directamente dentro de la red de Docker.
 
 ## Requisitos
@@ -136,13 +138,13 @@ Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecu
 ./bna test
 ```
 
-Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, SOL, Evaluación, Desembolso y CAPTACION (contra COREDB y la base integrada nuevas; CAPTACION también con el adaptador real de SOL), Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
+Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, SOL, Evaluación, Desembolso y CAPTACION (contra COREDB y la base integrada nuevas; CAPTACION también con el adaptador real de SOL), Seguridad y COREDB (unitarias y contra un MySQL nuevo), el despliegue de la base integrada, el aviso de push directo, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
 
 Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
 
 `./bna smoke` inicia sesión como administrador, registra un cliente, le abre dos cuentas, deposita, transfiere, repite la transferencia para comprobar la idempotencia y lee saldos, movimientos y bitácora por COREDB; después consulta las mismas cuentas por CUENTAS; por TARJETAS emite una tarjeta al cliente de desarrollo `DEV001`, la activa, la bloquea y comprueba que el desbloqueo se rechaza; por CAPTACION capta a un prospecto hasta habilitarlo, comprueba el cliente en COREDB y la referencia CR-INT-01 que leería SOL; y al final llega a los servicios por los puentes del frontend. Cada ejecución crea un cliente nuevo y una tarjeta nueva.
 
-La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue o del flujo de extremo a extremo (`scripts/flujo_e2e.py`).
+La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue o del flujo de extremo a extremo (`scripts/flujo_e2e.py`). Un tercero (`aviso-push-directo.yml`) abre un issue para el autor de cada commit que llega a `main` sin un PR fusionado.
 
 ## Kubernetes
 
@@ -214,6 +216,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 - `X-Correlation-ID` identifica una petición de punta a punta. El frontend lo genera si falta, CUENTAS y TARJETAS lo reenvían a COREDB, COREDB lo devuelve siempre y lo guarda en la bitácora, y Seguridad lo exige.
 - Un cambio en la base va primero a [bna-core-db](https://github.com/miguelpro324/bna-core-db) y llega aquí con una etiqueta nueva. `database/` no se edita.
 - Ninguna clave se versiona.
+- Todo cambio llega a `main` por un PR: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Equipo
 
