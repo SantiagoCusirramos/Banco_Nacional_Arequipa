@@ -27,6 +27,7 @@ data:
   DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
   CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
   COBRANZA_GATEWAY_URL: http://bus:8018/bus/cobranza
+  ATM_GATEWAY_URL: http://bus:8018/bus/atm
   SOL_COOKIE_SECURE: "false"
 ---
 # Solo del Bus: la dirección de cada módulo (la directa de COREDB, entre ellas) y la lista de
@@ -46,4 +47,5 @@ data:
   BUS_URL_DESEMBOLSO: http://desembolso:8016
   BUS_URL_COBRANZA: http://cobranza:8014
   BUS_URL_SEGURIDAD: http://seguridad:8013
-  BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA
+  BUS_URL_ATM: http://atm:8019
+  BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM

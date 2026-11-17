@@ -349,6 +349,36 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8014/salud", timeout=3)
 
+  # ── ATM: cajero automático, sobre TARJETAS y CUENTAS por Bus ──────────────
+  # Sirve la pantalla del cajero y orquesta: validar PIN → autorizar (retención)
+  # → dispensar → confirmar (idempotente) / extorno si falla. Sin base propia.
+  # Ver backend/ATM/README.md.
+  atm:
+    <<: *backend
+    command: uvicorn ATM.main:app --host 0.0.0.0 --port 8019
+    environment:
+      # TARJETAS y CUENTAS, a través del Bus (fase 2), con la credencial de ATM.
+      BUS_BASE_URL: http://bus:8018/bus
+      BUS_TOKEN: ${BUS_TOKEN_ATM:?Falta en .env. Ejecute ./bna up}
+      ATM_ID: ATM-AQP-001
+    depends_on:
+      bus:
+        condition: service_healthy
+      tarjetas:
+        condition: service_healthy
+      cuentas:
+        condition: service_healthy
+    networks: [default, canales]
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_ATM:-8019}:8019"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8019/ready", timeout=3)
+
   # ── Seguridad: prototipo sobre SQLite ───────────────────────────────────
   seguridad:
     image: bna/seguridad:local
@@ -390,9 +420,10 @@ services:
       BUS_URL_DESEMBOLSO: http://desembolso:8016
       BUS_URL_COBRANZA: http://cobranza:8014
       BUS_URL_SEGURIDAD: http://seguridad:8013
+      BUS_URL_ATM: http://atm:8019
       # FRONTEND: los puentes del frontend. PRUEBAS: el flujo de extremo a extremo. El resto:
       # cada módulo que llama a COREDB (fase 2).
-      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA
+      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM
       BUS_TOKEN_FRONTEND: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_PRUEBAS: ${BUS_TOKEN_PRUEBAS:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_CUENTAS: ${BUS_TOKEN_CUENTAS:?Falta en .env. Ejecute ./bna up}
@@ -401,6 +432,7 @@ services:
       BUS_TOKEN_EVALUACION: ${BUS_TOKEN_EVALUACION:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_DESEMBOLSO: ${BUS_TOKEN_DESEMBOLSO:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_COBRANZA: ${BUS_TOKEN_COBRANZA:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_ATM: ${BUS_TOKEN_ATM:?Falta en .env. Ejecute ./bna up}
     networks: [default, canales, core]
     ports:
       - "127.0.0.1:${BNA_PUERTO_BUS:-8018}:8018"
@@ -429,6 +461,7 @@ services:
       DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
       COBRANZA_GATEWAY_URL: http://bus:8018/bus/cobranza
       CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
+      ATM_GATEWAY_URL: http://bus:8018/bus/atm
       BUS_TOKEN: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
     networks: [canales]
     depends_on:
@@ -449,6 +482,8 @@ services:
       cobranza:
         condition: service_healthy
       captacion:
+        condition: service_healthy
+      atm:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BNA_PUERTO_FRONTEND:-3000}:3000"

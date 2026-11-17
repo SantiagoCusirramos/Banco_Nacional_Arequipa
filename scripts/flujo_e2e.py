@@ -51,6 +51,7 @@ SERVICIOS = {
     "COREDB": (COREDB + "/coredb/salud", {}),
     "CUENTAS": (CUENTAS + "/health", {}),
     "TARJETAS": (TARJETAS + "/health", {}),
+    "ATM": (f"{BUS}/bus/atm/health", {}),
     "SOL": (SOL + "/ready", {}),
     "EVALUACIÓN": (EVALUACION + "/salud", {}),
     "DESEMBOLSO": (DESEMBOLSO + "/salud", {}),
@@ -406,6 +407,58 @@ def flujo():
     paso(f"TARJETAS: emisión a {titular} (no a un cliente OBSERVADO), repetición con la misma llave "
          "sin duplicar, 409 con la misma llave y otra cuenta, activación, bloqueo, desbloqueo rechazado y tarjetas del cliente")
 
+    # ── ATM: retiro por el cajero (valida PIN → autoriza → confirma) ──────────
+    # Usa la misma tarjeta DEV001 que TARJETAS, sobre la cuenta_tarjeta ya existente.
+    atm_base = f"{BUS}/bus/atm/api"
+    # Primero validar PIN (el ATM llama a TARJETAS por el Bus)
+    pin_key = {"X-Idempotency-Key": str(uuid.uuid4())}
+    estado, respuesta = pedir("POST", f"{atm_base}/validar-pin",
+                              {"id_tarjeta": tarjeta, "pin": "4821", "id_terminal": "ATM-AQP-001"},
+                              token, cabeceras=pin_key)
+    exigir(estado == 200 and respuesta["success"] is True
+           and respuesta["data"]["resultado"] == "EXITOSO",
+           f"ATM validar PIN: {estado} {respuesta}")
+    paso("ATM: PIN validado correctamente por TARJETAS a través del Bus")
+
+    # Autorizar retención
+    retiro_atm = {"id_tarjeta": tarjeta, "num_cuenta": cuenta_tarjeta, "moneda": "PEN",
+                  "monto": "30.00", "id_terminal": "ATM-AQP-001",
+                  "uuid_transaccion": str(uuid.uuid4())}
+    llave_atm = {"X-Idempotency-Key": str(uuid.uuid4())}
+    estado, respuesta = pedir("POST", f"{atm_base}/autorizar", retiro_atm, token, cabeceras=llave_atm)
+    exigir(estado == 201 and respuesta["success"] is True
+           and respuesta["data"]["aprobada"] is True
+           and respuesta["data"]["codigo_respuesta"] == "00",
+           f"ATM autorizar retiro: {estado} {respuesta}")
+    autorizacion_atm = respuesta["data"]["uuid_autorizacion"]
+    paso(f"ATM: retiro de 30.00 autorizado (00) y retenido, uuid_autorizacion={autorizacion_atm[:8]}…")
+
+    # Confirmar dispensación
+    confirmar_atm = {"uuid_autorizacion": autorizacion_atm, "id_terminal": "ATM-AQP-001",
+                     "resultado": "DISPENSADO"}
+    llave_conf = {"X-Idempotency-Key": str(uuid.uuid4())}
+    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras=llave_conf)
+    exigir(estado == 200 and respuesta["success"] is True
+           and respuesta["data"]["estado_autorizacion"] == "DISPENSADA",
+           f"ATM confirmar dispensación: {estado} {respuesta}")
+    uuid_txn = respuesta["data"].get("uuid_transaccion")
+    paso(f"ATM: dispensación confirmada, uuid_transaccion={uuid_txn}")
+
+    # Verificar que el saldo bajó una sola vez
+    saldo_despues = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    # La cuenta tenía 100.00, se autorizó 40.00 (extornado en TARJETAS) = 100.00, luego 30.00 = 70.00
+    exigir(float(saldo_despues) == 70.0, f"El saldo debía bajar 30.00 una sola vez: disponible {saldo_despues}")
+    paso(f"ATM: retiro de 30.00 en el cajero ATM-AQP-001 confirmado, saldo final {saldo_despues}")
+
+    # Repetir confirmación con misma llave → sin segundo débito (idempotencia)
+    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras=llave_conf)
+    exigir(estado == 200 and respuesta["success"] is True
+           and respuesta["data"]["uuid_transaccion"] == uuid_txn,
+           f"ATM repetir confirmación: {estado} {respuesta}")
+    saldo_otra = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(saldo_otra) == 70.0, f"Repetir confirmación no debía debitar de nuevo: {saldo_otra}")
+    paso("ATM: repetir confirmación con misma llave no debita dos veces (idempotencia)")
+
     # ── EVALUACIÓN: expediente de SOL → evaluación → decisión, todo en COREDB ──
     exigir(TOKEN_SOL_EVALUACION, "Falta EVALUACION_TOKEN_SOL para enviar el expediente a Evaluación")
     base = EVALUACION + "/eva"
@@ -728,17 +781,18 @@ def flujo():
     def crecio(consumidor, modulo):
         return despues.get(consumidor, {}).get(modulo, 0) > inicio_bus.get(consumidor, {}).get(modulo, 0)
 
-    faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION", "COBRANZA")
+    faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "ATM", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION", "COBRANZA")
               if not crecio("FRONTEND", m)]
     exigir(not faltan, f"Estos puentes del frontend no pasaron por el Bus: {faltan}")
-    faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION",
+    faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "ATM", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION",
                           "SEGURIDAD") if not crecio("PRUEBAS", m)]
     exigir(not faltan, f"El flujo no llegó por el Bus a: {faltan}")
     # Fase 2: cada módulo llegó a COREDB a través del Bus, con su propia credencial.
+    # ATM no llama a COREDB directo; llama a TARJETAS y CUENTAS por el Bus.
     faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA")
               if not crecio(m, "COREDB")]
     exigir(not faltan, f"Estos módulos no llegaron a COREDB por el Bus: {faltan}")
-    paso("Bus de Servicios: el flujo y los siete puentes del frontend llegaron a los módulos por el Bus, "
+    paso("Bus de Servicios: el flujo y los ocho puentes del frontend llegaron a los módulos por el Bus, "
          "y CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO y COBRANZA llegaron a COREDB por él")
 
 

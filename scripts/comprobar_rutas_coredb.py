@@ -32,7 +32,7 @@ COMPOSE_PERMITIDOS = {"db", "coredb", "coredb-init", "bus"}
 RED_COREDB = "core"
 K8S_PERMITIDOS = {"coredb", "bus"}
 CONFIGMAP_BUS = "bna-bus"
-MODULOS = ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA")
+MODULOS = ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA", "ATM")
 
 
 def _cadenas(valor):
