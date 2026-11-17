@@ -61,6 +61,7 @@ correr "CORE legado contra MySQL" \
   env CORE_IMAGEN_PRUEBAS=bna/backend:local backend/CORE/scripts/pruebas_integracion.sh
 correr "CUENTAS" en_backend CUENTAS/tests
 correr "TARJETAS" en_backend TARJETAS/tests
+correr "Bus de Servicios" en_backend BUS_SERVICIOS/tests
 correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests
 correr "EVALUACION contra COREDB y MySQL" \
   env EVALUACION_IMAGEN_PRUEBAS=bna/backend:local EVALUACION_IMAGEN_COREDB=bna/coredb:local \

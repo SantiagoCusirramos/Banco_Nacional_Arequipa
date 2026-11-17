@@ -16,11 +16,24 @@ data:
   SEGURIDAD_DB: /datos/seguridad.sqlite3
   CAP_CORE_USUARIO: svc-captacion
   CAP_OTP_SIMULADO: "true"
+  # Los módulos llaman a COREDB directo (fase 2: por el Bus).
   COREDB_URL: http://coredb:8012
-  CUENTAS_GATEWAY_URL: http://cuentas:8001/api/v1/cuentas
-  TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
-  SOL_GATEWAY_URL: http://sol:8011/gateway/sol
-  EVALUACION_GATEWAY_URL: http://evaluacion:8015/eva/v1
-  DESEMBOLSO_GATEWAY_URL: http://desembolso:8016/api/v1
-  CAPTACION_GATEWAY_URL: http://captacion:8017/api/v1/captacion
+  # Bus de Servicios: dirección de cada módulo y consumidores (sus credenciales, en el Secret).
+  BUS_URL_COREDB: http://coredb:8012
+  BUS_URL_CUENTAS: http://cuentas:8001
+  BUS_URL_TARJETAS: http://tarjetas:8002
+  BUS_URL_CAPTACION: http://captacion:8017
+  BUS_URL_SOL: http://sol:8011
+  BUS_URL_EVALUACION: http://evaluacion:8015
+  BUS_URL_DESEMBOLSO: http://desembolso:8016
+  BUS_URL_SEGURIDAD: http://seguridad:8013
+  BUS_CONSUMIDORES: FRONTEND,PRUEBAS
+  # Puentes del frontend: todos por el Bus.
+  FRONTEND_COREDB_URL: http://bus:8018/bus/coredb
+  CUENTAS_GATEWAY_URL: http://bus:8018/bus/cuentas/api/v1/cuentas
+  TARJETAS_GATEWAY_URL: http://bus:8018/bus/tarjetas/api/v1/tarjetas
+  SOL_GATEWAY_URL: http://bus:8018/bus/sol/gateway/sol
+  EVALUACION_GATEWAY_URL: http://bus:8018/bus/evaluacion/eva/v1
+  DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
+  CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
   SOL_COOKIE_SECURE: "false"

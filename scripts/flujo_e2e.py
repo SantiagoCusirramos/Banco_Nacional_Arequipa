@@ -1,7 +1,7 @@
 """Flujo de extremo a extremo del producto integrado.
 
-Corre dentro del contenedor de COREDB (`./bna smoke`), así que llega a los demás
-servicios por su nombre en la red interna y solo usa la biblioteca estándar.
+Corre dentro del contenedor del Bus (`./bna smoke`), así que llega al frontend por su
+nombre en la red interna y solo usa la biblioteca estándar.
 
 Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
@@ -13,6 +13,10 @@ COREDB), su desembolso por DESEMBOLSO (identidad → orden → validación → c
 que abona una sola vez y crea el crédito), un prospecto captado y habilitado por
 CAPTACION (expediente en COREDB, cliente nuevo y referencia CR-INT-01 para SOL) y todo
 por los puentes del frontend, que es el camino que sigue el navegador.
+
+Todo pasa por el Bus de Servicios: el flujo solo conoce el Bus (E2E_BUS, con su credencial
+BUS_TOKEN) y el frontend, y al final comprueba con las métricas del Bus que el flujo y cada
+puente del frontend llegaron a los módulos a través de él.
 """
 
 import datetime
@@ -27,29 +31,32 @@ import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
-COREDB = os.environ.get("E2E_COREDB", "http://127.0.0.1:8012")
-CUENTAS = os.environ.get("E2E_CUENTAS", "http://cuentas:8001")
-TARJETAS = os.environ.get("E2E_TARJETAS", "http://tarjetas:8002")
+# Todo pasa por el Bus de Servicios: el flujo solo conoce la dirección del Bus y la del
+# frontend (que también llega a los módulos por el Bus). Ningún módulo se llama directo.
+BUS = os.environ.get("E2E_BUS", "http://127.0.0.1:8018").rstrip("/")
+TOKEN_BUS = os.environ.get("BUS_TOKEN", "")
+COREDB = f"{BUS}/bus/coredb"
+CUENTAS = f"{BUS}/bus/cuentas"
+TARJETAS = f"{BUS}/bus/tarjetas"
+SOL = f"{BUS}/bus/sol"
+EVALUACION = f"{BUS}/bus/evaluacion"
+DESEMBOLSO = f"{BUS}/bus/desembolso"
+CAPTACION = f"{BUS}/bus/captacion"
+SEGURIDAD = f"{BUS}/bus/seguridad"
 FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
-EVALUACION = os.environ.get("E2E_EVALUACION", "http://evaluacion:8015")
-DESEMBOLSO = os.environ.get("E2E_DESEMBOLSO", "http://desembolso:8016")
-CAPTACION = os.environ.get("E2E_CAPTACION", "http://captacion:8017")
 TOKEN_SOL = os.environ.get("CAP_SOL_TOKEN", "")
 SERVICIOS = {
+    "Bus de Servicios": (BUS + "/salud", {}),
     "COREDB": (COREDB + "/coredb/salud", {}),
     "CUENTAS": (CUENTAS + "/health", {}),
     "TARJETAS": (TARJETAS + "/health", {}),
-    "SOL": (os.environ.get("E2E_SOL", "http://sol:8011") + "/ready", {}),
+    "SOL": (SOL + "/ready", {}),
     "EVALUACIÓN": (EVALUACION + "/salud", {}),
     "DESEMBOLSO": (DESEMBOLSO + "/salud", {}),
     "CAPTACION": (CAPTACION + "/ready", {}),
-    "Seguridad": (os.environ.get("E2E_SEGURIDAD", "http://seguridad:8013") + "/seguridad/estado",
-                  {"X-Correlation-ID": "flujo-e2e"}),
+    "Seguridad": (SEGURIDAD + "/seguridad/estado", {"X-Correlation-ID": "flujo-e2e"}),
     "frontend": (FRONTEND + "/login", {}),
 }
-# Solo si se levantó con el perfil `legado`.
-if os.environ.get("E2E_CORE_LEGADO"):
-    SERVICIOS["CORE legado"] = (os.environ["E2E_CORE_LEGADO"] + "/health", {})
 # Intentos de la primera consulta a cada servicio. En Kubernetes un pod recién listo
 # puede tardar un momento en recibir tráfico de su Service (`./bna k8s-smoke` pide 5).
 INTENTOS = max(1, int(os.environ.get("E2E_INTENTOS", "1")))
@@ -75,6 +82,8 @@ def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
         peticion.add_header("Content-Type", "application/json")
     if token:
         peticion.add_header("Authorization", f"Bearer {token}")
+    if url.startswith(BUS + "/") and TOKEN_BUS:
+        peticion.add_header("X-Bus-Token", TOKEN_BUS)
     for nombre, valor in (cabeceras or {}).items():
         peticion.add_header(nombre, valor)
     try:
@@ -172,16 +181,37 @@ def sobre_sol(cod_cliente, monto="15000.00", plazo=12):
     }
 
 
+def metricas_bus():
+    estado, respuesta = pedir("GET", BUS + "/metricas")
+    exigir(estado == 200, f"Métricas del Bus: {estado} {respuesta}")
+    return respuesta["reenvios"]
+
+
 def flujo():
     exigir(PASSWORD, "Falta BNA_ADMIN_PASSWORD")
+    exigir(TOKEN_BUS, "Falta BUS_TOKEN (credencial del flujo ante el Bus)")
 
+    # Las métricas del Bus se acumulan desde que arrancó: se compara con lo de antes del flujo.
+    sano("Bus de Servicios", BUS + "/salud", {})
+    inicio_bus = metricas_bus()
     for nombre, (url, cabeceras) in SERVICIOS.items():
         sano(nombre, url, cabeceras)
         paso(f"{nombre} responde")
 
+    # ── El Bus: sin su credencial no reenvía; con ella, el error del módulo llega igual ──
+    peticion = urllib.request.Request(COREDB + "/coredb/salud")
+    try:
+        with urllib.request.urlopen(peticion, timeout=15) as respuesta:
+            estado, texto = respuesta.status, respuesta.read().decode()
+    except urllib.error.HTTPError as error:
+        estado, texto = error.code, error.read().decode()
+    exigir(estado == 401 and "BUS_CREDENCIAL_INVALIDA" in texto,
+           f"El Bus sin credencial debía responder 401: {estado} {texto}")
+    paso("Bus de Servicios: sin su credencial responde 401 y no reenvía")
+
     estado, _ = pedir("GET", COREDB + "/coredb/auth/me")
     exigir(estado == 401, f"COREDB sin token debía responder 401 y respondió {estado}")
-    paso("COREDB rechaza una petición sin token")
+    paso("COREDB rechaza una petición sin token (su 401 llega igual por el Bus)")
 
     sesion = coredb("POST", "/coredb/auth/login", 200, {"username": USUARIO, "password": PASSWORD})
     token = sesion["access_token"]
@@ -639,6 +669,20 @@ def flujo():
     exigir(estado == 401, f"La sesión de SOL debía quedar revocada tras cerrar: respondió {estado}")
     paso("frontend: SOL por su proxy, con login desde el origen del frontend (otro origen, 403), "
          "sesión en cookie HttpOnly, consulta y cierre de sesión")
+
+    # ── Todo pasó por el Bus: el flujo y cada puente del frontend ────────────
+    despues = metricas_bus()
+
+    def crecio(consumidor, modulo):
+        return despues.get(consumidor, {}).get(modulo, 0) > inicio_bus.get(consumidor, {}).get(modulo, 0)
+
+    faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION")
+              if not crecio("FRONTEND", m)]
+    exigir(not faltan, f"Estos puentes del frontend no pasaron por el Bus: {faltan}")
+    faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION",
+                          "SEGURIDAD") if not crecio("PRUEBAS", m)]
+    exigir(not faltan, f"El flujo no llegó por el Bus a: {faltan}")
+    paso("Bus de Servicios: el flujo y los siete puentes del frontend llegaron a los módulos por el Bus")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,16 @@ import { NextRequest, NextResponse } from "next/server";
 const REENVIADAS = ["authorization", "x-idempotency-key", "x-channel-id", "x-request-timestamp"];
 
 /**
+ * Credencial del frontend ante el Bus de Servicios (X-Bus-Token). Sale del entorno del
+ * servidor (BUS_TOKEN), nunca del navegador. Sin BUS_TOKEN no se envía: así el frontend
+ * también puede apuntar directo a los módulos en desarrollo (`npm run dev`).
+ */
+export function credencialBus(headers: Headers): void {
+  const token = process.env.BUS_TOKEN;
+  if (token) headers.set("X-Bus-Token", token);
+}
+
+/**
  * Reenvía una petición del navegador a un servicio interno desde el servidor de
  * Next.js, de modo que el navegador nunca conoce la dirección del servicio.
  */
@@ -19,6 +29,7 @@ export async function reenviar(
     const valor = request.headers.get(nombre);
     if (valor) headers.set(nombre, valor);
   }
+  credencialBus(headers);
   const destino = `${base.replace(/\/$/, "")}/${ruta.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
 
   let respuesta: Response;
