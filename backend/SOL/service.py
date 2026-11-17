@@ -11,7 +11,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 from sqlalchemy import select
 from .finance import calendar
-from .integrations import CLIENT_FIELDS, captacion_reference, guarantor_reference
+from .integrations import captacion_reference, guarantor_reference, project_identity
 from .models import Application, Event, Version, Outcome, Delivery, now
 
 
@@ -139,7 +139,7 @@ def summary(db, application, version=None):
         "version": application.current_version,
         "revision": application.revision,
         "cliente_nombre": " ".join(
-            [client["nombres"], client["apellido_paterno"], client["apellido_materno"]]
+            part for part in [client["nombres"], client["apellido_paterno"], client.get("apellido_materno")] if part
         ),
         "documento": client["numero_documento"],
         "monto": data["condiciones"]["monto_solicitado"],
@@ -219,9 +219,9 @@ def projected_detail(db, application, user):
     for version in result["versiones"]:
         snapshot = deepcopy(version["expediente"])
         for identity in [snapshot["cliente"], *[f.get("identidad", {}) for f in snapshot.get("fiadores", [])]]:
-            for key in list(identity):
-                if key not in CLIENT_FIELDS:
-                    identity.pop(key)
+            projected = project_identity(identity)
+            identity.clear()
+            identity.update(projected)
         version["expediente"] = snapshot
     return result
 

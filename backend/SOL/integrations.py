@@ -11,6 +11,7 @@ import httpx
 from fastapi import HTTPException
 from .clock import business_today
 from .models import ClientReference
+from .settings import provider_connection
 
 CLIENT_FIELDS = {
     "id_cliente", "cod_tipo_documento", "numero_documento", "nombres",
@@ -29,26 +30,44 @@ class IntegrationError(Exception):
 class Integrations:
     def __init__(self, settings, transport=None):
         self.settings = settings
+        if hasattr(settings, "validate"):
+            settings.validate()
         # Sin reintentos ocultos del transporte: los controlamos explícitamente.
-        self.client = httpx.Client(
-            base_url=settings.bus_base_url or "http://simulador.invalid",
-            headers={"Authorization": "Bearer " + settings.bus_token},
-            transport=transport, follow_redirects=False, trust_env=False,
-        )
+        self._connections = {"bus": (settings.bus_base_url, settings.bus_token)}
+        self._connections.update({p: provider_connection(settings, p) for p in ("cap", "eva", "audit")})
+        clients = {}
+        self._clients = {}
+        for provider, connection in self._connections.items():
+            if connection not in clients:
+                url, token = connection
+                clients[connection] = httpx.Client(
+                    base_url=url or "http://simulador.invalid",
+                    headers={"Authorization": "Bearer " + token},
+                    transport=transport, follow_redirects=False, trust_env=False,
+                )
+            self._clients[provider] = clients[connection]
+        # Compatibilidad del cliente y request/read públicos para el Bus legado.
+        self.client = self._clients["bus"]
 
     def close(self):
-        self.client.close()
+        for client in set(self._clients.values()):
+            client.close()
 
     def request(self, method, path, correlation, operation=None, payload=None,
-                params=None, deadline=None, allow_missing=False):
+                params=None, deadline=None, allow_missing=False, provider="bus"):
         remaining = (deadline or monotonic() + self.settings.request_budget) - monotonic()
         if remaining <= 0:
             raise IntegrationError("PRESUPUESTO_AGOTADO")
+        if provider not in self._clients or not all(self._connections[provider]):
+            raise IntegrationError("PROVEEDOR_NO_CONFIGURADO", permanent=True)
+        # Una ruta nunca puede elegir otro host ni enviar el token a una URL absoluta.
+        if not path.startswith("/") or path.startswith("//") or "\\" in path or "://" in path:
+            raise IntegrationError("RUTA_PROVEEDOR_INVALIDA", permanent=True)
         headers = {"X-Correlation-ID": correlation}
         if operation:
             headers["X-Idempotency-Key"] = operation
         try:
-            response = self.client.request(
+            response = self._clients[provider].request(
                 method, path, headers=headers, json=payload, params=params,
                 timeout=min(self.settings.http_timeout, remaining),
             )
@@ -71,12 +90,12 @@ class Integrations:
             raise IntegrationError("RESPUESTA_BUS_INVALIDA", permanent=True)
         return data
 
-    def read(self, path, correlation, params=None, deadline=None, allow_missing=False):
+    def read(self, path, correlation, params=None, deadline=None, allow_missing=False, provider="bus"):
         deadline = deadline or monotonic() + self.settings.request_budget
         for attempt in range(self.settings.max_retries + 1):
             try:
                 return self.request("GET", path, correlation, params=params,
-                                    deadline=deadline, allow_missing=allow_missing)
+                                    deadline=deadline, allow_missing=allow_missing, provider=provider)
             except IntegrationError as exc:
                 if exc.permanent or attempt == self.settings.max_retries:
                     raise
@@ -84,7 +103,7 @@ class Integrations:
     def reference(self, identifier, correlation):
         path = self.settings.cap_reference_path.replace("{idCliente}", quote(identifier, safe=""))
         try:
-            data = self.read(path, correlation, allow_missing=True)
+            data = self.read(path, correlation, allow_missing=True, provider="cap")
         except IntegrationError:
             raise HTTPException(503, "Captación no disponible o contrato incompatible.") from None
         if data is None:
@@ -95,7 +114,7 @@ class Integrations:
         # Una búsqueda acotada; no se descarga todo el maestro de Clientes.
         try:
             data = self.read(self.settings.cap_search_path, correlation,
-                             params={"search": search, "limit": 50})
+                             params={"search": search, "limit": 50}, provider="cap")
             if not isinstance(data, list) or len(data) > 50:
                 raise IntegrationError("RESPUESTA_BUS_INVALIDA", True)
             return [normalize_reference(r) for r in data]
@@ -121,11 +140,11 @@ class Integrations:
         last = IntegrationError()
         for attempt in range(self.settings.max_retries + 1):
             try:
-                received = self.request("GET", path, trace, deadline=deadline, allow_missing=True)
+                received = self.request("GET", path, trace, deadline=deadline, allow_missing=True, provider="eva")
                 if received is not None:
                     return validate_receipt(received, envelope)
                 receipt = self.request("POST", self.settings.eva_send_path, trace,
-                                       operation=key, payload=envelope, deadline=deadline)
+                                       operation=key, payload=envelope, deadline=deadline, provider="eva")
                 return validate_receipt(receipt, envelope)
             except IntegrationError as exc:
                 last = exc
@@ -141,7 +160,7 @@ class Integrations:
             try:
                 data = self.request("POST", self.settings.audit_path,
                                     payload["idCorrelacion"], payload["idEvento"],
-                                    payload, deadline=deadline)
+                                    payload, deadline=deadline, provider="audit")
                 if (not isinstance(data, dict) or data.get("idEvento") != payload["idEvento"]
                         or data.get("confirmado") is not True
                         or not isinstance(data.get("acuse"), str) or not 1 <= len(data["acuse"]) <= 80
@@ -153,10 +172,18 @@ class Integrations:
                     raise
 
 
+def project_identity(data):
+    """Proyección mínima; ausencia de segundo apellido se representa sin inventarlo."""
+    result = {key: value for key, value in data.items() if key in CLIENT_FIELDS}
+    if result.get("apellido_materno") is None:
+        result["apellido_materno"] = ""
+    return result
+
+
 def normalize_reference(data):
     if not isinstance(data, dict):
         raise ValueError("Referencia inválida")
-    required = CLIENT_FIELDS - {"simulado", "cod_tipo_documento"}
+    required = CLIENT_FIELDS - {"simulado", "cod_tipo_documento", "apellido_materno"}
     if any(not isinstance(data.get(k), str) or not data[k].strip() for k in required):
         raise ValueError("Campos de Captación incompletos")
     if "cod_tipo_documento" in data and (
@@ -164,13 +191,15 @@ def normalize_reference(data):
         raise ValueError("Tipo de documento de Captación inválido")
     if "simulado" in data and type(data["simulado"]) is not bool:
         raise ValueError("Indicador de simulación inválido")
+    if data.get("apellido_materno") is not None and not isinstance(data["apellido_materno"], str):
+        raise ValueError("Apellido materno de Captación inválido")
     if len(data["id_cliente"]) > 36 or len(data["numero_documento"]) > 20:
         raise ValueError("Identificador de Captación inválido")
     verified, expires = date.fromisoformat(data["fecha_verificacion"]), date.fromisoformat(data["vigente_hasta"])
     if verified.isoformat() != data["fecha_verificacion"] or expires.isoformat() != data["vigente_hasta"]:
         raise ValueError("Captación requiere fechas YYYY-MM-DD")
     # Nunca almacenar campos adicionales del maestro que SOL no necesita.
-    return {key: data[key] for key in CLIENT_FIELDS if key in data}
+    return project_identity(data)
 
 
 def validate_reference(data, identifier):
@@ -220,7 +249,7 @@ def guarantor_reference(db, identifier):
         raise HTTPException(422, "El fiador requiere una referencia de identidad activa.")
     return {
         "id_cliente": identifier,
-        "identidad": {key: value for key, value in ref.snapshot.items() if key in CLIENT_FIELDS},
+        "identidad": project_identity(ref.snapshot),
         "validacion": "SIMULADA",
     }
 

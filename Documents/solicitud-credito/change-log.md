@@ -318,3 +318,8 @@
 - Se quitaron del repositorio las instrucciones para agentes (`prompts/` y `plan-integracion-sol.md`), las copias antiguas de OpenAPI (E01, E05 y E06 REAL), la lista de archivos del cierre (`sol-archivos-commit.txt`) y el laboratorio E06 aparte de `./bna` (`compose-e06.yaml`, `e06_validar_http.py`, `e06_validar_mysql.py`): `./bna test` y el flujo de extremo a extremo ya prueban SOL con MySQL y por el proxy del frontend. Siguen en el historial de git (PR #75).
 - El OpenAPI vigente es `openapi.json`: el que publica SOL en `/openapi.json` en modo SIMULADO, idéntico al E06 simulado. Las menciones a los archivos quitados en los informes de arriba son históricas.
 - Proxy del frontend: sin `SOL_PUBLIC_ORIGIN`, el origen esperado es el `Host` que recibe el servidor (con el esquema de Next). Así funciona detrás de compose con cualquier `BNA_PUERTO_FRONTEND` y del NodePort de kind, donde Next escucha en el 3000 y el navegador usa otro puerto. `SOL_PUBLIC_ORIGIN` queda para un proxy TLS delante.
+
+## 2026-11-17 — Integración de proveedores HTTP de SOL (PR #99)
+
+- Incorporado el cliente httpx por proveedor (CAP, EVA y Auditoría) con respaldo opcional en el Bus, validación de URL y token, rechazo de rutas absolutas y `apellido_materno` opcional. Las 50 pruebas de `backend/SOL/tests/test_providers.py` pasan; una de ellas amplía la cobertura del par explícito de Auditoría frente al Bus.
+- `SOL_INTEGRATION_MODE` sigue en `SIMULADO`. Las variables `SOL_CAP_*`, `SOL_EVA_*` y `SOL_AUDIT_*` se documentan vacías en `.env.example`; no se activa REAL. Queda para otra tarea decidir si se cablean en compose/k8s cuando se habilite REAL.
