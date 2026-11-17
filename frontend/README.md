@@ -25,11 +25,11 @@ El navegador solo llama a rutas de este mismo servidor, que las reenvía desde e
 | `/api/cuenta/*` | CUENTAS, `/api/v1/cuentas/*` | `CUENTAS_GATEWAY_URL` |
 | `/api/tarjeta/*` | TARJETAS, `/api/v1/tarjetas/*` | `TARJETAS_GATEWAY_URL` |
 | `/api/solicitud-credito/*` | SOL, `/gateway/sol/*` | `SOL_GATEWAY_URL` |
-| `/api/cobranza/*` | COBRANZA (solo las 4 rutas de "Pagar cuota"; cualquier otra da 404) | `COBRANZA_URL`, `COBRANZA_API_KEY_LEER`, `COBRANZA_API_KEY_INTEGRACION` |
+| `/api/cobranza/*` | COBRANZA por el Bus | `COBRANZA_GATEWAY_URL` |
 
 Las variables se leen al ejecutar, no al construir. De cada petición se reenvían `Authorization`, `X-Idempotency-Key`, `X-Channel-ID` y `X-Request-Timestamp`; si falta `X-Correlation-ID`, se genera uno. La sesión de COREDB (el token) se guarda en `localStorage`; la de SOL, en una cookie que maneja su propio puente.
 
-Cobranza es la excepción: se autentica con `X-API-Key` (no con el bearer token de COREDB), así que esa clave la agrega el puente `/api/cobranza` del lado servidor y nunca llega al navegador; el bearer token que sí envía el navegador solo le prueba al puente que hay una sesión de COREDB iniciada. Para `X-Token-Seguridad` (RF-COB-004), el módulo Seguridad todavía no publica su validador real, así que el puente envía un valor fijo documentado como validación SIMULADA (ver [`app/api/cobranza/[...path]/route.ts`](app/api/cobranza/%5B...path%5D/route.ts)).
+Cobranza funciona igual que los demás: el puente `/api/cobranza` reenvía el bearer token de COREDB y `X-Bus-Token`; sin claves propias.
 
 ## Ejecutar
 
