@@ -383,27 +383,23 @@ def flujo():
     disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     exigir(float(disponible) == 60.0, f"La autorización debía retener 40.00 una sola vez: disponible {disponible}")
     # Confirmar la autorización (el cajero dispensa)
-    llave_confirma = {"X-Idempotency-Key": str(uuid.uuid4())}
-    import hashlib
-    huella = hashlib.sha256(llave_confirma["X-Idempotency-Key"].encode()).hexdigest()
+    llave_confirma = str(uuid.uuid4())
     estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/confirmacion",
-                              {"llave_idempotencia": llave_confirma["X-Idempotency-Key"], "huella": huella,
-                               "id_terminal": "DEV-ATM-01"}, token)
+                              {"id_terminal": "DEV-ATM-01"}, token, cabeceras={"X-Idempotency-Key": llave_confirma})
     exigir(estado == 200 and respuesta["data"]["estado_autorizacion"] == "DISPENSADA"
            and respuesta["data"]["uuid_transaccion"] == autorizacion,
            f"Confirmación por TARJETAS: {estado} {respuesta}")
     # Repetir la confirmación con la misma llave no debita dos veces
     estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/confirmacion",
-                              {"llave_idempotencia": llave_confirma["X-Idempotency-Key"], "huella": huella,
-                               "id_terminal": "DEV-ATM-01"}, token)
+                              {"id_terminal": "DEV-ATM-01"}, token, cabeceras={"X-Idempotency-Key": llave_confirma})
     exigir(estado == 200 and respuesta["data"]["uuid_autorizacion"] == autorizacion,
            f"Repetir la confirmación con la misma llave debía devolver la misma: {estado} {respuesta}")
     disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     exigir(float(disponible) == 60.0, f"La confirmación repetida no debía debitar de nuevo: disponible {disponible}")
-    # Extornar una confirmada debe fallar
+    # Extornar una confirmada debe fallar (la autorización ya tiene movimiento)
     estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/extorno",
                               {"motivo": "Intento de extorno tras confirmar"}, token)
-    exigir(estado == 409 and respuesta["error_code"] == "ERR-TAR-CONFIRMACION-NO-PERMITIDA",
+    exigir(estado == 409 and respuesta["error_code"] == "ERR-TAR-EXTORNO-NO-PERMITIDO",
            f"Extornar una confirmada debía fallar: {estado} {respuesta}")
     disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     exigir(float(disponible) == 60.0, f"El saldo no debía cambiar tras extorno fallido: disponible {disponible}")
