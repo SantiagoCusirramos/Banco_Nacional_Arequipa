@@ -56,6 +56,14 @@ export const apiCaptacion = axios.create({
 });
 apiCaptacion.interceptors.request.use(conToken);
 
+// COBRANZA por el puente de Next (/api/cobranza), que reenvía el token de COREDB.
+export const apiCobranza = axios.create({
+  baseURL: "/api/cobranza",
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000,
+});
+apiCobranza.interceptors.request.use(conToken);
+
 const OPERACIONES = ["/deposito", "/retiro", "/transferencia"];
 
 /** Cabeceras que CUENTAS exige en toda operación que mueve dinero. */

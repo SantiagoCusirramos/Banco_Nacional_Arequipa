@@ -26,6 +26,7 @@ data:
   EVALUACION_GATEWAY_URL: http://bus:8018/bus/evaluacion/eva/v1
   DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
   CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
+  COBRANZA_GATEWAY_URL: http://bus:8018/bus/cobranza
   SOL_COOKIE_SECURE: "false"
 ---
 # Solo del Bus: la dirección de cada módulo (la directa de COREDB, entre ellas) y la lista de
@@ -43,5 +44,6 @@ data:
   BUS_URL_SOL: http://sol:8011
   BUS_URL_EVALUACION: http://evaluacion:8015
   BUS_URL_DESEMBOLSO: http://desembolso:8016
+  BUS_URL_COBRANZA: http://cobranza:8014
   BUS_URL_SEGURIDAD: http://seguridad:8013
-  BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO
+  BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA

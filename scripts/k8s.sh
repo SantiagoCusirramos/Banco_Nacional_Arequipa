@@ -13,7 +13,7 @@ RED=kind
 NS=bna
 IMAGENES=(bna/core-db:local bna/db-aux:local bna/coredb:local bna/backend:local
           bna/sol:local bna/seguridad:local bna/frontend:local)
-DESPLIEGUES=(db db-aux coredb cuentas tarjetas sol evaluacion desembolso captacion seguridad bus frontend)
+DESPLIEGUES=(db db-aux coredb cuentas tarjetas sol evaluacion desembolso cobranza captacion seguridad bus frontend)
 ESPERA="${BNA_ESPERA_SEGUNDOS:-600}"
 
 k() { kubectl --context "$CONTEXTO" "$@"; }
@@ -108,6 +108,7 @@ Producto desplegado en el clúster $CLUSTER (kind).
   SOL           http://127.0.0.1:18011/docs
   Evaluación    http://localhost:13000/evaluacion (API: http://127.0.0.1:18015/docs)
   Desembolso    http://localhost:13000/desembolso (API: http://127.0.0.1:18016/docs)
+  Cobranza      http://localhost:13000/cobranza (API: http://127.0.0.1:18014/docs)
   CAPTACION     http://127.0.0.1:18017/docs
   Seguridad     http://127.0.0.1:18013
 

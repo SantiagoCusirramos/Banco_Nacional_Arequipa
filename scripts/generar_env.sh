@@ -19,6 +19,7 @@ chmod 600 "$DESTINO"
 
 nuevas=0
 while IFS= read -r linea || [ -n "$linea" ]; do
+  linea="${linea%$'\r'}" # .env.example con CRLF (Windows): se ignora el \r final
   case "$linea" in
     [A-Za-z_]*=*) ;;
     *) continue ;;
