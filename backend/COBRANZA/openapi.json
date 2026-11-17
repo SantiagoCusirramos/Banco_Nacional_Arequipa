@@ -1,66 +1,809 @@
 {
-  "components": {
-    "schemas": {
-      "CuotaIn": {
-        "properties": {
-          "fechaVencimiento": {
-            "format": "date",
-            "title": "Fechavencimiento",
-            "type": "string"
-          },
-          "montoCuota": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
+  "openapi": "3.1.0",
+  "info": {
+    "title": "BNA · Cobranza",
+    "description": "Módulo 14 de la Línea de Créditos, sin base propia. El crédito ya existe en COREDB cuando Desembolso confirma la orden (CR-INT-06): Cobranza lo lee y cobra sus cuotas. Pagar debita la cuenta del titular y aplica el pago en una sola operación (CR-INT-07); la misma `referencia` no cobra dos veces. La mora se registra y se muestra, pero no se cobra (decisión 5 del contrato). Lo que hace la persona va con su token de COREDB, que Cobranza reenvía. Montos como texto decimal (\"150.00\").",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/salud": {
+      "get": {
+        "tags": [
+          "Estado"
+        ],
+        "summary": "COREDB responde y el usuario de servicio inicia sesión",
+        "operationId": "salud_salud_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
-            ],
-            "title": "Montocuota"
-          },
-          "numeroCuota": {
-            "title": "Numerocuota",
-            "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sesion": {
+      "get": {
+        "tags": [
+          "Operación en agencia"
+        ],
+        "summary": "Perfil de la persona en Cobranza",
+        "operationId": "sesion_api_v1_sesion_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           }
         },
-        "required": [
-          "numeroCuota",
-          "fechaVencimiento",
-          "montoCuota"
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/creditos": {
+      "get": {
+        "tags": [
+          "Cobranza"
         ],
-        "title": "CuotaIn",
-        "type": "object"
+        "summary": "Créditos desembolsados (CR-INT-06)",
+        "description": "Leídos de COREDB con el token de la persona, del más reciente al más antiguo.",
+        "operationId": "creditos_api_v1_creditos_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "AL_DIA",
+                    "EN_MORA",
+                    "CANCELADO"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "codCliente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/creditos/{codCredito}": {
+      "get": {
+        "tags": [
+          "Cobranza"
+        ],
+        "summary": "El crédito con sus cuotas y su bitácora",
+        "operationId": "detalle_api_v1_creditos__codCredito__get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codCredito",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Codcredito"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "CREDITO_NO_ENCONTRADO"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/creditos/{codCredito}/pagos": {
+      "get": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Los pagos del crédito, del más reciente al más antiguo",
+        "operationId": "pagos_api_v1_creditos__codCredito__pagos_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codCredito",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Codcredito"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       },
+      "post": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "Cobrar una cuota: debita la cuenta y aplica el pago (CR-INT-07)",
+        "operationId": "cobrar_api_v1_creditos__codCredito__pagos_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codCredito",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Codcredito"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagoIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "200": {
+            "description": "La misma referencia con el mismo cuerpo: el mismo pago"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO"
+          },
+          "422": {
+            "description": "PAGO_NO_ADMITIDO, CREDITO_NO_ADMITIDO o CUENTA_NO_ELEGIBLE"
+          }
+        }
+      }
+    },
+    "/api/v1/pagos/{referencia}": {
+      "get": {
+        "tags": [
+          "Pagos"
+        ],
+        "summary": "El pago con esa referencia (comprobante)",
+        "operationId": "pago_por_referencia_api_v1_pagos__referencia__get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "referencia",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "title": "Referencia"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "PAGO_NO_ENCONTRADO"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/creditos/{codCredito}/cuotas/{numeroCuota}/mora": {
+      "post": {
+        "tags": [
+          "Mora (valor recibido)"
+        ],
+        "summary": "Registrar la mora recibida de una cuota vencida (decisión 5: no se cobra)",
+        "operationId": "registrar_mora_api_v1_creditos__codCredito__cuotas__numeroCuota__mora_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codCredito",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Codcredito"
+            }
+          },
+          {
+            "name": "numeroCuota",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 600,
+              "minimum": 1,
+              "title": "Numerocuota"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoraIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "CUOTA_NO_ADMITIDA"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Créditos y mora"
+        ],
+        "summary": "Los cálculos de mora de la cuota, del más reciente al más antiguo",
+        "operationId": "historial_mora_api_v1_creditos__codCredito__cuotas__numeroCuota__mora_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codCredito",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Codcredito"
+            }
+          },
+          {
+            "name": "numeroCuota",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 600,
+              "minimum": 1,
+              "title": "Numerocuota"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vencimientos": {
+      "post": {
+        "tags": [
+          "Mora (valor recibido)"
+        ],
+        "summary": "Marcar las cuotas vencidas y recalcular los créditos",
+        "description": "Es también la tarea diaria de `svc-cobranza`, que la llama con su token de servicio.",
+        "operationId": "vencimientos_api_v1_vencimientos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VencimientosIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Datos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "FECHA_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/conciliacion": {
+      "get": {
+        "tags": [
+          "Conciliación"
+        ],
+        "summary": "Lo cobrado frente a lo aplicado, por día, canal y moneda",
+        "operationId": "conciliacion_api_v1_conciliacion_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fecha"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clientes/{idCliente}/creditos": {
+      "get": {
+        "tags": [
+          "Pantalla Pagar cuota (formato anterior)"
+        ],
+        "summary": "Créditos (con su cronograma) de un cliente (RF-COB-002 / RF-COB-012)",
+        "operationId": "creditos_del_cliente_clientes__idCliente__creditos_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "idCliente",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 12,
+              "pattern": "^[A-Za-z0-9]+$",
+              "title": "Idcliente"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/creditos/{codCredito}/monto-a-pagar": {
+      "get": {
+        "tags": [
+          "Pantalla Pagar cuota (formato anterior)"
+        ],
+        "summary": "Monto a pagar de la próxima cuota (RF-COB-003)",
+        "operationId": "monto_a_pagar_creditos__codCredito__monto_a_pagar_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codCredito",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "pattern": "^[A-Za-z0-9-]+$",
+              "title": "Codcredito"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pagos/{referencia}/comprobante": {
+      "get": {
+        "tags": [
+          "Pantalla Pagar cuota (formato anterior)"
+        ],
+        "summary": "Comprobante de un pago confirmado (RN-COB-012)",
+        "operationId": "comprobante_pagos__referencia__comprobante_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "referencia",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "title": "Referencia"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cr-int-08/pagos": {
+      "post": {
+        "tags": [
+          "Pantalla Pagar cuota (formato anterior)"
+        ],
+        "summary": "CR-INT-08: pago desde Home Banking",
+        "description": "La misma `referenciaTransaccion` no cobra dos veces. `codCliente` se conserva por\ncompatibilidad: COREDB comprueba que la cuenta sea del titular del crédito.",
+        "operationId": "pago_home_banking_cr_int_08_pagos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagoLegacyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
       "HTTPValidationError": {
         "properties": {
           "detail": {
             "items": {
               "$ref": "#/components/schemas/ValidationError"
             },
-            "title": "Detail",
-            "type": "array"
+            "type": "array",
+            "title": "Detail"
           }
         },
-        "title": "HTTPValidationError",
-        "type": "object"
+        "type": "object",
+        "title": "HTTPValidationError"
       },
       "MoraIn": {
-        "examples": [
-          {
-            "diasAtraso": 5,
-            "montoCalculado": 12.5
-          }
-        ],
         "properties": {
-          "diasAtraso": {
-            "title": "Diasatraso",
-            "type": "integer"
-          },
           "montoCalculado": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "minimum": 0.0
               },
               {
                 "type": "string"
@@ -69,134 +812,79 @@
             "title": "Montocalculado"
           }
         },
+        "additionalProperties": false,
+        "type": "object",
         "required": [
-          "diasAtraso",
           "montoCalculado"
         ],
-        "title": "MoraIn",
-        "type": "object"
+        "title": "MoraIn"
       },
-      "ObligacionIn": {
-        "examples": [
-          {
-            "calendarioPagos": [
-              {
-                "fechaVencimiento": "2026-11-05",
-                "montoCuota": 400.0,
-                "numeroCuota": 1
-              },
-              {
-                "fechaVencimiento": "2026-12-05",
-                "montoCuota": 400.0,
-                "numeroCuota": 2
-              },
-              {
-                "fechaVencimiento": "2027-01-05",
-                "montoCuota": 400.0,
-                "numeroCuota": 3
-              }
-            ],
-            "codCredito": "CR-0001",
-            "fechaDesembolso": "2026-10-05T10:00:00",
-            "idCliente": "CLI-0001",
-            "idSolicitud": "SOL-0001",
-            "moneda": "PEN",
-            "montoAprobado": 1200.0
-          }
-        ],
+      "PagoIn": {
         "properties": {
-          "calendarioPagos": {
-            "items": {
-              "$ref": "#/components/schemas/CuotaIn"
-            },
-            "title": "Calendariopagos",
-            "type": "array"
-          },
-          "codCredito": {
+          "numCuenta": {
+            "type": "string",
             "maxLength": 20,
-            "title": "Codcredito",
-            "type": "string"
+            "minLength": 1,
+            "title": "Numcuenta"
           },
-          "fechaDesembolso": {
-            "format": "date-time",
-            "title": "Fechadesembolso",
-            "type": "string"
-          },
-          "idCliente": {
-            "maxLength": 20,
-            "title": "Idcliente",
-            "type": "string"
-          },
-          "idSolicitud": {
-            "maxLength": 20,
-            "title": "Idsolicitud",
-            "type": "string"
-          },
-          "moneda": {
-            "default": "PEN",
-            "title": "Moneda",
-            "type": "string"
-          },
-          "montoAprobado": {
+          "monto": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMinimum": 0.0
               },
               {
                 "type": "string"
               }
             ],
-            "title": "Montoaprobado"
+            "title": "Monto"
+          },
+          "referencia": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Referencia"
+          },
+          "canal": {
+            "type": "string",
+            "enum": [
+              "VEN",
+              "HB"
+            ],
+            "title": "Canal",
+            "default": "VEN"
           }
         },
+        "additionalProperties": false,
+        "type": "object",
         "required": [
-          "codCredito",
-          "idCliente",
-          "idSolicitud",
-          "montoAprobado",
-          "fechaDesembolso",
-          "calendarioPagos"
+          "numCuenta",
+          "monto",
+          "referencia"
         ],
-        "title": "ObligacionIn",
-        "type": "object"
+        "title": "PagoIn",
+        "description": "Pago de una cuota con el token de la persona (CR-INT-07)."
       },
-      "PagoIn": {
-        "examples": [
-          {
-            "codCliente": "CLI-0001",
-            "codCredito": "CR-0001",
-            "cuentaOrigen": "AH-001-123456",
-            "idCanal": "HB",
-            "montoPago": 150.0,
-            "referenciaTransaccion": "OP-0001"
-          }
-        ],
+      "PagoLegacyIn": {
         "properties": {
           "codCliente": {
-            "maxLength": 20,
-            "title": "Codcliente",
-            "type": "string"
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Codcliente"
           },
           "codCredito": {
+            "type": "string",
             "maxLength": 20,
-            "title": "Codcredito",
-            "type": "string"
-          },
-          "cuentaOrigen": {
-            "maxLength": 30,
-            "title": "Cuentaorigen",
-            "type": "string"
-          },
-          "idCanal": {
-            "default": "HB",
-            "maxLength": 10,
-            "title": "Idcanal",
-            "type": "string"
+            "minLength": 1,
+            "title": "Codcredito"
           },
           "montoPago": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "exclusiveMinimum": 0.0
               },
               {
                 "type": "string"
@@ -204,12 +892,31 @@
             ],
             "title": "Montopago"
           },
+          "cuentaOrigen": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Cuentaorigen"
+          },
           "referenciaTransaccion": {
+            "type": "string",
             "maxLength": 40,
-            "title": "Referenciatransaccion",
-            "type": "string"
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Referenciatransaccion"
+          },
+          "idCanal": {
+            "type": "string",
+            "enum": [
+              "VEN",
+              "HB"
+            ],
+            "title": "Idcanal",
+            "default": "HB"
           }
         },
+        "additionalProperties": false,
+        "type": "object",
         "required": [
           "codCliente",
           "codCredito",
@@ -217,8 +924,8 @@
           "cuentaOrigen",
           "referenciaTransaccion"
         ],
-        "title": "PagoIn",
-        "type": "object"
+        "title": "PagoLegacyIn",
+        "description": "CR-INT-08: el cuerpo que envía la pantalla \"Pagar cuota\"."
       },
       "ValidationError": {
         "properties": {
@@ -233,891 +940,50 @@
                 }
               ]
             },
-            "title": "Location",
-            "type": "array"
+            "type": "array",
+            "title": "Location"
           },
           "msg": {
-            "title": "Message",
-            "type": "string"
+            "type": "string",
+            "title": "Message"
           },
           "type": {
-            "title": "Error Type",
-            "type": "string"
+            "type": "string",
+            "title": "Error Type"
           }
         },
+        "type": "object",
         "required": [
           "loc",
           "msg",
           "type"
         ],
-        "title": "ValidationError",
-        "type": "object"
+        "title": "ValidationError"
+      },
+      "VencimientosIn": {
+        "properties": {
+          "fecha": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "VencimientosIn"
       }
     },
     "securitySchemes": {
-      "APIKeyHeader": {
-        "in": "header",
-        "name": "X-API-Key",
-        "type": "apiKey"
-      }
-    }
-  },
-  "info": {
-    "description": "Modulo de Cobranza de la Linea de Creditos (laboratorio del producto BNA). Interfaces: CR-INT-06 (Desembolso a Cobranza), CR-INT-07 (Cobranza a CUENTAS: con CUENTAS_MODO=BNA debita la cuenta de ahorros por el modulo CUENTAS real; si no, simulado) y CR-INT-08 (Home Banking a Cobranza). La mora la calcula el nucleo y Cobranza solo la registra y la refleja (RGN-15, RF-COB-06 de Requerimientos y Especificaciones Generales BNA). Pendientes del Comite de Creditos: el propietario del calendario y el tratamiento de pagos mayores a la cuota. Autenticacion (I-04): header X-API-Key por rol (COBRANZA_LEER, COBRANZA_EJECUTAR, INTEGRACION_BUS); usa el boton Authorize. CR-INT-08 ademas exige X-Token-Seguridad (RF-COB-004, PROPUESTA pendiente del Comite).",
-    "title": "Cobranza BNA",
-    "version": "0.1.0"
-  },
-  "openapi": "3.1.0",
-  "paths": {
-    "/auditoria": {
-      "get": {
-        "operationId": "auditoria_auditoria_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "idEntidad",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Identidad"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limite",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "maximum": 500,
-              "minimum": 1,
-              "title": "Limite",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Eventos de auditoria registrados",
-        "tags": [
-          "Auditoria (CR-INT-10)"
-        ]
-      }
-    },
-    "/clientes/{idCliente}/creditos": {
-      "get": {
-        "operationId": "creditos_por_cliente_clientes__idCliente__creditos_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "idCliente",
-            "required": true,
-            "schema": {
-              "title": "Idcliente",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Creditos (con su cronograma) de un cliente",
-        "tags": [
-          "Clientes (RF-COB-002 / RF-COB-012)"
-        ]
-      }
-    },
-    "/clientes/{idCliente}/pagos": {
-      "get": {
-        "operationId": "pagos_por_cliente_clientes__idCliente__pagos_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "idCliente",
-            "required": true,
-            "schema": {
-              "title": "Idcliente",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Historial de pagos de un cliente",
-        "tags": [
-          "Clientes (RF-COB-002 / RF-COB-012)"
-        ]
-      }
-    },
-    "/conciliacion": {
-      "get": {
-        "operationId": "conciliacion_conciliacion_get",
-        "parameters": [
-          {
-            "description": "AAAA-MM-DD, por defecto hoy",
-            "in": "query",
-            "name": "fecha",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "AAAA-MM-DD, por defecto hoy",
-              "title": "Fecha"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Conciliacion diaria: total cobrado vs aplicado (RF-COB-018)",
-        "tags": [
-          "Conciliacion (RF-COB-018)"
-        ]
-      }
-    },
-    "/cr-int-06/obligaciones": {
-      "post": {
-        "operationId": "activar_obligacion_cr_int_06_obligaciones_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ObligacionIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Activar obligacion de cobro",
-        "tags": [
-          "CR-INT-06 Desembolso a Cobranza"
-        ]
-      }
-    },
-    "/cr-int-08/pagos": {
-      "post": {
-        "operationId": "registrar_pago_cr_int_08_pagos_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Token-Seguridad",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Token-Seguridad"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PagoIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Registrar pago de una cuota (RF-COB-004: exige X-Token-Seguridad)",
-        "tags": [
-          "CR-INT-08 Home Banking a Cobranza"
-        ]
-      }
-    },
-    "/creditos/{codCredito}": {
-      "get": {
-        "operationId": "credito_creditos__codCredito__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "codCredito",
-            "required": true,
-            "schema": {
-              "title": "Codcredito",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Credito con sus cuotas y saldo",
-        "tags": [
-          "Consultas"
-        ]
-      }
-    },
-    "/creditos/{codCredito}/cuotas": {
-      "get": {
-        "operationId": "cuotas_creditos__codCredito__cuotas_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "codCredito",
-            "required": true,
-            "schema": {
-              "title": "Codcredito",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Cronograma de cuotas",
-        "tags": [
-          "Consultas"
-        ]
-      }
-    },
-    "/creditos/{codCredito}/cuotas/{numeroCuota}/mora": {
-      "get": {
-        "operationId": "historial_mora_creditos__codCredito__cuotas__numeroCuota__mora_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "codCredito",
-            "required": true,
-            "schema": {
-              "title": "Codcredito",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "numeroCuota",
-            "required": true,
-            "schema": {
-              "title": "Numerocuota",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Historial de mora de una cuota",
-        "tags": [
-          "Mora (valor recibido)"
-        ]
-      },
-      "post": {
-        "operationId": "registrar_mora_creditos__codCredito__cuotas__numeroCuota__mora_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "codCredito",
-            "required": true,
-            "schema": {
-              "title": "Codcredito",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "numeroCuota",
-            "required": true,
-            "schema": {
-              "title": "Numerocuota",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Opcional, por defecto hoy. Permite demostrar RN-COB-010 sin esperar al vencimiento real.",
-            "in": "query",
-            "name": "fechaReferencia",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Opcional, por defecto hoy. Permite demostrar RN-COB-010 sin esperar al vencimiento real.",
-              "title": "Fechareferencia"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MoraIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Registrar la mora recibida para una cuota (RN-COB-010)",
-        "tags": [
-          "Mora (valor recibido)"
-        ]
-      }
-    },
-    "/creditos/{codCredito}/monto-a-pagar": {
-      "get": {
-        "operationId": "monto_a_pagar_creditos__codCredito__monto_a_pagar_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "codCredito",
-            "required": true,
-            "schema": {
-              "title": "Codcredito",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Monto a pagar de la proxima cuota, desglosado en capital y mora (RF-COB-003)",
-        "tags": [
-          "Consultas"
-        ]
-      }
-    },
-    "/creditos/{codCredito}/pagos": {
-      "get": {
-        "operationId": "pagos_creditos__codCredito__pagos_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "codCredito",
-            "required": true,
-            "schema": {
-              "title": "Codcredito",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Historial de pagos",
-        "tags": [
-          "Consultas"
-        ]
-      }
-    },
-    "/creditos/{codCredito}/recalcular-estado": {
-      "post": {
-        "operationId": "recalcular_estado_creditos__codCredito__recalcular_estado_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "codCredito",
-            "required": true,
-            "schema": {
-              "title": "Codcredito",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Opcional, por defecto hoy. Permite demostrar la transicion a EN_MORA.",
-            "in": "query",
-            "name": "fechaReferencia",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Opcional, por defecto hoy. Permite demostrar la transicion a EN_MORA.",
-              "title": "Fechareferencia"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Recalcula AL_DIA/EN_MORA del credito (RF-COB-007)",
-        "tags": [
-          "Consultas"
-        ]
-      }
-    },
-    "/metricas": {
-      "get": {
-        "operationId": "metricas_metricas_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Tasa de fallas, pagos pendientes y p95 de POST /cr-int-08/pagos (I-05, sin metas)",
-        "tags": [
-          "Metricas (I-05)"
-        ]
-      }
-    },
-    "/pagos/pendientes": {
-      "get": {
-        "operationId": "pagos_pendientes_pagos_pendientes_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Pagos PENDIENTE con su antiguedad (RF-COB-011 / INC-01)",
-        "tags": [
-          "Pagos pendientes (RF-COB-011 / INC-01)"
-        ]
-      }
-    },
-    "/pagos/{referenciaTransaccion}/comprobante": {
-      "get": {
-        "operationId": "comprobante_pagos__referenciaTransaccion__comprobante_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "referenciaTransaccion",
-            "required": true,
-            "schema": {
-              "title": "Referenciatransaccion",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Comprobante de un pago confirmado",
-        "tags": [
-          "Consultas"
-        ]
-      }
-    },
-    "/pagos/{referenciaTransaccion}/resolver": {
-      "post": {
-        "operationId": "resolver_pago_pagos__referenciaTransaccion__resolver_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "referenciaTransaccion",
-            "required": true,
-            "schema": {
-              "title": "Referenciatransaccion",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "summary": "Resuelve un pago PENDIENTE consultando a Cuentas, sin repetir el cargo (RN-COB-009)",
-        "tags": [
-          "Pagos pendientes (RF-COB-011 / INC-01)"
-        ]
-      }
-    },
-    "/salud": {
-      "get": {
-        "operationId": "salud_salud_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Salud",
-        "tags": [
-          "Estado"
-        ]
+      "Bearer": {
+        "type": "http",
+        "scheme": "bearer"
       }
     }
   }
