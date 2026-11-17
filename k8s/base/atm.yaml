@@ -1,0 +1,60 @@
+# ATM: cajero automático, sobre TARJETAS y CUENTAS por Bus. No tiene base propia.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atm
+  labels: { app.kubernetes.io/name: atm }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: atm }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: atm }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: atm
+          image: bna/backend:local
+          command: [uvicorn, ATM.main:app, --host, 0.0.0.0, --port, "8019"]
+          env:
+            # TARJETAS y CUENTAS, a través del Bus, con la credencial de ATM.
+            - name: BUS_BASE_URL
+              value: http://bus:8018
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_ATM } }
+            - name: ATM_ID
+              value: "DEV-ATM-01"  # terminal de bna_datos_dev.sql
+          ports:
+            - { name: http, containerPort: 8019 }
+          startupProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atm
+spec:
+  selector: { app.kubernetes.io/name: atm }
+  ports:
+    - { name: http, port: 8019, targetPort: http }

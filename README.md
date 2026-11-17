@@ -9,6 +9,7 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | Bus de Servicios | `backend/BUS_SERVICIOS` | Punto único por el que el frontend llega a los módulos y los módulos llegan a COREDB: `/bus/<módulo>/<ruta>` se reenvía sin tocar cabeceras, cuerpo ni códigos, con una credencial por consumidor | En uso |
 | CUENTAS | `backend/CUENTAS` | Cuentas de ahorro: apertura, depósito, retiro, transferencia y consultas. No tiene base propia: llama a COREDB | En uso |
 | TARJETAS | `backend/TARJETAS` | Tarjetas de débito: emisión, consulta, bloqueo y cambio de estado. No tiene base propia: llama a COREDB | En uso |
+| ATM | `backend/ATM` | Cajero automático: pantalla, validar PIN, autorizar retención, dispensar, confirmar (idempotente), extorno, consultar saldo/movimientos. Sin base propia: llama a TARJETAS y CUENTAS por el Bus | En uso |
 | CAPTACION | `backend/CAPTACION` | Captación de clientes: registro del solicitante, consentimientos, OTP, RENIEC/listas/PEP, centrales y perfil de riesgo; registra al cliente HABILITADO en COREDB y publica la referencia CR-INT-01 que consulta SOL. Sin base propia: el expediente vive en la base integrada (`clientes.*_captacion`) y se trabaja por COREDB | En uso, con proveedores simulados |
 | Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas, captación y solicitud de crédito; pantallas del analista (`/evaluacion`) y del operador de desembolso (`/desembolso`) | En uso |
 | SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas | Laboratorio: base propia, sin conexión con el CORE |
@@ -105,6 +106,7 @@ sequenceDiagram
 | COREDB | http://127.0.0.1:8012/docs | Token de `POST /coredb/auth/login` con `admin` | [`backend/COREDB/README.md`](backend/COREDB/README.md) |
 | CUENTAS | http://127.0.0.1:8001/docs | El mismo token de COREDB | [`backend/CUENTAS/README.md`](backend/CUENTAS/README.md) |
 | TARJETAS | http://127.0.0.1:8002/docs | El mismo token de COREDB | [`backend/TARJETAS/README.md`](backend/TARJETAS/README.md) |
+| ATM | http://127.0.0.1:8019 (pantalla) / http://127.0.0.1:8019/docs (API) | El mismo token de COREDB | [`backend/ATM/README.md`](backend/ATM/README.md) |
 | CAPTACION | http://127.0.0.1:8017/docs | El mismo token de COREDB | [`backend/CAPTACION/README.md`](backend/CAPTACION/README.md) |
 | SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
 | Evaluación | http://localhost:3000/evaluacion (API: http://127.0.0.1:8015/docs) | Un usuario de COREDB con rol ANALISTA (decidir exige además un analista registrado: el administrador lo da de alta con `POST /coredb/empleados` y `POST /coredb/creditos/analistas`); AUDITOR solo consulta | [`backend/EVALUACION/README.md`](backend/EVALUACION/README.md) |
@@ -146,9 +148,9 @@ Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo 
 | `AUX_DB_ROOT_PASSWORD`, `SOL_DB_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base auxiliar y CORE legado |
 | `EVALUACION_COREDB_SECRETO`, `EVALUACION_TOKEN_SOL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | Secreto del usuario de servicio de Evaluación en COREDB y los tokens de CR-INT-02 y CR-INT-03 con SOL |
 | `DESEMBOLSO_COREDB_SECRETO` | Secreto del usuario de servicio de Desembolso en COREDB |
-| `BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS`, `BUS_TOKEN_CUENTAS`, `BUS_TOKEN_TARJETAS`, `BUS_TOKEN_CAPTACION`, `BUS_TOKEN_EVALUACION`, `BUS_TOKEN_DESEMBOLSO` | Bus de Servicios: credencial de los puentes del frontend, del flujo de extremo a extremo y de cada módulo que llama a COREDB |
+| `BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS`, `BUS_TOKEN_CUENTAS`, `BUS_TOKEN_TARJETAS`, `BUS_TOKEN_CAPTACION`, `BUS_TOKEN_EVALUACION`, `BUS_TOKEN_DESEMBOLSO`, `BUS_TOKEN_ATM` | Bus de Servicios: credencial de los puentes del frontend, del flujo de extremo a extremo y de cada módulo que llama a COREDB (incluye ATM) |
 | `CAPTACION_COREDB_SECRETO`, `CAP_SOL_TOKEN`, `CAP_OTP_CLAVE` | CAPTACION: secreto de su usuario de servicio en COREDB, el token con el que SOL consulta las referencias y la clave de los OTP |
-| `BNA_PUERTO_*` | Puerto de cada servicio en esta máquina |
+| `BNA_PUERTO_*` | Puerto de cada servicio en esta máquina (incluye `BNA_PUERTO_ATM=8019`) |
 
 - Para usar otro puerto, cambiar su `BNA_PUERTO_*` en `.env` y volver a ejecutar `./bna up`.
 - Las contraseñas de las bases y las cuentas iniciales solo se aplican al crear los datos. Para que un cambio en `.env` surta efecto en ellas: `./bna reset`, que borra los datos.
@@ -212,6 +214,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 │   ├── BUS_SERVICIOS/ Bus de Servicios
 │   ├── CUENTAS/       Módulo de cuentas de ahorro
 │   ├── TARJETAS/      Módulo de tarjetas de débito
+│   ├── ATM/           Módulo de cajero automático
 │   ├── CAPTACION/     Módulo de captación de clientes
 │   ├── SOL/           Solicitud de crédito
 │   ├── EVALUACION/    Evaluación crediticia

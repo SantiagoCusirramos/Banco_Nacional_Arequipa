@@ -21,5 +21,6 @@ resources:
   - cobranza.yaml
   - captacion.yaml
   - seguridad.yaml
+  - atm.yaml
   - bus.yaml
   - frontend.yaml
