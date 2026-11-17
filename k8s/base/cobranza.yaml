@@ -1,0 +1,94 @@
+# COBRANZA: cobro de las cuotas, sobre COREDB. No tiene base propia ni cobra por CUENTAS:
+# reenvía a COREDB el token de la persona y ejecuta su tarea diaria con el usuario de servicio
+# svc-cobranza, que crea el arranque de COREDB.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cobranza
+  labels: { app.kubernetes.io/name: cobranza }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: cobranza }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: cobranza }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        # COREDB crea svc-cobranza antes de arrancar: cuando responde, el usuario ya existe.
+        - name: esperar-coredb
+          image: bna/backend:local
+          # A través del Bus, con la credencial del módulo, como todas sus llamadas a COREDB.
+          command:
+            - python
+            - -c
+            - |
+              import os, sys, time, urllib.request as u
+              pedido = u.Request(os.environ["COREDB_URL"] + "/coredb/salud",
+                                 headers={"X-Bus-Token": os.environ["BUS_TOKEN"]})
+              for _ in range(150):
+                  try:
+                      u.urlopen(pedido, timeout=2)
+                      sys.exit(0)
+                  except OSError:
+                      time.sleep(2)
+              sys.exit("COREDB no respondió a tiempo a través del Bus.")
+          env:
+            - name: COREDB_URL
+              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: COREDB_URL } }
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_COBRANZA } }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: &contenedor-seguro
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+      containers:
+        - name: cobranza
+          image: bna/backend:local
+          command: [uvicorn, COBRANZA.main:app, --host, 0.0.0.0, --port, "8014"]
+          env:
+            # COREDB, a través del Bus, con la credencial de COBRANZA.
+            - name: COREDB_URL
+              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: COREDB_URL } }
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_COBRANZA } }
+            - name: COBRANZA_COREDB_USUARIO
+              value: svc-cobranza
+            - name: COBRANZA_COREDB_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: COBRANZA_COREDB_SECRETO } }
+          ports:
+            - { name: http, containerPort: 8014 }
+          # /salud comprueba COREDB y el login del usuario de servicio: sirve para recibir tráfico,
+          # no para reiniciar el pod si COREDB cae.
+          startupProbe:
+            httpGet: { path: /salud, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /salud, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket: { port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: *contenedor-seguro
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cobranza
+spec:
+  selector: { app.kubernetes.io/name: cobranza }
+  ports:
+    - { name: http, port: 8014, targetPort: http }
