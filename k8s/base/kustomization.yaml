@@ -20,4 +20,5 @@ resources:
   - desembolso.yaml
   - captacion.yaml
   - seguridad.yaml
+  - bus.yaml
   - frontend.yaml

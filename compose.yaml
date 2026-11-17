@@ -312,23 +312,58 @@ services:
         - -c
         - import urllib.request as u; u.urlopen(u.Request("http://127.0.0.1:8013/seguridad/estado", headers={"X-Correlation-ID":"sonda"}), timeout=3)
 
+  # ── Bus de Servicios: los canales llegan a los módulos solo a través de él ─
+  # /bus/<módulo>/<ruta> → el módulo, sin tocar cabeceras, cuerpo ni códigos. Cada
+  # consumidor presenta su credencial (X-Bus-Token). El frontend está en la red
+  # `canales` con el Bus y nada más: no puede llamar a un módulo directo.
+  bus:
+    <<: *backend
+    command: uvicorn BUS_SERVICIOS.main:app --host 0.0.0.0 --port 8018
+    environment:
+      BUS_URL_COREDB: http://coredb:8012
+      BUS_URL_CUENTAS: http://cuentas:8001
+      BUS_URL_TARJETAS: http://tarjetas:8002
+      BUS_URL_CAPTACION: http://captacion:8017
+      BUS_URL_SOL: http://sol:8011
+      BUS_URL_EVALUACION: http://evaluacion:8015
+      BUS_URL_DESEMBOLSO: http://desembolso:8016
+      BUS_URL_SEGURIDAD: http://seguridad:8013
+      # FRONTEND: los puentes del frontend. PRUEBAS: el flujo de extremo a extremo.
+      BUS_CONSUMIDORES: FRONTEND,PRUEBAS
+      BUS_TOKEN_FRONTEND: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_PRUEBAS: ${BUS_TOKEN_PRUEBAS:?Falta en .env. Ejecute ./bna up}
+    networks: [default, canales]
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_BUS:-8018}:8018"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8018/salud", timeout=3)
+
   # ── Frontend ────────────────────────────────────────────────────────────
   frontend:
     image: bna/frontend:local
     build:
       context: ./frontend
       dockerfile: ../docker/frontend/Dockerfile
-    # El navegador solo habla con el frontend, que reenvía desde su servidor.
+    # El navegador solo habla con el frontend, que reenvía desde su servidor por el Bus.
     environment:
-      COREDB_URL: http://coredb:8012
-      CUENTAS_GATEWAY_URL: http://cuentas:8001/api/v1/cuentas
-      TARJETAS_GATEWAY_URL: http://tarjetas:8002/api/v1/tarjetas
-      SOL_GATEWAY_URL: http://sol:8011/gateway/sol
+      COREDB_URL: http://bus:8018/bus/coredb
+      CUENTAS_GATEWAY_URL: http://bus:8018/bus/cuentas/api/v1/cuentas
+      TARJETAS_GATEWAY_URL: http://bus:8018/bus/tarjetas/api/v1/tarjetas
+      SOL_GATEWAY_URL: http://bus:8018/bus/sol/gateway/sol
       SOL_COOKIE_SECURE: "false"
-      EVALUACION_GATEWAY_URL: http://evaluacion:8015/eva/v1
-      DESEMBOLSO_GATEWAY_URL: http://desembolso:8016/api/v1
-      CAPTACION_GATEWAY_URL: http://captacion:8017/api/v1/captacion
+      EVALUACION_GATEWAY_URL: http://bus:8018/bus/evaluacion/eva/v1
+      DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
+      CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
+      BUS_TOKEN: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
+    networks: [canales]
     depends_on:
+      bus:
+        condition: service_healthy
       coredb:
         condition: service_healthy
       cuentas:
@@ -394,6 +429,11 @@ services:
       test:
         - CMD-SHELL
         - MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -uroot -h127.0.0.1 --protocol=TCP -e 'SELECT 1 FROM mysql.user WHERE user = "sol_user"' | grep -q 1
+
+networks:
+  default:
+  # Solo el frontend y el Bus: el frontend no ve los módulos.
+  canales:
 
 volumes:
   core-db-datos:
