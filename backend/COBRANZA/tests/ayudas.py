@@ -59,7 +59,9 @@ def cabeceras(token: str, **otras) -> dict:
 
 # ------------------------------------------------------------------ COREDB real
 def coredb(metodo: str, ruta: str, token: str | None = None, esperado: int | None = None, **opciones):
-    encabezados = cabeceras(token) if token else {}
+    encabezados = {**opciones.pop("headers", {})}
+    if token:
+        encabezados.update(cabeceras(token))
     if BUS_TOKEN_PRUEBAS:
         encabezados["X-Bus-Token"] = BUS_TOKEN_PRUEBAS
     r = httpx.request(metodo, COREDB + ruta, headers=encabezados, timeout=15, **opciones)
@@ -126,7 +128,7 @@ def saldo(admin: str, num_cuenta: str) -> str:
 
 def calendario(monto: str, plazo: int) -> dict:
     """Un calendario coherente, como lo arma SOL: amortización constante y 1 % de interés mensual."""
-    inicio = date.today() + timedelta(days=40)
+    inicio = date.today() + timedelta(days=30)
     monto_d = Decimal(monto)
     amortizacion = (monto_d / plazo).quantize(CENTIMO, rounding=ROUND_HALF_UP)
     saldo_d, cuotas = monto_d, []
@@ -173,14 +175,14 @@ def credito_desembolsado(admin: str, operador: str, monto: str = "1200.00", plaz
     depositar(admin, num_cuenta, fondos)
 
     verificacion = coredb("POST", "/coredb/clientes/validaciones/documento", operador, 201, json={
-        "tipoDocumento": "DNI", "numeroDocumento": documento, "identidadVerificada": True})
+        "tipo_documento": "DNI", "numero_documento": documento, "identidad_verificada": True})
     id_validacion = verificacion.json()["id_validacion"]
     assert verificacion.json()["resultado"] == "APROBADO", verificacion.text
 
     orden = coredb("POST", "/coredb/creditos/ordenes", operador, 201,
                    headers={"X-Idempotency-Key": str(uuid.uuid4())},
                    json={"idEvaluacion": id_evaluacion, "numCuenta": num_cuenta, "canal": "VEN"}).json()
-    coredb("POST", f"/coredb/creditos/ordenes/{orden['idOrden']}/validaciones", operador, 200, json={
+    coredb("POST", f"/coredb/creditos/ordenes/{orden['idOrden']}/validaciones", operador, 201, json={
         "tipo": "IDENTIDAD", "resultado": "APROBADA", "referenciaEvidencia": str(id_validacion),
         "detalle": "Documento original verificado en ventanilla."})
     confirmada = coredb("POST", f"/coredb/creditos/ordenes/{orden['idOrden']}/confirmacion", operador, 201).json()
@@ -193,10 +195,9 @@ def atrasar_cuotas(cod_credito: str, dias: int = 40, numero_cuota: int = 1) -> i
     """Mueve al pasado una cuota OFICIAL del crédito para poder probar mora y vencimientos."""
     return con_admin_de_la_base(
         "UPDATE creditos.cuota q "
-        "JOIN creditos.calendario_pago c ON c.id_calendario = q.id_calendario "
-        "JOIN creditos.credito cr ON cr.id_solicitud = c.id_solicitud "
+        "JOIN creditos.credito cr ON cr.id_calendario = q.id_calendario "
         "SET q.fecha_vencimiento = q.fecha_vencimiento - INTERVAL %s DAY "
-        "WHERE cr.cod_credito = %s AND c.tipo_calendario = 'OFICIAL' AND q.numero_cuota = %s",
+        "WHERE cr.cod_credito = %s AND q.numero_cuota = %s",
         (dias, cod_credito, numero_cuota))
 
 
