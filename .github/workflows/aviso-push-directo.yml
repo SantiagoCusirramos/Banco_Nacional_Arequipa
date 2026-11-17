@@ -1,0 +1,32 @@
+# En cada push a main, avisa a los autores de commits que no llegaron por un PR
+# fusionado (ver CONTRIBUTING.md). No revierte nada y nunca hace fallar el push.
+name: Aviso de push directo
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+concurrency:
+  group: aviso-push-directo
+  cancel-in-progress: false
+
+jobs:
+  aviso:
+    name: Commits directos a main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Avisar a los autores
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/aviso_push_directo.py
