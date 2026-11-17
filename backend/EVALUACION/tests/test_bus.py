@@ -29,11 +29,11 @@ def test_presenta_la_credencial_del_bus_en_cada_llamada():
                    transporte_coredb=httpx.MockTransport(_coredb(recibidas)))
     with TestClient(crear_app(contexto=ctx)) as api:
         api.get("/salud")
-    ctx.coredb.como_persona("tok-persona", "GET", "/coredb/x")
-    try:
-        ctx.verificador.perfil("tok-persona")
-    except Exception:  # noqa: BLE001 - solo interesa lo que salió hacia COREDB
-        pass
+        ctx.coredb.como_persona("tok-persona", "GET", "/coredb/x")
+        try:
+            ctx.verificador.perfil("tok-persona")
+        except Exception:  # noqa: BLE001 - solo interesa lo que salió hacia COREDB
+            pass
     rutas = {p.url.path for p in recibidas}
     assert {"/bus/coredb/coredb/auth/login", "/bus/coredb/coredb/x", "/bus/coredb/coredb/auth/me"} <= rutas
     assert all(p.headers.get("x-bus-token") == TOKEN for p in recibidas)

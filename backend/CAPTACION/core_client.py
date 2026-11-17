@@ -51,10 +51,13 @@ TRADUCCION = {
 
 class CoreDb:
     def __init__(self, base_url: str | None = None, timeout: float | None = None,
-                 transport: httpx.BaseTransport | None = None):
+                 transport: httpx.BaseTransport | None = None, bus_token: str | None = None):
+        token = settings.bus_token if bus_token is None else bus_token
+        # Credencial ante el Bus en cada llamada; el Bus no la reenvía a COREDB.
         self._http = httpx.Client(base_url=base_url or settings.core_base_url,
                                   timeout=timeout or settings.core_timeout_seconds,
-                                  transport=transport, follow_redirects=False)
+                                  transport=transport, follow_redirects=False,
+                                  headers={"X-Bus-Token": token} if token else None)
         self._token: str | None = None
         self._vence = 0.0
         self._candado = threading.Lock()

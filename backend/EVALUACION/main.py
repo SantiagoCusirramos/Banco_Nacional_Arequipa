@@ -65,9 +65,10 @@ class Contexto:
                  transporte_sol: httpx.BaseTransport | None = None):
         self.config = config
         self.coredb = ClienteCoreDb(config.coredb_url, config.servicio_usuario, config.servicio_secreto,
-                                    timeout=config.timeout_seg, transporte=transporte_coredb)
+                                    timeout=config.timeout_seg, transporte=transporte_coredb,
+                                    bus_token=config.bus_token)
         self.verificador = VerificadorCoreDb(config.coredb_url, config.timeout_seg, config.sesion_cache_seg,
-                                             transporte=transporte_coredb)
+                                             transporte=transporte_coredb, bus_token=config.bus_token)
         self.despachador = DespachadorResultados(config, self.coredb, transporte_sol)
         self._trabajador: Trabajador | None = None
 

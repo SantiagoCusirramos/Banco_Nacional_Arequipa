@@ -1,7 +1,7 @@
 """Fase 2 del Bus: CAPTACION llega a COREDB a través del Bus y presenta su credencial (X-Bus-Token)."""
 import httpx
 
-from CAPTACION.config import Settings
+from CAPTACION.config import Settings, settings
 from CAPTACION.core_client import CoreDb
 
 TOKEN = "t" * 40
@@ -16,7 +16,8 @@ def _core(recibidas, **kw):
     return CoreDb(base_url="http://bus.test/bus/coredb", transport=httpx.MockTransport(manejador), **kw)
 
 
-def test_presenta_la_credencial_del_bus_en_cada_llamada():
+def test_presenta_la_credencial_del_bus_en_cada_llamada(monkeypatch):
+    monkeypatch.setattr(settings, "cap_core_secreto", "s" * 40)
     recibidas = []
     core = _core(recibidas, bus_token=TOKEN)
     core.persona("GET", "/coredb/x", "persona", "corr-1")
