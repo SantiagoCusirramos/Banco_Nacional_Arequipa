@@ -5,6 +5,7 @@ BNA_INTEGRACION_MYSQL=1. Ver "Pruebas de integración" en AUTENTICACION.md.
 """
 
 import os
+import random
 import re
 import statistics
 import threading
@@ -264,6 +265,25 @@ def test_http_login_audita(http):
     assert CLAVE not in str(a[0]["detalle"]) and fila(u)["h"] not in str(a[0]["detalle"])
 
 
+def medianas_intercaladas(casos, intento, rondas=7):
+    """Mediana en ms de `rondas` intentos por caso, midiendo por rondas intercaladas.
+
+    En cada ronda se mide una vez cada caso, en orden aleatorio. Así una variación de carga
+    de la máquina (otra suite, la CI) afecta a todos los casos por igual en vez de cargarse
+    a los que tocaron en ese momento, que es lo que pasaba midiendo los 7 intentos de un caso
+    seguidos. Una diferencia real (un caso que se salta bcrypt) aparece en todas las rondas.
+    """
+    m = {k: [] for k in casos}
+    orden = list(casos)
+    for _ in range(rondas):
+        random.shuffle(orden)
+        for k in orden:
+            s = time.perf_counter()
+            intento(k, *casos[k])
+            m[k].append(time.perf_counter() - s)
+    return {k: statistics.median(v) * 1000 for k, v in m.items()}
+
+
 def test_tiempos_uniformes(db):
     from CORE.utils import hashing
     if not hasattr(hashing, "simular_verificacion"):
@@ -275,16 +295,13 @@ def test_tiempos_uniformes(db):
     sql("update usuario_sistema set hash_password='x', algoritmo_hash='BCRYPT' where username=%s", mal)
     casos = {"inexistente": ("no.existe", "otra-clave"), "bcrypt": (bc, "otra-clave"), "sha256": (sh, "otra-clave"),
              "malformado": (mal, "otra-clave"), "larga": (bc, "a" * 80)}
-    t = {}
-    for k, (u, p) in casos.items():
-        m = []
-        for _ in range(7):
-            s = time.perf_counter()
-            with pytest.raises(NotFoundError):
-                usuariossvc.autenticar(db, username=u, password=p)
-            m.append(time.perf_counter() - s)
-        t[k] = statistics.median(m) * 1000
-    assert max(t.values()) / min(t.values()) < 1.2
+
+    def intento(_k, u, p):
+        with pytest.raises(NotFoundError):
+            usuariossvc.autenticar(db, username=u, password=p)
+
+    t = medianas_intercaladas(casos, intento)
+    assert max(t.values()) / min(t.values()) < 1.2, t
 
 
 def test_http_login_fallido_uniforme(http):
@@ -297,15 +314,13 @@ def test_http_login_fallido_uniforme(http):
     casos = {"inexistente": ("no.existe", CLAVE), "bcrypt": (bc, "otra-clave"), "sha256": (sh, "otra-clave"),
              "inactivo_clave_correcta": (inactivo, CLAVE), "inactivo_clave_mala": (inactivo, "otra-clave"),
              "bcrypt_inactivo": (bc_inactivo, CLAVE)}
-    t, cuerpos = {}, set()
-    for k, (u, p) in casos.items():
-        m = []
-        for _ in range(7):
-            s = time.perf_counter()
-            r = http.post("/core/auth/login", json={"username": u, "password": p})
-            m.append(time.perf_counter() - s)
-            assert r.status_code == 401, (k, r.text)
-            cuerpos.add(r.text)
-        t[k] = statistics.median(m) * 1000
+    cuerpos = set()
+
+    def intento(k, u, p):
+        r = http.post("/core/auth/login", json={"username": u, "password": p})
+        assert r.status_code == 401, (k, r.text)
+        cuerpos.add(r.text)
+
+    t = medianas_intercaladas(casos, intento)
     assert len(cuerpos) == 1
     assert max(t.values()) / min(t.values()) < 1.2, t
