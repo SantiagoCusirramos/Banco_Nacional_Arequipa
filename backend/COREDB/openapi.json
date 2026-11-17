@@ -1437,13 +1437,6 @@
       "ConfirmacionRegistrar": {
         "additionalProperties": false,
         "properties": {
-          "huella": {
-            "maxLength": 64,
-            "minLength": 64,
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Huella",
-            "type": "string"
-          },
           "id_canal": {
             "anyOf": [
               {
@@ -1469,18 +1462,8 @@
               }
             ],
             "title": "Id Terminal"
-          },
-          "llave_idempotencia": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Llave Idempotencia",
-            "type": "string"
           }
         },
-        "required": [
-          "llave_idempotencia",
-          "huella"
-        ],
         "title": "ConfirmacionRegistrar",
         "type": "object"
       },
@@ -6525,7 +6508,7 @@
     },
     "/coredb/autorizaciones/{uuid_autorizacion}/confirmacion": {
       "post": {
-        "description": "Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.\nLa llave de idempotencia es obligatoria; repetirla devuelve el mismo resultado sin\nsegundo débito. El canal o terminal deben coincidir con la autorización.",
+        "description": "Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.\nLa llave de idempotencia (X-Idempotency-Key, UUID) es obligatoria; repetirla devuelve\nel mismo resultado sin segundo débito. La huella se calcula en el servidor a partir\nde uuid_autorizacion, id_canal e id_terminal. El canal o terminal deben coincidir\ncon la autorización.",
         "operationId": "confirmar_coredb_autorizaciones__uuid_autorizacion__confirmacion_post",
         "parameters": [
           {
@@ -6535,6 +6518,16 @@
             "schema": {
               "format": "uuid",
               "title": "Uuid Autorizacion",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "X-Idempotency-Key",
               "type": "string"
             }
           }

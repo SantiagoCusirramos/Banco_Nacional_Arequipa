@@ -86,13 +86,6 @@
       "ConfirmacionIn": {
         "additionalProperties": false,
         "properties": {
-          "huella": {
-            "maxLength": 64,
-            "minLength": 64,
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Huella",
-            "type": "string"
-          },
           "id_canal": {
             "anyOf": [
               {
@@ -118,18 +111,8 @@
               }
             ],
             "title": "Id Terminal"
-          },
-          "llave_idempotencia": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Llave Idempotencia",
-            "type": "string"
           }
         },
-        "required": [
-          "llave_idempotencia",
-          "huella"
-        ],
         "title": "ConfirmacionIn",
         "type": "object"
       },
@@ -422,7 +405,7 @@
     },
     "/api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/confirmacion": {
       "post": {
-        "description": "Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.\nLa llave de idempotencia es obligatoria; repetirla devuelve el mismo resultado sin\nsegundo débito. El canal o terminal deben coincidir con la autorización.",
+        "description": "Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.\nLa llave de idempotencia (X-Idempotency-Key, UUIDv4) es obligatoria; repetirla devuelve\nel mismo resultado sin segundo débito. La huella la calcula COREDB. El canal o terminal\ndeben coincidir con la autorización.",
         "operationId": "confirmar_api_v1_tarjetas_autorizaciones__uuid_autorizacion__confirmacion_post",
         "parameters": [
           {
@@ -448,6 +431,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
             }
           }
         ],
