@@ -90,6 +90,35 @@ def test_ready_tarjetas_caido(client, core):
     assert r.json()["status"] == "not_ready"
 
 
+def test_ready_sin_sustituir_el_cliente_llama_al_bus_una_sola_vez_por_ruta(client, monkeypatch):
+    """La dependencia real arma el cliente con la raíz del Bus: /bus/<módulo>/… sin duplicar /bus."""
+    from ATM import core_client
+    from ATM.config import settings
+
+    rutas = []
+    cliente_real = httpx.Client
+
+    def cliente_simulado(**opciones):
+        opciones["transport"] = httpx.MockTransport(
+            lambda peticion: rutas.append(str(peticion.url)) or httpx.Response(200, json={}))
+        return cliente_real(**opciones)
+
+    monkeypatch.setattr(core_client.httpx, "Client", cliente_simulado)
+    monkeypatch.setattr(settings, "bus_base_url", "http://bus:8018")
+    r = client.get("/ready")
+    assert r.status_code == 200
+    assert rutas == ["http://bus:8018/bus/tarjetas/health", "http://bus:8018/bus/cuentas/health"]
+
+
+def test_el_cajero_se_identifica_con_su_atm_id(client, monkeypatch):
+    """El id del cajero sale de ATM_ID: en el producto es una terminal de la base (DEV-ATM-01)."""
+    from ATM.config import settings
+
+    monkeypatch.setattr(settings, "atm_id", "DEV-ATM-01")
+    assert client.get(f"{BASE}/config").json()["data"]["id_cajero"] == "DEV-ATM-01"
+    assert client.get(f"{BASE}/estado").json()["data"]["terminal"] == "DEV-ATM-01"
+
+
 # ── Validar PIN ───────────────────────────────────────────────────────────
 
 def test_validar_pin_exitoso(client, core):
@@ -161,6 +190,8 @@ def test_autorizar_retiro_ok(client, core):
     assert core.llamadas[0]["ruta"] == "/bus/tarjetas/api/v1/tarjetas/7e570001-0000-4000-8000-000000000001/autorizaciones"
     assert core.llamadas[0]["json"]["tipo_operacion"] == "RETIRO"
     assert core.llamadas[0]["json"]["monto"] == "150.00"
+    # TARJETAS exige la llave de idempotencia: el ATM reenvía la del cajero.
+    assert core.llamadas[0]["headers"]["x-idempotency-key"] == KEY
 
 
 def test_autorizar_retiro_rechazado_sin_fondos(client, core):
@@ -282,7 +313,25 @@ def test_confirmar_dispensacion_ok(client, core):
     assert "uuid_transaccion" in data
     # Verifica llamada a TARJETAS
     assert core.llamadas[0]["ruta"] == f"/bus/tarjetas/api/v1/tarjetas/autorizaciones/{uuid_aut}/confirmacion"
-    assert core.llamadas[0]["json"] == {"id_terminal": "ATM-AQP-001", "resultado": "DISPENSADO"}
+    # Contrato de TARJETAS (#103): canal o terminal en el cuerpo y la llave en la cabecera.
+    assert core.llamadas[0]["json"] == {"id_terminal": "ATM-AQP-001"}
+    assert core.llamadas[0]["headers"]["x-idempotency-key"] == KEY
+
+
+def test_no_dispensado_extorna_en_vez_de_confirmar(client, core):
+    """Si el dispensador no entregó el dinero, se libera la retención: nunca se confirma."""
+    uuid_aut = "5a1f0c3e-0000-4000-8000-000000000001"
+    core.respuesta = httpx.Response(200, json=extorno_ok(uuid_aut))
+    r = client.post(f"{BASE}/confirmar", json={
+        "uuid_autorizacion": uuid_aut,
+        "id_terminal": "ATM-AQP-001",
+        "resultado": "NO_DISPENSADO",
+    }, headers={**HEADERS, **CORR})
+    assert r.status_code == 200
+    assert r.json()["data"]["estado_autorizacion"] == "EXTORNADA"
+    assert [c["ruta"] for c in core.llamadas] == [
+        f"/bus/tarjetas/api/v1/tarjetas/autorizaciones/{uuid_aut}/extorno"]
+    assert core.llamadas[0]["json"] == {"motivo": "NO_DISPENSADO"}
 
 
 def test_confirmar_idempotencia_misma_llave_sin_segundo_debito(client, core):

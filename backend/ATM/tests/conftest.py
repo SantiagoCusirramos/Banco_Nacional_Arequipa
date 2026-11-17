@@ -35,9 +35,21 @@ class CoreFalso:
         if self.excepcion:
             raise self.excepcion
         # Una lista da una respuesta por llamada, en orden.
-        if isinstance(self.respuesta, list):
-            return self.respuesta.pop(0)
-        return self.respuesta
+        respuesta = self.respuesta.pop(0) if isinstance(self.respuesta, list) else self.respuesta
+        return self.con_sobre(respuesta)
+
+    @staticmethod
+    def con_sobre(respuesta: httpx.Response) -> httpx.Response:
+        """TARJETAS y CUENTAS envuelven cada respuesta correcta en {success, data, metadata}."""
+        if respuesta.status_code >= 400 or not respuesta.content:
+            return respuesta
+        datos = respuesta.json()
+        if isinstance(datos, dict) and "success" in datos:
+            return respuesta
+        return httpx.Response(respuesta.status_code, json={
+            "success": True, "status_code": respuesta.status_code, "message": "ok",
+            "data": datos, "metadata": {"modulo_emisor": "PRUEBA"},
+        })
 
 
 @pytest.fixture

@@ -168,6 +168,23 @@ def test_respeta_el_prefijo_de_la_direccion_del_modulo():
     assert str(modulo.recibidas[0].url) == "http://cuentas:8001/base/api/v1/cuentas/123"
 
 
+def test_el_cajero_tiene_ruta_y_credencial_propias():
+    token_atm = "a" * 48
+    modulo = Modulo()
+    with cliente(modulo, BUS_URL_ATM="http://atm:8019", BUS_CONSUMIDORES="FRONTEND,PRUEBAS,ATM",
+                 BUS_TOKEN_ATM=token_atm) as c:
+        pantalla = c.get("/bus/atm/health", headers=AUT)
+        retiro = c.post("/bus/tarjetas/api/v1/tarjetas/autorizaciones",
+                        headers={"X-Bus-Token": token_atm}, content=b"{}")
+        metricas = c.get("/metricas", headers=AUT).json()
+    assert pantalla.status_code == 200 and retiro.status_code == 200
+    assert str(modulo.recibidas[0].url) == "http://atm:8019/health"
+    assert str(modulo.recibidas[1].url) == "http://tarjetas.interno:9000/api/v1/tarjetas/autorizaciones"
+    assert "X-Bus-Token" not in modulo.recibidas[1].headers
+    assert metricas["reenvios"]["PRUEBAS"] == {"ATM": 1}
+    assert metricas["reenvios"]["ATM"] == {"TARJETAS": 1}
+
+
 # ── Reenvía sin tocar ────────────────────────────────────────────────────
 
 CABECERAS = {
