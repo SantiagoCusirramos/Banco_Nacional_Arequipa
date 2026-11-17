@@ -363,8 +363,7 @@ def flujo():
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "ACTIVA",
            f"Activación por TARJETAS: {estado} {respuesta}")
-    # Un retiro en el cajero de desarrollo: se autoriza y retiene el saldo, la misma llave no
-    # lo retiene dos veces y el extorno lo libera (RN-ATM-003).
+    # Un retiro en el cajero de desarrollo: se autoriza, confirma (dispensa) y debita una vez.
     coredb("POST", "/coredb/movimientos", 201, {
         "num_cuenta": cuenta_tarjeta, "tipo": "DEPOSITO", "monto": "100.00",
         "glosa": "Depósito para el retiro con tarjeta", "id_canal": CANAL,
@@ -383,15 +382,33 @@ def flujo():
            f"Repetir la autorización con la misma llave debía devolver la misma: {estado} {respuesta}")
     disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     exigir(float(disponible) == 60.0, f"La autorización debía retener 40.00 una sola vez: disponible {disponible}")
-    estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/extorno",
-                              {"motivo": "Prueba del flujo"}, token)
-    exigir(estado == 200 and respuesta["data"]["estado_autorizacion"] == "EXTORNADA"
-           and respuesta["data"]["codigo_respuesta"] == "EXT",
-           f"Extorno por TARJETAS: {estado} {respuesta}")
+    # Confirmar la autorización (el cajero dispensa)
+    llave_confirma = {"X-Idempotency-Key": str(uuid.uuid4())}
+    import hashlib
+    huella = hashlib.sha256(llave_confirma["X-Idempotency-Key"].encode()).hexdigest()
+    estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/confirmacion",
+                              {"llave_idempotencia": llave_confirma["X-Idempotency-Key"], "huella": huella,
+                               "id_terminal": "DEV-ATM-01"}, token)
+    exigir(estado == 200 and respuesta["data"]["estado_autorizacion"] == "DISPENSADA"
+           and respuesta["data"]["uuid_transaccion"] == autorizacion,
+           f"Confirmación por TARJETAS: {estado} {respuesta}")
+    # Repetir la confirmación con la misma llave no debita dos veces
+    estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/confirmacion",
+                              {"llave_idempotencia": llave_confirma["X-Idempotency-Key"], "huella": huella,
+                               "id_terminal": "DEV-ATM-01"}, token)
+    exigir(estado == 200 and respuesta["data"]["uuid_autorizacion"] == autorizacion,
+           f"Repetir la confirmación con la misma llave debía devolver la misma: {estado} {respuesta}")
     disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
-    exigir(float(disponible) == 100.0, f"El extorno debía liberar el saldo retenido: disponible {disponible}")
-    paso(f"TARJETAS: retiro de 40.00 en el cajero DEV-ATM-01 autorizado (00) y retenido una sola vez "
-         "con la misma llave, y extornado (saldo liberado)")
+    exigir(float(disponible) == 60.0, f"La confirmación repetida no debía debitar de nuevo: disponible {disponible}")
+    # Extornar una confirmada debe fallar
+    estado, respuesta = pedir("POST", f"{base}/autorizaciones/{autorizacion}/extorno",
+                              {"motivo": "Intento de extorno tras confirmar"}, token)
+    exigir(estado == 409 and respuesta["error_code"] == "ERR-TAR-CONFIRMACION-NO-PERMITIDA",
+           f"Extornar una confirmada debía fallar: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 60.0, f"El saldo no debía cambiar tras extorno fallido: disponible {disponible}")
+    paso(f"TARJETAS: retiro de 40.00 en el cajero DEV-ATM-01 autorizado (00), confirmado (DISPENSADA) y debitado "
+         "una sola vez con la misma llave de confirmación; extorno posterior rechazado")
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
            f"Bloqueo por TARJETAS: {estado} {respuesta}")

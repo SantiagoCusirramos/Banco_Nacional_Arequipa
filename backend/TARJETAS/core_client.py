@@ -94,6 +94,11 @@ class CoreClient:
         return self._request("POST", f"/coredb/autorizaciones/{uuid_autorizacion}/extorno", json=payload,
                              correlation_id=correlation_id, authorization=authorization)
 
+    def confirmar_autorizacion(self, uuid_autorizacion: str, payload: dict, correlation_id: str | None = None,
+                               authorization: str | None = None):
+        return self._request("POST", f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion", json=payload,
+                             correlation_id=correlation_id, authorization=authorization)
+
     def registrar_credencial(self, id_tarjeta: str, tipo: str, payload: dict,
                              correlation_id: str | None = None, authorization: str | None = None):
         # 204 sin cuerpo

@@ -72,6 +72,7 @@ Los decide COREDB, según el rol del token:
 | `POST /{id_tarjeta}/autorizaciones` | `REGISTRAR_MOVIMIENTO` | Sí | Sí | No | No |
 | `GET /autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Sí | Sí | Sí | No |
 | `POST /autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Sí | Sí | No | No |
+| `POST /autorizaciones/{uuid_autorizacion}/confirmacion` | `REGISTRAR_MOVIMIENTO` | Sí | Sí | No | No |
 | `PUT /{id_tarjeta}/credenciales/{tipo}` | `CREAR_TARJETA` | Sí | Sí | No | No |
 | `POST /{id_tarjeta}/credenciales/{tipo}/validacion` | `REGISTRAR_MOVIMIENTO` | Sí | Sí | No | No |
 
@@ -200,7 +201,36 @@ Pasa la autorización a `EXTORNADA` (`codigo_respuesta` `EXT`) y libera el saldo
 | 404 | `ERR-TAR-AUTORIZACION-NO-ENCONTRADA` | No existe |
 | 409 | `ERR-TAR-EXTORNO-NO-PERMITIDO` | Fue rechazada, o la operación ya se contabilizó (se revierte con un movimiento inverso en CUENTAS) |
 
-### 4.9 Claves de la tarjeta: `PUT /api/v1/tarjetas/{id_tarjeta}/credenciales/{tipo}` y `POST .../{tipo}/validacion`
+### 4.9 Confirmar una autorización: `POST /api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/confirmacion`
+
+Cuando el cajero dispensa el efectivo, confirma la autorización retenida: registra el movimiento real (débito) y pasa la autorización a `DISPENSADA`. Exige `X-Idempotency-Key` (UUIDv4) y la **huella** (SHA-256 hex de 64 caracteres) de la llave, para idempotencia fuerte.
+
+```json
+{"llave_idempotencia": "550e8400-e29b-41d4-a716-446655440000",
+ "huella": "a1b2c3d4e5f6... (64 hex)",
+ "id_terminal": "DEV-ATM-01"}
+```
+
+- `id_canal` (`ATM`, `AGE`, `VEN`, `HB`, `BD`) o `id_terminal`: uno de los dos (o ambos). Deben coincidir con la autorización.
+- Repetir con la **misma llave y huella** devuelve el mismo resultado sin segundo débito.
+- Repetir con **otra llave** falla: la autorización ya cambió a `DISPENSADA`.
+
+```json
+{"uuid_autorizacion": "…", "id_tarjeta": "…", "num_cuenta": "10100000000001",
+ "id_canal": "ATM", "id_terminal": "DEV-ATM-01", "tipo_operacion": "RETIRO",
+ "monto": "150.00", "estado_autorizacion": "DISPENSADA", "codigo_respuesta": "00",
+ "motivo_rechazo": null, "uuid_transaccion": "…", "aprobada": true}
+```
+
+| Estado | `error_code` | Cuándo |
+|---|---|---|
+| 200 | | `message`: `Operación confirmada` |
+| 400 | `ERR-TAR-HEADER-REQUERIDO`, `ERR-TAR-VALIDACION` | Falta la llave, la huella no es 64 hex, o falta canal/terminal |
+| 404 | `ERR-TAR-AUTORIZACION-NO-ENCONTRADA` | No existe |
+| 409 | `ERR-TAR-CONFIRMACION-NO-PERMITIDA` | Fue rechazada, extornada, o ya dispensada |
+| 409 | `ERR-TAR-IDEMPOTENCIA` | La llave se usó en otra operación |
+
+### 4.10 Claves de la tarjeta: `PUT /api/v1/tarjetas/{id_tarjeta}/credenciales/{tipo}` y `POST .../{tipo}/validacion`
 
 `tipo`: `PIN_ATM` (4 dígitos) o `CLAVE_WEB` (6 dígitos), RN-TAR-001.
 

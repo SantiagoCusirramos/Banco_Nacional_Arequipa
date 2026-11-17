@@ -1,3 +1,4 @@
+import hashlib
 import logging
 
 import httpx
@@ -11,6 +12,10 @@ AUTH = {"Authorization": "Bearer token-de-prueba"}
 KEY = "550e8400-e29b-41d4-a716-446655440000"
 HEADERS = {"X-Idempotency-Key": KEY, **AUTH}
 RETIRO = {"num_cuenta": "10100000000001", "monto": "150.00", "id_terminal": "DEV-ATM-01"}
+
+
+def _huella(valor: str) -> str:
+    return hashlib.sha256(valor.encode()).hexdigest()
 
 
 def autorizacion_core(estado="AUTORIZADA", codigo="00", motivo=None):
@@ -169,3 +174,134 @@ def test_validar_con_la_tarjeta_bloqueada_400(client, core):
     r = client.post(f"{BASE}/{ID}/credenciales/PIN_ATM/validacion",
                     json={"valor": "4821", "id_canal": "ATM"}, headers=AUTH)
     assert (r.status_code, r.json()["error_code"]) == (400, "ERR-TAR-003")
+
+
+def autorizacion_confirmada():
+    base = autorizacion_core()
+    base.update({
+        "estado_autorizacion": "DISPENSADA",
+        "uuid_transaccion": AUT,
+    })
+    return base
+
+
+def test_confirmar_envia_llave_y_huella(client, core):
+    core.respuesta = httpx.Response(200, json=autorizacion_confirmada())
+    llave = "550e8400-e29b-41d4-a716-446655440001"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["message"] == "Operación confirmada"
+    assert r.json()["data"]["estado_autorizacion"] == "DISPENSADA"
+    assert r.json()["data"]["uuid_transaccion"] == AUT
+    llamada = core.llamadas[0]
+    assert (llamada["metodo"], llamada["ruta"]) == ("POST", f"/coredb/autorizaciones/{AUT}/confirmacion")
+    assert llamada["json"] == {
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_terminal": "DEV-ATM-01",
+    }
+
+
+def test_confirmar_con_id_canal(client, core):
+    core.respuesta = httpx.Response(200, json=autorizacion_confirmada())
+    llave = "550e8400-e29b-41d4-a716-446655440002"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM"
+    }, headers=AUTH)
+    assert r.status_code == 200
+    llamada = core.llamadas[0]
+    assert llamada["json"] == {
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM",
+    }
+
+
+def test_confirmar_sin_llave_400_sin_llamar_a_core(client, core):
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "huella": _huella("x"), "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert r.status_code == 400
+    assert r.json()["error_code"] == "ERR-TAR-HEADER-REQUERIDO"
+    assert core.llamadas == []
+
+
+def test_confirmar_sin_canal_ni_terminal_400_sin_llamar_a_core(client, core):
+    llave = "550e8400-e29b-41d4-a716-446655440003"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave)
+    }, headers=AUTH)
+    assert r.status_code == 400
+    assert r.json()["error_code"] == "ERR-TAR-VALIDACION"
+    assert core.llamadas == []
+
+
+def test_confirmar_huella_invalida_400_sin_llamar_a_core(client, core):
+    llave = "550e8400-e29b-41d4-a716-446655440004"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": "no-es-hex", "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert r.status_code == 400
+    assert r.json()["error_code"] == "ERR-TAR-VALIDACION"
+    assert core.llamadas == []
+
+
+def test_confirmar_autorizacion_inexistente_404(client, core):
+    core.respuesta = error_core(404, "BNA-AUTORIZACION")
+    llave = "550e8400-e29b-41d4-a716-446655440005"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert (r.status_code, r.json()["error_code"]) == (404, "ERR-TAR-AUTORIZACION-NO-ENCONTRADA")
+
+
+def test_confirmar_ya_dispensada_409(client, core):
+    core.respuesta = error_core(409, "BNA-CONFIRMACION", "BNA-CONFIRMACION: la autorización no está en estado vigente")
+    llave = "550e8400-e29b-41d4-a716-446655440006"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-CONFIRMACION-NO-PERMITIDA")
+
+
+def test_confirmar_extornada_409(client, core):
+    core.respuesta = error_core(409, "BNA-CONFIRMACION", "BNA-CONFIRMACION: la autorización no está en estado vigente")
+    llave = "550e8400-e29b-41d4-a716-446655440007"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-CONFIRMACION-NO-PERMITIDA")
+
+
+def test_confirmar_canal_no_coincide_409(client, core):
+    core.respuesta = error_core(409, "BNA-CONFIRMACION", "BNA-CONFIRMACION: el canal no coincide con la autorización")
+    llave = "550e8400-e29b-41d4-a716-446655440008"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "VEN"
+    }, headers=AUTH)
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-CONFIRMACION-NO-PERMITIDA")
+
+
+def test_confirmar_terminal_no_coincide_409(client, core):
+    core.respuesta = error_core(409, "BNA-CONFIRMACION", "BNA-CONFIRMACION: la terminal no coincide con la autorización")
+    llave = "550e8400-e29b-41d4-a716-446655440009"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_terminal": "OTRA-TERMINAL"
+    }, headers=AUTH)
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-CONFIRMACION-NO-PERMITIDA")
+
+
+def test_confirmar_idempotencia_conflicto_409(client, core):
+    core.respuesta = error_core(409, "BNA-IDEMPOTENCIA", "BNA-IDEMPOTENCIA: la llave se usó en otra operación")
+    llave = "550e8400-e29b-41d4-a716-446655440010"
+    r = client.post(f"{BASE}/autorizaciones/{AUT}/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert (r.status_code, r.json()["error_code"]) == (409, "ERR-TAR-IDEMPOTENCIA")
+
+
+def test_un_id_de_autorizacion_invalido_en_confirmacion_400_sin_llamar_a_core(client, core):
+    llave = "550e8400-e29b-41d4-a716-446655440011"
+    r = client.post(f"{BASE}/autorizaciones/no-es-uuid/confirmacion", json={
+        "llave_idempotencia": llave, "huella": _huella(llave), "id_terminal": "DEV-ATM-01"
+    }, headers=AUTH)
+    assert (r.status_code, r.json()["error_code"]) == (400, "ERR-TAR-ID-INVALIDO")
+    assert core.llamadas == []
