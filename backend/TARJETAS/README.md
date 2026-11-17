@@ -16,6 +16,12 @@ Los modulos que lo usan (Cajero ATM, Home Banking, Billetera Digital) tienen su 
 | POST | /api/v1/tarjetas/emision | POST /coredb/tarjetas |
 | POST | /api/v1/tarjetas/{id_tarjeta}/bloqueo | POST /coredb/tarjetas/{id}/estado |
 | POST | /api/v1/tarjetas/{id_tarjeta}/estado | POST /coredb/tarjetas/{id}/estado |
+| POST | /api/v1/tarjetas/{id_tarjeta}/autorizaciones | POST /coredb/autorizaciones |
+| GET | /api/v1/tarjetas/autorizaciones/{uuid_autorizacion} | GET /coredb/autorizaciones/{uuid} |
+| POST | /api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/extorno | POST /coredb/autorizaciones/{uuid}/extorno |
+| POST | /api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/confirmacion | POST /coredb/autorizaciones/{uuid}/confirmacion |
+| PUT | /api/v1/tarjetas/{id_tarjeta}/credenciales/{tipo} | PUT /coredb/tarjetas/{id}/credenciales/{tipo} |
+| POST | /api/v1/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion | POST /coredb/tarjetas/{id}/credenciales/{tipo}/validacion |
 | GET | /health | - |
 | GET | /ready | GET /coredb/salud (503 si COREDB no responde) |
 
@@ -77,8 +83,8 @@ Error: `{success:false, status_code, error_code, message, details, metadata}`. 4
 
 ## Pendiente
 
-Autorizar una operacion, extornarla y validar una clave o una coordenada de la tarjeta matriz
-necesitan procedimientos en la base que el rol de COREDB pueda ejecutar; hoy no existen.
+Validar una coordenada de la tarjeta matriz necesita un procedimiento en la base que el rol de
+COREDB pueda ejecutar; hoy no existe.
 
 ## Ejecutar
 

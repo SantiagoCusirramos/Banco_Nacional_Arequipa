@@ -5,7 +5,7 @@ from uuid import UUID, uuid4, uuid5
 from TARJETAS.core_client import CoreClient
 from TARJETAS.exceptions import TarjetasError
 from TARJETAS.schemas.tarjetas import (
-    AutorizacionIn, BloqueoIn, CredencialIn, EmisionIn, EstadoIn, ExtornoIn, TipoCredencial, ValidacionIn,
+    AutorizacionIn, BloqueoIn, ConfirmacionIn, CredencialIn, EmisionIn, EstadoIn, ExtornoIn, TipoCredencial, ValidacionIn,
 )
 
 # Espacio de nombres fijo de los ids de emision. No cambiarlo: una llave ya usada daria otro id.
@@ -156,6 +156,17 @@ def extornar(core: CoreClient, uuid_autorizacion: str, datos: ExtornoIn, correla
              authorization: str | None = None) -> dict:
     return core.extornar(_uuid_autorizacion(uuid_autorizacion), {"motivo": datos.motivo},
                          _uuid(correlation_id), authorization)
+
+
+def confirmar_autorizacion(core: CoreClient, uuid_autorizacion: str, datos: ConfirmacionIn,
+                           correlation_id: str, authorization: str | None = None,
+                           idempotency_key: str | None = None) -> dict:
+    payload = {
+        **({"id_canal": datos.id_canal} if datos.id_canal else {}),
+        **({"id_terminal": datos.id_terminal} if datos.id_terminal else {}),
+    }
+    return core.confirmar_autorizacion(_uuid_autorizacion(uuid_autorizacion), payload,
+                                       _uuid(correlation_id), authorization, idempotency_key)
 
 
 def registrar_credencial(core: CoreClient, id_tarjeta: str, tipo: TipoCredencial, datos: CredencialIn,

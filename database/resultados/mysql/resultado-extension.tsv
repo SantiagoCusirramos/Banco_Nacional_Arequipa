@@ -70,6 +70,14 @@ X376	bna_app_user	Cambiar el PIN reemplaza el anterior y reinicia los intentos	p
 X377	bna_app_user	La clave web de seis dígitos se valida por Home Banking	pasa
 X397	bna_app_user	bna_app no puede registrar empleados (solo bna_api)	pasa
 X444	bna_app_user	bna_app no puede registrar solicitantes (solo bna_api)	pasa
+X500	bna_app_user	Confirmación feliz: débito real, saldo contable y disponible iguales (retención liberada), tope ya comprometido	pasa
+X501	bna_app_user	Repetición idempotente con la misma llave devuelve el mismo resultado sin debitar dos veces	pasa
+X502	bna_app_user	Otra llave sobre autorización ya confirmada da error	pasa
+X503	bna_app_user	No se confirma una autorización extornada	pasa
+X504	bna_app_user	Repetir con la misma llave sobre autorización ya confirmada es idempotente	pasa
+X505	bna_app_user	No se confirma una autorización rechazada	pasa
+X506	bna_app_user	Extorno tras confirmar falla (el extorno es solo sin movimiento)	pasa
+X507	bna_app_user	No se confirma una autorización INICIADA (sin haber pasado a AUTORIZADA)	pasa
 X110	bna_api_user	bna_api no puede: SELECT tarjetas.credencial	pasa
 X111	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_token	pasa
 X112	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_coordenada	pasa
@@ -329,6 +337,8 @@ X205	bna_admin_user	Un usuario SERVICIO sin módulo se rechaza aun con privilegi
 X206	bna_admin_user	Una persona con módulo se rechaza aun con privilegios	pasa
 X207	bna_admin_user	bna_admin ejecuta los procedimientos de clientes por su privilegio sobre la base	pasa
 X342	bna_admin_user	bna_admin ejecuta los procedimientos de créditos	pasa
+X508	bna_app_user	Dos confirmaciones simultáneas con llaves distintas: la segunda falla con BNA-CONFIRMACION	pasa
+X509	bna_app_user	Dos confirmaciones simultáneas con la misma llave: la segunda es idempotente	pasa
 X234	bna_app_user	Dos registros simultáneos con el mismo correo dejan un solo cliente	pasa
 X70	bna_api_user	Una transferencia a una cuenta bloqueada no deja nada (C1)	pasa
 X71	bna_api_user	Repetir la llave tras un fallo no informa éxito (C1)	pasa

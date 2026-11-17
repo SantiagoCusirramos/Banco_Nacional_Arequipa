@@ -83,6 +83,39 @@
         "title": "BloqueoIn",
         "type": "object"
       },
+      "ConfirmacionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "id_canal": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "id_terminal": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Terminal"
+          }
+        },
+        "title": "ConfirmacionIn",
+        "type": "object"
+      },
       "CredencialIn": {
         "additionalProperties": false,
         "properties": {
@@ -365,6 +398,89 @@
           }
         },
         "summary": "Ver Autorizacion",
+        "tags": [
+          "Tarjetas"
+        ]
+      }
+    },
+    "/api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/confirmacion": {
+      "post": {
+        "description": "Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.\nLa llave de idempotencia (X-Idempotency-Key, UUIDv4) es obligatoria; repetirla devuelve\nel mismo resultado sin segundo débito. La huella la calcula COREDB. El canal o terminal\ndeben coincidir con la autorización.",
+        "operationId": "confirmar_api_v1_tarjetas_autorizaciones__uuid_autorizacion__confirmacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid_autorizacion",
+            "required": true,
+            "schema": {
+              "title": "Uuid Autorizacion",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmacionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirmar",
         "tags": [
           "Tarjetas"
         ]
