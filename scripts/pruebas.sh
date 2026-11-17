@@ -61,8 +61,22 @@ correr "CORE legado contra MySQL" \
   env CORE_IMAGEN_PRUEBAS=bna/backend:local backend/CORE/scripts/pruebas_integracion.sh
 correr "CUENTAS" en_backend CUENTAS/tests
 correr "TARJETAS" en_backend TARJETAS/tests
-correr "COBRANZA" en_backend COBRANZA/tests
+correr "Bus de Servicios" en_backend BUS_SERVICIOS/tests
+# Fase 2: ningún módulo tiene configurada la dirección directa de COREDB (compose, k8s,
+# .env.example, valores por omisión); solo el Bus, COREDB y su arranque.
+correr "Bus de Servicios, rutas a COREDB" \
+  docker run --rm -v "$RAIZ:/repo:ro" -e REPO=/repo bna/backend:local $PYTEST /repo/scripts/test_comprobar_rutas_coredb.py
 correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests
+correr "EVALUACION contra COREDB y MySQL" \
+  env EVALUACION_IMAGEN_PRUEBAS=bna/backend:local EVALUACION_IMAGEN_COREDB=bna/coredb:local \
+  backend/EVALUACION/scripts/pruebas_integracion.sh
+correr "DESEMBOLSO contra COREDB y MySQL" \
+  env DESEMBOLSO_IMAGEN_PRUEBAS=bna/backend:local DESEMBOLSO_IMAGEN_COREDB=bna/coredb:local \
+  backend/DESEMBOLSO/scripts/pruebas_integracion.sh
+# CAPTACION y, en la imagen de SOL, su contrato CR-INT-01 con el adaptador real de SOL.
+correr "CAPTACION contra COREDB y MySQL" \
+  env CAPTACION_IMAGEN_PRUEBAS=bna/backend:local CAPTACION_IMAGEN_COREDB=bna/coredb:local \
+  CAPTACION_IMAGEN_SOL=bna/sol:local backend/CAPTACION/scripts/pruebas_integracion.sh
 correr "Seguridad" docker run --rm bna/seguridad:local $PYTEST seguridad/tests
 correr "COREDB, unitarias" \
   docker run --rm bna/coredb:local sh -c "cd COREDB && $PYTEST"
@@ -74,6 +88,8 @@ correr "Contratos de CUENTAS y TARJETAS con COREDB" \
 correr "COREDB contra MySQL" \
   env COREDB_IMAGEN_PRUEBAS=bna/coredb:local backend/COREDB/scripts/pruebas_integracion.sh
 correr "Base integrada, despliegue" database/pruebas/mysql/prueba_despliegue.sh
+correr "Aviso de push directo" \
+  docker run --rm -v "$RAIZ/.github/scripts:/aviso:ro" bna/backend:local $PYTEST /aviso
 correr "Frontend, imagen de pruebas" \
   docker build -q --target pruebas -f docker/frontend/Dockerfile -t bna/frontend-pruebas:local frontend
 correr "Frontend, lint" docker run --rm bna/frontend-pruebas:local npm run lint

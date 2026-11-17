@@ -15,6 +15,8 @@ ESTADOS_POR_REGLA = {
     "BNA-USUARIO": 404,
     "BNA-DESBLOQUEO": 403,
     "BNA-IDEMPOTENCIA": 409,
+    "BNA-AUTORIZACION": 404,
+    "BNA-EXTORNO": 409,
 }
 # El mensaje de la base incluye saldos o consumos, que no se devuelven al cliente.
 MENSAJES_POR_REGLA = {

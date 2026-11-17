@@ -3,13 +3,14 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic.alias_generators import to_camel
 from sqlalchemy.orm import Session
 
 from COREDB.auth import actor_actual
 from COREDB.database import db_session
 from COREDB.models import Agencia, Moneda, ProductoAhorro, ProductoCredito, TipoCambio
-from COREDB.services import clientes
+from COREDB.services import clientes, creditos
 
 # Cualquier usuario autenticado lee los catálogos.
 router = APIRouter(prefix="/coredb/catalogos", tags=["catálogos"], dependencies=[Depends(actor_actual)])
@@ -104,3 +105,51 @@ def catalogos_de_clientes(db: Session = Depends(db_session)):
     """Tipos de documento con sus reglas y estados de cliente. Conviene que el módulo
     Clientes lea de aquí las reglas de documento en lugar de fijarlas en su código."""
     return clientes.catalogos(db)
+
+
+class _CatalogoCredito(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class CodigoCredito(_CatalogoCredito):
+    codigo: str
+    descripcion: str
+
+
+class EstadoCredito(CodigoCredito):
+    es_final: bool
+
+
+class ReglaEvaluacion(_CatalogoCredito):
+    id_regla: str
+    codigo_rn: str
+    descripcion: str
+    ratio_min: Decimal | None
+    ratio_max: Decimal | None
+    resultado: str
+
+    @field_validator("ratio_min", "ratio_max")
+    @classmethod
+    def _dos_decimales(cls, valor: Decimal | None) -> Decimal | None:
+        # DECIMAL(7,2) en la tabla; dentro de un JSON de MySQL 80.00 llega como 80.0.
+        return None if valor is None else valor.quantize(Decimal("0.01"))
+
+
+class CatalogosCreditoRespuesta(_CatalogoCredito):
+    estados_solicitud: list[EstadoCredito]
+    reglas: list[ReglaEvaluacion]
+    metodos_amortizacion: list[CodigoCredito]
+    tipos_validacion: list[CodigoCredito]
+    estados_orden: list[EstadoCredito]
+    estados_cuota: list[CodigoCredito]
+    estados_credito: list[CodigoCredito]
+    canales_desembolso: list[str]
+    vigencia_aprobacion_dias: int
+
+
+@router.get("/creditos", response_model=CatalogosCreditoRespuesta)
+def catalogos_de_creditos(db: Session = Depends(db_session)):
+    """Estados, reglas de RN-EVA-002-P con sus umbrales (ratio monto / límite, en %), métodos
+    de amortización, tipos de validación del desembolso, canales y vigencia de una aprobación.
+    Campos en camelCase, como el resto de créditos (CONTRATO_CREDITOS.md)."""
+    return creditos.catalogos(db)

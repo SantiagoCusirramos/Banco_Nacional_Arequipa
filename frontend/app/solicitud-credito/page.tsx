@@ -160,7 +160,11 @@ async function api<T>(
               `${e.loc.slice(1).join(".")}: ${e.msg}`,
           )
           .join(" · ")
-      : data.detail;
+      : typeof data.detail === "string"
+        ? data.detail
+        : data.detail && typeof data.detail.mensaje === "string"
+          ? data.detail.mensaje
+          : "No se pudo completar la operación.";
     throw new ApiError(
       message || "No se pudo completar la operación.",
       response.status,
@@ -440,6 +444,10 @@ export default function SolicitudPage() {
   const [password, setPassword] = useState("");
   const [decision, setDecision] = useState("OBSERVADO");
   const [observation, setObservation] = useState("");
+  const [operations, setOperations] = useState<{ envios: string[]; auditoria: { estado: string; cantidad: number }[] } | null>(null);
+  const [metrics, setMetrics] = useState<{ operaciones: { operacion: string; muestras: number; p95_ms: number }[] } | null>(null);
+  const [disableUsername, setDisableUsername] = useState("");
+  const [disableReason, setDisableReason] = useState("");
   // Conservar la clave al reintentar tras un timeout reconoce un acuse que
   // pudo confirmarse aunque el navegador no recibiera la primera respuesta.
   const sendKeys = useRef(new Map<string, string>());
@@ -452,14 +460,20 @@ export default function SolicitudPage() {
     return sendKeys.current.get(id)!;
   }
 
+  const clearSession = useCallback(() => {
+    setUser(null); setSelected(null); setPreview(null); setApps([]); setClients([]);
+    setPolicy(null); setForm(freshForm()); setPassword(""); setView("bandeja");
+    setOperations(null); setMetrics(null); setDisableUsername(""); setDisableReason("");
+    setPageOffset(0); sendKeys.current.clear();
+  }, []);
   const fail = useCallback((e: unknown) => {
     setNotice({
       text:
         e instanceof Error ? e.message : "No se pudo completar la operación.",
       error: true,
     });
-    if (e instanceof ApiError && e.status === 401) setUser(null);
-  }, []);
+    if (e instanceof ApiError && e.status === 401) clearSession();
+  }, [clearSession]);
   const refresh = useCallback(async () => {
     const [p, c, a] = await Promise.all([
       api<Policy>("policy"),
@@ -483,7 +497,10 @@ export default function SolicitudPage() {
           await refresh();
         }
       } catch (e) {
-        if (!(e instanceof ApiError && e.status === 401) && active) fail(e);
+        if (active) {
+          if (e instanceof ApiError && e.status === 401) clearSession();
+          else fail(e);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -491,7 +508,7 @@ export default function SolicitudPage() {
     return () => {
       active = false;
     };
-  }, [refresh, fail]);
+  }, [refresh, fail, clearSession]);
 
   async function run(task: () => Promise<void>) {
     setBusy(true);
@@ -511,6 +528,14 @@ export default function SolicitudPage() {
   const writable = user?.rol === "ASESOR";
   const editing = selected && view === "editor";
   const current = selected?.versiones.find((v) => v.numero === version);
+  const activeDelivery = selected?.envios.find((e) => e.version === selected.version);
+  async function refreshOperations() {
+    const [pending, samples] = await Promise.all([
+      api<NonNullable<typeof operations>>("ops/pending"),
+      api<NonNullable<typeof metrics>>("ops/metrics"),
+    ]);
+    setOperations(pending); setMetrics(samples);
+  }
 
   function start() {
     setSelected(null);
@@ -828,9 +853,8 @@ export default function SolicitudPage() {
               aria-label="Cerrar sesión"
               onClick={() =>
                 run(async () => {
-                  await api("auth/logout", "POST", {});
-                  setUser(null);
-                  setSelected(null);
+                  try { await api("auth/logout", "POST", {}); }
+                  finally { clearSession(); }
                 })
               }
             >
@@ -1143,7 +1167,7 @@ export default function SolicitudPage() {
                           <div>
                             <h2>Selecciona al solicitante</h2>
                             <p>
-                              Referencias recibidas desde Captación simulada.
+                              {policy.integracion === "REAL" ? "Referencias por HTTP configurado; validación institucional pendiente." : "Referencias recibidas desde Captación simulada."}
                             </p>
                           </div>
                         </div>
@@ -1647,10 +1671,10 @@ export default function SolicitudPage() {
                       </button>
                       <button
                         className="sol-button primary"
-                        disabled={busy}
+                        disabled={busy || activeDelivery?.estado_transporte === "ERROR_CONTRATO"}
                         onClick={sendCurrent}
                       >
-                        Enviar a Evaluación
+                        {activeDelivery?.estado_transporte === "ERROR_CONTRATO" ? "Envío requiere revisión" : activeDelivery?.estado_transporte === "PENDIENTE" ? "Reintentar envío pendiente" : "Enviar a Evaluación"}
                         <Icon name="arrow" size={16} />
                       </button>
                     </>
@@ -1856,7 +1880,7 @@ export default function SolicitudPage() {
                   )}
                 </div>
               </section>
-              {user.rol === "EVALUADOR" &&
+              {user.rol === "EVALUADOR" && policy?.integracion === "SIMULADO" &&
                 selected.estado === "EN_EVALUACION" && (
                   <section className="sol-card sol-simulator">
                     <p className="sol-kicker">
@@ -2034,6 +2058,35 @@ export default function SolicitudPage() {
                   </section>
                 ))}
               </div>
+              {(user.rol === "SUPERVISOR" || user.rol === "AUDITOR") && (
+                <section className="sol-card">
+                  <h2>Operación y auditoría</h2>
+                  <button className="sol-button secondary" disabled={busy} onClick={() => run(refreshOperations)}>
+                    Actualizar pendientes y métricas
+                  </button>
+                  {operations && <div>
+                    <h3>Envíos pendientes o con error</h3>
+                    <ul>{operations.envios.map((id) => <li key={id}>{id}</li>)}</ul>
+                    <h3>Estado de auditoría</h3>
+                    <ul>{operations.auditoria.map((entry) => <li key={entry.estado}>{entry.estado}: {entry.cantidad}</li>)}</ul>
+                    <p>SIMULADO es un acuse local; CONFIRMADO identifica el acuse del receptor configurado, sin acreditar por sí solo integración institucional.</p>
+                  </div>}
+                  {metrics && <ul>{metrics.operaciones.map((entry) => <li key={entry.operacion}>{entry.operacion}: {entry.muestras} muestras · p95 {entry.p95_ms} ms</li>)}</ul>}
+                  {user.rol === "SUPERVISOR" && <form onSubmit={(event) => {
+                    event.preventDefault();
+                    run(async () => {
+                      await api(`admin/users/${encodeURIComponent(disableUsername.trim())}/disable`, "POST", { motivo: disableReason });
+                      setDisableUsername(""); setDisableReason(""); await refreshOperations();
+                      setNotice({ text: "Usuario deshabilitado y sesiones revocadas.", error: false });
+                    });
+                  }}>
+                    <h3>Revocación local de acceso</h3>
+                    <Field title="Usuario a deshabilitar"><input required maxLength={60} value={disableUsername} onChange={(e) => setDisableUsername(e.target.value)} /></Field>
+                    <Field title="Motivo de baja"><input required minLength={5} maxLength={200} value={disableReason} onChange={(e) => setDisableReason(e.target.value)} /></Field>
+                    <button className="sol-button secondary" disabled={busy}>Deshabilitar usuario</button>
+                  </form>}
+                </section>
+              )}
               <div className="sol-bottom-note">
                 <Icon name="link" />
                 <p>

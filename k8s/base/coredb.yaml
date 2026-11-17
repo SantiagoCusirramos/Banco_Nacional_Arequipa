@@ -54,6 +54,45 @@ spec:
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BNA_ADMIN_PASSWORD } }
           resources: *recursos-arranque
           securityContext: *contenedor-seguro
+        # Crea o alinea el usuario de servicio de Evaluación con el secreto del Secret.
+        - name: servicio-evaluacion
+          image: bna/coredb:local
+          command: [python, -m, COREDB.scripts.crear_servicio, --modulo, EVALUACION, --username, svc-evaluacion, --nombre, Evaluación]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_SERVICIO_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: EVALUACION_COREDB_SECRETO } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
+        # Crea o alinea el usuario de servicio de Desembolso con el secreto del Secret.
+        - name: servicio-desembolso
+          image: bna/coredb:local
+          command: [python, -m, COREDB.scripts.crear_servicio, --modulo, DESEMBOLSO, --username, svc-desembolso, --nombre, Desembolso]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_SERVICIO_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: DESEMBOLSO_COREDB_SECRETO } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
+        # Crea o alinea el usuario de servicio de CAPTACION (módulo CLIENTES) con el secreto del Secret.
+        - name: servicio-captacion
+          image: bna/coredb:local
+          command: [python, -m, COREDB.scripts.crear_servicio, --modulo, CLIENTES, --username, svc-captacion, --nombre, Captación de clientes]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_SERVICIO_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAPTACION_COREDB_SECRETO } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
       containers:
         - name: coredb
           image: bna/coredb:local

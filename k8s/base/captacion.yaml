@@ -1,0 +1,94 @@
+# CAPTACION: captación de clientes, sobre COREDB. No tiene base propia: el expediente
+# vive en la base integrada y se trabaja por COREDB. Su usuario de servicio
+# (svc-captacion, módulo CLIENTES) lo crea el arranque de COREDB con el secreto del Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: captacion
+  labels: { app.kubernetes.io/name: captacion }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: captacion }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: captacion }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        # COREDB crea svc-captacion antes de arrancar: cuando responde, el usuario ya existe.
+        - name: esperar-coredb
+          image: bna/backend:local
+          # A través del Bus, con la credencial del módulo, como todas sus llamadas a COREDB.
+          command:
+            - python
+            - -c
+            - |
+              import os, sys, time, urllib.request as u
+              pedido = u.Request(os.environ["CORE_BASE_URL"] + "/coredb/salud",
+                                 headers={"X-Bus-Token": os.environ["BUS_TOKEN"]})
+              for _ in range(150):
+                  try:
+                      u.urlopen(pedido, timeout=2)
+                      sys.exit(0)
+                  except OSError:
+                      time.sleep(2)
+              sys.exit("COREDB no respondió a tiempo a través del Bus.")
+          env:
+            - name: CORE_BASE_URL
+              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: CORE_BASE_URL } }
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_CAPTACION } }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: &contenedor-seguro
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+      containers:
+        - name: captacion
+          image: bna/backend:local
+          command: [uvicorn, CAPTACION.main:app, --host, 0.0.0.0, --port, "8017"]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            # COREDB (CORE_BASE_URL, del ConfigMap) a través del Bus, con la credencial de CAPTACION.
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_CAPTACION } }
+            - name: CAP_CORE_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAPTACION_COREDB_SECRETO } }
+            - name: CAP_SOL_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_SOL_TOKEN } }
+            - name: CAP_OTP_CLAVE
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_OTP_CLAVE } }
+          ports:
+            - { name: http, containerPort: 8017 }
+          startupProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: *contenedor-seguro
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: captacion
+spec:
+  selector: { app.kubernetes.io/name: captacion }
+  ports:
+    - { name: http, port: 8017, targetPort: http }

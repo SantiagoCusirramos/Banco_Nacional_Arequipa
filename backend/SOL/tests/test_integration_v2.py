@@ -8,13 +8,14 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
 from sqlalchemy import func, select, text
 from SOL import clock
 from SOL.app import create_app
-from SOL.integrations import IntegrationError, Integrations
+from SOL.integrations import CLIENT_FIELDS, IntegrationError, Integrations, captacion_reference, validate_receipt
 from SOL.migrations import migrate
 from SOL.models import (Application, AuditOutbox, Base, ClientReference, Delivery,
-                        Event, LoginSession, Outcome, SecurityEvent, User, now)
+                        Event, LoginSession, Outcome, SecurityEvent, User, Version, now)
 from SOL.operations import maintenance, process_audit, process_delivery
 from SOL.seed import seed
 from SOL.settings import Settings
@@ -254,6 +255,29 @@ def test_cr03_callback_auth_round_version_and_full_v2_cycle(real_lab):
     assert c.post(f"/sol/applications/{d['id']}/demo-result", headers=h, json={"version": 2, "decision": "APROBADO", "observaciones": "Prueba local."}).status_code == 403
 
 
+def test_e02_real_guarantors_remain_blocked_without_mutating_draft(real_lab):
+    c, app, bus = real_lab
+    h = real_auth(c)
+    d = real_create(c, h)
+    route = f"/sol/applications/{d['id']}"
+    guarantor = "0198b000-0000-7009-8000-000000000002"
+    with app.state.factory() as db:
+        before = tuple(db.scalar(select(func.count()).select_from(model))
+                       for model in (Application, Version, Event, AuditOutbox))
+    for suffix in ["/preview", "/applications"]:
+        response = c.post("/sol" + suffix, headers=h, json=form(fiadores=[guarantor]))
+        assert response.status_code == 422
+        assert "homologar" in response.json()["detail"]
+    response = c.put(route, headers=h, json=form(revision=d["revision"], fiadores=[guarantor]))
+    assert response.status_code == 422
+    assert c.get(route, headers=h).json() == d
+    with app.state.factory() as db:
+        after = tuple(db.scalar(select(func.count()).select_from(model))
+                      for model in (Application, Version, Event, AuditOutbox))
+    assert after == before
+    assert not any(method == "POST" for method, _ in bus.calls)
+
+
 def test_cr10_outbox_survives_failure_recovers_and_deduplicates(real_lab):
     c, app, bus = real_lab
     h = real_auth(c)
@@ -415,3 +439,618 @@ def test_event_order_follows_revision_when_mysql_timestamps_tie(lab):
         db.execute(update(Event).values(date=datetime(2026, 10, 23, 12)))
     events = c.get("/sol/applications/" + d["id"], headers=h).json()["eventos"]
     assert [e["accion"] for e in events] == ["CREAR_BORRADOR", "ENVIAR_CR_INT_02_SIMULADO", "RECIBIR_CR_INT_03_SIMULADO"]
+
+
+def e03_reference():
+    today = clock.business_today()
+    return {"id_cliente": "cliente-e03", "cod_tipo_documento": "DEMO",
+            "numero_documento": "DOC-SINTETICO", "nombres": "Persona de prueba",
+            "apellido_paterno": "Sintetico", "apellido_materno": "Laboratorio",
+            "estado_cliente": "ACTIVO", "id_caso": "caso-e03",
+            "id_verificacion": "ver-e03", "fecha_verificacion": today.isoformat(),
+            "vigente_hasta": (today + timedelta(days=1)).isoformat(),
+            "estado_habilitante": "HABILITADO", "version_contrato": "CR-INT-01-PROPUESTA-v2",
+            "simulado": True}
+
+
+@pytest.fixture
+def e03_adapter():
+    adapters = []
+    def build(handler):
+        settings = Settings("sqlite://", mode="REAL", worker_seconds=0,
+            bus_base_url="http://cap.fake.test", bus_token="b" * 32, callback_token="c" * 32,
+            cap_search_path="/fake-cap/search", cap_reference_path="/fake-cap/ref/{idCliente}",
+            eva_send_path="/fake-eva/send", eva_status_path="/fake-eva/ops/{idOperacion}",
+            audit_path="/fake-audit/events")
+        settings.validate()
+        adapter = Integrations(settings, httpx.MockTransport(handler))
+        adapters.append(adapter)
+        return adapter
+    yield build
+    for adapter in adapters:
+        adapter.close()
+
+
+@pytest.mark.parametrize("changes", [
+    {"simulado": {"privado": "NO-EXPORTAR"}}, {"simulado": "false"},
+    {"cod_tipo_documento": {"privado": "NO-EXPORTAR"}}, {"cod_tipo_documento": "   "},
+    {"nombres": "   "}, {"fecha_verificacion": "20261114"},
+])
+def test_e03_rejects_malformed_reference_fields(e03_adapter, changes):
+    data = {**e03_reference(), **changes}
+    adapter = e03_adapter(lambda request: httpx.Response(200, json=data))
+    with pytest.raises(HTTPException) as exc:
+        adapter.reference("cliente-e03", "trace-e03")
+    assert exc.value.status_code == 503
+    listing = e03_adapter(lambda request: httpx.Response(200, json=[data]))
+    with pytest.raises(HTTPException) as exc:
+        listing.clients("prueba", "trace-e03")
+    assert exc.value.status_code == 503
+
+
+@pytest.mark.parametrize("status,expected,attempts", [(401, 503, 1), (403, 503, 1),
+    (404, 422, 1), (422, 503, 1), (503, 503, 3), (302, 503, 1)])
+def test_e03_http_errors_are_safe_and_bounded(e03_adapter, status, expected, attempts):
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(status, json={"secreto": "REMOTO-NO-EXPONER"},
+                              headers={"Location": "http://otro.fake.test"})
+    adapter = e03_adapter(handler)
+    with pytest.raises(HTTPException) as exc:
+        adapter.reference("cliente-e03", "trace-e03")
+    assert exc.value.status_code == expected and len(calls) == attempts
+    assert "REMOTO-NO-EXPONER" not in str(exc.value.detail)
+
+
+@pytest.mark.parametrize("failure", [httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError])
+def test_e03_transport_failure_never_falls_back(e03_adapter, failure):
+    calls = []
+    def handler(request):
+        calls.append(request)
+        raise failure("REMOTO-NO-EXPONER", request=request)
+    adapter = e03_adapter(handler)
+    with pytest.raises(HTTPException) as exc:
+        adapter.reference("cliente-e03", "trace-e03")
+    assert exc.value.status_code == 503 and len(calls) == 3
+    assert "REMOTO-NO-EXPONER" not in str(exc.value.detail)
+
+
+@pytest.mark.parametrize("body", [b"null", b"[]", b'"texto"', b"{no-json}"])
+def test_e03_invalid_json_reference_is_contract_failure(e03_adapter, body):
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, content=body)
+    with pytest.raises(HTTPException) as exc:
+        e03_adapter(handler).reference("cliente-e03", "trace-e03")
+    assert exc.value.status_code == 503 and len(calls) == 1
+
+
+@pytest.mark.parametrize("kind", ["object", "oversized", "bad-item"])
+def test_e03_search_requires_bounded_list(e03_adapter, kind):
+    data = {"object": {"items": [e03_reference()]}, "oversized": [e03_reference()] * 51,
+            "bad-item": [None]}[kind]
+    with pytest.raises(HTTPException) as exc:
+        e03_adapter(lambda request: httpx.Response(200, json=data)).clients("", "trace-e03")
+    assert exc.value.status_code == 503
+
+
+def test_e03_success_config_headers_retry_and_pii_minimization(e03_adapter):
+    calls = []
+    reference = {**e03_reference(), "correo": "SINTETICO-NO-EXPORTAR",
+                 "biometria": {"dato": "SINTETICO-NO-EXPORTAR"}}
+    def handler(request):
+        calls.append(request)
+        assert request.method == "GET"
+        assert request.headers["Authorization"] == "Bearer " + "b" * 32
+        assert request.headers["X-Correlation-ID"] == "trace-e03"
+        assert request.extensions["timeout"]["read"] <= 0.6
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("Fallo transitorio", request=request)
+        if request.url.path == "/fake-cap/search":
+            assert request.url.params["search"] == "prueba" and request.url.params["limit"] == "50"
+            return httpx.Response(200, json=[reference])
+        assert request.url.path == "/fake-cap/ref/cliente-e03"
+        return httpx.Response(200, json=reference)
+    adapter = e03_adapter(handler)
+    assert adapter.clients("prueba", "trace-e03") == [e03_reference()]
+    assert adapter.reference("cliente-e03", "trace-e03") == e03_reference()
+    assert len(calls) == 3
+
+
+def test_e03_missing_real_adapter_cannot_read_local_reference(lab):
+    _, app = lab
+    with app.state.factory() as db:
+        db.info.update(integration_mode="REAL", integrations=None)
+        with pytest.raises(HTTPException) as exc:
+            captacion_reference(db, CLIENT)
+        assert exc.value.status_code == 503
+
+
+def test_e03_rechecks_cap_before_send_without_duplicate_queries(real_lab):
+    c, app, bus = real_lab
+    h = real_auth(c)
+    assert c.get("/sol/clients", headers=h, params={"search": "prueba"}).status_code == 200
+    d = real_create(c, h)
+    assert bus.calls == [("GET", "/cap/references"), ("GET", "/cap/references/" + CLIENT)]
+    bus.references[CLIENT]["estado_habilitante"] = "OBSERVADO"
+    response = c.post(f"/sol/applications/{d['id']}/send", headers={**h, "X-Idempotency-Key": str(uuid4())},
+                      json={"revision": d["revision"]})
+    assert response.status_code == 422
+    assert bus.calls[-1] == ("GET", "/cap/references/" + CLIENT) and len(bus.calls) == 3
+    assert c.get(f"/sol/applications/{d['id']}", headers=h).json() == d
+    with app.state.factory() as db:
+        assert db.scalar(select(func.count()).select_from(Delivery)) == 0
+
+
+@pytest.mark.parametrize("field", ["id_caso", "id_verificacion", "vigente_hasta", "estado_habilitante"])
+def test_e03_missing_authoritative_fields_are_not_invented(e03_adapter, field):
+    data = e03_reference()
+    del data[field]
+    with pytest.raises(HTTPException) as exc:
+        e03_adapter(lambda request: httpx.Response(200, json=data)).reference("cliente-e03", "trace-e03")
+    assert exc.value.status_code == 503
+
+
+@pytest.mark.parametrize("kind,expected", [("different-client", 503), ("disabled", 422),
+    ("expired", 422), ("future-verification", 422)])
+def test_e03_identity_and_eligibility_are_authoritative(e03_adapter, kind, expected):
+    today = clock.business_today()
+    changes = {"different-client": {"id_cliente": "otro-cliente"},
+               "disabled": {"estado_cliente": "BLOQUEADO"},
+               "expired": {"vigente_hasta": (today - timedelta(days=1)).isoformat()},
+               "future-verification": {"fecha_verificacion": (today + timedelta(days=1)).isoformat()}}[kind]
+    data = {**e03_reference(), **changes}
+    with pytest.raises(HTTPException) as exc:
+        e03_adapter(lambda request: httpx.Response(200, json=data)).reference("cliente-e03", "trace-e03")
+    assert exc.value.status_code == expected
+
+
+def test_e03_optional_fields_remain_optional(e03_adapter):
+    data = e03_reference()
+    del data["simulado"], data["cod_tipo_documento"]
+    assert e03_adapter(lambda request: httpx.Response(200, json=data)).reference("cliente-e03", "trace-e03") == data
+
+
+def test_e03_repeated_lookup_minimizes_refresh_and_preserves_version(real_lab):
+    c, app, bus = real_lab
+    h = real_auth(c)
+    bus.references[CLIENT].update(correo="CONTACTO-E03", biometria={"dato": "CONTACTO-E03"})
+    d = real_create(c, h)
+    with app.state.factory() as db:
+        before_count = db.scalar(select(func.count()).select_from(ClientReference))
+    bus.references[CLIENT]["id_caso"] = "caso-e03-actualizado-por-fake"
+    preview = c.post("/sol/preview", headers=h, json=form())
+    assert preview.status_code == 200
+    assert preview.json()["cliente"]["id_caso"] == "caso-e03-actualizado-por-fake"
+    assert "CONTACTO-E03" not in json.dumps(preview.json())
+    with app.state.factory() as db:
+        ref = db.get(ClientReference, CLIENT)
+        assert db.scalar(select(func.count()).select_from(ClientReference)) == before_count
+        assert set(ref.snapshot).issubset(CLIENT_FIELDS)
+        assert "CONTACTO-E03" not in json.dumps(ref.snapshot)
+        assert ref.snapshot["id_caso"] == "caso-e03-actualizado-por-fake"
+    assert c.get(f"/sol/applications/{d['id']}", headers=h).json() == d
+    assert bus.calls == [("GET", "/cap/references/" + CLIENT)] * 2
+
+
+@pytest.mark.parametrize("changes", [
+    {"versionSolicitud": True}, {"versionSolicitud": 1.0}, {"versionSolicitud": "1"},
+    {"versionSolicitud": 2}, {"idSolicitud": "otra"}, {"idOperacion": "otra"},
+    {"idEvaluacion": ""}, {"idEvaluacion": "   "}, {"idEvaluacion": " eva "},
+    {"ronda": True}, {"ronda": 0}, {"ronda": 1.0},
+    {"acuse": ""}, {"acuse": "   "}, {"acuse": "x" * 61},
+])
+def test_e04_receipt_requires_exact_identity_and_types(changes):
+    envelope = {"idSolicitud": "sol-e04", "versionSolicitud": 1, "idOperacion": "envio-e04"}
+    data = {**envelope, "idEvaluacion": "eva-e04", "ronda": 8, "acuse": "ACK-E04", **changes}
+    with pytest.raises(IntegrationError) as exc:
+        validate_receipt(data, envelope)
+    assert exc.value.permanent
+
+
+def e04_result_message(app, d):
+    with app.state.factory() as db:
+        row = db.scalar(select(Delivery).where(Delivery.application_id == d["id"], Delivery.version == d["version"]))
+        return {"idSolicitud": d["id"], "versionSolicitud": d["version"],
+                "idEvaluacion": row.evaluation_id, "ronda": row.round,
+                "idOperacion": str(uuid4()), "idCorrelacion": str(uuid4()),
+                "decision": "OBSERVADO", "observaciones": "Precisar el destino de prueba E04."}
+
+
+def e04_headers(app, message):
+    return {"Authorization": "Bearer " + app.state.settings.callback_token,
+            "X-Idempotency-Key": message["idOperacion"], "X-Correlation-ID": message["idCorrelacion"]}
+
+
+def test_e04_envelope_and_pending_idempotency_are_immutable(real_lab):
+    c, app, bus = real_lab
+    h = real_auth(c)
+    d = real_create(c, h)
+    key, trace = str(uuid4()), str(uuid4())
+    route = f"/sol/applications/{d['id']}/send"
+    headers = {**h, "X-Idempotency-Key": key, "X-Correlation-ID": trace}
+    one = c.post(route, headers=headers, json={"revision": d["revision"]})
+    assert one.status_code == 202 and one.json()["estado"] == "BORRADOR"
+    with app.state.factory() as db:
+        saved = copy.deepcopy(db.get(Delivery, key).payload)
+    assert saved == {"idSolicitud": d["id"], "versionSolicitud": 1, "idOperacion": key,
+                     "idCorrelacion": trace, "expediente": d["versiones"][0]["expediente"],
+                     "actorEnvio": "asesor.bna", "versionContrato": "CR-INT-02-PROPUESTA-v2", "simulado": False}
+    assert c.post(route, headers={**headers, "X-Correlation-ID": str(uuid4())},
+                  json={"revision": d["revision"]}).status_code == 202
+    assert c.post(route, headers=headers, json={"revision": d["revision"] + 1}).status_code == 409
+    assert c.post(route, headers={**headers, "X-Idempotency-Key": str(uuid4())},
+                  json={"revision": d["revision"]}).status_code == 409
+    with app.state.factory() as db:
+        assert db.get(Delivery, key).payload == saved
+        assert db.scalar(select(func.count()).select_from(Delivery)) == 1
+    assert not any(path.startswith("/eva/") for _, path in bus.calls)
+    assert process_delivery(app.state.factory, app.state.integrations, key)
+    assert c.post(route, headers=headers, json={"revision": d["revision"]}).status_code == 200
+    assert len(bus.received) == 1
+
+
+@pytest.mark.parametrize("changes,status", [
+    ({"versionSolicitud": True}, 422), ({"ronda": True}, 422), ({"ronda": 999}, 409),
+    ({"versionSolicitud": 2}, 409), ({"idEvaluacion": "otra"}, 409),
+    ({"decision": "DERIVAR"}, 422), ({"observaciones": "   "}, 422),
+    ({"campo_extra": "no-admitido"}, 422), ({"idOperacion": "corta"}, 422),
+])
+def test_e04_bad_results_do_not_change_expediente(real_lab, changes, status):
+    c, app, _ = real_lab
+    h = real_auth(c)
+    d = real_create(c, h)
+    key = real_send(c, app, h, d)
+    assert process_delivery(app.state.factory, app.state.integrations, key)
+    route = "/sol/applications/" + d["id"]
+    before = c.get(route, headers=h).json()
+    message = {**e04_result_message(app, d), **changes}
+    response = c.post("/sol/integrations/evaluation-results", headers=e04_headers(app, message), json=message)
+    assert response.status_code == status
+    assert c.get(route, headers=h).json() == before
+    with app.state.factory() as db:
+        assert db.scalar(select(func.count()).select_from(Outcome)) == 0
+
+
+def test_e04_callback_explicit_correlation_is_required_in_openapi(real_lab):
+    _, app, _ = real_lab
+    operation = app.openapi()["paths"]["/sol/integrations/evaluation-results"]["post"]
+    headers = {p["name"]: p for p in operation["parameters"] if p["in"] == "header"}
+    assert "X-Correlation-ID" in headers
+    assert headers["X-Correlation-ID"]["required"]
+
+
+def test_e04_stale_worker_failure_cannot_undo_confirmation(real_lab, monkeypatch):
+    c, app, bus = real_lab
+    d = real_create(c, real_auth(c))
+    key = real_send(c, app, real_auth(c), d)
+    original = app.state.integrations.deliver
+    def stale(envelope):
+        with app.state.factory.begin() as db:
+            db.get(Delivery, key).lease_until = now() - timedelta(seconds=1)
+        monkeypatch.setattr(app.state.integrations, "deliver", original)
+        assert process_delivery(app.state.factory, app.state.integrations, key)
+        raise IntegrationError()
+    monkeypatch.setattr(app.state.integrations, "deliver", stale)
+    assert process_delivery(app.state.factory, app.state.integrations, key)
+    with app.state.factory() as db:
+        assert db.get(Delivery, key).status == "CONFIRMADO"
+        assert db.get(Application, d["id"]).state == "EN_EVALUACION"
+        assert db.scalar(select(func.count()).select_from(Event).where(Event.action == "ENVIAR_CR_INT_02")) == 1
+    assert len(bus.received) == 1
+
+
+@pytest.mark.parametrize("outcome", ["success", "failure"])
+def test_e04_stale_worker_cannot_overwrite_newer_reservation(real_lab, monkeypatch, outcome):
+    c, app, _ = real_lab
+    h = real_auth(c)
+    d = real_create(c, h)
+    key = real_send(c, app, h, d)
+    original = app.state.integrations.deliver
+    def stale(envelope):
+        # Intercalado controlado: otro worker recuperó la reserva expirada.
+        with app.state.factory.begin() as db:
+            row = db.get(Delivery, key)
+            row.attempts += 1
+            row.lease_until = now() + timedelta(seconds=30)
+        if outcome == "failure":
+            raise IntegrationError()
+        return original(envelope)
+    monkeypatch.setattr(app.state.integrations, "deliver", stale)
+    assert not process_delivery(app.state.factory, app.state.integrations, key)
+    with app.state.factory() as db:
+        row = db.get(Delivery, key)
+        assert row.status == "PENDIENTE" and row.lease_until > now()
+        assert db.get(Application, d["id"]).state == "BORRADOR"
+    monkeypatch.setattr(app.state.integrations, "deliver", original)
+    with app.state.factory.begin() as db:
+        db.get(Delivery, key).lease_until = now() - timedelta(seconds=1)
+    assert process_delivery(app.state.factory, app.state.integrations, key)
+
+
+@pytest.mark.parametrize("fault,status", [("auth-missing", 401), ("auth-wrong", 401),
+    ("trace-missing", 422), ("trace-wrong", 422), ("trace-invalid", 422),
+    ("key-missing", 422), ("key-wrong", 422)])
+def test_e04_callback_service_headers_are_required_and_matched(real_lab, fault, status):
+    c, app, _ = real_lab
+    h = real_auth(c)
+    d = real_create(c, h)
+    assert process_delivery(app.state.factory, app.state.integrations, real_send(c, app, h, d))
+    message = e04_result_message(app, d)
+    headers = e04_headers(app, message)
+    field = {"auth": "Authorization", "trace": "X-Correlation-ID", "key": "X-Idempotency-Key"}[fault.split("-")[0]]
+    if fault.endswith("missing"):
+        del headers[field]
+    else:
+        headers[field] = "con espacio" if fault.endswith("invalid") else "distinto-e04"
+    before = c.get("/sol/applications/" + d["id"], headers=h).json()
+    assert c.post("/sol/integrations/evaluation-results", headers=headers, json=message).status_code == status
+    assert c.get("/sol/applications/" + d["id"], headers=h).json() == before
+
+
+@pytest.mark.parametrize("source", ["GET", "POST"])
+def test_e04_invalid_http_receipt_does_not_trigger_blind_repost(e03_adapter, source):
+    calls = []
+    envelope = {"idSolicitud": "sol-e04", "versionSolicitud": 1,
+                "idOperacion": "envio-e04", "idCorrelacion": "trace-e04"}
+    def handler(request):
+        calls.append(request.method)
+        if request.method == "GET" and source == "POST":
+            return httpx.Response(404, json={})
+        return httpx.Response(200, json={**envelope, "versionSolicitud": True,
+                                        "idEvaluacion": "eva-e04", "ronda": 8, "acuse": "ACK-E04"})
+    with pytest.raises(IntegrationError) as exc:
+        e03_adapter(handler).deliver(envelope)
+    assert exc.value.permanent
+    assert calls == (["GET"] if source == "GET" else ["GET", "POST"])
+
+
+def test_e04_callback_before_local_receipt_retries_after_reconciliation(real_lab):
+    c, app, bus = real_lab
+    h = real_auth(c)
+    d = real_create(c, h)
+    key = real_send(c, app, h, d)
+    with app.state.factory() as db:
+        receipt = app.state.integrations.deliver(db.get(Delivery, key).payload)
+    message = {**e04_result_message(app, d), "idEvaluacion": receipt["idEvaluacion"], "ronda": receipt["ronda"]}
+    headers = e04_headers(app, message)
+    assert c.post("/sol/integrations/evaluation-results", headers=headers, json=message).status_code == 409
+    with app.state.factory() as db:
+        assert db.scalar(select(func.count()).select_from(Outcome)) == 0
+    assert process_delivery(app.state.factory, app.state.integrations, key)
+    assert c.post("/sol/integrations/evaluation-results", headers=headers, json=message).status_code == 200
+    repeated = c.post("/sol/integrations/evaluation-results", headers=headers, json=message)
+    assert repeated.status_code == 200 and repeated.json()["reintento_reconocido"]
+    assert sum(method == "POST" and path == "/eva/applications" for method, path in bus.calls) == 1
+    with app.state.factory() as db:
+        assert db.scalar(select(func.count()).select_from(Outcome)) == 1
+
+
+def test_e04_crash_after_remote_acceptance_recovers_from_durable_lease(real_lab, monkeypatch):
+    from SOL.database import make_database
+    c, app, bus = real_lab
+    h = real_auth(c)
+    d = real_create(c, h)
+    key = real_send(c, app, h, d)
+    original = app.state.integrations.deliver
+    def crash(envelope):
+        original(envelope)
+        raise RuntimeError("Caída sintética antes de persistir acuse")
+    monkeypatch.setattr(app.state.integrations, "deliver", crash)
+    with pytest.raises(RuntimeError):
+        process_delivery(app.state.factory, app.state.integrations, key)
+    calls = len(bus.calls)
+    assert not process_delivery(app.state.factory, app.state.integrations, key)
+    assert len(bus.calls) == calls
+    with app.state.factory.begin() as db:
+        row = db.get(Delivery, key)
+        assert row.status == "PENDIENTE" and row.lease_until > now()
+        envelope = copy.deepcopy(row.payload)
+        row.lease_until = now() - timedelta(seconds=1)
+    monkeypatch.setattr(app.state.integrations, "deliver", original)
+    engine, factory = make_database(app.state.settings)
+    try:
+        assert process_delivery(factory, app.state.integrations, key)
+        assert process_delivery(factory, app.state.integrations, key)
+        with factory() as db:
+            assert db.get(Delivery, key).payload == envelope
+            assert db.scalar(select(func.count()).select_from(Event).where(Event.action == "ENVIAR_CR_INT_02")) == 1
+    finally:
+        engine.dispose()
+    assert [method for method, path in bus.calls if path.startswith("/eva/")] == ["GET", "POST", "GET"]
+
+
+def test_e04_crossed_application_evaluation_is_rejected(real_lab):
+    c, app, _ = real_lab
+    h = real_auth(c)
+    one, two = real_create(c, h), real_create(c, h)
+    for d in [one, two]:
+        assert process_delivery(app.state.factory, app.state.integrations, real_send(c, app, h, d))
+    message = {**e04_result_message(app, one), "idSolicitud": two["id"]}
+    assert c.post("/sol/integrations/evaluation-results", headers=e04_headers(app, message), json=message).status_code == 409
+    with app.state.factory() as db:
+        assert db.scalar(select(func.count()).select_from(Outcome)) == 0
+        assert all(db.get(Application, d["id"]).state == "EN_EVALUACION" for d in [one, two])
+
+
+def test_e04_successive_subsanations_preserve_history_and_reject_late_results(real_lab):
+    c, app, _ = real_lab
+    h = real_auth(c)
+    d = real_create(c, h)
+    route = "/sol/applications/" + d["id"]
+    frozen, old_messages = [], []
+    for version in [1, 2]:
+        assert process_delivery(app.state.factory, app.state.integrations, real_send(c, app, h, d))
+        current = c.get(route, headers=h).json()
+        frozen.append(copy.deepcopy(current["versiones"][-1]))
+        message = e04_result_message(app, d)
+        headers = e04_headers(app, message)
+        assert c.post("/sol/integrations/evaluation-results", headers=headers, json=message).status_code == 200
+        assert c.post("/sol/integrations/evaluation-results", headers=headers,
+                      json={**message, "observaciones": "Contenido diferente para la misma clave."}).status_code == 409
+        old_messages.append((message, headers))
+        current = c.get(route, headers=h).json()
+        revised = c.post(route + "/revise", headers=h, json={"revision": current["revision"]})
+        assert revised.status_code == 200 and revised.json()["version"] == version + 1
+        edited = c.put(route, headers=h, json=form(revision=revised.json()["revision"],
+                      monto_solicitado=str(15000 + 1000 * version)))
+        assert edited.status_code == 200
+        d = edited.json()
+        for old, old_headers in old_messages:
+            repeated = c.post("/sol/integrations/evaluation-results", headers=old_headers, json=old)
+            assert repeated.status_code == 200 and repeated.json()["reintento_reconocido"]
+            stale = {**old, "idOperacion": str(uuid4())}
+            assert c.post("/sol/integrations/evaluation-results", headers=e04_headers(app, stale), json=stale).status_code == 409
+        assert c.get(route, headers=h).json() == d
+    assert process_delivery(app.state.factory, app.state.integrations, real_send(c, app, h, d))
+    message = {**e04_result_message(app, d), "decision": "RECHAZADO"}
+    response = c.post("/sol/integrations/evaluation-results", headers=e04_headers(app, message), json=message)
+    assert response.status_code == 200 and response.json()["estado"] == "RECHAZADA"
+    current = c.get(route, headers=h).json()
+    assert current["versiones"][:2] == frozen
+    assert c.post(route + "/revise", headers=h, json={"revision": current["revision"]}).status_code == 409
+    with app.state.factory() as db:
+        assert db.scalar(select(func.count()).select_from(Version)) == 3
+        assert db.scalar(select(func.count()).select_from(Outcome)) == 3
+        assert db.scalar(select(func.count()).select_from(Delivery)) == 3
+
+
+def test_e05_validation_errors_do_not_echo_secrets(lab, caplog):
+    c, _ = lab
+    response = c.post("/sol/auth/login", json={"username": "asesor.bna",
+        "password": {"dato": "PRIVADO-E05"}, "PRIVADO-E05": "extra"})
+    assert response.status_code == 422
+    assert "PRIVADO-E05" not in response.text
+    assert "PRIVADO-E05" not in caplog.text
+    assert all("input" not in e and "ctx" not in e for e in response.json()["detail"])
+
+
+def test_e05_session_is_expired_at_its_exact_deadline(lab, monkeypatch):
+    import importlib
+    c, app = lab
+    h = auth(c)
+    instant = now()
+    with app.state.factory.begin() as db:
+        db.scalar(select(LoginSession)).expires = instant
+    # El deadline efectivo es el almacenado; MySQL DATETIME(0) redondea.
+    with app.state.factory() as db:
+        instant = db.scalar(select(LoginSession.expires))
+    monkeypatch.setattr(importlib.import_module("SOL.app"), "now", lambda: instant)
+    assert c.get("/sol/auth/me", headers=h).status_code == 401
+
+
+@pytest.mark.parametrize("path", ["/sol/clients", "/ruta-inexistente"])
+def test_e06_uvicorn_access_logs_omit_query_values(lab, caplog, path):
+    import logging
+    marker = "E06-CONSULTA-SENSIBLE-SINTETICA"
+    with caplog.at_level(logging.INFO, logger="uvicorn.access"):
+        logging.getLogger("uvicorn.access").info(
+            '%s - "%s %s HTTP/%s" %d', "127.0.0.1:1234", "GET",
+            path + "?search=" + marker, "1.1", 200,
+        )
+    assert marker not in caplog.text
+    assert path in caplog.text and "200" in caplog.text
+
+
+def test_e05_openapi_has_responses_auth_and_actual_status_codes(real_lab):
+    _, app, _ = real_lab
+    spec = app.openapi()
+    schemes = spec["components"].get("securitySchemes", {})
+    assert schemes["SOLSession"]["scheme"] == "bearer"
+    assert schemes["EVACallback"]["scheme"] == "bearer"
+    for path, methods in spec["paths"].items():
+        for operation in methods.values():
+            for code, response in operation["responses"].items():
+                if code.startswith("2"):
+                    assert response["content"]["application/json"]["schema"]
+            if path.startswith("/sol/") and path != "/sol/auth/login":
+                assert operation["security"]
+    send_op = spec["paths"]["/sol/applications/{identifier}/send"]["post"]
+    assert {"200", "202", "401", "403", "409", "422", "503"} <= send_op["responses"].keys()
+    callback_op = spec["paths"]["/sol/integrations/evaluation-results"]["post"]
+    assert callback_op["security"] == [{"EVACallback": []}]
+    assert {"200", "401", "409", "422", "503"} <= callback_op["responses"].keys()
+
+
+def test_e05_audit_stale_error_preserves_confirmation(real_lab, monkeypatch):
+    c, app, _ = real_lab
+    real_auth(c)
+    with app.state.factory() as db:
+        key = db.scalar(select(AuditOutbox.id))
+    original = app.state.integrations.audit
+    def stale(payload):
+        with app.state.factory.begin() as db:
+            db.get(AuditOutbox, key).lease_until = now() - timedelta(seconds=1)
+        monkeypatch.setattr(app.state.integrations, "audit", original)
+        assert process_audit(app.state.factory, app.state.integrations, key)
+        raise IntegrationError()
+    monkeypatch.setattr(app.state.integrations, "audit", stale)
+    process_audit(app.state.factory, app.state.integrations, key)
+    with app.state.factory() as db:
+        assert db.get(AuditOutbox, key).status == "CONFIRMADO"
+
+
+@pytest.mark.parametrize("outcome", ["success", "failure"])
+def test_e05_audit_stale_result_cannot_clear_newer_reservation(real_lab, monkeypatch, outcome):
+    c, app, _ = real_lab
+    real_auth(c)
+    with app.state.factory() as db:
+        key = db.scalar(select(AuditOutbox.id))
+    original = app.state.integrations.audit
+    def stale(payload):
+        with app.state.factory.begin() as db:
+            row = db.get(AuditOutbox, key)
+            row.attempts += 1
+            row.lease_until = now() + timedelta(seconds=30)
+        if outcome == "failure":
+            raise IntegrationError()
+        return original(payload)
+    monkeypatch.setattr(app.state.integrations, "audit", stale)
+    assert not process_audit(app.state.factory, app.state.integrations, key)
+    with app.state.factory() as db:
+        row = db.get(AuditOutbox, key)
+        assert row.status == "PENDIENTE" and row.lease_until > now()
+
+
+def test_e05_operations_roles_and_revocation_of_all_sessions(lab):
+    c, _ = lab
+    one, two = auth(c), auth(c)
+    supervisor, auditor = auth(c, "supervisor.bna"), auth(c, "auditor.bna")
+    for route in ["/sol/ops/metrics", "/sol/ops/pending"]:
+        assert c.get(route).status_code == 401
+        assert c.get(route, headers=one).status_code == 403
+        assert c.get(route, headers=supervisor).status_code == 200
+        assert c.get(route, headers=auditor).status_code == 200
+    assert c.post("/sol/admin/users/supervisor.bna/disable", headers=supervisor,
+                  json={"motivo": "Baja sintética autorizada"}).status_code == 409
+    response = c.post("/sol/admin/users/asesor.bna/disable", headers=supervisor,
+                      json={"motivo": "Baja sintética autorizada"})
+    assert response.status_code == 200 and response.json()["sesiones_revocadas"] == 2
+    for headers in [one, two]:
+        assert c.get("/sol/auth/me", headers=headers).status_code == 401
+
+
+def test_e05_real_rejects_residual_demo_evaluator_session(real_lab):
+    from SOL.security import token_hash
+    c, app, _ = real_lab
+    token = "sesion-sintetica-residual-e05"
+    with app.state.factory.begin() as db:
+        evaluator = db.scalar(select(User).where(User.role == "EVALUADOR"))
+        db.add(LoginSession(token_hash=token_hash(token), user_id=evaluator.id, expires=now() + timedelta(hours=1)))
+    assert c.get("/sol/auth/me", headers={"Authorization": "Bearer " + token}).status_code == 401
+
+
+@pytest.mark.parametrize("changes", [{"idEvento": "otro-evento"}, {"confirmado": False},
+    {"confirmado": 1}, {"acuse": "   "}, {"acuse": "x" * 81}, {"acuse": None}])
+def test_e05_audit_requires_positive_nonblank_receipt(e03_adapter, changes):
+    payload = {"idEvento": "evento-e05", "idOperacion": "evento-e05", "idCorrelacion": "trace-e05"}
+    reply = {"idEvento": payload["idEvento"], "confirmado": True, "acuse": "ACK-E05", **changes}
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json=reply)
+    with pytest.raises(IntegrationError) as exc:
+        e03_adapter(handler).audit(payload)
+    assert exc.value.permanent and len(calls) == 1

@@ -16,5 +16,9 @@ resources:
   - cuentas.yaml
   - tarjetas.yaml
   - sol.yaml
+  - evaluacion.yaml
+  - desembolso.yaml
+  - captacion.yaml
   - seguridad.yaml
+  - bus.yaml
   - frontend.yaml

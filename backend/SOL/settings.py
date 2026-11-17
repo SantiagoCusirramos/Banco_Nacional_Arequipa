@@ -13,6 +13,17 @@ ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env.sol")
 
 
+def provider_connection(settings, provider):
+    """Una pareja propia completa prevalece; nunca mezclar secreto propio/Bus."""
+    url = getattr(settings, provider + "_base_url", "")
+    token = getattr(settings, provider + "_token", "")
+    if url or token:
+        if not url or not token:
+            raise ValueError(f"Configura URL y token completos de {provider.upper()}.")
+        return url, token
+    return settings.bus_base_url, settings.bus_token
+
+
 @dataclass(frozen=True)
 class Settings:
     """Variables operativas; las políticas editables están en politica_demo.json."""
@@ -33,6 +44,13 @@ class Settings:
     max_retries: int = 2
     request_budget: float = 2.4
     worker_seconds: float = 5
+    # Al final para conservar el orden de los argumentos posicionales anteriores.
+    cap_base_url: str = ""
+    cap_token: str = ""
+    eva_base_url: str = ""
+    eva_token: str = ""
+    audit_base_url: str = ""
+    audit_token: str = ""
 
     def validate(self):
         from urllib.parse import urlparse
@@ -43,11 +61,25 @@ class Settings:
         if not 0 <= self.max_retries <= 2 or self.worker_seconds < 0:
             raise ValueError("Se permiten como máximo dos reintentos.")
         if self.mode == "REAL":
-            parsed = urlparse(self.bus_base_url)
-            if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
-                raise ValueError("Configura una URL del Bus válida, sin credenciales ni query.")
-            if min(len(self.bus_token), len(self.callback_token)) < 32 or self.bus_token == self.callback_token:
-                raise ValueError("REAL requiere dos tokens distintos de al menos 32 caracteres.")
+            tokens = [self.bus_token] if self.bus_token else []
+            for provider in ("cap", "eva", "audit"):
+                url, token = provider_connection(self, provider)
+                try:
+                    parsed = urlparse(url)
+                    valid = (parsed.scheme in {"http", "https"} and parsed.hostname
+                             and parsed.username is None and parsed.password is None
+                             and not parsed.query and not parsed.fragment
+                             and not any(c.isspace() for c in url))
+                    parsed.port  # También rechaza puertos inválidos.
+                except ValueError:
+                    valid = False
+                if not valid:
+                    raise ValueError(f"Configura una URL HTTP válida de {provider.upper()}, sin credenciales ni query.")
+                if not isinstance(token, str) or len(token) < 32 or any(c.isspace() for c in token):
+                    raise ValueError(f"Configura un token de {provider.upper()} de al menos 32 caracteres sin espacios.")
+                tokens.append(token)
+            if len(self.callback_token) < 32 or any(c.isspace() for c in self.callback_token) or self.callback_token in tokens:
+                raise ValueError("REAL requiere un token de callback distinto de los proveedores, de al menos 32 caracteres.")
             for path in [self.cap_search_path, self.cap_reference_path, self.eva_send_path, self.eva_status_path, self.audit_path]:
                 if not path.startswith("/") or path.startswith("//") or ".." in path or "://" in path or "?" in path:
                     raise ValueError("Configura todas las rutas relativas homologadas del Bus.")
@@ -90,4 +122,10 @@ class Settings:
             max_retries=int(os.getenv("SOL_HTTP_MAX_RETRIES", "2")),
             request_budget=float(os.getenv("SOL_REQUEST_BUDGET_SECONDS", "2.4")),
             worker_seconds=float(os.getenv("SOL_WORKER_SECONDS", "5")),
+            cap_base_url=os.getenv("SOL_CAP_BASE_URL", ""),
+            cap_token=os.getenv("SOL_CAP_TOKEN", ""),
+            eva_base_url=os.getenv("SOL_EVA_BASE_URL", ""),
+            eva_token=os.getenv("SOL_EVA_TOKEN", ""),
+            audit_base_url=os.getenv("SOL_AUDIT_BASE_URL", ""),
+            audit_token=os.getenv("SOL_AUDIT_TOKEN", ""),
         )

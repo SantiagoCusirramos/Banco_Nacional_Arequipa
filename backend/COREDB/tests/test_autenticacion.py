@@ -244,3 +244,11 @@ def test_solo_el_servicio_de_clientes_registra_habilitado_y_solo_una_persona_da_
     assert not permisos.puede_registrar_habilitado(otro_servicio)
     assert not permisos.puede_registrar_habilitado(asesor)
     assert permisos.puede_dar_de_baja(asesor) and not permisos.puede_dar_de_baja(servicio)
+
+
+def test_registrar_empleados_es_un_permiso_propio_del_administrador():
+    assert "REGISTRAR_EMPLEADO" in permisos.ACCIONES
+    assert {rol for rol, acciones in permisos.PERMISOS.items() if "REGISTRAR_EMPLEADO" in acciones} == {
+        "ADMINISTRADOR"}
+    ruta = next(r for r in _rutas() if r.path == "/coredb/empleados" and "POST" in r.methods)
+    assert {getattr(c, "accion", None) for c in _dependencias(ruta.dependant)} - {None} == {"REGISTRAR_EMPLEADO"}

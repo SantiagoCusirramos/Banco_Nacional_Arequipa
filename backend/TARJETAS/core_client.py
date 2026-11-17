@@ -6,11 +6,14 @@ from TARJETAS.exceptions import TarjetasError
 
 class CoreClient:
     def __init__(self, base_url: str | None = None, timeout: float | None = None,
-                 transport: httpx.BaseTransport | None = None):
+                 transport: httpx.BaseTransport | None = None, bus_token: str | None = None):
+        token = settings.bus_token if bus_token is None else bus_token
         self._http = httpx.Client(
             base_url=base_url or settings.core_base_url,
             timeout=timeout or settings.core_timeout_seconds,
             transport=transport,
+            # Credencial ante el Bus en cada llamada; el Bus no la reenvía a COREDB.
+            headers={"X-Bus-Token": token} if token else None,
         )
 
     def close(self) -> None:
@@ -19,7 +22,8 @@ class CoreClient:
     def _request(self, method: str, path: str, *, json: dict | None = None,
                  params: dict | None = None,
                  correlation_id: str | None = None,
-                 authorization: str | None = None):
+                 authorization: str | None = None,
+                 sin_cuerpo: bool = False):
         headers = {}
         if authorization:
             headers["Authorization"] = authorization
@@ -33,6 +37,8 @@ class CoreClient:
             raise TarjetasError("ERR-TAR-TIMEOUT-CORE", "COREDB no respondió a tiempo", 504)
         if resp.status_code >= 400:
             raise self._error_de_core(resp)
+        if sin_cuerpo:
+            return None
         return resp.json()
 
     @staticmethod
@@ -73,3 +79,28 @@ class CoreClient:
                        authorization: str | None = None):
         return self._request("POST", f"/coredb/tarjetas/{id_tarjeta}/estado", json=payload,
                              correlation_id=correlation_id, authorization=authorization)
+
+    def autorizar(self, payload: dict, correlation_id: str | None = None, authorization: str | None = None):
+        return self._request("POST", "/coredb/autorizaciones", json=payload,
+                             correlation_id=correlation_id, authorization=authorization)
+
+    def ver_autorizacion(self, uuid_autorizacion: str, correlation_id: str | None = None,
+                         authorization: str | None = None):
+        return self._request("GET", f"/coredb/autorizaciones/{uuid_autorizacion}",
+                             correlation_id=correlation_id, authorization=authorization)
+
+    def extornar(self, uuid_autorizacion: str, payload: dict, correlation_id: str | None = None,
+                 authorization: str | None = None):
+        return self._request("POST", f"/coredb/autorizaciones/{uuid_autorizacion}/extorno", json=payload,
+                             correlation_id=correlation_id, authorization=authorization)
+
+    def registrar_credencial(self, id_tarjeta: str, tipo: str, payload: dict,
+                             correlation_id: str | None = None, authorization: str | None = None):
+        # 204 sin cuerpo
+        self._request("PUT", f"/coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}", json=payload,
+                      correlation_id=correlation_id, authorization=authorization, sin_cuerpo=True)
+
+    def validar_credencial(self, id_tarjeta: str, tipo: str, payload: dict,
+                           correlation_id: str | None = None, authorization: str | None = None):
+        return self._request("POST", f"/coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion",
+                             json=payload, correlation_id=correlation_id, authorization=authorization)

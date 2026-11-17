@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BNA · Cajero</title>
+<style>
+@font-face{font-family:"Bricolage";src:url("fuentes/bricolage.woff2") format("woff2");font-weight:200 800;font-display:swap}
+@font-face{font-family:"PlexMono";src:url("fuentes/plexmono-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"PlexMono";src:url("fuentes/plexmono-500.woff2") format("woff2");font-weight:500;font-display:swap}
+
+:root{
+  --suelo:#F1F7FB; --carcasa:#FFFFFF; --borde:#D3E6F2;
+  --cielo:#5BB3E3; --cielo-2:#9AD3F0; --polvo:#CFE8F7; --niebla:#E8F4FB;
+  --tinta:#27425C; --suave:#6C8AA3; --papel:#FFFFFF; --acento:#2A74A3;
+  --sans:"Bricolage",system-ui,sans-serif; --mono:"PlexMono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--suelo);color:var(--tinta);font:16px/1.45 var(--sans);overflow-x:hidden}
+
+/* barras inclinadas del logo, de fondo */
+.barras{position:fixed;right:-40px;top:-60px;width:420px;height:520px;pointer-events:none;z-index:0}
+.barras i{position:absolute;bottom:0;width:70px;border-radius:14px 0 0 14px;transform:skewY(-28deg);transform-origin:bottom right}
+.barras i:nth-child(1){right:170px;height:200px;background:var(--cielo-2);opacity:.35}
+.barras i:nth-child(2){right:90px;height:320px;background:var(--cielo);opacity:.18}
+.barras i:nth-child(3){right:10px;height:440px;background:var(--polvo);opacity:.55}
+
+main{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:26px 22px 50px}
+header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:26px}
+header img{height:54px;display:block}
+.mono-logo{font-weight:800;font-size:28px;letter-spacing:-.03em;color:var(--acento)}
+header p{margin:0;font:12px var(--mono);color:var(--suave);text-align:right}
+
+.escena{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:34px;align-items:start}
+
+/* ---- cajero ---- */
+.cajero{background:var(--carcasa);border:1px solid var(--borde);border-radius:30px 30px 22px 22px;padding:20px 22px 24px;
+  box-shadow:0 1px 0 #fff inset,0 26px 44px -28px rgba(70,140,185,.40)}
+.cabeza{display:flex;justify-content:space-between;align-items:center;margin:0 4px 14px;font:11px var(--mono);color:var(--suave);letter-spacing:.06em}
+.led{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--cielo);margin-right:8px;box-shadow:0 0 0 3px rgba(91,179,227,.22)}
+
+.marco{display:grid;grid-template-columns:46px minmax(0,1fr) 46px;gap:12px;align-items:stretch}
+.teclas{display:flex;flex-direction:column;justify-content:space-around;padding:6px 0}
+.tecla{height:34px;border:0;border-radius:10px;background:linear-gradient(#FFFFFF,#DCE9F3);cursor:default;position:relative;
+  box-shadow:0 2px 0 #BCD0E0, 0 4px 8px rgba(70,140,185,.18);padding:0}
+.tecla::after{content:"";position:absolute;left:8px;right:8px;top:50%;height:2px;margin-top:-1px;background:#B3C7D8;border-radius:2px;transition:background .15s}
+.tecla.on{cursor:pointer}
+.tecla.on::after{background:var(--cielo);box-shadow:0 0 8px var(--cielo-2)}
+.tecla.on:hover{transform:translateY(1px);box-shadow:0 1px 0 #BCD0E0,0 2px 4px rgba(70,140,185,.18)}
+.tecla:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+
+.pantalla{position:relative;height:380px;border-radius:12px;color:var(--tinta);overflow:hidden;
+  background:radial-gradient(120% 90% at 15% 0%,#F4FAFE,var(--polvo) 70%);
+  border:7px solid #EEF5FA;box-shadow:0 0 0 1px #C5DCEC,inset 0 0 36px rgba(91,179,227,.22)}
+.pantalla::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(39,66,92,.025) 0 1px,transparent 1px 3px);pointer-events:none}
+.centro{position:absolute;inset:0 18px 0 18px;display:flex;flex-direction:column;justify-content:center}
+.centro.alto{justify-content:flex-start;padding-top:22px}
+.peque{font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--acento)}
+.pantalla h2{margin:8px 0 0;font-weight:600;font-size:30px;line-height:1.1;letter-spacing:-.02em}
+.etq{position:absolute;display:flex;align-items:center;gap:8px;font-weight:550;font-size:16px;max-width:60%}
+.etq.izq{left:14px}.etq.der{right:14px;flex-direction:row-reverse;text-align:right}
+.etq::before{content:"";width:8px;height:8px;border-top:2px solid var(--acento);border-right:2px solid var(--acento);transform:rotate(45deg);flex:none}
+.etq.izq::before{transform:rotate(-135deg)}
+.fila1{top:calc(12.5% - 12px)}.fila2{top:calc(37.5% - 12px)}.fila3{top:calc(62.5% - 12px)}.fila4{top:calc(87.5% - 12px)}
+.nota{position:absolute;left:18px;bottom:14px;font:11px var(--mono);color:#6C8AA3}
+
+.cuentas{margin-top:14px}
+.cta{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 0;border-bottom:1px solid rgba(39,66,92,.14)}
+.cta:last-child{border-bottom:0}
+.cta small{font:12px var(--mono);color:#5B7B96;display:block}
+.cta b{font-weight:550;font-size:15px}
+.monto{font-weight:650;font-size:32px;letter-spacing:-.025em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.monto s{text-decoration:none;font-size:15px;font-weight:500;color:var(--acento);margin-right:6px;letter-spacing:0}
+.puntos::after{content:"";animation:p 1.2s steps(4,end) infinite}
+@keyframes p{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+
+/* tarjetas y ranura */
+.base{margin:20px 4px 0;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.base>span{font:11px var(--mono);letter-spacing:.06em;color:var(--suave);width:100%}
+.ranura{height:10px;border-radius:6px;background:#CFE0EC;width:100%;box-shadow:inset 0 2px 3px rgba(60,110,150,.35);margin-bottom:-6px}
+.insertar{display:flex;gap:10px;width:100%;margin-top:8px}
+.insertar input{flex:1;min-width:0;background:#fff;border:1px solid var(--borde);border-radius:12px;padding:10px 12px;font:500 15px var(--mono);letter-spacing:.12em;color:var(--tinta)}
+.insertar button,.vista{border:0;border-radius:12px;background:var(--acento);color:#fff;font:550 14px var(--sans);padding:10px 18px;cursor:pointer}
+.insertar button:hover,.vista:hover{filter:brightness(1.08)}
+.vista{background:transparent;color:var(--acento);border:1px solid var(--borde);padding:5px 12px;font:12px var(--mono);margin-top:8px}
+.ranura.dentro{animation:ins .8s ease}
+@keyframes ins{0%{background:#CFE0EC}40%{background:var(--cielo);box-shadow:0 0 14px var(--cielo)}100%{background:#CFE0EC}}
+.ayuda{width:100%;font:12px var(--mono)}
+.ayuda .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.ayuda .chips button{border:1px solid var(--borde);background:var(--niebla);color:var(--tinta);border-radius:8px;padding:5px 9px;font:12px var(--mono);cursor:pointer}
+.ayuda p{margin:8px 0 0;color:#5B7B96}
+.etq small{display:block;font:400 12px var(--mono);color:#5B7B96}
+.tarj-icono{width:74px;height:48px;border-radius:8px;background:linear-gradient(135deg,#B7DFF5,#8CCBEE);margin-top:16px;box-shadow:0 8px 14px -8px rgba(70,140,185,.55);animation:sale-tj 1.4s ease-in-out infinite alternate}
+@keyframes sale-tj{from{transform:translateY(0)}to{transform:translateY(-10px)}}
+.billetes span{animation:sube .5s both}
+.billetes span:nth-child(2){animation-delay:.15s}.billetes span:nth-child(3){animation-delay:.3s}
+.billetes span:nth-child(4){animation-delay:.45s}.billetes span:nth-child(5){animation-delay:.6s}
+@keyframes sube{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* derecha */
+.lado{display:flex;flex-direction:column;gap:26px}
+.salida{position:relative;padding-top:0}
+.salida .rend{height:12px;border-radius:7px;background:#CFE0EC;box-shadow:inset 0 2px 3px rgba(60,110,150,.35);position:relative;z-index:2}
+.rollo{margin:-4px 14px 0;overflow:hidden;max-height:0;transition:max-height .9s cubic-bezier(.3,.7,.2,1)}
+.rollo.sale{max-height:560px}
+.recibo{background:var(--papel);padding:18px 18px 26px;font:12.5px/1.65 var(--mono);color:#2B3F52;transform:rotate(-.6deg);
+  box-shadow:0 10px 18px -12px rgba(70,140,185,.55);
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) bottom/14px 100% repeat-x;
+          mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) bottom/14px 100% repeat-x;
+  padding-bottom:30px}
+.recibo .tit{text-align:center;font-weight:500;letter-spacing:.04em}
+.recibo hr{border:0;border-top:1px dashed #A9C0D2;margin:9px 0}
+.recibo .r{display:flex;justify-content:space-between;gap:10px}
+.recibo .fin{text-align:center;font-size:11px;color:#555;margin-top:6px}
+.vacio-recibo{font:12px var(--mono);color:var(--suave);margin:10px 4px 0}
+
+.registro{background:var(--niebla);border:1px solid var(--borde);color:#3A566F;border-radius:18px;padding:14px 16px 16px;font:12px/1.7 var(--mono);min-height:150px}
+.registro h3{margin:0 0 8px;font:500 11px var(--mono);letter-spacing:.1em;color:#6C8AA3;text-transform:uppercase}
+.registro div{white-space:pre-wrap;overflow-wrap:anywhere}
+.registro .t{color:#8AA5BB}
+.registro .ok{color:#2F8F7A}.registro .no{color:#BE5A6E}
+details{margin-top:10px;font:12px var(--mono)}
+summary{cursor:pointer;color:#6C8AA3}
+details pre{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;color:#3A566F;font:11.5px/1.6 var(--mono)}
+.conex{margin-top:12px;font:11px var(--mono);color:#6C8AA3}
+.conex input{width:100%;margin-top:4px;background:#fff;border:1px solid var(--borde);border-radius:10px;color:var(--tinta);padding:7px 9px;font:12px var(--mono)}
+
+
+/* clave, teclado y paneles */
+.clave{display:flex;gap:14px;margin:22px 0 4px}
+.clave i{width:20px;height:20px;border-radius:50%;border:2px solid var(--acento);background:transparent;transition:background .12s}
+.clave i.lleno{background:var(--acento)}
+.aviso{margin:10px 0 0;color:#B04A5E;font-weight:550;font-size:15px}
+.cifra{font-weight:650;font-size:44px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:14px}
+.cifra s{text-decoration:none;font-size:20px;color:var(--acento);margin-right:8px;font-weight:500}
+.detalle{margin:10px 0 0;color:#46657F;font-size:15px;max-width:92%}
+.billetes{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+.billetes span{font:500 13px var(--mono);background:#fff;border:1px solid var(--borde);border-radius:8px;padding:5px 9px;color:var(--tinta)}
+.etq.off{opacity:.38}
+.teclado{margin:16px 4px 0;display:grid;grid-template-columns:repeat(6,1fr);gap:7px;opacity:.45;pointer-events:none;transition:opacity .15s}
+.teclado.on{opacity:1;pointer-events:auto}
+.teclado button{height:34px;border:0;border-radius:9px;background:linear-gradient(#FFFFFF,#DCE9F3);box-shadow:0 2px 0 #BCD0E0;color:var(--tinta);font:500 14px var(--mono);cursor:pointer}
+.teclado button:active{transform:translateY(1px);box-shadow:0 1px 0 #BCD0E0}
+.estado{background:var(--carcasa);border:1px solid var(--borde);border-radius:18px;padding:12px 16px;font:12px/1.7 var(--mono);color:#3A566F}
+.estado h3{margin:0 0 6px;font:500 11px var(--mono);letter-spacing:.1em;color:#6C8AA3;text-transform:uppercase}
+.estado .f{display:flex;gap:10px;flex-wrap:wrap}
+.estado .f b{font-weight:500;color:var(--acento);min-width:30px}
+.estado .f span{background:var(--niebla);border-radius:6px;padding:0 7px}
+.prueba{background:#FFF8EC;border:1px dashed #E3C98F;border-radius:18px;padding:12px 16px;font:12px/1.6 var(--mono);color:#6E5A2C}
+.prueba h3{margin:0 0 8px;font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.prueba label{display:block;margin:4px 0}
+.prueba select,.prueba button{font:12px var(--mono);border:1px solid #E3C98F;border-radius:8px;background:#fff;color:#6E5A2C;padding:4px 8px;margin:3px 6px 3px 0;cursor:pointer}
+
+@media(max-width:860px){
+  .escena{grid-template-columns:1fr}
+  .barras{opacity:.6}
+  main{padding:18px 12px 36px}
+  .pantalla{height:350px}
+  .marco{grid-template-columns:34px minmax(0,1fr) 34px;gap:8px}
+  .monto{font-size:26px}
+  .pantalla h2{font-size:25px}
+  .etq{font-size:14px}
+}
+</style>
+</head>
+<body>
+<div class="barras" aria-hidden="true"><i></i><i></i><i></i></div>
+<main>
+  <header>
+    <img id="logo" src="logo.png" alt="Banco Nacional de Arequipa" onerror="logoFallback(this)">
+    <p>Consulta y retiro<br>canal ATM<br><button class="vista" id="vista" type="button">Abrir panel técnico ↗</button></p>
+  </header>
+
+  <div class="escena">
+    <section class="cajero" aria-label="Cajero automático">
+      <div class="cabeza"><span><i class="led"></i>ATM-AQP-001</span><span>EN SERVICIO</span></div>
+      <div class="marco">
+        <div class="teclas" id="izq"></div>
+        <div class="pantalla" id="pantalla" aria-live="polite"></div>
+        <div class="teclas" id="der"></div>
+      </div>
+      <div class="base">
+        <span>RANURA DE TARJETA</span>
+        <div class="ranura" id="ranura"></div>
+        <form class="insertar" id="formTj" autocomplete="off">
+          <input id="numTj" inputmode="numeric" maxlength="4" pattern="\d{4}" placeholder="N.º de tarjeta (4 dígitos)" aria-label="Número de tarjeta">
+          <button type="submit" id="btnIns">Insertar tarjeta</button>
+        </form>
+        <details class="ayuda"><summary>Ayuda de la demo</summary>
+          <div class="chips">
+            <button type="button" data-tj="4821">4821</button><button type="button" data-tj="7730">7730</button>
+            <button type="button" data-tj="0000">0000</button><button type="button" data-tj="5555">5555</button>
+          </div>
+          <p>Clave = los mismos 4 dígitos, salvo 4821 → 1234 y 7730 → 5678. 0000: sin cuentas habilitadas. 5555: saldo bajo (S/ 80) y tope diario.</p>
+        </details>
+      </div>
+      <div class="teclado" id="teclado" aria-label="Teclado numérico"></div>
+    </section>
+
+    <aside class="lado">
+      <div class="salida">
+        <div class="rend"></div>
+        <div class="rollo" id="rollo"><div class="recibo" id="recibo"></div></div>
+        <p class="vacio-recibo" id="vacioRecibo">El comprobante sale aquí.</p>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const ID_CAJERO = 'ATM-AQP-001';
+let ocupado = false;
+let sesion = null;          // {token, tarjeta}
+let entrada = null;         // captura de digitos: {max, valor, cambio, enter}
+
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+const busBase = () => { let u = ''; try{ u = localStorage.getItem('bnaBus') || ''; }catch(e){} return (u || 'http://localhost:8001').trim().replace(/\/+$/, ''); };
+let tarjeta = null;         // numero (4 digitos) de la tarjeta insertada
+const tarjetaActual = () => 'tok_' + tarjeta;
+const ultimos4 = () => tarjeta || '----';
+const TOPE = {PEN:1500, USD:500};
+
+/* ---- inactividad: aviso a los 45 s, expulsa tarjeta 10 s despues ---- */
+let tInact = null, tCuenta = null, enAviso = false;
+function armarInactividad(){
+  if(enAviso) return;
+  clearTimeout(tInact);
+  if(tarjeta) tInact = setTimeout(avisoInactividad, 45000);
+}
+['click','keydown'].forEach(ev => document.addEventListener(ev, armarInactividad));
+function avisoInactividad(){
+  if(!tarjeta) return;
+  if(ocupado){ tInact = setTimeout(avisoInactividad, 5000); return; }
+  enAviso = true;
+  const c = nueva();
+  let seg = 10;
+  const t = el('h2', null, '¿Desea continuar?');
+  const d = el('p', 'detalle', 'Por seguridad, se devolverá tu tarjeta en ' + seg + ' s.');
+  c.append(el('div','peque','Sin actividad'), t, d);
+  etiqueta('der', 4, 'Sí, continuar', () => { cerrarAviso(); inicio(); });
+  tCuenta = setInterval(() => {
+    seg--; d.textContent = 'Por seguridad, se devolverá tu tarjeta en ' + seg + ' s.';
+    if(seg <= 0){ cerrarAviso(); linea('sesión cerrada por inactividad'); expulsar(); }
+  }, 1000);
+}
+function cerrarAviso(){ clearInterval(tCuenta); enAviso = false; armarInactividad(); }
+
+/* ---- tarjeta: insertar y retirar ---- */
+function pantallaInsertar(){
+  const c = nueva();
+  c.append(el('div','peque','Banco Nacional de Arequipa'), el('h2',null,'Inserte su tarjeta'),
+    el('p','detalle','Escribe el número de tu tarjeta abajo y pulsa «Insertar tarjeta».'));
+  $('numTj').focus({preventScroll:true});
+}
+function insertar(num){
+  if(!/^\d{4}$/.test(num)){ $('numTj').setCustomValidity('Ingresa 4 dígitos'); $('numTj').reportValidity(); $('numTj').setCustomValidity(''); return; }
+  tarjeta = num; sesion = null; guardarRecibo();
+  $('numTj').value = ''; $('numTj').blur();
+  $('ranura').classList.remove('dentro'); void $('ranura').offsetWidth; $('ranura').classList.add('dentro');
+  linea('tarjeta •••• ' + num + ' insertada');
+  pantallaClave(); armarInactividad();
+}
+function expulsar(){
+  clearTimeout(tInact); if(enAviso){ clearInterval(tCuenta); enAviso = false; }
+  sesion = null; tarjeta = null; guardarRecibo();
+  const c = nueva();
+  c.append(el('div','peque','Gracias por usar BNA'), el('h2',null,'Retira tu tarjeta'), el('div','tarj-icono'));
+  etiqueta('der', 4, 'Aceptar', pantallaInsertar);
+  setTimeout(() => { if(!tarjeta && $('pantalla').querySelector('.tarj-icono')) pantallaInsertar(); }, 3500);
+}
+
+/* ---- comprobante opcional ---- */
+function preguntarRecibo(imprimir, siguiente){
+  const c = nueva();
+  c.append(el('div','peque','Operación terminada'), el('h2',null,'¿Desea comprobante?'));
+  etiqueta('der', 3, 'Sí', () => { imprimir(); siguiente(); });
+  etiqueta('der', 4, 'No', siguiente);
+}
+
+/* ---- validacion de monto ---- */
+function validarMonto(cuenta, monto){
+  const [pre] = dinero(0, cuenta.moneda);
+  if(!(monto > 0)) return 'Escribe un monto.';
+  if(monto % 10 !== 0) return 'El monto debe ser múltiplo de 10.';
+  if(monto > cuenta.saldoDisponible) return 'Supera tu saldo disponible.';
+  if(monto > TOPE[cuenta.moneda]) return 'Tope diario: ' + pre + ' ' + TOPE[cuenta.moneda].toLocaleString('en-US') + '.';
+  return null;
+}
+
+function logoFallback(img){
+  if(!img.dataset.svg){ img.dataset.svg = 1; img.src = 'logo.svg'; return; }
+  const m = document.createElement('div'); m.className = 'mono-logo'; m.textContent = 'BNA'; img.replaceWith(m);
+}
+
+/* ---- teclas laterales ---- */
+const teclas = {izq:[], der:[]};
+['izq','der'].forEach(lado => {
+  for(let i=0;i<4;i++){
+    const b = document.createElement('button'); b.className = 'tecla'; b.type = 'button'; b.tabIndex = -1;
+    b.setAttribute('aria-hidden','true');
+    $(lado).appendChild(b); teclas[lado].push(b);
+  }
+});
+function activarTecla(lado, fila, texto, fn){
+  const b = teclas[lado][fila-1];
+  b.classList.add('on'); b.tabIndex = 0; b.removeAttribute('aria-hidden'); b.setAttribute('aria-label', texto);
+  b.onclick = fn;
+}
+function apagarTecla(lado, fila){
+  const b = teclas[lado][fila-1];
+  b.classList.remove('on'); b.tabIndex = -1; b.setAttribute('aria-hidden','true'); b.removeAttribute('aria-label'); b.onclick = null;
+}
+function limpiarTeclas(){ ['izq','der'].forEach(l => [1,2,3,4].forEach(f => apagarTecla(l, f))); }
+
+/* ---- pantalla ---- */
+function el(tag, cls, txt){ const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; }
+function etiqueta(lado, fila, texto, fn){
+  const e = el('div','etq '+(lado==='izq'?'izq':'der')+' fila'+fila, texto);
+  $('pantalla').appendChild(e);
+  activarTecla(lado, fila, texto, fn);
+  e.style.cursor = 'pointer';
+  e.addEventListener('click', () => { const b = teclas[lado][fila-1]; if(b.onclick) b.onclick(); });
+  return e;
+}
+function nueva(alto = true){
+  limpiarTeclas(); soltarEntrada();
+  const p = $('pantalla'); p.replaceChildren();
+  const c = el('div', alto ? 'centro alto' : 'centro'); p.append(c);
+  return c;
+}
+function dinero(m, mo){
+  const n = new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(m);
+  return [mo === 'USD' ? 'US$' : 'S/', n];
+}
+
+/* ---- teclado numerico ---- */
+(function(){
+  const t = $('teclado');
+  ['1','2','3','4','5','6','7','8','9','C','0','←'].forEach(d => {
+    const b = el('button', null, d); b.type = 'button';
+    b.onclick = () => digito(d === '←' ? 'B' : d === 'C' ? 'L' : d);
+    t.append(b);
+  });
+  t.style.gridTemplateColumns = 'repeat(6,1fr)';
+})();
+function pedirNumero(max, cambio, enter){
+  entrada = {max, valor:'', cambio, enter};
+  $('teclado').classList.add('on');
+  cambio('');
+}
+function soltarEntrada(){ entrada = null; $('teclado').classList.remove('on'); }
+function digito(d){
+  if(!entrada) return;
+  if(d === 'B') entrada.valor = entrada.valor.slice(0,-1);
+  else if(d === 'L') entrada.valor = '';
+  else if(entrada.valor.length < entrada.max) entrada.valor += d;
+  entrada.cambio(entrada.valor);
+}
+document.addEventListener('keydown', e => {
+  if(!entrada) return;
+  if(/^\d$/.test(e.key)) digito(e.key);
+  else if(e.key === 'Backspace') digito('B');
+  else if(e.key === 'Enter' && entrada.enter) entrada.enter();
+});
+
+/* ---- registro del canal, comprobante ---- */
+function hora(){ const d = new Date(); return d.toTimeString().slice(0,8) + '.' + String(d.getMilliseconds()).padStart(3,'0'); }
+const canal = ('BroadcastChannel' in window) ? new BroadcastChannel('bna-atm') : null;
+const historial = {lineas:[], msgs:''};
+function linea(txt, cls){
+  const l = {h: hora(), txt, cls: cls || ''};
+  historial.lineas.push(l); if(historial.lineas.length > 200) historial.lineas.shift();
+  if(canal) canal.postMessage({t:'linea', l});
+}
+function mensajes(titulo, obj){
+  historial.msgs = (titulo ? titulo + '\n' : '') + (typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2));
+  if(canal) canal.postMessage({t:'msgs', msgs: historial.msgs});
+}
+function anexar(titulo, obj){
+  historial.msgs += '\n\n' + titulo + '\n' + JSON.stringify(obj, null, 2);
+  if(canal) canal.postMessage({t:'msgs', msgs: historial.msgs});
+}
+if(canal) canal.onmessage = e => { if(e.data && e.data.t === 'hola') canal.postMessage({t:'historial', h: historial}); };
+function recibo(titulo, filas, pie){
+  const f = new Date();
+  const fecha = f.toLocaleDateString('es-PE') + ' ' + f.toTimeString().slice(0,8);
+  const r = $('recibo'); r.replaceChildren();
+  const fila = (a,b) => { const x = el('div','r'); x.append(el('span',null,a), el('span',null,b)); return x; };
+  r.append(el('div','tit','BANCO NACIONAL DE AREQUIPA'), el('div','tit',titulo), el('hr'),
+    fila('FECHA', fecha), fila('CAJERO', ID_CAJERO), fila('TARJETA', '****' + ultimos4()));
+  filas.forEach(x => r.append(x === '-' ? el('hr') : fila(x[0], x[1])));
+  r.append(el('hr'));
+  if(pie) r.append(el('div','fin',pie));
+  $('vacioRecibo').hidden = true;
+  $('rollo').classList.remove('sale'); void $('rollo').offsetWidth; $('rollo').classList.add('sale');
+}
+function guardarRecibo(){ $('rollo').classList.remove('sale'); $('vacioRecibo').hidden = false; }
+
+/* ---- llamadas ---- */
+async function llamar(url, cuerpo, corr, ms = 5000){
+  const control = new AbortController();
+  const limite = setTimeout(() => control.abort(), ms);
+  try{
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-Correlation-ID':corr},
+      body:JSON.stringify(cuerpo), signal:control.signal, cache:'no-store'});
+    return {r, datos: await r.json()};
+  } finally { clearTimeout(limite); }
+}
+function evento(tipo, estado, corr, extra){
+  fetch('/api/registrar', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(Object.assign({tipo, estado, correlationId:corr, tarjeta:ultimos4()}, extra||{}))}).catch(() => {});
+}
+
+/* ---- clave ---- */
+function inicio(){ !tarjeta ? pantallaInsertar() : sesion ? menu() : pantallaClave(); }
+function pantallaClave(aviso){
+  const c = nueva();
+  c.append(el('div','peque','Tarjeta •••• ' + ultimos4()), el('h2',null,'Ingresa tu clave'));
+  const pts = el('div','clave'); for(let i=0;i<4;i++) pts.append(el('i')); c.append(pts);
+  if(aviso) c.append(el('p','aviso',aviso));
+  const confirmar = () => { if(entrada && entrada.valor.length === 4) autenticar(entrada.valor); };
+  const etq = etiqueta('der', 4, 'Confirmar', confirmar); apagarTecla('der', 4); etq.classList.add('off');
+  etiqueta('izq', 4, 'Cancelar', expulsar);
+  pedirNumero(4, v => {
+    [...pts.children].forEach((p,i) => p.classList.toggle('lleno', i < v.length));
+    if(v.length === 4){ activarTecla('der', 4, 'Confirmar', confirmar); etq.classList.remove('off'); }
+    else { apagarTecla('der', 4); etq.classList.add('off'); }
+  }, confirmar);
+}
+async function autenticar(pin){
+  if(ocupado) return; ocupado = true;
+  pantallaCarga('Validando');
+  const corr = uuid();
+  const solicitud = {idTarjetaTokenizado:tarjetaActual(), pin, idCajero:ID_CAJERO, uuidAutenticacion:corr};
+  mensajes('SOLICITUD /autenticar', Object.assign({}, solicitud, {pin:'****'}));
+  linea('corr ' + corr.slice(0,8)); linea('ATM -> BUS      /autenticar');
+  const t0 = performance.now();
+  try{
+    const {r, datos} = await llamar(busBase() + '/autenticar', solicitud, corr);
+    const ms = Math.round(performance.now() - t0);
+    anexar('RESPUESTA ' + r.status, Object.assign({}, datos, datos.tokenSesion ? {tokenSesion:'SES-********'} : {}));
+    if(r.ok){
+      sesion = {token:datos.tokenSesion, tarjeta:tarjetaActual()};
+      linea('BUS -> ATM      200  ' + ms + ' ms', 'ok');
+      evento('AUTENTICACION', 'AUTENTICADA', corr, {ms}); return menu();
+    }
+    linea('BUS -> ATM      ' + r.status + '  ' + datos.codigo, 'no');
+    evento('AUTENTICACION', datos.codigo, corr, {ms, codigo:datos.codigo});
+    if(datos.codigo === 'PIN_INCORRECTO') return pantallaClave('Clave incorrecta. Intentos restantes: ' + datos.intentosRestantes);
+    if(datos.codigo === 'TARJETA_BLOQUEADA') return pantallaError('Tarjeta bloqueada', 'Superaste los 3 intentos. Acude a tu banco para desbloquearla.', 'Retirar tarjeta', expulsar);
+    if(datos.codigo === 'TARJETA_NO_ENCONTRADA') return pantallaError('Tarjeta no reconocida', 'No pudimos leer esta tarjeta. Retírala e inténtalo con otra.', 'Retirar tarjeta', expulsar);
+    return pantallaError('Servicio no disponible', 'Intenta nuevamente en unos minutos.');
+  }catch(e){
+    linea(e.name === 'AbortError' ? 'BUS            sin respuesta en 5 s' : 'ATM -> BUS      sin conexión', 'no');
+    pantallaError(e.name === 'AbortError' ? 'El servicio tardó demasiado' : 'Sin conexión con el Bus',
+      e.name === 'AbortError' ? 'Intenta nuevamente en unos minutos.' : 'Verifica que el Bus esté encendido y la dirección sea correcta.');
+  }finally{ ocupado = false; }
+}
+
+/* ---- menu ---- */
+function menu(){
+  const c = nueva();
+  c.append(el('div','peque','Tarjeta •••• ' + ultimos4()), el('h2',null,'¿Qué deseas hacer?'));
+  etiqueta('izq', 2, 'Retirar efectivo', iniciarRetiro);
+  etiqueta('izq', 3, 'Consultar saldo', consultar);
+  etiqueta('der', 4, 'Terminar', terminar);
+}
+function terminar(){ linea('sesión cerrada'); expulsar(); }
+function pantallaCarga(texto = 'Consultando'){
+  const c = nueva(false);
+  const h = el('h2'); h.append(texto); h.append(el('span','puntos'));
+  c.append(el('div','peque','Un momento'), h);
+}
+function pantallaError(titulo, texto, boton = 'Intentar de nuevo', fn = inicio){
+  const c = nueva();
+  c.append(el('div','peque','No se pudo completar'), el('h2',null,titulo));
+  const t = el('p','detalle',texto); c.append(t);
+  etiqueta('der', 4, boton, fn);
+}
+function sesionVencida(){
+  sesion = null;
+  pantallaError('Tu sesión venció', 'Por seguridad, ingresa tu clave nuevamente.', 'Continuar', pantallaClave);
+}
+
+/* ---- consulta de saldo (INT-06) ---- */
+async function pedirCuentas(corr){
+  const solicitud = {tokenSesion:sesion.token, idTarjetaTokenizado:sesion.tarjeta, idCajero:ID_CAJERO, uuidConsulta:corr};
+  mensajes('SOLICITUD /consulta-saldo', Object.assign({}, solicitud, {tokenSesion:'SES-********'}));
+  linea('corr ' + corr.slice(0,8)); linea('ATM -> BUS      /consulta-saldo');
+  const t0 = performance.now();
+  const {r, datos} = await llamar(busBase() + '/consulta-saldo', solicitud, corr);
+  const ms = Math.round(performance.now() - t0);
+  anexar('RESPUESTA ' + r.status, datos);
+  return {r, datos, ms, cms:r.headers.get('X-Cuentas-Ms')};
+}
+async function consultar(){
+  if(ocupado) return; ocupado = true;
+  guardarRecibo(); pantallaCarga('Consultando');
+  const corr = uuid();
+  try{
+    const {r, datos, ms, cms} = await pedirCuentas(corr);
+    if(!r.ok){
+      linea('BUS -> ATM      ' + r.status + '  ' + ms + ' ms', 'no');
+      if(datos.codigo) linea(datos.codigo, 'no');
+      evento('CONSULTA', datos.codigo || 'ERROR', corr, {ms, codigo:datos.codigo});
+      if(datos.codigo === 'SESION_INVALIDA') return sesionVencida();
+      return pantallaError(datos.codigo === 'SIN_CUENTAS_HABILITADAS' ? 'Sin cuentas habilitadas' : 'Servicio no disponible',
+        datos.codigo === 'SIN_CUENTAS_HABILITADAS' ? 'Esta tarjeta no tiene cuentas habilitadas para operar en cajero.' : 'Intenta nuevamente en unos minutos.');
+    }
+    if(!Array.isArray(datos.listaCuentas) || datos.uuidConsulta !== corr) throw new Error('formato');
+    linea('BUS <-> CUENTAS ' + datos.listaCuentas.length + (datos.listaCuentas.length === 1 ? ' cuenta' : ' cuentas') + (cms ? '  ' + cms + ' ms' : ''));
+    linea('BUS -> ATM      200  ' + ms + ' ms', 'ok');
+    evento('CONSULTA', 'CONSULTADA', corr, {ms});
+    const filas = [['REF', corr.slice(0,8)], '-'];
+    datos.listaCuentas.forEach(x => { const [pre, num] = dinero(x.saldoDisponible, x.moneda);
+      filas.push(['AHORROS ' + x.moneda, x.numCuentaEnmascarado], ['  saldo', pre + ' ' + num]); });
+    pantallaSaldo(datos, () => recibo('CONSULTA DE SALDO', filas, datos.simulado ? 'SALDOS SIMULADOS · PRUEBA' : ''));
+  }catch(e){
+    const tarde = e.name === 'AbortError';
+    linea(tarde ? 'BUS            sin respuesta en 5 s' : 'ATM -> BUS      sin conexión', 'no');
+    pantallaError(tarde ? 'El servicio tardó demasiado' : 'Sin conexión con el Bus',
+      tarde ? 'Intenta nuevamente en unos minutos.' : 'Verifica que el Bus esté encendido y la dirección sea correcta.');
+  }finally{ ocupado = false; }
+}
+function pantallaSaldo(d, imprimir){
+  const c = nueva();
+  c.append(el('div','peque','Saldo disponible'));
+  const lista = el('div','cuentas');
+  d.listaCuentas.forEach(x => {
+    const f = el('div','cta');
+    const i = el('div'); i.append(el('b',null,'Ahorros'), el('small',null,x.numCuentaEnmascarado));
+    const [pre, num] = dinero(x.saldoDisponible, x.moneda);
+    const m = el('div','monto'); m.append(el('s',null,pre), num);
+    f.append(i, m); lista.append(f);
+  });
+  c.append(lista);
+  if(d.simulado) $('pantalla').append(el('div','nota','saldos simulados'));
+  etiqueta('der', 4, 'Continuar', () => preguntarRecibo(imprimir, menu));
+}
+
+/* ---- retiro (INT-04, INT-07, INT-05) ---- */
+async function iniciarRetiro(){
+  if(ocupado) return; ocupado = true;
+  guardarRecibo(); pantallaCarga('Un momento');
+  const corr = uuid();
+  try{
+    const {r, datos, ms} = await pedirCuentas(corr);
+    if(!r.ok){
+      linea('BUS -> ATM      ' + r.status + '  ' + ms + ' ms', 'no');
+      if(datos.codigo === 'SESION_INVALIDA') return sesionVencida();
+      return pantallaError(datos.codigo === 'SIN_CUENTAS_HABILITADAS' ? 'Sin cuentas habilitadas' : 'Servicio no disponible',
+        datos.codigo === 'SIN_CUENTAS_HABILITADAS' ? 'Esta tarjeta no tiene cuentas habilitadas para operar en cajero.' : 'Intenta nuevamente en unos minutos.');
+    }
+    linea('BUS -> ATM      200  ' + ms + ' ms', 'ok');
+    pantallaCuentas(datos.listaCuentas);
+  }catch(e){
+    linea('ATM -> BUS      sin respuesta', 'no');
+    pantallaError('Sin conexión con el Bus', 'Verifica que el Bus esté encendido y la dirección sea correcta.');
+  }finally{ ocupado = false; }
+}
+function pantallaCuentas(lista){
+  const c = nueva();
+  c.append(el('div','peque','Retiro de efectivo'), el('h2',null,'¿De qué cuenta?'));
+  lista.slice(0,3).forEach((x, i) => {
+    const [pre, num] = dinero(x.saldoDisponible, x.moneda);
+    const e = etiqueta('izq', i + 2, 'Ahorros ' + x.moneda, () => pantallaMonto(x));
+    const sp = el('span'); sp.append('Ahorros ' + x.moneda, el('small', null, x.numCuentaEnmascarado + ' · ' + pre + ' ' + num));
+    e.replaceChildren(sp);
+  });
+  etiqueta('der', 4, 'Cancelar', menu);
+}
+function pantallaMonto(cuenta){
+  const c = nueva();
+  const [pre] = dinero(0, cuenta.moneda);
+  c.append(el('div','peque','Ahorros ' + cuenta.moneda + ' ' + cuenta.numCuentaEnmascarado), el('h2',null,'Elige el monto'));
+  const base = cuenta.moneda === 'USD' ? [20,50,100,200] : [50,100,200,500];
+  const tope = Math.min(cuenta.saldoDisponible, TOPE[cuenta.moneda]);
+  base.filter(m => m <= tope).forEach((m, i) => etiqueta('der', i + 1, pre + ' ' + m, () => confirmarRetiro(cuenta, m)));
+  etiqueta('izq', 2, 'Otro monto', () => pantallaOtroMonto(cuenta));
+  etiqueta('izq', 4, 'Cancelar', menu);
+}
+function confirmarRetiro(cuenta, monto){
+  const c = nueva();
+  const [pre] = dinero(0, cuenta.moneda);
+  c.append(el('div','peque','Confirma tu retiro'), el('h2',null,'Retirar ' + pre + ' ' + new Intl.NumberFormat('en-US',{minimumFractionDigits:2}).format(monto)),
+    el('p','detalle','De Ahorros ' + cuenta.moneda + ' ' + cuenta.numCuentaEnmascarado + '.'));
+  etiqueta('der', 4, 'Confirmar', () => ejecutarRetiro(cuenta, monto));
+  etiqueta('izq', 3, 'Cambiar monto', () => pantallaMonto(cuenta));
+  etiqueta('izq', 4, 'Cancelar', menu);
+}
+function pantallaOtroMonto(cuenta){
+  const c = nueva();
+  const [pre] = dinero(0, cuenta.moneda);
+  c.append(el('div','peque','Otro monto · múltiplos de 10'), el('h2',null,'Escribe el monto'));
+  const cifra = el('div','cifra'); const msg = el('p','aviso'); c.append(cifra, msg);
+  const ir = () => { if(entrada && !validarMonto(cuenta, Number(entrada.valor))) confirmarRetiro(cuenta, Number(entrada.valor)); };
+  const etq = etiqueta('der', 4, 'Continuar', ir); apagarTecla('der', 4); etq.classList.add('off');
+  etiqueta('izq', 4, 'Cancelar', menu);
+  pedirNumero(5, v => {
+    cifra.replaceChildren(); const s = el('s', null, pre); cifra.append(s, v || '0');
+    const err = v ? validarMonto(cuenta, Number(v)) : null; msg.textContent = err || '';
+    if(Number(v) > 0 && !err){ activarTecla('der', 4, 'Continuar', ir); etq.classList.remove('off'); }
+    else { apagarTecla('der', 4); etq.classList.add('off'); }
+  }, ir);
+}
+async function ejecutarRetiro(cuenta, monto){
+  if(ocupado) return; ocupado = true;
+  pantallaCarga('Procesando retiro');
+  const uuidT = uuid(), corr = uuid();
+  const solicitud = {tokenSesion:sesion.token, idTarjetaTokenizado:sesion.tarjeta, idCuenta:cuenta.idCuenta,
+    moneda:cuenta.moneda, monto, uuidTransaccion:uuidT, busBase:busBase()};
+  mensajes('SOLICITUD /api/retiro', Object.assign({}, solicitud, {tokenSesion:'SES-********'}));
+  linea('corr ' + corr.slice(0,8)); linea('ATM -> BUS      /retiro  ' + dinero(monto, cuenta.moneda).join(' '));
+  const t0 = performance.now();
+  try{
+    const {r, datos} = await llamar('/api/retiro', solicitud, corr, 30000);
+    const ms = Math.round(performance.now() - t0);
+    anexar('RESPUESTA ' + r.status, datos);
+    resultadoRetiro(r, datos, cuenta, monto, corr, ms);
+  }catch(e){
+    linea('ATM            sin respuesta del cajero', 'no');
+    pantallaError('No se pudo completar', 'Conserva tu comprobante y consulta tu saldo.');
+  }finally{ ocupado = false; refrescar(); }
+}
+function resultadoRetiro(r, d, cuenta, monto, corr, ms){
+  const moneda = cuenta.moneda, [pre] = dinero(0, moneda);
+  if(r.ok){
+    linea('BUS -> ATM      ' + r.status + '  AUTORIZADA', 'ok');
+    linea('DISPENSADOR     ' + d.billetes.map(b => b.cantidad + '×' + b.denominacion).join(' + ') + '  entregado', 'ok');
+    linea('ATM -> BUS      confirmación  ' + (d.confirmado ? 'ok' : 'pendiente'), d.confirmado ? 'ok' : 'no');
+    const c = nueva();
+    c.append(el('div','peque','Retiro exitoso'), el('h2',null,'Retira tu efectivo'));
+    const cif = el('div','cifra'); cif.append(el('s',null,pre), new Intl.NumberFormat('en-US',{minimumFractionDigits:2}).format(monto)); c.append(cif);
+    const bl = el('div','billetes'); d.billetes.forEach(b => bl.append(el('span',null,b.cantidad + ' × ' + pre + ' ' + b.denominacion))); c.append(bl);
+    const [, sn] = dinero(d.saldoDisponible, moneda);
+    c.append(el('p','detalle','Saldo disponible: ' + pre + ' ' + sn));
+    const imprimir = () => recibo('RETIRO DE EFECTIVO', [['REF', corr.slice(0,8)], ['OPERACIÓN', d.idOperacion], '-', ['CUENTA', cuenta.numCuentaEnmascarado],
+      ['MONTO', pre + ' ' + new Intl.NumberFormat('en-US',{minimumFractionDigits:2}).format(monto)],
+      ['BILLETES', d.billetes.map(b => b.cantidad + 'x' + b.denominacion).join(' ')], ['SALDO', pre + ' ' + sn]], 'OPERACIÓN SIMULADA · PRUEBA');
+    etiqueta('der', 4, 'Continuar', () => preguntarRecibo(imprimir, menu));
+    return;
+  }
+  linea('BUS -> ATM      ' + r.status + '  ' + (d.codigo || '') + '  ' + (d.estado || ''), 'no');
+  const cod = d.codigo, est = d.estado;
+  if(cod === 'SESION_INVALIDA') return sesionVencida();
+  if(cod === 'FALLA_DISPENSADOR' && est === 'EXTORNADA'){
+    linea('ATM -> BUS      extorno  ' + (d.idContraAsiento || ''), 'ok');
+    const [, sn] = dinero(d.saldoDisponible, moneda);
+    const c = nueva();
+    c.append(el('div','peque','No pudimos entregar tu efectivo'), el('h2',null,'Tu dinero fue devuelto'));
+    c.append(el('p','detalle','El cajero no pudo dispensar los billetes. El débito se extornó de inmediato. Saldo disponible: ' + pre + ' ' + sn));
+    etiqueta('der', 4, 'Aceptar', menu);
+    recibo('EXTORNO · SIN ENTREGA', [['REF', corr.slice(0,8)], ['CONTRA-ASIENTO', d.idContraAsiento || '-'], '-', ['CUENTA', cuenta.numCuentaEnmascarado],
+      ['MONTO DEVUELTO', pre + ' ' + new Intl.NumberFormat('en-US',{minimumFractionDigits:2}).format(monto)], ['SALDO', pre + ' ' + sn]], 'NO SE ENTREGÓ EFECTIVO');
+    return;
+  }
+  if(est === 'PENDIENTE_REVERSION'){
+    const c = nueva();
+    c.append(el('div','peque','Operación en verificación'), el('h2',null,'Conserva tu comprobante'));
+    c.append(el('p','detalle','No se pudo confirmar el resultado. El banco revisará la operación y, si corresponde, devolverá el importe.'));
+    etiqueta('der', 4, 'Aceptar', menu);
+    recibo('OPERACIÓN EN VERIFICACIÓN', [['REF', corr.slice(0,8)], '-', ['CUENTA', cuenta.numCuentaEnmascarado],
+      ['MONTO', pre + ' ' + new Intl.NumberFormat('en-US',{minimumFractionDigits:2}).format(monto)]], 'PENDIENTE DE REVERSIÓN');
+    return;
+  }
+  const textos = {
+    SALDO_INSUFICIENTE:['Saldo insuficiente', 'El monto supera el saldo disponible de la cuenta.'],
+    TOPE_DIARIO_EXCEDIDO:['Superaste el tope diario', 'El tope diario de retiro es ' + (moneda === 'USD' ? 'US$ 500' : 'S/ 1,500') + '.'],
+    BILLETES_INSUFICIENTES:['Monto no disponible', 'Este cajero no puede formar ese monto. Prueba con otro.'],
+    MONTO_INVALIDO:['Monto no válido', 'El monto debe ser múltiplo de 10.'],
+    CUENTA_NO_HABILITADA:['Cuenta no habilitada', 'La cuenta no está habilitada para operar en cajero.'],
+    RETIRO_NO_CONFIRMADO:['No se confirmó el retiro', 'No se realizó ningún cargo. Intenta nuevamente.'],
+  };
+  const t = textos[cod] || ['Servicio no disponible', 'Intenta nuevamente en unos minutos.'];
+  pantallaError(t[0], t[1], 'Elegir otro monto', () => pantallaMonto(cuenta));
+}
+
+function refrescar(){}   // el estado de bandejas y pendientes vive ahora en tecnico.html
+
+$('formTj').addEventListener('submit', e => { e.preventDefault(); insertar($('numTj').value.trim()); });
+$('numTj').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
+document.querySelectorAll('[data-tj]').forEach(b => b.addEventListener('click', () => insertar(b.dataset.tj)));
+
+$('vista').onclick = () => window.open('tecnico.html', 'bnaTecnico', 'width=560,height=920,left=40,top=40');
+
+pantallaInsertar();
+</script>
+</body>
+</html>
