@@ -1,4 +1,4 @@
-"""Autorizaciones de operaciones con tarjeta y su extorno (bd-v1.5).
+"""Autorizaciones de operaciones con tarjeta, su extorno y confirmación (bd-v1.8).
 
 Las reglas (tarjeta operativa y vigente, canal, saldo, tope diario, cajero) las aplica la
 base. Una regla que no se cumple no es un error de la petición: la autorización queda
@@ -50,6 +50,21 @@ class ExtornoRegistrar(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     motivo: str = Field(min_length=1, max_length=255)
+
+
+class ConfirmacionRegistrar(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    llave_idempotencia: str = Field(min_length=1, max_length=64)
+    huella: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    id_canal: str | None = Field(default=None, min_length=1, max_length=5)
+    id_terminal: str | None = Field(default=None, min_length=1, max_length=30)
+
+    @model_validator(mode="after")
+    def _canal_o_terminal(self):
+        if self.id_canal is None and self.id_terminal is None:
+            raise ValueError("Se indica el canal o la terminal (o ambos).")
+        return self
 
 
 class AutorizacionRespuesta(BaseModel):
@@ -139,5 +154,31 @@ def extornar(
             salidas=1,
         ),
         nombre="extornar_autorizacion",
+    )
+    return _obtener(db, uuid_autorizacion)
+
+
+@router.post("/{uuid_autorizacion}/confirmacion", response_model=AutorizacionRespuesta,
+              responses={404: {"description": "BNA-AUTORIZACION"},
+                         409: {"description": "BNA-CONFIRMACION, BNA-IDEMPOTENCIA"},
+                         422: {"description": "BNA-CONFIRMACION"}})
+def confirmar(
+    uuid_autorizacion: uuid.UUID,
+    datos: ConfirmacionRegistrar,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
+):
+    """Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.
+    La llave de idempotencia es obligatoria; repetirla devuelve el mismo resultado sin
+    segundo débito. El canal o terminal deben coincidir con la autorización."""
+    con_reintentos(
+        db,
+        lambda: llamar(
+            db, "tarjetas.confirmar_autorizacion",
+            uuid_autorizacion, datos.llave_idempotencia, datos.huella, actor.usuario,
+            datos.id_canal, datos.id_terminal,
+            salidas=2,
+        ),
+        nombre="confirmar_autorizacion",
     )
     return _obtener(db, uuid_autorizacion)
