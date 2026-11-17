@@ -1,6 +1,3 @@
-> **Entrada actual SOL:** [README técnico vigente](Documents/solicitud-credito/README.md) y [ejecución](Documents/solicitud-credito/05-despliegue/README.md). Revisión documental2026-11-16, HEAD `988dc0776da282fbef306632fc86426b6e372376`.
-> El cuerpo siguiente conserva la guía/plan de una etapa anterior; no prevalece sobre el estado y evidencias P20.
-
 # MVP funcional v2 — Solicitud de Crédito BNA
 
 El módulo SOL incluye una interfaz Next.js y un servicio FastAPI. Trabaja con tu MySQL local y datos sintéticos.
@@ -21,7 +18,7 @@ El resto de esta guía es la instalación manual del módulo, en Windows y con u
 ## Si ya ejecutabas la v1: actualizar conservando tus datos
 
 1. Respalda tu base `bna_sol_mvp` y conserva tus `.env.sol` y `.env.local` privados. No copies archivos sobre un backend que siga ejecutándose.
-2. Lleva los archivos SOL de esta actualización a tu carpeta del proyecto; lo que cambió está en `Documents/solicitud-credito/06-historico/etapas/CORRECCIONES_V2.md`. No reemplaces cambios de otros equipos.
+2. Lleva los archivos SOL de esta actualización a tu carpeta del proyecto; lo que cambió está en `Documents/solicitud-credito/CORRECCIONES_V2.md`. No reemplaces cambios de otros equipos.
 3. Desde **backend**, ejecuta:
 
 ```powershell
@@ -33,7 +30,7 @@ El resto de esta guía es la instalación manual del módulo, en Windows y con u
 
 `migrate` añade tablas/columnas sin borrar solicitudes, versiones o claves. No necesitas crear otro entorno virtual ni repetir `init`. Mantén `SOL_INTEGRATION_MODE=SIMULADO` para seguir con la demo; las nuevas variables HTTP pueden quedar vacías. Reinicia `npm run dev` en la terminal del frontend. `/ready` comprueba acceso a MySQL.
 
-**Para practicar el modo HTTP o coordinar la integración:** sigue `Documents/solicitud-credito/06-historico/contratos/CONTRATOS_HTTP_V2.md`. Activar REAL requiere las rutas y tokens; no basta cambiar una URL. Las reglas de negocio y contratos siguen pendientes de homologación.
+**Para practicar el modo HTTP o coordinar la integración:** sigue `Documents/solicitud-credito/CONTRATOS_HTTP_V2.md`. Activar REAL requiere las rutas y tokens; no basta cambiar una URL. Las reglas de negocio y contratos siguen pendientes de homologación.
 
 ## Qué hace esta versión
 
@@ -190,4 +187,4 @@ Desde `frontend`, `npm run lint` y `npm run build` verifican la interfaz. La con
 
 Persistencia local en MySQL y lógica de SOL funcionales. Captación y Evaluación se simulan; el Bus corporativo y Seguridad central no están conectados. La auditoría tiene historial local y cola persistente. Incluye adaptador HTTP con acuse central, pendiente de validación contra Seguridad institucional. No es un repositorio certificado como inmutable. Pago doble, documentos adjuntos, cambios de condiciones propuestos por EVA, traspaso final de calendario, desembolso y cobranza no se implementan en esta entrega. La identidad visual y las políticas siguen siendo propuestas para revisión.
 
-Consulta `Documents/solicitud-credito/06-historico/etapas/LECTURA_DEL_CODIGO.md`, `CONTRATOS_DEMO.md`, `PROPUESTAS_Y_DECISIONES.md` y `VALIDACION.md` para explicar y coordinar la siguiente integración.
+Consulta `Documents/solicitud-credito/LECTURA_DEL_CODIGO.md`, `CONTRATOS_DEMO.md`, `PROPUESTAS_Y_DECISIONES.md` y `VALIDACION.md` para explicar y coordinar la siguiente integración.

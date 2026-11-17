@@ -1,8 +1,5 @@
 # Banco Nacional de Arequipa (BNA)
 
-Documentación SOL vigente y circuito académico CAP→COREDB→CAP→SOL→EVA→SOL: [entrada técnica](Documents/solicitud-credito/README.md). El Compose principal descrito abajo conserva SOL SIMULADO; el circuito intermodular utiliza un laboratorio aislado independiente.
-
-
 Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositorio contiene el producto integrado: la base de datos del CORE, su API, los módulos que ya trabajan sobre ella y el frontend. Todo se levanta en Docker con una orden.
 
 | Parte | Carpeta | Qué hace | Estado |
