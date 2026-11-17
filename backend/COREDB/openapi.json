@@ -1434,6 +1434,56 @@
         "title": "ConciliacionPagos",
         "type": "object"
       },
+      "ConfirmacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "huella": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Huella",
+            "type": "string"
+          },
+          "id_canal": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "id_terminal": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Terminal"
+          },
+          "llave_idempotencia": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Llave Idempotencia",
+            "type": "string"
+          }
+        },
+        "required": [
+          "llave_idempotencia",
+          "huella"
+        ],
+        "title": "ConfirmacionRegistrar",
+        "type": "object"
+      },
       "ConsentimientoCaptacion": {
         "properties": {
           "aceptado": {
@@ -6468,6 +6518,64 @@
           }
         ],
         "summary": "Ver",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/autorizaciones/{uuid_autorizacion}/confirmacion": {
+      "post": {
+        "description": "Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.\nLa llave de idempotencia es obligatoria; repetirla devuelve el mismo resultado sin\nsegundo débito. El canal o terminal deben coincidir con la autorización.",
+        "operationId": "confirmar_coredb_autorizaciones__uuid_autorizacion__confirmacion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid_autorizacion",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Uuid Autorizacion",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutorizacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "BNA-AUTORIZACION"
+          },
+          "409": {
+            "description": "BNA-CONFIRMACION, BNA-IDEMPOTENCIA"
+          },
+          "422": {
+            "description": "BNA-CONFIRMACION"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Confirmar",
         "tags": [
           "tarjetas"
         ]
