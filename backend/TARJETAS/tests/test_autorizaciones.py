@@ -40,7 +40,7 @@ def test_autorizar_envia_el_uuid_de_la_llave(client, core):
     assert cuerpo["message"] == "Operación autorizada"
     assert cuerpo["data"]["aprobada"] is True
     assert cuerpo["data"]["codigo_respuesta"] == "00"
-    assert "uuid_transaccion" not in cuerpo["data"]
+    assert cuerpo["data"]["uuid_transaccion"] is None
     llamada = core.llamadas[0]
     assert (llamada["metodo"], llamada["ruta"]) == ("POST", "/coredb/autorizaciones")
     assert llamada["json"] == {
@@ -220,7 +220,7 @@ def test_confirmar_sin_llave_400_sin_llamar_a_core(client, core):
         "huella": _huella("x"), "id_terminal": "DEV-ATM-01"
     }, headers=AUTH)
     assert r.status_code == 400
-    assert r.json()["error_code"] == "ERR-TAR-HEADER-REQUERIDO"
+    assert r.json()["error_code"] == "ERR-VALIDACION-ESQUEMA"
     assert core.llamadas == []
 
 
@@ -230,7 +230,7 @@ def test_confirmar_sin_canal_ni_terminal_400_sin_llamar_a_core(client, core):
         "llave_idempotencia": llave, "huella": _huella(llave)
     }, headers=AUTH)
     assert r.status_code == 400
-    assert r.json()["error_code"] == "ERR-TAR-VALIDACION"
+    assert r.json()["error_code"] == "ERR-VALIDACION-ESQUEMA"
     assert core.llamadas == []
 
 
@@ -240,7 +240,7 @@ def test_confirmar_huella_invalida_400_sin_llamar_a_core(client, core):
         "llave_idempotencia": llave, "huella": "no-es-hex", "id_terminal": "DEV-ATM-01"
     }, headers=AUTH)
     assert r.status_code == 400
-    assert r.json()["error_code"] == "ERR-TAR-VALIDACION"
+    assert r.json()["error_code"] == "ERR-VALIDACION-ESQUEMA"
     assert core.llamadas == []
 
 

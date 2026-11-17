@@ -135,6 +135,7 @@ class AutorizacionOut(BaseModel):
     estado_autorizacion: str
     codigo_respuesta: str | None
     motivo_rechazo: str | None
+    uuid_transaccion: str | None = None
 
     @computed_field
     @property
