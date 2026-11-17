@@ -1,0 +1,16 @@
+{
+  "name": "chaski-api",
+  "version": "2.0.0",
+  "description": "API REST de Chaski (Billetera Digital BNA) sobre PostgreSQL para la app móvil Flutter",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --watch --env-file-if-exists=.env server.js",
+    "test": "node --env-file-if-exists=.env --test test/*.test.js"
+  },
+  "engines": { "node": ">=22.13" },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.13.0"
+  }
+}

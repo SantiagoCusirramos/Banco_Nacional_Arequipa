@@ -1,0 +1,32 @@
+name: chaski_app
+description: "Chaski — Billetera Digital BNA (app móvil Flutter)"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  http: ^1.6.0
+  intl: ^0.20.3
+  local_auth: ^3.0.2
+  mobile_scanner: ^7.4.2
+  path: ^1.9.1
+  provider: ^6.1.5+1
+  qr_flutter: ^4.1.0
+  share_plus: ^13.3.1
+  shared_preferences: ^2.5.6
+  sqflite: ^2.4.4+2
+  uuid: ^4.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
