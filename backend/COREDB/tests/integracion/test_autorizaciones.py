@@ -217,14 +217,9 @@ def test_un_auditor_no_autoriza(sesion_de, tarjeta_activa):
 # ── Confirmación de autorización ──────────────────────────────────────────────
 
 
-def _huella(valor: str) -> str:
-    """Genera una huella de 64 caracteres hex (SHA-256 del valor)."""
-    import hashlib
-    return hashlib.sha256(valor.encode()).hexdigest()
-
-
 def test_confirmar_autorizacion_debita_una_sola_vez(cliente, tarjeta_activa):
-    """Confirma una autorización AUTORIZADA: registra el movimiento y pasa a DISPENSADA."""
+    """Confirma una autorización AUTORIZADA: registra el movimiento y pasa a DISPENSADA.
+    La llave de idempotencia va en cabecera X-Idempotency-Key; la huella la calcula COREDB."""
     id_tarjeta, num_cuenta = tarjeta_activa()
     # Autoriza un retiro de 100.00
     auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
@@ -233,11 +228,12 @@ def test_confirmar_autorizacion_debita_una_sola_vez(cliente, tarjeta_activa):
     uuid_autorizacion = auth["uuid_autorizacion"]
     assert (auth["estado_autorizacion"], auth["codigo_respuesta"]) == ("AUTORIZADA", "00")
 
-    # Confirma con llave de idempotencia
+    # Confirma con llave de idempotencia en cabecera
     llave = str(uuid.uuid4())
     confirmacion = cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave},
     )
     assert confirmacion.status_code == 200, confirmacion.text
     confirmada = confirmacion.json()
@@ -253,12 +249,12 @@ def test_repetir_confirmacion_con_misma_llave_no_debita_dos_veces(cliente, tarje
     auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
     uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
     llave = str(uuid.uuid4())
-    huella = _huella(llave)
 
     # Primera confirmación
     primera = cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"llave_idempotencia": llave, "huella": huella, "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave},
     )
     assert primera.status_code == 200
     assert disponible(cliente, num_cuenta) == Decimal("900.00")
@@ -266,7 +262,8 @@ def test_repetir_confirmacion_con_misma_llave_no_debita_dos_veces(cliente, tarje
     # Segunda confirmación con la misma llave
     segunda = cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"llave_idempotencia": llave, "huella": huella, "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave},
     )
     assert segunda.status_code == 200
     assert segunda.json() == primera.json()
@@ -285,12 +282,14 @@ def test_otra_llave_sobre_confirmada_409_o_422(cliente, tarjeta_activa):
     # Primera confirmación
     cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"llave_idempotencia": llave1, "huella": _huella(llave1), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave1},
     )
     # Segunda con otra llave
     respuesta = cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"llave_idempotencia": llave2, "huella": _huella(llave2), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave2},
     )
     assert respuesta.status_code in (409, 422), respuesta.text
     assert respuesta.json()["error"]["code"] in ("BNA-CONFIRMACION", "BNA-IDEMPOTENCIA")
@@ -311,7 +310,8 @@ def test_confirmar_extornada_409(cliente, tarjeta_activa):
     llave = str(uuid.uuid4())
     respuesta = cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave},
     )
     assert respuesta.status_code in (409, 422), respuesta.text
     assert respuesta.json()["error"]["code"] == "BNA-CONFIRMACION"
@@ -322,7 +322,8 @@ def test_confirmar_inexistente_404(cliente, datos_base):
     llave = str(uuid.uuid4())
     respuesta = cliente.post(
         f"/coredb/autorizaciones/{uuid.uuid4()}/confirmacion",
-        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave},
     )
     assert respuesta.status_code == 404
     assert respuesta.json()["error"]["code"] == "BNA-AUTORIZACION"
@@ -337,7 +338,8 @@ def test_confirmar_canal_no_coincide_409(cliente, tarjeta_activa):
     llave = str(uuid.uuid4())
     respuesta = cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave},
     )
     assert respuesta.status_code in (409, 422), respuesta.text
     assert respuesta.json()["error"]["code"] == "BNA-CONFIRMACION"
@@ -352,23 +354,25 @@ def test_confirmar_terminal_no_coincide_409(cliente, tarjeta_activa):
     llave = str(uuid.uuid4())
     respuesta = cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "OTRA-TERMINAL"},
+        json={"id_canal": "ATM", "id_terminal": "OTRA-TERMINAL"},
+        headers={"X-Idempotency-Key": llave},
     )
     assert respuesta.status_code in (409, 422), respuesta.text
     assert respuesta.json()["error"]["code"] == "BNA-CONFIRMACION"
 
 
 def test_confirmar_sin_llave_idempotencia_422(cliente, tarjeta_activa):
-    """La llave de idempotencia es obligatoria."""
+    """La llave de idempotencia en cabecera X-Idempotency-Key es obligatoria."""
     id_tarjeta, num_cuenta = tarjeta_activa()
     auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
     uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
 
+    # Sin cabecera X-Idempotency-Key
     respuesta = cliente.post(
         f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-        json={"huella": _huella("x"), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
     )
-    assert respuesta.status_code == 422
+    assert respuesta.status_code in (400, 422), respuesta.text
 
 
 def test_confirmar_concurrencia_dos_llaves_distintas_un_solo_debito(cliente, tarjeta_activa, consulta):
@@ -384,7 +388,8 @@ def test_confirmar_concurrencia_dos_llaves_distintas_un_solo_debito(cliente, tar
     def confirmar(llave):
         return cliente.post(
             f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
-            json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+            json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+            headers={"X-Idempotency-Key": llave},
         )
 
     barrera = threading.Barrier(8)
@@ -411,3 +416,43 @@ def test_confirmar_concurrencia_dos_llaves_distintas_un_solo_debito(cliente, tar
     )
     assert movimientos[0]["COUNT(*)"] == 1
     assert disponible(cliente, num_cuenta) == Decimal("900.00")
+
+
+def test_confirmar_misma_llave_distinto_canal_terminal_409(cliente, tarjeta_activa):
+    """La misma llave con diferente canal/terminal debe fallar por conflicto de idempotencia (huella distinta)."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00", id_canal="VEN")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+    llave = str(uuid.uuid4())
+
+    # Primera confirmación con canal VEN
+    primera = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"id_canal": "VEN"},
+        headers={"X-Idempotency-Key": llave},
+    )
+    assert primera.status_code == 200, primera.text
+
+    # Segunda confirmación con la MISMA llave pero canal/terminal diferente
+    # La huella calculada por COREDB será distinta → conflicto de idempotencia
+    segunda = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": llave},
+    )
+    assert segunda.status_code == 409, segunda.text
+    assert segunda.json()["error"]["code"] == "BNA-IDEMPOTENCIA"
+
+
+def test_confirmar_sin_cabecera_idempotencia_422(cliente, tarjeta_activa):
+    """Sin cabecera X-Idempotency-Key debe fallar con 422/400 como los otros endpoints."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+
+    # Sin cabecera X-Idempotency-Key
+    respuesta = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert respuesta.status_code in (400, 422), respuesta.text

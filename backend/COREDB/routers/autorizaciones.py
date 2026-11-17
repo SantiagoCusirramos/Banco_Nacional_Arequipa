@@ -5,12 +5,14 @@ base. Una regla que no se cumple no es un error de la petición: la autorizació
 RECHAZADA con su código de respuesta y se devuelve con 201, como la aprobada.
 """
 
+import hashlib
 import ipaddress
+import json
 import uuid
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
@@ -23,6 +25,21 @@ from COREDB.transacciones import con_reintentos
 router = APIRouter(prefix="/coredb/autorizaciones", tags=["tarjetas"])
 
 Monto = Annotated[Decimal, Field(gt=0, max_digits=15, decimal_places=2)]
+
+
+def _huella_confirmacion(
+    uuid_autorizacion: uuid.UUID, id_canal: str | None, id_terminal: str | None
+) -> str:
+    """Calcula la huella SHA-256 de los parámetros de la confirmación para idempotencia fuerte.
+    Igual que movimientos._huella: JSON ordenado de los parámetros determinísticos."""
+    parametros = {
+        "uuid_autorizacion": str(uuid_autorizacion),
+        "id_canal": id_canal,
+        "id_terminal": id_terminal,
+    }
+    return hashlib.sha256(
+        json.dumps(parametros, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
 
 
 class AutorizacionRegistrar(BaseModel):
@@ -55,8 +72,6 @@ class ExtornoRegistrar(BaseModel):
 class ConfirmacionRegistrar(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    llave_idempotencia: str = Field(min_length=1, max_length=64)
-    huella: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
     id_canal: str | None = Field(default=None, min_length=1, max_length=5)
     id_terminal: str | None = Field(default=None, min_length=1, max_length=30)
 
@@ -165,17 +180,21 @@ def extornar(
 def confirmar(
     uuid_autorizacion: uuid.UUID,
     datos: ConfirmacionRegistrar,
+    llave_idempotencia: uuid.UUID = Header(alias="X-Idempotency-Key"),
     db: Session = Depends(db_session),
     actor: Actor = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
 ):
     """Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.
-    La llave de idempotencia es obligatoria; repetirla devuelve el mismo resultado sin
-    segundo débito. El canal o terminal deben coincidir con la autorización."""
+    La llave de idempotencia (X-Idempotency-Key, UUID) es obligatoria; repetirla devuelve
+    el mismo resultado sin segundo débito. La huella se calcula en el servidor a partir
+    de uuid_autorizacion, id_canal e id_terminal. El canal o terminal deben coincidir
+    con la autorización."""
+    huella = _huella_confirmacion(uuid_autorizacion, datos.id_canal, datos.id_terminal)
     con_reintentos(
         db,
         lambda: llamar(
             db, "tarjetas.confirmar_autorizacion",
-            uuid_autorizacion, datos.llave_idempotencia, datos.huella, actor.usuario,
+            uuid_autorizacion, str(llave_idempotencia), huella, actor.usuario,
             datos.id_canal, datos.id_terminal,
             salidas=2,
         ),
