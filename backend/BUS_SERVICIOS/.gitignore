@@ -1,0 +1,10 @@
+# Entornos y archivos locales
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store

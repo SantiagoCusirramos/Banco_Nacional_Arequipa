@@ -1,0 +1,241 @@
+
+import hmac
+import logging
+import uuid
+from urllib.parse import quote
+
+import httpx
+from fastapi import APIRouter, Depends, Header, Request
+from fastapi.responses import JSONResponse, Response
+
+from app.config import (
+    BUS_TOKEN,
+    BUS_CORE_TOKEN,
+    CLIENTES_TOKEN,
+    CORE_TOKEN,
+    BUS_TOKENS_MODULOS,
+    BUS_TIMEOUT_SEG,
+    SERVICIOS,
+)
+
+log = logging.getLogger("bna.bus")
+
+# Comprobar las credenciales obligatorias
+if not all([BUS_TOKEN, BUS_CORE_TOKEN, CLIENTES_TOKEN, CORE_TOKEN]):
+    raise RuntimeError("Faltan credenciales de integración en .env")
+
+if BUS_TOKEN == BUS_CORE_TOKEN:
+    raise RuntimeError("BUS_TOKEN y BUS_CORE_TOKEN deben ser distintos")
+
+# Tokens de los módulos consumidores
+TOKENS_CONSUMIDORES = {"GENERAL": BUS_TOKEN}
+
+for elemento in filter(None, BUS_TOKENS_MODULOS.split(",")):
+    nombre, separador, token = elemento.partition("=")
+
+    if not separador or not nombre.strip() or not token.strip():
+        raise RuntimeError("Formato inválido en BUS_TOKENS_MODULOS")
+
+    nombre = nombre.strip().upper()
+    token = token.strip()
+
+    if token in (BUS_TOKEN, BUS_CORE_TOKEN):
+        raise RuntimeError("Un token de módulo no puede repetir los tokens principales")
+
+    TOKENS_CONSUMIDORES[nombre] = token
+
+# Clientes y Core tienen credenciales independientes
+TOKENS_POR_DESTINO = {
+    "CLIENTES": TOKENS_CONSUMIDORES,
+    "CORE": {"CLIENTES": BUS_CORE_TOKEN},
+    "CUENTAS": TOKENS_CONSUMIDORES,
+    "SEGURIDAD": TOKENS_CONSUMIDORES,
+}
+
+DESTINOS = {
+    "CLIENTES": (SERVICIOS["clientes"], CLIENTES_TOKEN),
+    "CORE": (SERVICIOS["core"], CORE_TOKEN),
+    "CUENTAS": (SERVICIOS["cuentas"], None),
+    "SEGURIDAD": (SERVICIOS["seguridad"], None),
+}
+
+TIMEOUT = httpx.Timeout(BUS_TIMEOUT_SEG, connect=3.0)
+
+router_integracion = APIRouter()
+
+cliente_http = None
+
+
+@router_integracion.on_event("startup")
+async def iniciar_cliente():
+    global cliente_http
+    cliente_http = httpx.AsyncClient(timeout=TIMEOUT)
+
+
+@router_integracion.on_event("shutdown")
+async def cerrar_cliente():
+    global cliente_http
+    if cliente_http is not None:
+        await cliente_http.aclose()
+        cliente_http = None
+
+
+
+def requerir_token(tokens):
+
+    async def validar(
+        request: Request,
+        token: str = Header(default="", alias="X-Service-Token"),
+    ):
+        llamador = None
+
+        for nombre, esperado in tokens.items():
+            if hmac.compare_digest(token, esperado):
+                llamador = nombre
+                break
+
+        if llamador is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=401,
+                detail="Credencial de servicio inválida o ausente",
+            )
+
+        request.state.llamador = llamador
+
+    return validar
+
+
+
+RUTAS = [
+    ("GET", "/bus/atm/consulta-saldo/{num_cuenta}", "CUENTAS", "/api/v1/cuentas/{num_cuenta}"),
+    ("POST", "/bus/clientes/registrar", "CLIENTES", "/clientes/registrar"),
+    ("POST", "/bus/clientes/validar-documento", "CLIENTES", "/clientes/validar-documento"),
+    ("POST", "/bus/clientes/validar-biometria", "CLIENTES", "/clientes/validar-biometria"),
+
+    ("POST", "/bus/core/registrar-cliente", "CORE", "/interno/registrar-cliente"),
+    ("POST", "/bus/core/auditar-registro", "CORE", "/interno/auditar-registro"),
+    ("POST", "/bus/core/validar-documento", "CORE", "/interno/validar-documento"),
+    ("POST", "/bus/core/validar-biometria", "CORE", "/interno/validar-biometria"),
+    ("GET", "/bus/core/solicitudes-registro", "CORE", "/interno/solicitudes-registro"),
+    ("GET", "/bus/core/solicitudes-validacion", "CORE", "/interno/solicitudes-validacion"),
+
+    ("POST", "/bus/cuentas/apertura", "CUENTAS", "/api/v1/cuentas/apertura"),
+    ("GET", "/bus/cuentas/consolidada/{id_cliente}", "CUENTAS", "/api/v1/cuentas/consolidada/{id_cliente}"),
+    ("GET", "/bus/cuentas/{num_cuenta}", "CUENTAS", "/api/v1/cuentas/{num_cuenta}"),
+    ("POST", "/bus/cuentas/deposito", "CUENTAS", "/api/v1/cuentas/deposito"),
+    ("POST", "/bus/cuentas/retiro", "CUENTAS", "/api/v1/cuentas/retiro"),
+    ("POST", "/bus/cuentas/transferencia", "CUENTAS", "/api/v1/cuentas/transferencia"),
+    ("GET", "/bus/cuentas/{num_cuenta}/movimientos", "CUENTAS", "/api/v1/cuentas/{num_cuenta}/movimientos"),
+    ("GET", "/bus/cuentas/movimiento/{uuid_transaccion}", "CUENTAS", "/api/v1/cuentas/movimiento/{uuid_transaccion}"),
+    ("GET", "/bus/seguridad/{path:path}", "SEGURIDAD", "/seguridad/{path}"),
+    ("POST", "/bus/seguridad/{path:path}", "SEGURIDAD", "/seguridad/{path}"),
+    ("PUT", "/bus/seguridad/{path:path}", "SEGURIDAD", "/seguridad/{path}"),
+    ("PATCH", "/bus/seguridad/{path:path}", "SEGURIDAD", "/seguridad/{path}"),
+    ("DELETE", "/bus/seguridad/{path:path}", "SEGURIDAD", "/seguridad/{path}"),
+]
+
+
+def crear_ruta(metodo, ruta_publica, destino, ruta_destino):
+    base, token_destino = DESTINOS[destino]
+
+    async def reenviar(request: Request):
+        id_peticion = request.headers.get("X-Correlation-ID")
+
+        if not id_peticion or len(id_peticion) > 64:
+            id_peticion = uuid.uuid4().hex[:16]
+
+        cabeceras = {
+            "X-Request-ID": id_peticion,
+            "X-Correlation-ID": id_peticion,
+        }
+
+        if token_destino:
+            cabeceras["X-Service-Token"] = token_destino
+
+        if destino in ("CUENTAS", "SEGURIDAD"):
+            for nombre in (
+                "Authorization",
+                "X-Idempotency-Key",
+                "X-Channel-ID",
+                "X-Request-Timestamp",
+            ):
+                valor = request.headers.get(nombre)
+                if valor:
+                    cabeceras[nombre] = valor
+
+        if metodo in ("POST", "PUT", "PATCH"):
+            cabeceras["Content-Type"] = request.headers.get(
+                "Content-Type", "application/json"
+            )
+
+        ruta_final = ruta_destino
+        for nombre, valor in request.path_params.items():
+            ruta_final = ruta_final.replace(
+                "{" + nombre + "}",
+                quote(str(valor), safe="/" if nombre == "path" else ""),
+            )
+
+        try:
+            respuesta = await cliente_http.request(
+                method=metodo,
+                url=base.rstrip("/") + ruta_final,
+                params=list(request.query_params.multi_items()),
+                content=await request.body() if metodo in ("POST", "PUT", "PATCH") else None,
+                headers=cabeceras,
+            )
+
+        except httpx.HTTPError as error:
+            log.warning(
+                "Servicio %s no disponible: %s",
+                destino,
+                type(error).__name__,
+            )
+
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "correcto": False,
+                    "codigo": "SERVICIO_NO_DISPONIBLE",
+                    "mensaje": f"No se pudo contactar con {destino}",
+                },
+            )
+
+        # Registrar solo metadatos, nunca el cuerpo de la petición.
+        log.info(
+            "%s %s -> %s: HTTP %s",
+            metodo,
+            ruta_publica,
+            destino,
+            respuesta.status_code,
+        )
+
+        return Response(
+            content=respuesta.content,
+            status_code=respuesta.status_code,
+            headers={
+                "Content-Type": respuesta.headers.get(
+                    "content-type",
+                    "application/json",
+                ),
+                "X-Request-ID": id_peticion,
+                "X-Correlation-ID": id_peticion,
+            },
+        )
+
+    router_integracion.add_api_route(
+        ruta_publica,
+        reenviar,
+        methods=[metodo],
+        dependencies=[
+            Depends(requerir_token(TOKENS_POR_DESTINO[destino]))
+        ],
+        summary=f"{metodo} {ruta_destino}",
+        tags=["ATM"] if ruta_publica.startswith("/bus/atm/") else ["Integración oficial"],
+    )
+
+
+for metodo, publica, destino, interna in RUTAS:
+    crear_ruta(metodo, publica, destino, interna)
+

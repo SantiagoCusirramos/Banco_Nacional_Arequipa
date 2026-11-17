@@ -1,0 +1,22 @@
+services:
+  bus-oficial:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bna-bus-oficial
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      CLIENTES_URL: http://clientes:8000
+      CORE_URL: http://core:8000
+      CUENTAS_URL: http://bna-cuentas:8001
+    networks:
+      - bna-clientes_default
+    restart: unless-stopped
+
+networks:
+  bna-clientes_default:
+    external: true
+    name: bna-clientes_default
