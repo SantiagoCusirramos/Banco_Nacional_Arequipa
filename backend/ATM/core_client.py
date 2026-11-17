@@ -24,8 +24,11 @@ class CoreClient:
                  params: dict | None = None,
                  correlation_id: str | None = None,
                  authorization: str | None = None,
+                 idempotency_key: str | None = None,
                  sin_cuerpo: bool = False) -> dict:
         headers = {}
+        if idempotency_key:
+            headers["X-Idempotency-Key"] = idempotency_key
         if authorization:
             headers["Authorization"] = f"Bearer {authorization}"
         if correlation_id:
@@ -43,7 +46,11 @@ class CoreClient:
             raise self._error_de_bus(resp)
         if sin_cuerpo:
             return {}
-        return resp.json()
+        cuerpo = resp.json()
+        # TARJETAS y CUENTAS envuelven la respuesta: {success, status_code, message, data, metadata}.
+        if isinstance(cuerpo, dict) and cuerpo.get("success") is True and "data" in cuerpo:
+            return cuerpo["data"]
+        return cuerpo
 
     @staticmethod
     def _error_de_bus(resp: httpx.Response) -> AtmError:
@@ -91,7 +98,7 @@ class CoreClient:
     def autorizar(self, id_tarjeta: str, num_cuenta: str, moneda: str, monto: str,
                   id_canal: str | None, id_terminal: str | None,
                   uuid_transaccion: str, correlation_id: str | None = None,
-                  authorization: str | None = None) -> dict:
+                  authorization: str | None = None, idempotency_key: str | None = None) -> dict:
         """POST /bus/tarjetas/api/v1/tarjetas/{id_tarjeta}/autorizaciones"""
         path = f"/bus/tarjetas/api/v1/tarjetas/{id_tarjeta}/autorizaciones"
         payload = {
@@ -103,19 +110,18 @@ class CoreClient:
             payload["id_canal"] = id_canal
         else:
             payload["id_terminal"] = id_terminal
-        return self._request("POST", path, json=payload, correlation_id=correlation_id, authorization=authorization)
+        return self._request("POST", path, json=payload, correlation_id=correlation_id,
+                             authorization=authorization, idempotency_key=idempotency_key)
 
     def confirmar(self, uuid_autorizacion: str, id_canal: str | None, id_terminal: str | None,
-                  resultado: str, correlation_id: str | None = None,
+                  idempotency_key: str, correlation_id: str | None = None,
                   authorization: str | None = None) -> dict:
-        """POST /bus/tarjetas/api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/confirmacion"""
+        """POST /bus/tarjetas/api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/confirmacion
+        con X-Idempotency-Key (#103): repetirla con la misma llave no debita dos veces."""
         path = f"/bus/tarjetas/api/v1/tarjetas/autorizaciones/{uuid_autorizacion}/confirmacion"
-        payload = {"resultado": resultado}
-        if id_canal:
-            payload["id_canal"] = id_canal
-        else:
-            payload["id_terminal"] = id_terminal
-        return self._request("POST", path, json=payload, correlation_id=correlation_id, authorization=authorization)
+        payload = {"id_canal": id_canal} if id_canal else {"id_terminal": id_terminal}
+        return self._request("POST", path, json=payload, correlation_id=correlation_id,
+                             authorization=authorization, idempotency_key=idempotency_key)
 
     def extornar(self, uuid_autorizacion: str, motivo: str,
                  correlation_id: str | None = None,

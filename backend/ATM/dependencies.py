@@ -23,7 +23,7 @@ class ContextoOperacion(BaseModel):
 async def get_core_client() -> CoreClient:
     """Cliente HTTP para llamar a TARJETAS y CUENTAS por el Bus."""
     return CoreClient(
-        base_url=settings.core_base_url,
+        base_url=settings.bus_base_url,
         timeout=settings.core_timeout_seconds,
         bus_token=settings.bus_token,
     )

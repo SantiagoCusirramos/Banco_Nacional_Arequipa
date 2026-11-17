@@ -1,6 +1,6 @@
 # Bus de Servicios
 
-Punto único por el que los canales llegan a los módulos del producto y los módulos llegan a COREDB, como pide [`Documents/01-stack-tecnologico.md`](../../Documents/01-stack-tecnologico.md) («Módulos de negocio → CORE: REST interno vía Bus»). Lo usan los puentes del frontend, el flujo de extremo a extremo y cada módulo que llama a COREDB (CUENTAS, TARJETAS, CAPTACION, Evaluación y Desembolso; fase 2), cada uno con su credencial.
+Punto único por el que los canales llegan a los módulos del producto y los módulos llegan a COREDB, como pide [`Documents/01-stack-tecnologico.md`](../../Documents/01-stack-tecnologico.md) («Módulos de negocio → CORE: REST interno vía Bus»). Lo usan los puentes del frontend, el flujo de extremo a extremo y cada módulo que llama a COREDB (CUENTAS, TARJETAS, CAPTACION, Evaluación, Desembolso y COBRANZA; fase 2) y el cajero automático (ATM, que llama a TARJETAS y CUENTAS), cada uno con su credencial.
 
 Parte del aporte de Gabriel Tapia (PR #91): la idea de un Bus con credencial por consumidor y el reenvío de `Authorization` y de la llave de idempotencia.
 
@@ -17,7 +17,9 @@ Parte del aporte de Gabriel Tapia (PR #91): la idea de un Bus con credencial por
 | `/bus/sol/...` | SOL | `BUS_URL_SOL` |
 | `/bus/evaluacion/...` | EVALUACIÓN | `BUS_URL_EVALUACION` |
 | `/bus/desembolso/...` | DESEMBOLSO | `BUS_URL_DESEMBOLSO` |
+| `/bus/cobranza/...` | COBRANZA | `BUS_URL_COBRANZA` |
 | `/bus/seguridad/...` | Seguridad | `BUS_URL_SEGURIDAD` |
+| `/bus/atm/...` | ATM (cajero automático) | `BUS_URL_ATM` |
 
 Por ejemplo, `GET /bus/cuentas/api/v1/cuentas/001-...` llega a CUENTAS como `GET /api/v1/cuentas/001-...`.
 
@@ -45,8 +47,8 @@ Sin valores por omisión para direcciones ni credenciales: si falta algo, no arr
 
 | Variable | Qué es |
 |---|---|
-| `BUS_URL_<MÓDULO>` | Dirección de cada módulo de la tabla, `http(s)://host:puerto[/prefijo]`, sin credenciales ni consulta. Las ocho son obligatorias |
-| `BUS_CONSUMIDORES` | Nombres de los consumidores, separados por comas (mayúsculas, dígitos y `_`). En el producto: `FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO` |
+| `BUS_URL_<MÓDULO>` | Dirección de cada módulo de la tabla, `http(s)://host:puerto[/prefijo]`, sin credenciales ni consulta. Las diez son obligatorias |
+| `BUS_CONSUMIDORES` | Nombres de los consumidores, separados por comas (mayúsculas, dígitos y `_`). En el producto: `FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM` |
 | `BUS_TOKEN_<CONSUMIDOR>` | Credencial de cada consumidor, que presenta en `X-Bus-Token`. Al menos 32 caracteres, distinta de las demás. `./bna up` las genera en `.env` (`BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS` y una por módulo: `BUS_TOKEN_CUENTAS`…) |
 | `BUS_TIMEOUT_SEG` | Segundos que espera la respuesta de un módulo. Por omisión 9, menos que los 10 del puente del frontend, para que el navegador vea el 504 del Bus |
 | `BUS_TIMEOUT_CONEXION_SEG` | Segundos para conectar con un módulo. Por omisión 2 |

@@ -54,6 +54,7 @@ async def autorizar_retiro(core: CoreClient, datos: AutorizarIn,
         uuid_transaccion=datos.uuid_transaccion,
         correlation_id=correlation_id,
         authorization=authorization,
+        idempotency_key=idempotency_key,
     )
     return AutorizacionOut(**resp)
 
@@ -68,11 +69,21 @@ async def confirmar_dispensacion(core: CoreClient, datos: ConfirmarIn,
     if not es_valido:
         raise AtmError(codigo, "Resultado de dispensación inválido", 400)
 
+    if datos.resultado == "NO_DISPENSADO":
+        # El dinero no salió: se libera la retención en vez de debitar.
+        resp = core.extornar(
+            uuid_autorizacion=datos.uuid_autorizacion,
+            motivo="NO_DISPENSADO",
+            correlation_id=correlation_id,
+            authorization=authorization,
+        )
+        return AutorizacionOut(**resp)
+
     resp = core.confirmar(
         uuid_autorizacion=datos.uuid_autorizacion,
         id_canal=datos.id_canal,
         id_terminal=datos.id_terminal,
-        resultado=datos.resultado,
+        idempotency_key=idempotency_key,
         correlation_id=correlation_id,
         authorization=authorization,
     )

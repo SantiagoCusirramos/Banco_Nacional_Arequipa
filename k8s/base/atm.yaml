@@ -23,12 +23,12 @@ spec:
           command: [uvicorn, ATM.main:app, --host, 0.0.0.0, --port, "8019"]
           env:
             # TARJETAS y CUENTAS, a través del Bus, con la credencial de ATM.
-            - name: CORE_BASE_URL
-              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: CORE_BASE_URL } }
+            - name: BUS_BASE_URL
+              value: http://bus:8018
             - name: BUS_TOKEN
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_ATM } }
             - name: ATM_ID
-              value: "ATM-AQP-001"
+              value: "DEV-ATM-01"  # terminal de bna_datos_dev.sql
           ports:
             - { name: http, containerPort: 8019 }
           startupProbe:

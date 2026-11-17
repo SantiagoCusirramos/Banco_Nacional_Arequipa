@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 from pydantic import BaseModel
 
+from ATM.config import settings
 from ATM.core_client import CoreClient
 from ATM.dependencies import (
     autorizacion, contexto_operacion, correlation_id, get_core_client,
@@ -42,7 +43,7 @@ class RegistroEventoIn(BaseModel):
 def _estado_cajero() -> EstadoOut:
     """Estado local del cajero (bandejas simuladas)."""
     return EstadoOut(
-        terminal="ATM-AQP-001",
+        terminal=settings.atm_id,
         bandejas={"PEN": {"200": 20, "100": 40, "50": 60, "20": 80, "10": 80},
                   "USD": {"100": 20, "50": 40, "20": 60, "10": 60}},
         pendientes=[],
@@ -74,7 +75,7 @@ async def ready(core: CoreClient = Depends(get_core_client)):
 
 @router.get("/config")
 def config(request: Request):
-    return exito(request, ConfigOut(id_cajero="ATM-AQP-001", pruebas=False))
+    return exito(request, ConfigOut(id_cajero=settings.atm_id, pruebas=False))
 
 
 @router.get("/estado")
@@ -221,7 +222,7 @@ async def registrar_evento(request: Request, datos: RegistroEventoIn):
     No guarda datos sensibles (clave, token, PAN completo)."""
     evento = {
         "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
-        "terminal": "ATM-AQP-001",
+        "terminal": settings.atm_id,
         "correlationId": datos.correlationId,
         "uuidTransaccion": datos.uuidTransaccion or "-",
         "tipo": datos.tipo[:20],

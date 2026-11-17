@@ -174,7 +174,7 @@ details pre{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;color:#3A
 
   <div class="escena">
     <section class="cajero" aria-label="Cajero automático">
-      <div class="cabeza"><span><i class="led"></i>ATM-AQP-001</span><span>EN SERVICIO</span></div>
+      <div class="cabeza"><span id="idCajero"><i class="led"></i>ATM-AQP-001</span><span>EN SERVICIO</span></div>
       <div class="marco">
         <div class="teclas" id="izq"></div>
         <div class="pantalla" id="pantalla" aria-live="polite"></div>
@@ -210,7 +210,14 @@ details pre{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;color:#3A
 
 <script>
 const $ = id => document.getElementById(id);
-const ID_CAJERO = 'ATM-AQP-001';
+// El id del cajero lo da el servidor (ATM_ID): debe ser una terminal registrada en la base.
+let ID_CAJERO = 'ATM-AQP-001';
+fetch('/api/config').then(r => r.json()).then(j => {
+  if (j && j.data && j.data.id_cajero) {
+    ID_CAJERO = j.data.id_cajero;
+    $('idCajero').lastChild.textContent = ID_CAJERO;
+  }
+}).catch(() => {});
 let ocupado = false;
 let sesion = null;          // {token, id_tarjeta}
 let entrada = null;         // captura de digitos: {max, valor, cambio, enter}

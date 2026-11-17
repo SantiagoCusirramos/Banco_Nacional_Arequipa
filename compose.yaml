@@ -358,9 +358,9 @@ services:
     command: uvicorn ATM.main:app --host 0.0.0.0 --port 8019
     environment:
       # TARJETAS y CUENTAS, a través del Bus (fase 2), con la credencial de ATM.
-      BUS_BASE_URL: http://bus:8018/bus
+      BUS_BASE_URL: http://bus:8018
       BUS_TOKEN: ${BUS_TOKEN_ATM:?Falta en .env. Ejecute ./bna up}
-      ATM_ID: ATM-AQP-001
+      ATM_ID: DEV-ATM-01  # terminal de bna_datos_dev.sql
     depends_on:
       bus:
         condition: service_healthy
@@ -461,7 +461,6 @@ services:
       DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
       COBRANZA_GATEWAY_URL: http://bus:8018/bus/cobranza
       CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
-      ATM_GATEWAY_URL: http://bus:8018/bus/atm
       BUS_TOKEN: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
     networks: [canales]
     depends_on:

@@ -68,7 +68,7 @@ Variables de entorno (`.env`):
 
 | Variable | Descripción | Ejemplo |
 |---|---|---|
-| `CORE_BASE_URL` | Base URL del Bus | `http://bus:8018/bus` |
+| `BUS_BASE_URL` | Raíz del Bus de Servicios (sin `/bus`) | `http://bus:8018` |
 | `BUS_TOKEN` | Credencial ante el Bus | (generado por `./bna up`) |
 | `ATM_ID` | Identificador del cajero | `ATM-AQP-001` |
 | `PRUEBAS` | Modo pruebas (simular fallos) | `false` |
