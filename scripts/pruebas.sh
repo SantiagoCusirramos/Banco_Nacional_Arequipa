@@ -83,6 +83,8 @@ correr "Contratos de CUENTAS y TARJETAS con COREDB" \
 correr "COREDB contra MySQL" \
   env COREDB_IMAGEN_PRUEBAS=bna/coredb:local backend/COREDB/scripts/pruebas_integracion.sh
 correr "Base integrada, despliegue" database/pruebas/mysql/prueba_despliegue.sh
+correr "Aviso de push directo" \
+  docker run --rm -v "$RAIZ/.github/scripts:/aviso:ro" bna/backend:local $PYTEST /aviso
 correr "Frontend, imagen de pruebas" \
   docker build -q --target pruebas -f docker/frontend/Dockerfile -t bna/frontend-pruebas:local frontend
 correr "Frontend, lint" docker run --rm bna/frontend-pruebas:local npm run lint
