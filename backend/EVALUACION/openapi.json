@@ -1,0 +1,1038 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "BNA · Evaluación Crediticia",
+    "description": "Módulo 12 de la Línea de Créditos, sin base propia. Recibe el expediente de Solicitud (CR-INT-02) y lo registra en COREDB con su usuario de servicio; el analista consulta, registra la situación financiera (COREDB corre la regla RN-EVA-002-P) y decide los casos OBSERVADO con su propio token de COREDB, que Evaluación reenvía; el resultado final vuelve a Solicitud (CR-INT-03). Montos como texto decimal (\"500.00\").",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/salud": {
+      "get": {
+        "tags": [
+          "Estado"
+        ],
+        "summary": "COREDB responde y el usuario de servicio inicia sesión",
+        "operationId": "salud_salud_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eva/applications": {
+      "post": {
+        "tags": [
+          "CR-INT-02 Solicitud a Evaluación"
+        ],
+        "summary": "Recibir el expediente de una versión de solicitud",
+        "description": "Registra la versión en COREDB y devuelve el acuse que SOL valida. COREDB reconoce la\nmisma versión con el mismo contenido (200, el mismo acuse), así que reenviar es seguro.",
+        "operationId": "recibir_expediente_eva_applications_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SobreExpediente"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "200": {
+            "description": "Repetición: el mismo acuse"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO: la misma versión con otro contenido"
+          },
+          "422": {
+            "description": "EXPEDIENTE_INCONSISTENTE, CLIENTE_NO_HABILITADO, CALENDARIO_INVALIDO o SOLICITUD_NO_ADMITIDA"
+          }
+        }
+      }
+    },
+    "/eva/operations/{id_operacion}": {
+      "get": {
+        "tags": [
+          "CR-INT-02 Solicitud a Evaluación"
+        ],
+        "summary": "Consultar la recepción de una operación",
+        "description": "Evaluación no guarda las operaciones de SOL: responde 404 y SOL reenvía el expediente, que\nCOREDB reconoce por su versión y contenido sin registrarlo dos veces (devuelve el mismo acuse).",
+        "operationId": "consultar_operacion_eva_operations__id_operacion__get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_operacion",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id Operacion"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Sin registro de la operación: SOL puede enviarla"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eva/v1/solicitudes": {
+      "get": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Bandeja de solicitudes de crédito",
+        "operationId": "bandeja_eva_v1_solicitudes_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "REGISTRADA",
+                    "EN_EVALUACION",
+                    "APROBADA",
+                    "RECHAZADA",
+                    "DESEMBOLSADA"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Estado"
+            }
+          },
+          {
+            "name": "codCliente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eva/v1/solicitudes/{id_solicitud}": {
+      "get": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Calendario, evaluaciones e historial",
+        "operationId": "detalle_eva_v1_solicitudes__id_solicitud__get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_solicitud",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Solicitud"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eva/v1/solicitudes/{id_solicitud}/evaluaciones": {
+      "post": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Registrar la situación financiera y aplicar la regla",
+        "operationId": "evaluar_eva_v1_solicitudes__id_solicitud__evaluaciones_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_solicitud",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Solicitud"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SituacionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eva/v1/evaluaciones/{id_evaluacion}/decision": {
+      "post": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Decidir un resultado OBSERVADO: aprobar o rechazar",
+        "operationId": "decidir_eva_v1_evaluaciones__id_evaluacion__decision_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_evaluacion",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Evaluacion"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eva/v1/solicitudes/{id_solicitud}/revocacion": {
+      "post": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Revocar una aprobación sin desembolso",
+        "operationId": "revocar_eva_v1_solicitudes__id_solicitud__revocacion_post",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_solicitud",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Id Solicitud"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevocacionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eva/v1/aprobaciones": {
+      "get": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Aprobaciones vigentes sin desembolso",
+        "operationId": "aprobaciones_eva_v1_aprobaciones_get",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "codCliente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 12,
+                  "pattern": "^[A-Za-z0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          },
+          {
+            "name": "idSolicitud",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idsolicitud"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eva/v1/catalogo": {
+      "get": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Estados, reglas y vigencia de la aprobación",
+        "operationId": "catalogo_eva_v1_catalogo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/eva/v1/resultados-sol": {
+      "get": {
+        "tags": [
+          "Analista"
+        ],
+        "summary": "Resultados que se devuelven a Solicitud (CR-INT-03)",
+        "operationId": "resultados_sol_eva_v1_resultados_sol_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CalendarioSol": {
+        "properties": {
+          "cuotas": {
+            "items": {
+              "$ref": "#/components/schemas/CuotaSol"
+            },
+            "type": "array",
+            "maxItems": 600,
+            "minItems": 1,
+            "title": "Cuotas"
+          },
+          "total_pagar": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Total Pagar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cuotas",
+          "total_pagar"
+        ],
+        "title": "CalendarioSol"
+      },
+      "ClienteSol": {
+        "properties": {
+          "id_cliente": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Id Cliente"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_cliente"
+        ],
+        "title": "ClienteSol"
+      },
+      "CondicionesSol": {
+        "properties": {
+          "id_cliente": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Id Cliente"
+          },
+          "monto_solicitado": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto Solicitado"
+          },
+          "moneda": {
+            "type": "string",
+            "enum": [
+              "PEN",
+              "USD"
+            ],
+            "title": "Moneda"
+          },
+          "plazo_meses": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazo Meses"
+          },
+          "destino_credito": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destino Credito"
+          },
+          "pago_doble": {
+            "type": "boolean",
+            "title": "Pago Doble",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_cliente",
+          "monto_solicitado",
+          "moneda",
+          "plazo_meses"
+        ],
+        "title": "CondicionesSol"
+      },
+      "CuotaSol": {
+        "properties": {
+          "numero_cuota": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Numero Cuota"
+          },
+          "fecha_vencimiento": {
+            "type": "string",
+            "format": "date",
+            "title": "Fecha Vencimiento"
+          },
+          "saldo_inicial": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Saldo Inicial"
+          },
+          "amortizacion": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amortizacion"
+          },
+          "interes": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Interes"
+          },
+          "cuota_total": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Cuota Total"
+          },
+          "saldo_final": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Saldo Final"
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero_cuota",
+          "fecha_vencimiento",
+          "saldo_inicial",
+          "amortizacion",
+          "interes",
+          "cuota_total",
+          "saldo_final"
+        ],
+        "title": "CuotaSol"
+      },
+      "DecisionIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APROBADO",
+              "RECHAZADO"
+            ],
+            "title": "Decision"
+          },
+          "comentario": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 10,
+            "title": "Comentario"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision",
+          "comentario"
+        ],
+        "title": "DecisionIn",
+        "description": "Decisión del analista sobre un resultado OBSERVADO de la regla. Solo APROBADO o RECHAZADO:\npor omisión del equipo (T1), el analista no devuelve la solicitud a SOL."
+      },
+      "ExpedienteSol": {
+        "properties": {
+          "cliente": {
+            "$ref": "#/components/schemas/ClienteSol"
+          },
+          "condiciones": {
+            "$ref": "#/components/schemas/CondicionesSol"
+          },
+          "politica": {
+            "$ref": "#/components/schemas/PoliticaSol"
+          },
+          "calendario": {
+            "$ref": "#/components/schemas/CalendarioSol"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cliente",
+          "condiciones",
+          "politica",
+          "calendario"
+        ],
+        "title": "ExpedienteSol"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PoliticaSol": {
+        "properties": {
+          "tea": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Tea"
+          },
+          "amortizacion": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Amortizacion",
+            "default": "FRANCES"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tea"
+        ],
+        "title": "PoliticaSol"
+      },
+      "RevocacionIn": {
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 10,
+            "title": "Motivo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "motivo"
+        ],
+        "title": "RevocacionIn"
+      },
+      "SituacionIn": {
+        "properties": {
+          "versionSolicitud": {
+            "type": "integer",
+            "maximum": 32767.0,
+            "minimum": 1.0,
+            "title": "Versionsolicitud"
+          },
+          "ingresoMensual": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Ingresomensual"
+          },
+          "deudaMensual": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Deudamensual"
+          },
+          "riesgo": {
+            "type": "string",
+            "enum": [
+              "BUENO",
+              "REGULAR",
+              "ALTO"
+            ],
+            "title": "Riesgo"
+          },
+          "verificada": {
+            "type": "boolean",
+            "title": "Verificada"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "versionSolicitud",
+          "ingresoMensual",
+          "deudaMensual",
+          "riesgo",
+          "verificada"
+        ],
+        "title": "SituacionIn",
+        "description": "Situación financiera del cliente que registra el analista; con ella COREDB corre la regla."
+      },
+      "SobreExpediente": {
+        "properties": {
+          "versionContrato": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Versioncontrato"
+          },
+          "idSolicitud": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "title": "Idsolicitud"
+          },
+          "versionSolicitud": {
+            "type": "integer",
+            "maximum": 32767.0,
+            "minimum": 1.0,
+            "title": "Versionsolicitud"
+          },
+          "idOperacion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{8,80}$",
+            "title": "Idoperacion"
+          },
+          "idCorrelacion": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+            "title": "Idcorrelacion"
+          },
+          "expediente": {
+            "$ref": "#/components/schemas/ExpedienteSol"
+          },
+          "simulado": {
+            "type": "boolean",
+            "title": "Simulado",
+            "default": false
+          },
+          "actorEnvio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actorenvio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "versionContrato",
+          "idSolicitud",
+          "versionSolicitud",
+          "idOperacion",
+          "idCorrelacion",
+          "expediente"
+        ],
+        "title": "SobreExpediente",
+        "description": "CR-INT-02: lo que SOL envía al pulsar «Guardar y enviar»."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -1,17 +1,22 @@
 # Despliega el producto en un clúster de kind y corre dentro el flujo de extremo a
-# extremo. En un PR corre solo si cambia algo de lo que depende el despliegue; en
-# cada push a main, siempre.
+# extremo. En un PR corre solo si cambia algo de lo que depende el despliegue o el
+# flujo (k8s-smoke ejecuta scripts/flujo_e2e.py; k8s-up genera .env con
+# scripts/generar_env.sh desde .env.example); en cada push a main, siempre.
 name: Kubernetes
 
 on:
   pull_request:
     paths:
       - k8s/**
+      - backend/BUS_SERVICIOS/**
       - docker/**
       - database/**
       - compose.yaml
       - bna
       - scripts/k8s.sh
+      - scripts/flujo_e2e.py
+      - scripts/generar_env.sh
+      - .env.example
       - .github/workflows/k8s.yml
   push:
     branches: [main]

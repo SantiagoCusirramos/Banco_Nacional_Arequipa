@@ -4,6 +4,7 @@
  * En esta entrega el gateway es SIMULADO y ejecuta SOL sobre su BD local.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { credencialBus } from "@/lib/proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,9 +31,13 @@ async function proxy(
   const trace = crypto.randomUUID();
   if (request.method !== "GET") {
     const origin = request.headers.get("origin");
-    // Next puede ver el puerto interno del contenedor. El origen público
-    // se configura en servidor; nunca se toma de X-Forwarded-* del cliente.
-    let expectedOrigin = request.nextUrl.origin;
+    // Next arma nextUrl con su puerto interno (3000), no con el que publica
+    // compose o el NodePort de kind. Por omisión vale el Host que recibió el
+    // servidor, que lo fija el navegador y una página ajena no puede cambiar.
+    // Detrás de un proxy TLS se configura SOL_PUBLIC_ORIGIN; nunca se toma de
+    // X-Forwarded-* del cliente.
+    const host = request.headers.get("host");
+    let expectedOrigin = host ? `${request.nextUrl.protocol}//${host}` : request.nextUrl.origin;
     const configuredOrigin = process.env.SOL_PUBLIC_ORIGIN;
     if (configuredOrigin) {
       try {
@@ -73,6 +78,7 @@ async function proxy(
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const operation = request.headers.get("X-Idempotency-Key");
   if (operation) headers.set("X-Idempotency-Key", operation);
+  credencialBus(headers);
   try {
     const upstream = await fetch(
       `${base.replace(/\/$/, "")}/${route}${request.nextUrl.search}`,

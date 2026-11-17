@@ -1,0 +1,50 @@
+/* Captación: lo que no trae sol.css. Prefijo cap- para no tocar a los demás módulos. */
+.cap-sub { color: #6f7f8f; font-size: 12px; margin: 4px 0 0; }
+.cap-filtros { margin-bottom: 16px; }
+.cap-filtros button { text-transform: capitalize; }
+.cap-lista { margin: 6px 0 0; padding-left: 18px; }
+.cap-demo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 24px 16px; font-size: 12px; color: #6f7f8f; }
+.cap-form { padding: 0 24px 24px; }
+.cap-estado { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.cap-estado small { color: #6f7f8f; font-size: 11px; }
+.cap-seccion { margin-bottom: 20px; }
+.cap-seccion.hecho .cap-num { background: #e6f2ee; border-color: #b7d9d1; color: #1f7a63; }
+.cap-num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%;
+  border: 1px solid #d4dfe7; font-size: 11px; margin-right: 10px; vertical-align: middle; }
+.cap-cuerpo { padding: 0 24px 24px; display: grid; gap: 14px; }
+.cap-fila { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.cap-fila select, .cap-fila input, .cap-tipos input { font: inherit; }
+.cap-fila select, .cap-fila input:not([type="checkbox"]) { border: 1px solid #d4dfe7; border-radius: 8px; padding: 8px 10px; min-height: 38px; background: #fff; }
+.cap-dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cap-caja { border: 1px solid #e3eaf0; border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; align-content: start; }
+.cap-caja h3 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.cap-tipos { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; }
+.cap-tabla { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cap-tabla th { text-align: left; font-weight: 600; color: #6f7f8f; border-bottom: 1px solid #e3eaf0; padding: 6px; }
+.cap-tabla td { border-bottom: 1px solid #f0f4f7; padding: 7px 6px; vertical-align: middle; }
+.cap-req { color: #b42318; font-style: normal; }
+.cap-manual summary { cursor: pointer; font-size: 12px; color: #1d5c8a; margin-bottom: 8px; }
+.cap-otp { background: #f7fafc; border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; font-size: 13px; }
+.cap-otp p { margin: 0; }
+.cap-simulado { background: #fff4dc; color: #7a5200; padding: 6px 10px; border-radius: 6px; font-size: 12px; }
+.cap-simulado code { font-size: 15px; font-weight: 700; letter-spacing: 3px; margin: 0 6px; color: #15324f; }
+.cap-codigo { width: 130px; letter-spacing: 6px; font-size: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.cap-mal { color: #b42318; font-size: 12px; margin: 0; }
+.cap-puntaje { font-size: 34px; font-weight: 700; color: #15324f; font-variant-numeric: tabular-nums; }
+.cap-barra { position: relative; height: 10px; border-radius: 999px;
+  background: linear-gradient(90deg, #d9534f 0 35%, #e8a33d 35% 55%, #4f8fd0 55% 75%, #2f9a73 75% 100%); }
+.cap-barra i { position: absolute; top: -4px; width: 4px; height: 18px; background: #15324f; border-radius: 2px; transform: translateX(-2px); }
+.cap-eje { display: flex; justify-content: space-between; font-size: 10px; color: #6f7f8f; }
+.cap-datos { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 13px; }
+.cap-datos dt { color: #6f7f8f; }
+.cap-datos dd { margin: 0; }
+.cap-mono, .cap-json { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; word-break: break-all; }
+.cap-json { background: #0f1b2d; color: #d6deeb; border-radius: 8px; padding: 12px; margin: 0; white-space: pre-wrap; }
+@media (max-width: 900px) {
+  .cap-dos { grid-template-columns: 1fr; }
+  .cap-estado { align-items: flex-start; }
+}
+@media (max-width: 640px) {
+  .cap .sol-topbar-right .sol-demo-pill { display: none; }
+  .cap .sol-topbar { gap: 8px; }
+}

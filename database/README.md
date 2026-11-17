@@ -177,6 +177,102 @@ Solo agrega objetos: una base creada con `bd-v1.1-mysql` sigue sirviendo a una A
 anterior, pero necesita un volumen nuevo para tener las vistas, porque los scripts de
 inicio solo corren sobre un volumen vacío.
 
+### Créditos (desde `bd-v1.4-mysql`)
+
+La línea de créditos (Evaluación, Desembolso y Cobranza) escribe en `creditos.*` solo
+por estos procedimientos, concedidos solo a `bna_api`, y lee por vistas: `bna_api` no lee
+ninguna tabla de `creditos`.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `creditos.registrar_solicitud` | El expediente de SOL: la solicitud EN_EVALUACION y su calendario PRELIMINAR, que la base comprueba (cuotas consecutivas, fechas crecientes, saldos encadenados, tantas cuotas como meses). Una versión nueva, mientras la ronda no esté evaluada, abre otra ronda. La misma versión con la misma huella devuelve lo mismo. Devuelve la ronda y el id de la evaluación, que es determinista (`creditos.fn_id_evaluacion`) para el acuse a SOL |
+| `creditos.evaluar_solicitud` | Guarda la situación financiera y la evaluación. COREDB calcula el score y el límite; la regla sale de `creditos.regla_evaluacion` por el ratio monto / límite. R-A aprueba, R-C rechaza, R-B queda para el analista |
+| `creditos.registrar_analista`, `creditos.decidir_evaluacion` | El analista (un empleado activo) decide APROBADO o RECHAZADO una evaluación R-B, una vez y con comentario |
+| `creditos.revocar_aprobacion` | Una aprobación sin desembolso pasa a RECHAZADA con motivo; sus órdenes abiertas, también |
+| `creditos.preparar_orden`, `creditos.cambiar_cuenta_orden`, `creditos.registrar_validacion_orden`, `creditos.rechazar_orden` | La orden de una aprobación vigente (30 días, primera cuota sin vencer), con llave de idempotencia, sobre una cuenta de ahorros activa, individual, del titular y en la moneda del crédito. IDENTIDAD exige una verificación aprobada hoy (`clientes.verificar_documento`); CUENTA la registra la base |
+| `creditos.confirmar_orden` | En una sola transacción: el movimiento DESEMBOLSO, la orden CONFIRMADA, el calendario OFICIAL (copia exacta del PRELIMINAR), el crédito AL_DIA y la solicitud DESEMBOLSADA. Repetirla devuelve lo mismo sin abonar otra vez |
+| `creditos.registrar_pago_cuota` | En una sola transacción: el movimiento DEBITO_CUOTA y la aplicación de la cuota más antigua a la más reciente. Sin saldo, con la cuenta bloqueada o sobre el tope, el pago queda RECHAZADO con el código de la regla. La referencia es la llave |
+| `creditos.registrar_mora`, `creditos.actualizar_vencimientos` | El cálculo de mora de una cuota vencida (se muestra, no se cobra) y el paso diario a VENCIDA y EN_MORA; lo corre el evento `creditos.ev_actualizar_vencimientos` |
+| `creditos.catalogos_credito` | Estados, reglas con sus umbrales, métodos, tipos de validación y canales |
+
+Vistas: `v_solicitud_api`, `v_calendario_api`, `v_historial_solicitud_api`,
+`v_evaluacion_api`, `v_aprobacion_api`, `v_orden_api`, `v_validacion_orden_api`,
+`v_credito_api`, `v_cuota_api`, `v_pago_api`, `v_mora_api`, `v_evento_credito_api`,
+`v_conciliacion_cobranza` y `v_conciliacion_diaria`, sin nombres, documentos ni
+contactos del cliente. Como el dinero se mueve dentro de estos procedimientos, la orden
+no usa EN_PROCESO ni POR_VERIFICAR, el pago no usa PENDIENTE y `evento_entrega` queda sin
+uso. La extensión agrega cuatro tablas (`numerador_orden`, `numerador_credito`,
+`recepcion_solicitud`, `cobro_pago`); el modelo no cambia. Los mensajes de error no llevan
+cifras ni valores de entrada. Solo agrega objetos, pero una base existente necesita un
+volumen nuevo para tenerlos.
+
+### Autorizaciones y credenciales de tarjeta (desde `bd-v1.5-mysql`)
+
+El módulo Tarjetas autoriza, extorna y valida credenciales por COREDB. Las reglas son
+las de los triggers que ya estaban (`tg_autorizacion_validar_bi`, `tg_intento_contar`);
+estos procedimientos son la entrada de la API y se conceden a `bna_api`, `bna_app` y
+`bna_admin`.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `tarjetas.autorizar_operacion` | Registra la autorización con el uuid que envía quien llama (RN-BUS-002). Si se cumplen las reglas queda AUTORIZADA con `00`, retiene el saldo y compromete el tope. Si una regla falla queda RECHAZADA con su código ISO 8583 (`51`, `54`, `57`, `61`, `62`) y un motivo sin montos. El mismo uuid con los mismos datos devuelve lo registrado; con otros datos falla con `BNA-IDEMPOTENCIA` |
+| `tarjetas.extornar_autorizacion` | Pasa a EXTORNADA, con `EXT`, una autorización sin movimiento: los triggers liberan el saldo y el tope (RN-ATM-003). Repetirlo no cambia nada. Una rechazada o una que ya tiene su movimiento se rechaza con `BNA-EXTORNO` |
+| `tarjetas.registrar_credencial` | Asigna o cambia el PIN (4 dígitos) o la clave web (6), con una sal aleatoria, y reinicia los intentos |
+| `tarjetas.validar_credencial` | Compara el valor con el hash dentro de la base y registra el intento; el tercer fallo bloquea la tarjeta (RN-TAR-004). Con la tarjeta no operativa se rechaza sin registrar el intento |
+
+`bna_api` lee la autorización en `tarjetas.v_autorizacion_api`, sin la IP de origen ni
+el nivel de riesgo, y sigue sin leer `tarjetas.credencial`. El hash es
+`SHA2(CONCAT(sal, valor), 256)`; ningún evento ni mensaje de error repite el valor. La
+matriz de coordenadas queda para cuando haya un procedimiento que la emita. Solo agrega
+objetos y cuatro códigos de respuesta: una base anterior necesita un volumen nuevo.
+
+### Empleados (desde `bd-v1.6-mysql`)
+
+Un administrador registra empleados por la API, sin el administrador de la base, y así
+un analista de crédito queda disponible: empleado, usuario ANALISTA ligado a él y
+`creditos.registrar_analista`.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `core.registrar_empleado` | Crea el empleado activo (código, nombre, cargo y agencia opcional) y, si se indica, lo liga a un usuario: una persona que todavía no tiene empleado. Rechaza el código repetido (`BNA-EMPLEADO-DUPLICADO`), la agencia inexistente (`BNA-AGENCIA`), el usuario inexistente (`BNA-USUARIO`) y el usuario de servicio o ya ligado (`BNA-USUARIO-EMPLEADO`) |
+
+Se concede solo a `bna_api`; `bna_api` sigue sin escribir ni leer `core.empleado`. El
+evento `REGISTRAR_EMPLEADO` guarda el código, el cargo y el usuario, no el nombre; los
+mensajes de error no repiten valores de entrada. Solo agrega un procedimiento: una base
+anterior necesita un volumen nuevo para tenerlo.
+
+### Captación (desde `bd-v1.7-mysql`)
+
+El expediente del **prospecto**, que todavía no es cliente, en tablas de extensión del
+esquema `clientes`: `solicitante_captacion`, `caso_captacion`, `consentimiento_captacion`,
+`otp_captacion`, `validacion_captacion`, `consulta_riesgo_captacion` y
+`perfil_riesgo_captacion`. El modelo normalizado no cambia: solo se ligan a él por el
+cliente que resulta (`clientes.cliente`), la agencia y, a través del cliente, su
+verificación de captación. Los proveedores (RENIEC, listas, PEP, centrales, SMS) y el
+puntaje son del módulo CAPTACION; la base guarda lo que responden y aplica las reglas del
+expediente.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `clientes.registrar_solicitante_captacion` | Registra al prospecto con su documento validado por `clientes.tipo_documento`; un documento repetido devuelve el mismo solicitante (`p_duplicado`) |
+| `clientes.abrir_caso_captacion` | Abre el caso (INICIADO). Un solo caso abierto por solicitante (`BNA-CASO-ABIERTO`, y un índice único sobre una columna generada) |
+| `clientes.registrar_consentimientos_captacion` | De uno a cuatro consentimientos en JSON; vale el último de cada tipo y la versión se guarda solo en TERMINOS |
+| `clientes.emitir_otp_captacion` / `verificar_otp_captacion` | Guarda el HMAC que calcula CAPTACION, vence el pendiente anterior del mismo canal y cuenta intentos; vencimiento e intentos salen de `clientes.tipo_contacto`. El código correcto registra la verificación CELULAR o CORREO |
+| `clientes.registrar_validacion_captacion` | RENIEC, listas, PEP o biometría (con su consentimiento), del proveedor o manual; reemplaza al resultado anterior del mismo tipo |
+| `clientes.registrar_consulta_riesgo_captacion` / `registrar_perfil_captacion` | La respuesta de una central (exige CONSULTA_BUROS) y el perfil de 0 a 1000 (exige una consulta; una consulta posterior lo deja desactualizado) |
+| `clientes.cambiar_estado_caso_captacion` | Observar, levantar la observación, rechazar o revocar (solo un caso HABILITADO) |
+| `clientes.vincular_cliente_captacion` | Liga al caso APROBADO el cliente ACTIVO con el documento del solicitante; quien verificó la identidad lo registra antes con `registrar_cliente` (punto R-01) |
+| `clientes.habilitar_caso_captacion` | HABILITADO con vigencia de 1 a 365 días desde la fecha de negocio; deja en `clientes.validacion_identidad` las verificaciones de contacto. Repetirlo no cambia nada |
+
+El estado se recalcula tras cada paso: INICIADO → EN_VALIDACION → APROBADO → HABILITADO,
+OBSERVADO mientras algo quede por resolver, y RECHAZADO (validación rechazada, perfil
+MUY_ALTO o decisión del asesor) o REVOCADO como finales. Las vistas
+`clientes.v_*_captacion_api` dan a `bna_api` lo que necesita leer, con lo que falta para
+habilitar el caso (`faltantes`) y sin el hash del OTP; `bna_api` no escribe ni lee las
+tablas. Los eventos van al módulo CLIENTES (punto R-01: `core.modulo` no tiene CAPTACION)
+sin documento, nombres ni contactos. Solo agrega objetos: una base anterior necesita un
+volumen nuevo para tenerlos.
+
 `pruebas/mysql/run_tests.sh` ejecuta toda la suite con la extensión cargada. Sus
 pruebas (ID `X`) quedan en `resultados/mysql/resultado-extension.tsv`, fuera de la
 matriz. `pruebas_sin_transaccion.sh` prueba cada procedimiento en autocommit, porque
