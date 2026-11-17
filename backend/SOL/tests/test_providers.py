@@ -121,17 +121,27 @@ def test_bus_legacy_and_explicit_whole_pair_override():
         assert seen == ["bus.test", "bus.test", "eva.test"]
     finally:
         adapter.close()
-    # Un par propio de auditoría prevalece sobre el Bus; no se mezclan tokens.
+    # Con el Bus configurado: sin par propio se usa él; con par propio se usa
+    # audit.test. Nunca se mezcla la credencial del Bus con la de auditoría.
     seen_audit = []
     def audit_provider(request):
         seen_audit.append((request.url.host, request.headers["Authorization"]))
-        return httpx.Response(200, json={"idEvento": "evento-sintetico", "confirmado": True, "acuse": "ACK-audit"})
-    audit_adapter = Integrations(settings(), httpx.MockTransport(audit_provider))
-    try:
-        assert audit_adapter.audit({"idEvento": "evento-sintetico", "idCorrelacion": "trace"}) == "ACK-audit"
-    finally:
-        audit_adapter.close()
-    assert seen_audit == [("audit.test", "Bearer " + settings().audit_token)]
+        return httpx.Response(200, json={"idEvento": "evento-sintetico", "confirmado": True,
+                                         "acuse": "ACK-" + request.url.host})
+    payload = {"idEvento": "evento-sintetico", "idCorrelacion": "trace"}
+    bus_only = replace(settings(), cap_base_url="", cap_token="", eva_base_url="", eva_token="",
+                       audit_base_url="", audit_token="", bus_base_url="http://bus.test",
+                       bus_token="bus-" + "b" * 32)
+    explicit = replace(bus_only, audit_base_url="http://audit.test", audit_token=settings().audit_token)
+    for cfg_audit, expected in [(bus_only, [("bus.test", "Bearer " + bus_only.bus_token)]),
+                                (explicit, [("audit.test", "Bearer " + explicit.audit_token)])]:
+        seen_audit.clear()
+        audit_adapter = Integrations(cfg_audit, httpx.MockTransport(audit_provider))
+        try:
+            assert audit_adapter.audit(payload) == "ACK-" + expected[0][0]
+        finally:
+            audit_adapter.close()
+        assert seen_audit == expected
 
 
 @pytest.mark.parametrize("failure", [401, 503, "timeout"])
