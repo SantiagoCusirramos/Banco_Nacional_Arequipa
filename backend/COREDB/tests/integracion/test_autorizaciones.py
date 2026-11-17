@@ -212,3 +212,202 @@ def test_un_auditor_no_autoriza(sesion_de, tarjeta_activa):
     encabezados, _ = sesion_de("AUDITOR")
     respuesta = autorizar(TestClient(app, headers=encabezados), id_tarjeta, num_cuenta)
     assert respuesta.status_code == 403
+
+
+# ── Confirmación de autorización ──────────────────────────────────────────────
+
+
+def _huella(valor: str) -> str:
+    """Genera una huella de 64 caracteres hex (SHA-256 del valor)."""
+    import hashlib
+    return hashlib.sha256(valor.encode()).hexdigest()
+
+
+def test_confirmar_autorizacion_debita_una_sola_vez(cliente, tarjeta_activa):
+    """Confirma una autorización AUTORIZADA: registra el movimiento y pasa a DISPENSADA."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    # Autoriza un retiro de 100.00
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
+    assert auth_resp.status_code == 201
+    auth = auth_resp.json()
+    uuid_autorizacion = auth["uuid_autorizacion"]
+    assert (auth["estado_autorizacion"], auth["codigo_respuesta"]) == ("AUTORIZADA", "00")
+
+    # Confirma con llave de idempotencia
+    llave = str(uuid.uuid4())
+    confirmacion = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert confirmacion.status_code == 200, confirmacion.text
+    confirmada = confirmacion.json()
+    assert confirmada["estado_autorizacion"] == "DISPENSADA"
+    assert confirmada["uuid_transaccion"] == uuid_autorizacion
+    # El saldo disponible bajó una vez (1000 - 100 = 900)
+    assert disponible(cliente, num_cuenta) == Decimal("900.00")
+
+
+def test_repetir_confirmacion_con_misma_llave_no_debita_dos_veces(cliente, tarjeta_activa):
+    """Repetir la confirmación con la misma llave devuelve el mismo resultado sin segundo débito."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+    llave = str(uuid.uuid4())
+    huella = _huella(llave)
+
+    # Primera confirmación
+    primera = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"llave_idempotencia": llave, "huella": huella, "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert primera.status_code == 200
+    assert disponible(cliente, num_cuenta) == Decimal("900.00")
+
+    # Segunda confirmación con la misma llave
+    segunda = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"llave_idempotencia": llave, "huella": huella, "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert segunda.status_code == 200
+    assert segunda.json() == primera.json()
+    # El saldo no bajó dos veces
+    assert disponible(cliente, num_cuenta) == Decimal("900.00")
+
+
+def test_otra_llave_sobre_confirmada_409_o_422(cliente, tarjeta_activa):
+    """Confirmar una ya DISPENSADA con otra llave falla (estado no vigente)."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+    llave1 = str(uuid.uuid4())
+    llave2 = str(uuid.uuid4())
+
+    # Primera confirmación
+    cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"llave_idempotencia": llave1, "huella": _huella(llave1), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    # Segunda con otra llave
+    respuesta = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"llave_idempotencia": llave2, "huella": _huella(llave2), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert respuesta.status_code in (409, 422), respuesta.text
+    assert respuesta.json()["error"]["code"] in ("BNA-CONFIRMACION", "BNA-IDEMPOTENCIA")
+
+
+def test_confirmar_extornada_409(cliente, tarjeta_activa):
+    """Extornar una autorización y luego confirmarla falla."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+
+    # Extornar
+    extorno = cliente.post(f"/coredb/autorizaciones/{uuid_autorizacion}/extorno", json={"motivo": "Sin efectivo"})
+    assert extorno.status_code == 200
+    assert extorno.json()["estado_autorizacion"] == "EXTORNADA"
+
+    # Confirmar la extornada
+    llave = str(uuid.uuid4())
+    respuesta = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert respuesta.status_code in (409, 422), respuesta.text
+    assert respuesta.json()["error"]["code"] == "BNA-CONFIRMACION"
+
+
+def test_confirmar_inexistente_404(cliente, datos_base):
+    """Confirmar una autorización que no existe devuelve 404."""
+    llave = str(uuid.uuid4())
+    respuesta = cliente.post(
+        f"/coredb/autorizaciones/{uuid.uuid4()}/confirmacion",
+        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert respuesta.status_code == 404
+    assert respuesta.json()["error"]["code"] == "BNA-AUTORIZACION"
+
+
+def test_confirmar_canal_no_coincide_409(cliente, tarjeta_activa):
+    """Confirmar con un canal distinto al de la autorización falla."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00", id_canal="VEN")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+
+    llave = str(uuid.uuid4())
+    respuesta = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert respuesta.status_code in (409, 422), respuesta.text
+    assert respuesta.json()["error"]["code"] == "BNA-CONFIRMACION"
+
+
+def test_confirmar_terminal_no_coincide_409(cliente, tarjeta_activa):
+    """Confirmar con una terminal distinta a la de la autorización falla."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00", id_terminal="DEV-ATM-01")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+
+    llave = str(uuid.uuid4())
+    respuesta = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "OTRA-TERMINAL"},
+    )
+    assert respuesta.status_code in (409, 422), respuesta.text
+    assert respuesta.json()["error"]["code"] == "BNA-CONFIRMACION"
+
+
+def test_confirmar_sin_llave_idempotencia_422(cliente, tarjeta_activa):
+    """La llave de idempotencia es obligatoria."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+
+    respuesta = cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"huella": _huella("x"), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+    )
+    assert respuesta.status_code == 422
+
+
+def test_confirmar_concurrencia_dos_llaves_distintas_un_solo_debito(cliente, tarjeta_activa, consulta):
+    """Dos confirmaciones simultáneas con llaves distintas → una sola confirmación exitosa,
+    las demás fallan porque la autorización ya cambió a DISPENSADA."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    auth_resp = autorizar(cliente, id_tarjeta, num_cuenta, monto="100.00")
+    uuid_autorizacion = auth_resp.json()["uuid_autorizacion"]
+
+    def confirmar(llave):
+        return cliente.post(
+            f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+            json={"llave_idempotencia": llave, "huella": _huella(llave), "id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
+        )
+
+    barrera = threading.Barrier(8)
+    llaves = [str(uuid.uuid4()) for _ in range(8)]
+
+    def intento(_):
+        barrera.wait()
+        return confirmar(llaves[_])
+
+    with ThreadPoolExecutor(8) as hilos:
+        respuestas = list(hilos.map(intento, range(8)))
+
+    # Una responde 200 (la primera), las otras 409/422 porque la autorización ya no está vigente
+    exitosas = [r for r in respuestas if r.status_code == 200]
+    fallidas = [r for r in respuestas if r.status_code in (409, 422)]
+    assert len(exitosas) == 1
+    assert len(fallidas) == 7
+    for r in fallidas:
+        assert r.json()["error"]["code"] == "BNA-CONFIRMACION"
+    # Solo un movimiento en la cuenta
+    movimientos = consulta(
+        "SELECT COUNT(*) FROM cuentas.movimiento WHERE num_cuenta = %s AND tipo_operacion = 'RETIRO'",
+        num_cuenta,
+    )
+    assert movimientos[0]["COUNT(*)"] == 1
+    assert disponible(cliente, num_cuenta) == Decimal("900.00")
