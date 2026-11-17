@@ -278,6 +278,18 @@ pruebas (ID `X`) quedan en `resultados/mysql/resultado-extension.tsv`, fuera de 
 matriz. `pruebas_sin_transaccion.sh` prueba cada procedimiento en autocommit, porque
 el arnés siempre abre una transacción.
 
+### Confirmación de autorización (desde `bd-v1.8-mysql`)
+
+El cajero automático confirma una autorización retenida para convertirla en el débito
+real al dispensar el efectivo.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `tarjetas.confirmar_autorizacion` | Confirma una autorización en estado AUTORIZADA o DISPENSADA sin movimiento: registra el movimiento real (RETIRO) con el mismo uuid de la autorización (RN-BUS-002), pasa la autorización a DISPENSADA y libera la retención (saldo_contable y saldo_disponible quedan iguales). Idempotente: repetir con la misma llave devuelve el mismo resultado; otra llave sobre autorización ya confirmada falla con `BNA-IDEMPOTENCIA`. Después de confirmar, `extornar_autorizacion` falla porque la operación ya tiene su movimiento. |
+
+`bna_api` ejecuta este procedimiento y lee la autorización en `tarjetas.v_autorizacion_api`.
+Solo agrega un procedimiento: una base anterior necesita un volumen nuevo para tenerlo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.
