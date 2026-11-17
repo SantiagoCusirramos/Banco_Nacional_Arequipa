@@ -18,5 +18,6 @@ resources:
   - sol.yaml
   - evaluacion.yaml
   - desembolso.yaml
+  - captacion.yaml
   - seguridad.yaml
   - frontend.yaml

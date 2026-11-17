@@ -68,6 +68,10 @@ correr "EVALUACION contra COREDB y MySQL" \
 correr "DESEMBOLSO contra COREDB y MySQL" \
   env DESEMBOLSO_IMAGEN_PRUEBAS=bna/backend:local DESEMBOLSO_IMAGEN_COREDB=bna/coredb:local \
   backend/DESEMBOLSO/scripts/pruebas_integracion.sh
+# CAPTACION y, en la imagen de SOL, su contrato CR-INT-01 con el adaptador real de SOL.
+correr "CAPTACION contra COREDB y MySQL" \
+  env CAPTACION_IMAGEN_PRUEBAS=bna/backend:local CAPTACION_IMAGEN_COREDB=bna/coredb:local \
+  CAPTACION_IMAGEN_SOL=bna/sol:local backend/CAPTACION/scripts/pruebas_integracion.sh
 correr "Seguridad" docker run --rm bna/seguridad:local $PYTEST seguridad/tests
 correr "COREDB, unitarias" \
   docker run --rm bna/coredb:local sh -c "cd COREDB && $PYTEST"

@@ -38,6 +38,14 @@ x-sol: &sol
     SOL_DB_NAME: bna_sol_mvp
     SOL_INTEGRATION_MODE: SIMULADO
 
+x-captacion: &captacion
+  image: bna/backend:local
+  pull_policy: never
+  environment: &captacion-entorno
+    CORE_BASE_URL: http://coredb:8012
+    CAP_CORE_USUARIO: svc-captacion
+    CAP_CORE_SECRETO: ${CAPTACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+
 x-sonda: &sonda
   interval: 5s
   timeout: 5s
@@ -107,12 +115,15 @@ services:
         python -m COREDB.scripts.crear_servicio --modulo EVALUACION --username svc-evaluacion --nombre Evaluación
         && CORE_DB_SERVICIO_SECRETO="$$DESEMBOLSO_COREDB_SECRETO"
         python -m COREDB.scripts.crear_servicio --modulo DESEMBOLSO --username svc-desembolso --nombre Desembolso
+        && CORE_DB_SERVICIO_SECRETO="$$CAPTACION_COREDB_SECRETO"
+        python -m COREDB.scripts.crear_servicio --modulo CLIENTES --username svc-captacion --nombre "Captación de clientes"
     environment:
       <<: *coredb-entorno
       BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
       CORE_DB_ADMIN_INICIAL_PASSWORD: ${BNA_ADMIN_PASSWORD:?Falta en .env. Ejecute ./bna up}
       EVALUACION_COREDB_SECRETO: ${EVALUACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       DESEMBOLSO_COREDB_SECRETO: ${DESEMBOLSO_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+      CAPTACION_COREDB_SECRETO: ${CAPTACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
     depends_on:
       db:
         condition: service_healthy
@@ -159,6 +170,35 @@ services:
         - python
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8002/ready", timeout=3)
+
+  # ── CAPTACION: captación de clientes, sobre COREDB ──────────────────────
+  # Verifica la identidad del solicitante, lo registra como cliente en COREDB y
+  # publica la referencia que consulta SOL (CR-INT-01). No tiene base propia: el
+  # expediente vive en la base integrada y se trabaja por COREDB. Su usuario de
+  # servicio (svc-captacion, módulo CLIENTES) lo crea coredb-init.
+  captacion:
+    <<: *captacion
+    command: uvicorn CAPTACION.main:app --host 0.0.0.0 --port 8017
+    environment:
+      <<: *captacion-entorno
+      CAP_SOL_TOKEN: ${CAP_SOL_TOKEN:?Falta en .env. Ejecute ./bna up}
+      CAP_OTP_CLAVE: ${CAP_OTP_CLAVE:?Falta en .env. Ejecute ./bna up}
+      # Sin proveedor de SMS ni de correo: el código OTP vuelve en la respuesta.
+      CAP_OTP_SIMULADO: "true"
+    depends_on:
+      coredb-init:
+        condition: service_completed_successfully
+      coredb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_CAPTACION:-8017}:8017"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request as u; u.urlopen("http://127.0.0.1:8017/ready", timeout=3)
 
   # ── SOL: solicitud de crédito, con Captación y Evaluación simuladas ─────
   sol:
@@ -287,6 +327,7 @@ services:
       SOL_COOKIE_SECURE: "false"
       EVALUACION_GATEWAY_URL: http://evaluacion:8015/eva/v1
       DESEMBOLSO_GATEWAY_URL: http://desembolso:8016/api/v1
+      CAPTACION_GATEWAY_URL: http://captacion:8017/api/v1/captacion
     depends_on:
       coredb:
         condition: service_healthy
@@ -299,6 +340,8 @@ services:
       evaluacion:
         condition: service_healthy
       desembolso:
+        condition: service_healthy
+      captacion:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BNA_PUERTO_FRONTEND:-3000}:3000"
@@ -334,7 +377,7 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8000/health", timeout=3)
 
-  # ── Base auxiliar: `bna` legada y `bna_sol_mvp` de SOL ──────────────────
+  # ── Base auxiliar: `bna` legada y `bna_sol_mvp` de SOL ────────────────
   # Aparte de la base integrada, que no recibe esquemas ni usuarios ajenos.
   db-aux:
     image: bna/db-aux:local
