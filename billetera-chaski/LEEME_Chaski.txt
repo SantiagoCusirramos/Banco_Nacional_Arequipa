@@ -1,0 +1,250 @@
+==============================================================================
+  CHASKI - BILLETERA DIGITAL
+  Módulo Billetera Digital (BNA) - Trabajo final UCSM
+==============================================================================
+
+Chaski es una billetera digital para celular: permite enviar y recibir dinero
+solo con el número de celular, pagar con QR en comercios, comprar en una
+tienda integrada, recargar el celular y pagar servicios. Tiene dos partes:
+
+  1. backend/    -> Servidor (API) en Node.js + Express + PostgreSQL
+  2. app_movil/  -> Aplicación móvil en Flutter (Android e iOS)
+
+
+------------------------------------------------------------------------------
+1. QUÉ HACE LA APLICACIÓN (FUNCIONES PARA EL USUARIO)
+------------------------------------------------------------------------------
+
+CUENTA Y SEGURIDAD
+  - Crear cuenta con DNI/CE, nombres, apellidos, celular y PIN de 6 dígitos.
+  - Iniciar sesión con celular + PIN.
+  - Bloqueo de acceso por 5 minutos tras 5 PIN incorrectos.
+  - Cada operación con dinero se autoriza con huella, rostro o PIN.
+  - Opción en Perfil para activar/desactivar la biometría.
+  - Sesión con token que dura 12 horas.
+
+INICIO
+  - Muestra el saldo (se puede ocultar con el ojito).
+  - Muestra cuánto puede mover hoy (límite diario de S/ 500).
+  - Promociones destacadas y últimos movimientos.
+  - Se actualiza sola cada 8 segundos.
+
+ENVIAR DINERO (P2P)
+  - Envía dinero a otro usuario de Chaski con su número de celular.
+  - Valida que el número esté registrado.
+  - Valida saldo suficiente, máximo S/ 500 por operación y S/ 500 por día.
+  - Muestra contactos recientes.
+  - Genera constancia con número de operación, que se puede compartir.
+
+SOLICITAR DINERO (COBROS)
+  - Pide dinero a otro usuario con monto y concepto.
+  - El otro usuario la ve en Avisos y puede pagarla o rechazarla.
+  - Las solicitudes vencen a las 48 horas.
+
+PAGAR CON QR
+  - Escanea el QR de un comercio con la cámara.
+  - También permite escribir el código del QR o elegir el comercio de la lista.
+  - Aplica automáticamente la promoción del comercio (con tope de descuento).
+  - QR fijo (del comercio) y QR dinámico (con monto, vence en 15 minutos y se
+    puede pagar una sola vez).
+
+MI QR
+  - Muestra tu propio QR para que otra persona te pague.
+
+PROMOS Y OFERTAS
+  - Lista de promociones por comercio (porcentaje y tope de descuento).
+  - Cupones: cada cliente puede obtener un cupón único por promoción.
+  - Ofertas por tiempo limitado con precio rebajado y stock limitado.
+
+TIENDA CHASKI
+  - Catálogo de productos de varios comercios, con buscador y filtro por tienda.
+  - Carrito agrupado por tienda; respeta el máximo por producto.
+  - La oferta tiene prioridad sobre la promo y solo cubre los cupos que quedan.
+  - Al pagar se genera un código de recojo por tienda (ej. A2DKX7).
+  - Sección "Mis pedidos".
+
+RECARGAS Y SERVICIOS
+  - Recarga de celular: Claro, Movistar, Entel, Bitel (S/ 5, 10, 20, 30, 50).
+  - Pago de servicios: consulta la deuda por código y la paga.
+    Luz (Luz del Sur, Enel, SEAL), Agua (Sedapal, Sedapar), Gas (Cálidda),
+    Internet y cable (Movistar Hogar, Claro Hogar).
+
+MOVIMIENTOS Y AVISOS
+  - Historial de todas las operaciones (entradas en verde, salidas en negro).
+  - Notificaciones de cada operación y de solicitudes recibidas.
+
+MODO SIN CONEXIÓN
+  - Si no hay internet, muestra el último saldo y movimientos guardados en el
+    celular (SQLite) con el aviso "Modo fuera de línea".
+  - Bloquea operaciones con dinero mientras no haya conexión.
+
+
+------------------------------------------------------------------------------
+2. REGLAS DE NEGOCIO QUE CUMPLE EL SERVIDOR
+------------------------------------------------------------------------------
+  - Límite de S/ 500 por operación y S/ 500 por día por cliente (hora de Lima).
+  - Idempotencia: cada operación lleva un "Idempotency-Key" (uuidTransaccion).
+    Si se envía dos veces, el dinero se descuenta UNA sola vez.
+  - Transacciones ACID: el saldo de origen y destino se bloquea (FOR UPDATE)
+    y se actualiza junto; si algo falla no se mueve nada.
+  - Auditoría: toda operación de dinero (exitosa o rechazada) queda en la
+    tabla "auditoria".
+  - PIN guardado con hash scrypt (nunca en texto plano).
+  - Solicitudes vencen a las 48 h; QR dinámico vence a los 15 min.
+
+
+------------------------------------------------------------------------------
+3. TECNOLOGÍAS
+------------------------------------------------------------------------------
+  Backend : Node.js 22+, Express 4, PostgreSQL 18 (librería pg)
+  App     : Flutter 3 / Dart 3
+            provider, http, sqflite, shared_preferences, mobile_scanner (QR),
+            qr_flutter, local_auth (huella/rostro), share_plus, intl, uuid
+  Pruebas : node --test (backend) y flutter test (app)
+
+
+------------------------------------------------------------------------------
+4. ESTRUCTURA DEL ZIP
+------------------------------------------------------------------------------
+  LEEME_Chaski.txt          Este archivo
+  README.md                 Guía del repositorio
+  iniciar_backend.bat       Inicia el servidor con doble clic (Windows)
+  .github/workflows/ios.yml Compila la app de iOS en GitHub Actions
+
+  backend/
+    server.js               API REST (28 rutas bajo /api)
+    db.js                   Conexión, transacciones y datos demo
+    sql/schema.sql          Tablas de la base de datos
+    test/api.test.js        11 pruebas de punta a punta
+    package.json            Dependencias y scripts
+    .env.example            Plantilla de configuración (copiar a .env)
+
+  app_movil/
+    lib/main.dart           Inicio de la app
+    lib/screens/            Pantallas (login, inicio, enviar, QR, tienda,
+                            servicios, confirmación y éxito)
+    lib/services/           API, caché sin conexión y autorización biométrica
+    lib/state/app_state.dart Estado global de la app
+    test/logica_test.dart   6 pruebas de lógica
+    android/ , ios/         Proyectos nativos
+
+  docs/
+    Documentacion_Chaski.pdf   Documentación completa (11 secciones)
+    Ficha_Backend_Chaski.pdf   Ficha técnica del backend
+    secciones/                 Cada sección en un PDF aparte
+
+  entregables/README.md     Cómo instalar el APK en Android / iPhone
+
+
+------------------------------------------------------------------------------
+5. BASE DE DATOS (según el diagrama entidad-relación)
+------------------------------------------------------------------------------
+  Tablas del diagrama:
+    cliente, cuenta, comercio, transferencia, solicitud_cobro, codigo_qr,
+    pago_qr, movimiento, notificacion
+  Tablas de apoyo:
+    producto, promocion, cupon, oferta, orden, orden_item, servicio_pago,
+    credencial, operacion_idempotente, auditoria
+
+
+------------------------------------------------------------------------------
+6. ENDPOINTS DE LA API  (* = requiere Idempotency-Key)
+------------------------------------------------------------------------------
+  GET  /api/salud                      Estado del servidor
+  POST /api/registro                   Crear cuenta
+  POST /api/login                      Iniciar sesión
+  POST /api/pin/verificar              Verificar PIN
+  GET  /api/me                         Datos del usuario y saldo
+  GET  /api/movimientos                Historial
+  GET  /api/clientes/buscar            Buscar por celular
+  GET  /api/recientes                  Contactos recientes
+  POST /api/transferencias          *  Enviar dinero
+  POST /api/solicitudes                Crear solicitud de cobro
+  GET  /api/solicitudes                Ver solicitudes
+  POST /api/solicitudes/:id/responder* Pagar o rechazar solicitud
+  POST /api/qr                         Generar QR dinámico
+  GET  /api/qr/:id                     Leer un QR
+  POST /api/qr/:id/pagar            *  Pagar un QR
+  GET  /api/comercios                  Comercios afiliados
+  GET  /api/notificaciones             Avisos
+  POST /api/notificaciones/leidas      Marcar avisos como leídos
+  GET  /api/promos                     Promociones
+  POST /api/promos/:id/cupon           Obtener cupón
+  GET  /api/ofertas                    Ofertas
+  GET  /api/tienda                     Catálogo de la tienda
+  POST /api/tienda/comprar          *  Comprar carrito
+  GET  /api/ordenes                    Mis pedidos
+  GET  /api/servicios/catalogo         Operadores y empresas
+  POST /api/recargas                *  Recarga de celular
+  POST /api/servicios/consultar        Consultar deuda
+  POST /api/servicios/pagar         *  Pagar servicio
+
+  Formato: JSON. Autenticación: "Authorization: Bearer <token>".
+  Códigos: 200 OK, 400 datos inválidos, 401 sin sesión/PIN incorrecto,
+  403 bloqueado, 404 no existe, 409 duplicado o ya pagado, 410 vencido,
+  429 límite superado, 500 error del servidor.
+
+
+------------------------------------------------------------------------------
+7. CÓMO EJECUTARLO
+------------------------------------------------------------------------------
+  Requisitos: Node.js 22+, PostgreSQL, Flutter SDK y Android Studio.
+
+  A) Servidor
+     cd backend
+     copy .env.example .env      (y poner los datos de tu PostgreSQL)
+     npm install
+     npm start                   -> http://localhost:3000
+     La base "chaski" se crea sola y se llena con los datos demo.
+     npm test                    -> corre las 11 pruebas
+
+  B) App en el celular (por USB)
+     cd app_movil
+     flutter pub get
+     adb reverse tcp:3000 tcp:3000
+     flutter run
+     En la app: engranaje -> http://localhost:3000 -> Guardar.
+     (Por Wi-Fi: usar http://IP-DE-LA-PC:3000 y abrir el puerto 3000 en el
+      firewall de Windows.)
+
+  C) Generar APK
+     flutter build apk --release
+     -> app_movil/build/app/outputs/flutter-apk/app-release.apk
+
+
+------------------------------------------------------------------------------
+8. DATOS DE PRUEBA (DEMO)
+------------------------------------------------------------------------------
+  Usuarios (PIN 123456 para todos, saldo inicial S/ 250):
+    900000001  Lucía Quispe Mamani
+    900000002  Carlos Huamán Ccori
+    900000003  Ana Valdivia Pinto
+
+  Comercios: Bodega Don Lucho, Café Misti, Farmacia Sillar,
+             Pollería Rosita, Tecno Express.
+  Promos: Café Misti -15% (tope S/ 10), Farmacia Sillar -10% (tope S/ 15),
+          Bodega Don Lucho -5% (tope S/ 8), Pollería Rosita -10% (tope S/ 8),
+          Tecno Express -8% (tope S/ 12).
+
+
+------------------------------------------------------------------------------
+9. PRUEBAS REALIZADAS
+------------------------------------------------------------------------------
+  Automáticas:
+    Backend 11/11: PIN incorrecto, transferencia con idempotencia, celular no
+    afiliado, tope diario S/ 500, solicitud de cobro, pago QR con promo, QR
+    dinámico de un solo uso, cupón, compra en tienda, recarga y pago de
+    servicio, movimientos y notificaciones.
+    App 6/6: teclado de montos, formato de soles, promo con tope, trama QR,
+    oferta vs. promo en el carrito, carrito por tienda.
+
+  En celular real (Android): login, número no registrado, saldo
+  insuficiente, límite por operación, transferencia con huella, solicitud,
+  pago QR con promo, compra en tienda, recarga, movimientos, avisos y modo
+  sin conexión. Todas correctas.
+
+
+------------------------------------------------------------------------------
+NOTA: El ZIP no incluye node_modules, carpetas build, el archivo .env ni
+llaves privadas. Se regeneran con "npm install" y "flutter pub get".
+==============================================================================
