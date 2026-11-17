@@ -26,7 +26,7 @@ beforeEach(() => {
   vi.stubEnv("CUENTAS_GATEWAY_URL", "http://bus:8018/bus/cuentas/api/v1/cuentas");
   vi.stubEnv("SOL_GATEWAY_URL", "http://bus:8018/bus/sol/gateway/sol");
   vi.stubEnv("SOL_PUBLIC_ORIGIN", "");
-  upstream.mockReset().mockResolvedValue(Response.json({ ok: true }));
+  upstream.mockReset().mockImplementation(async () => Response.json({ ok: true }));
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
