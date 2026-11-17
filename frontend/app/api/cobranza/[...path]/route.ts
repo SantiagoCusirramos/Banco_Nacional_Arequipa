@@ -17,6 +17,9 @@ const RUTAS: { metodo: string; coincide: (ruta: string[]) => boolean }[] = [
   { metodo: "GET", coincide: (r) => r.length === 3 && r[0] === "creditos" && r[2] === "monto-a-pagar" },
   { metodo: "GET", coincide: (r) => r.length === 3 && r[0] === "pagos" && r[2] === "comprobante" },
   { metodo: "POST", coincide: (r) => r.length === 2 && r[0] === "cr-int-08" && r[1] === "pagos" },
+  // Rutas nuevas de la API v1 (CR-INT-07): consulta de créditos y cobro
+  { metodo: "GET", coincide: (r) => r.length >= 2 && r[0] === "api" && r[1] === "v1" },
+  { metodo: "POST", coincide: (r) => r.length >= 2 && r[0] === "api" && r[1] === "v1" },
 ];
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {

@@ -23,7 +23,7 @@ bus_de_pruebas_levantar() {
     -e BUS_URL_COREDB="$coredb" \
     -e BUS_URL_CUENTAS="$ausente" -e BUS_URL_TARJETAS="$ausente" -e BUS_URL_CAPTACION="$ausente" \
     -e BUS_URL_SOL="$ausente" -e BUS_URL_EVALUACION="$ausente" -e BUS_URL_DESEMBOLSO="$ausente" \
-    -e BUS_URL_SEGURIDAD="$ausente" \
+    -e BUS_URL_COBRANZA="$ausente" -e BUS_URL_SEGURIDAD="$ausente" \
     -e BUS_CONSUMIDORES="$modulo,PRUEBAS" \
     -e "BUS_TOKEN_$modulo=$BUS_PRUEBAS_TOKEN_MODULO" \
     -e BUS_TOKEN_PRUEBAS="$BUS_PRUEBAS_TOKEN_PRUEBAS" \

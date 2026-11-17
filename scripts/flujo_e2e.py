@@ -566,6 +566,54 @@ def flujo():
     exigir(estado == 200 and respuesta["estado"] == "CONFIRMADA", f"Puente a Desembolso: {estado} {respuesta}")
     paso("frontend: su puente llega a Desembolso con el token del operador")
 
+    # ── COBRANZA: cobrar una cuota del crédito recién creado ────────────────
+    cobranza = f"{BUS}/bus/cobranza"
+    saldo_antes = coredb("GET", f"/coredb/cuentas/{abono}", 200, token=token)["saldo_disponible"]
+    referencia_pago = f"PAGO-E2E-{uuid.uuid4().hex[:8]}"
+    # La primera cuota del crédito de 15000.00 a 12 meses: amortización constante 1250.00, interés 150.00 = 1400.00
+    monto_cuota = "1400.00"
+
+    def cobranza_pago(token_pago, referencia, monto=monto_cuota):
+        estado, respuesta = pedir("POST", f"{cobranza}/api/v1/creditos/{confirmada['codCredito']}/pagos",
+                                  {"numCuenta": abono, "monto": monto, "referencia": referencia, "canal": "VEN"},
+                                  token_pago)
+        return estado, respuesta
+
+    # Primer pago con el token del operador
+    estado, pago = cobranza_pago(token_op, referencia_pago)
+    exigir(estado == 201, f"COBRANZA primer pago: {estado} {pago}")
+    exigir(pago["estado"] == "CONFIRMADO" and pago["referencia"] == referencia_pago
+           and pago["monto"] == monto_cuota and pago["numCuenta"] == abono
+           and len(pago["aplicaciones"]) == 1 and pago["aplicaciones"][0]["montoAplicado"] == monto_cuota,
+           f"Pago no tiene la forma esperada: {pago}")
+    # El saldo de la cuenta debe haber bajado exactamente una vez
+    saldo_despues = coredb("GET", f"/coredb/cuentas/{abono}", 200, token=token)["saldo_disponible"]
+    exigir(float(saldo_despues) == float(saldo_antes) - float(monto_cuota),
+           f"El saldo debía bajar {monto_cuota}: {saldo_antes} -> {saldo_despues}")
+    paso(f"COBRANZA: {operador} cobró la cuota 1 ({monto_cuota}) del crédito {confirmada['codCredito']}, "
+         f"saldo de {abono}: {saldo_antes} -> {saldo_despues}")
+
+    # Repetir con la misma referencia y el mismo cuerpo → 200, saldo no cambia
+    estado, repetido = cobranza_pago(token_op, referencia_pago)
+    exigir(estado == 200 and repetido["idPago"] == pago["idPago"],
+           f"Repetir con la misma referencia debía devolver el mismo pago: {estado} {repetido}")
+    saldo_otra_vez = coredb("GET", f"/coredb/cuentas/{abono}", 200, token=token)["saldo_disponible"]
+    exigir(saldo_otra_vez == saldo_despues,
+           f"El saldo no debía cambiar al repetir el pago: {saldo_despues} -> {saldo_otra_vez}")
+    paso("COBRANZA: la misma referencia con el mismo cuerpo no cobra dos veces (idempotencia)")
+
+    # Comprobar el pago por referencia
+    estado, comprobante = pedir("GET", f"{cobranza}/api/v1/pagos/{referencia_pago}", token=token_op)
+    exigir(estado == 200 and comprobante["idPago"] == pago["idPago"],
+           f"Consulta por referencia: {estado} {comprobante}")
+    paso("COBRANZA: el comprobante del pago se recupera por referencia")
+
+    # Verificar que el crédito en COREDB refleja el pago
+    credito = coredb("GET", f"/coredb/creditos/{confirmada['codCredito']}", 200, token=token)
+    exigir(credito["cuotas"][0]["estado"] == "PAGADA" and credito["cuotasPagadas"] == 1,
+           f"El crédito debía tener la cuota 1 PAGADA: {credito}")
+    paso(f"COREDB: el crédito {confirmada['codCredito']} tiene la cuota 1 PAGADA y cuotasPagadas = 1")
+
     # ── CAPTACION: un prospecto, de la solicitud a cliente habilitado ──────
     exigir(TOKEN_SOL, "Falta CAP_SOL_TOKEN")
     cap = CAPTACION + "/api/v1/captacion"
@@ -646,9 +694,12 @@ def flujo():
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/captacion/casos/{caso}", token=token)
     exigir(estado == 200 and respuesta["data"]["cod_cliente"] == cod_cliente,
            f"Puente a CAPTACION: {estado} {respuesta}")
+    estado, respuesta = pedir("GET", f"{FRONTEND}/api/cobranza/api/v1/creditos/{confirmada['codCredito']}", token=token)
+    exigir(estado == 200 and respuesta["codCredito"] == confirmada['codCredito'],
+           f"Puente a COBRANZA: {estado} {respuesta}")
     estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
     exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
-    paso("frontend: sus puentes llegan a COREDB, a CUENTAS, a TARJETAS y a CAPTACION con el token del usuario")
+    paso("frontend: sus puentes llegan a COREDB, a CUENTAS, a TARJETAS, a CAPTACION y a COBRANZA con el token del usuario")
 
     # ── SOL por el proxy del frontend: escribir exige el Origin del propio frontend ──
     exigir(SOL_PASSWORD, "Falta SOL_INITIAL_PASSWORD para entrar a SOL por el frontend")
@@ -677,18 +728,18 @@ def flujo():
     def crecio(consumidor, modulo):
         return despues.get(consumidor, {}).get(modulo, 0) > inicio_bus.get(consumidor, {}).get(modulo, 0)
 
-    faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION")
+    faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION", "COBRANZA")
               if not crecio("FRONTEND", m)]
     exigir(not faltan, f"Estos puentes del frontend no pasaron por el Bus: {faltan}")
     faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION",
                           "SEGURIDAD") if not crecio("PRUEBAS", m)]
     exigir(not faltan, f"El flujo no llegó por el Bus a: {faltan}")
     # Fase 2: cada módulo llegó a COREDB a través del Bus, con su propia credencial.
-    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO")
+    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA")
               if not crecio(m, "COREDB")]
     exigir(not faltan, f"Estos módulos no llegaron a COREDB por el Bus: {faltan}")
     paso("Bus de Servicios: el flujo y los siete puentes del frontend llegaron a los módulos por el Bus, "
-         "y CUENTAS, TARJETAS, CAPTACION, EVALUACION y DESEMBOLSO llegaron a COREDB por él")
+         "y CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO y COBRANZA llegaron a COREDB por él")
 
 
 if __name__ == "__main__":
