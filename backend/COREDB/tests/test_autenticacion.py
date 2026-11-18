@@ -153,7 +153,12 @@ def test_esquema_distinto_de_bearer_no_autentica():
 
 def test_permisos_de_los_roles():
     assert permisos.ACCIONES >= {"VALIDAR_IDENTIDAD", "CREAR_CLIENTE", "REGISTRAR_MOVIMIENTO"}
-    assert permisos.PERMISOS["ADMINISTRADOR"] == permisos.ACCIONES - {"VALIDAR_IDENTIDAD", "OPERAR_SEGURIDAD"}
+    assert permisos.PERMISOS["ADMINISTRADOR"] == permisos.ACCIONES - {
+        "VALIDAR_IDENTIDAD", "OPERAR_SEGURIDAD", "REGISTRAR_EVENTO_MODULO"}
+    # Solo SOL, sin base propia, reporta eventos a la bitácora; el módulo sale de su token.
+    assert permisos.PERMISOS["SERVICIO:SOLICITUD DE CREDITO"] == {"VER_CREDITO", "REGISTRAR_EVENTO_MODULO"}
+    assert [r for r, a in permisos.PERMISOS.items() if "REGISTRAR_EVENTO_MODULO" in a] == [
+        "SERVICIO:SOLICITUD DE CREDITO"]
     # Las rutas de Seguridad solo las usa su módulo, que actúa por una persona.
     assert permisos.PERMISOS["SERVICIO:SEGURIDAD"] == {"OPERAR_SEGURIDAD", "VER_AUDITORIA"}
     assert [r for r, a in permisos.PERMISOS.items() if "OPERAR_SEGURIDAD" in a] == ["SERVICIO:SEGURIDAD"]

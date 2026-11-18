@@ -1,17 +1,22 @@
-"""GET /coredb/auditoria: la bitácora general, de solo lectura, y sus sellos (bd-v1.13)."""
+"""GET /coredb/auditoria: la bitácora general, de solo lectura, y sus sellos (bd-v1.13). Los
+módulos sin base propia reportan sus eventos con POST /coredb/auditoria/eventos (bd-v1.14)."""
 
+import hashlib
+import json
 import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Depends, Query, Response, status
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session, llamar
 from COREDB.models import EventoAuditoria, SelloAuditoria
-from COREDB.permisos import OPERAR_SEGURIDAD
+from COREDB.correlacion import correlacion
+from COREDB.errores import ErrorCoreDb
+from COREDB.permisos import OPERAR_SEGURIDAD, REGISTRAR_EVENTO_MODULO
 from COREDB.transacciones import con_reintentos
 
 router = APIRouter(prefix="/coredb/auditoria", tags=["auditoría"])
@@ -120,3 +125,67 @@ def sellar(
     )
     db.expire_all()
     return db.get(SelloAuditoria, id_sello)
+
+
+class EventoModulo(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    idEvento: uuid.UUID = Field(description="Id del evento en el módulo: repetirlo no lo duplica.")
+    accion: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,59}$")
+    entidad: str = Field(min_length=1, max_length=40)
+    idEntidad: str = Field(min_length=1, max_length=40)
+    actor: str = Field(min_length=1, max_length=40, description="Quién hizo la acción, según el módulo.")
+    detalle: dict[str, Any] | None = Field(default=None, description="Objeto de hasta 4 KB, sin datos personales.")
+
+    @field_validator("detalle")
+    @classmethod
+    def _detalle_acotado(cls, valor):
+        if valor is not None and len(json.dumps(valor, ensure_ascii=False).encode("utf-8")) > 3500:
+            raise ValueError("El detalle supera el tamaño admitido.")
+        return valor
+
+
+class EventoRegistrado(BaseModel):
+    idEvento: uuid.UUID
+    idRegistro: int
+    acuse: str
+    confirmado: bool
+
+
+@router.post("/eventos", response_model=EventoRegistrado, status_code=status.HTTP_201_CREATED,
+             responses={200: {"description": "El mismo evento ya se había recibido"},
+                        403: {"description": "PERMISO_DENEGADO"},
+                        409: {"description": "IDEMPOTENCIA_CONFLICTO: el mismo id con otro contenido"}})
+def registrar_evento(
+    datos: EventoModulo,
+    respuesta: Response,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso(REGISTRAR_EVENTO_MODULO)),
+    correlation_id: uuid.UUID = Depends(correlacion),
+):
+    """Registra en la bitácora un evento que reporta un módulo sin base propia (SOL), una sola
+    vez por `idEvento`. El módulo sale del token; el detalle guarda además el id de origen y el
+    usuario de servicio que lo reportó."""
+    modulo = actor.modulo
+    detalle = {**(datos.detalle or {}), "reportado_por": actor.usuario}
+    huella = hashlib.sha256(json.dumps(
+        {"accion": datos.accion, "entidad": datos.entidad, "id_entidad": datos.idEntidad, "actor": datos.actor,
+         "detalle": detalle}, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    try:
+        id_registro, repetido = con_reintentos(
+            db,
+            lambda: llamar(db, "core.recibir_evento_modulo", datos.idEvento, modulo, datos.entidad,
+                           datos.idEntidad, datos.accion, datos.actor, correlation_id,
+                           json.dumps(detalle, ensure_ascii=False), huella, salidas=2),
+            nombre="recibir_evento_modulo",
+        )
+    except ErrorCoreDb as exc:
+        if exc.code == "BNA-IDEMPOTENCIA":
+            raise ErrorCoreDb("IDEMPOTENCIA_CONFLICTO", "El evento ya se recibió con otro contenido.", 409) from None
+        if exc.code == "BNA-AUDITORIA":
+            raise ErrorCoreDb("EVENTO_NO_ADMITIDO", "El evento no cumple las reglas de la bitácora.", 422) from None
+        raise
+    if int(repetido):
+        respuesta.status_code = status.HTTP_200_OK
+    return {"idEvento": datos.idEvento, "idRegistro": int(id_registro), "acuse": f"AUD-{int(id_registro)}",
+            "confirmado": True}

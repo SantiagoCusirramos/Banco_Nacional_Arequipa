@@ -463,6 +463,222 @@
         "title": "AutorizacionRespuesta",
         "type": "object"
       },
+      "BorradorCrear": {
+        "additionalProperties": false,
+        "properties": {
+          "codCliente": {
+            "maxLength": 12,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9]+$",
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "condicionPagoDoble": {
+            "default": false,
+            "title": "Condicionpagodoble",
+            "type": "boolean"
+          },
+          "destino": {
+            "maxLength": 120,
+            "minLength": 5,
+            "title": "Destino",
+            "type": "string"
+          },
+          "fechaBase": {
+            "format": "date",
+            "title": "Fechabase",
+            "type": "string"
+          },
+          "fiadores": {
+            "description": "codCliente de cada fiador: clientes del CORE que pueden operar.",
+            "items": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Fiadores",
+            "type": "array"
+          },
+          "garantias": {
+            "items": {
+              "$ref": "#/components/schemas/GarantiaBorrador"
+            },
+            "maxItems": 10,
+            "title": "Garantias",
+            "type": "array"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "moneda": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoSolicitado": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Montosolicitado"
+          },
+          "plazoMeses": {
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "politica": {
+            "description": "La política con la que SOL calculó el borrador (hasta 4 KB).",
+            "title": "Politica",
+            "type": "object"
+          }
+        },
+        "required": [
+          "codCliente",
+          "montoSolicitado",
+          "moneda",
+          "plazoMeses",
+          "destino",
+          "fechaBase",
+          "politica",
+          "idSolicitud"
+        ],
+        "title": "BorradorCrear",
+        "type": "object"
+      },
+      "BorradorEditar": {
+        "additionalProperties": false,
+        "properties": {
+          "codCliente": {
+            "maxLength": 12,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9]+$",
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "condicionPagoDoble": {
+            "default": false,
+            "title": "Condicionpagodoble",
+            "type": "boolean"
+          },
+          "destino": {
+            "maxLength": 120,
+            "minLength": 5,
+            "title": "Destino",
+            "type": "string"
+          },
+          "fechaBase": {
+            "format": "date",
+            "title": "Fechabase",
+            "type": "string"
+          },
+          "fiadores": {
+            "description": "codCliente de cada fiador: clientes del CORE que pueden operar.",
+            "items": {
+              "maxLength": 12,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Fiadores",
+            "type": "array"
+          },
+          "garantias": {
+            "items": {
+              "$ref": "#/components/schemas/GarantiaBorrador"
+            },
+            "maxItems": 10,
+            "title": "Garantias",
+            "type": "array"
+          },
+          "moneda": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Moneda",
+            "type": "string"
+          },
+          "montoSolicitado": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Montosolicitado"
+          },
+          "plazoMeses": {
+            "maximum": 600.0,
+            "minimum": 1.0,
+            "title": "Plazomeses",
+            "type": "integer"
+          },
+          "politica": {
+            "description": "La política con la que SOL calculó el borrador (hasta 4 KB).",
+            "title": "Politica",
+            "type": "object"
+          },
+          "revision": {
+            "description": "La revisión vigente que se edita.",
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "codCliente",
+          "montoSolicitado",
+          "moneda",
+          "plazoMeses",
+          "destino",
+          "fechaBase",
+          "politica",
+          "revision"
+        ],
+        "title": "BorradorEditar",
+        "type": "object"
+      },
+      "BorradorRespuesta": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "idSolicitud": {
+            "format": "uuid",
+            "title": "Idsolicitud",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idSolicitud",
+          "codigo",
+          "revision",
+          "estado"
+        ],
+        "title": "BorradorRespuesta",
+        "type": "object"
+      },
       "COREDB__routers__auth__PerfilRespuesta": {
         "properties": {
           "acciones": {
@@ -2348,6 +2564,27 @@
         "title": "ContactoRespuesta",
         "type": "object"
       },
+      "ConteoSolicitudes": {
+        "properties": {
+          "estados": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Estados",
+            "type": "object"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "estados"
+        ],
+        "title": "ConteoSolicitudes",
+        "type": "object"
+      },
       "CredencialRegistrar": {
         "additionalProperties": false,
         "properties": {
@@ -3600,6 +3837,62 @@
         "title": "EventoCreditoRespuesta",
         "type": "object"
       },
+      "EventoModulo": {
+        "additionalProperties": false,
+        "properties": {
+          "accion": {
+            "pattern": "^[A-Z][A-Z0-9_]{2,59}$",
+            "title": "Accion",
+            "type": "string"
+          },
+          "actor": {
+            "description": "Quién hizo la acción, según el módulo.",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Actor",
+            "type": "string"
+          },
+          "detalle": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Objeto de hasta 4 KB, sin datos personales.",
+            "title": "Detalle"
+          },
+          "entidad": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Entidad",
+            "type": "string"
+          },
+          "idEntidad": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Identidad",
+            "type": "string"
+          },
+          "idEvento": {
+            "description": "Id del evento en el módulo: repetirlo no lo duplica.",
+            "format": "uuid",
+            "title": "Idevento",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvento",
+          "accion",
+          "entidad",
+          "idEntidad",
+          "actor"
+        ],
+        "title": "EventoModulo",
+        "type": "object"
+      },
       "EventoOrdenRespuesta": {
         "properties": {
           "accion": {
@@ -3659,6 +3952,35 @@
           "fechaHora"
         ],
         "title": "EventoOrdenRespuesta",
+        "type": "object"
+      },
+      "EventoRegistrado": {
+        "properties": {
+          "acuse": {
+            "title": "Acuse",
+            "type": "string"
+          },
+          "confirmado": {
+            "title": "Confirmado",
+            "type": "boolean"
+          },
+          "idEvento": {
+            "format": "uuid",
+            "title": "Idevento",
+            "type": "string"
+          },
+          "idRegistro": {
+            "title": "Idregistro",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idEvento",
+          "idRegistro",
+          "acuse",
+          "confirmado"
+        ],
+        "title": "EventoRegistrado",
         "type": "object"
       },
       "EventoRespuesta": {
@@ -4046,6 +4368,51 @@
         "title": "ExpedienteRegistrar",
         "type": "object"
       },
+      "ExpedienteSolRespuesta": {
+        "properties": {
+          "actualizadoEn": {
+            "format": "date-time",
+            "title": "Actualizadoen",
+            "type": "string"
+          },
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "creadoPor": {
+            "title": "Creadopor",
+            "type": "string"
+          },
+          "destino": {
+            "title": "Destino",
+            "type": "string"
+          },
+          "fechaBase": {
+            "format": "date",
+            "title": "Fechabase",
+            "type": "string"
+          },
+          "politica": {
+            "title": "Politica",
+            "type": "object"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "codigo",
+          "revision",
+          "destino",
+          "fechaBase",
+          "politica",
+          "creadoPor",
+          "actualizadoEn"
+        ],
+        "title": "ExpedienteSolRespuesta",
+        "type": "object"
+      },
       "ExtornoRegistrar": {
         "additionalProperties": false,
         "properties": {
@@ -4060,6 +4427,100 @@
           "motivo"
         ],
         "title": "ExtornoRegistrar",
+        "type": "object"
+      },
+      "FiadorRespuesta": {
+        "properties": {
+          "codCliente": {
+            "title": "Codcliente",
+            "type": "string"
+          },
+          "idVerificacion": {
+            "title": "Idverificacion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codCliente",
+          "idVerificacion"
+        ],
+        "title": "FiadorRespuesta",
+        "type": "object"
+      },
+      "GarantiaBorrador": {
+        "additionalProperties": false,
+        "properties": {
+          "descripcion": {
+            "maxLength": 200,
+            "minLength": 5,
+            "title": "Descripcion",
+            "type": "string"
+          },
+          "tipo": {
+            "description": "Del catálogo: HIPOTECARIA, MOBILIARIA o PRENDARIA.",
+            "pattern": "^[A-Z_]{1,20}$",
+            "title": "Tipo",
+            "type": "string"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Valor"
+          }
+        },
+        "required": [
+          "tipo",
+          "descripcion",
+          "valor"
+        ],
+        "title": "GarantiaBorrador",
+        "type": "object"
+      },
+      "GarantiaRespuesta": {
+        "properties": {
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "valor": {
+            "title": "Valor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tipo",
+          "descripcion",
+          "valor",
+          "moneda",
+          "estado"
+        ],
+        "title": "GarantiaRespuesta",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -5880,6 +6341,36 @@
         "title": "QrRespuesta",
         "type": "object"
       },
+      "RecepcionRespuesta": {
+        "properties": {
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "recibidaEn": {
+            "format": "date-time",
+            "title": "Recibidaen",
+            "type": "string"
+          },
+          "ronda": {
+            "title": "Ronda",
+            "type": "integer"
+          },
+          "versionSolicitud": {
+            "title": "Versionsolicitud",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "versionSolicitud",
+          "ronda",
+          "idEvaluacion",
+          "recibidaEn"
+        ],
+        "title": "RecepcionRespuesta",
+        "type": "object"
+      },
       "RechazoRegistrar": {
         "additionalProperties": false,
         "properties": {
@@ -6434,6 +6925,18 @@
             "title": "Codcliente",
             "type": "string"
           },
+          "codigo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Código del borrador de SOL (SOL-AAMM-XXXXXXXX).",
+            "title": "Codigo"
+          },
           "condicionPagoDoble": {
             "title": "Condicionpagodoble",
             "type": "boolean"
@@ -6449,10 +6952,35 @@
             "title": "Evaluaciones",
             "type": "array"
           },
+          "expediente": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExpedienteSolRespuesta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lo que guardó el asesor en SOL (null si la solicitud no nació como borrador)."
+          },
           "fechaCreacion": {
             "format": "date-time",
             "title": "Fechacreacion",
             "type": "string"
+          },
+          "fiadores": {
+            "items": {
+              "$ref": "#/components/schemas/FiadorRespuesta"
+            },
+            "title": "Fiadores",
+            "type": "array"
+          },
+          "garantias": {
+            "items": {
+              "$ref": "#/components/schemas/GarantiaRespuesta"
+            },
+            "title": "Garantias",
+            "type": "array"
           },
           "historial": {
             "items": {
@@ -6501,6 +7029,26 @@
             ],
             "title": "Primervencimiento"
           },
+          "recepciones": {
+            "description": "Versiones del expediente recibidas por Evaluación.",
+            "items": {
+              "$ref": "#/components/schemas/RecepcionRespuesta"
+            },
+            "title": "Recepciones",
+            "type": "array"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Revisión del borrador de SOL.",
+            "title": "Revision"
+          },
           "ronda": {
             "anyOf": [
               {
@@ -6544,7 +7092,11 @@
           "primerVencimiento",
           "calendario",
           "evaluaciones",
-          "historial"
+          "historial",
+          "expediente",
+          "garantias",
+          "fiadores",
+          "recepciones"
         ],
         "title": "SolicitudDetalle",
         "type": "object"
@@ -6667,6 +7219,18 @@
             "title": "Codcliente",
             "type": "string"
           },
+          "codigo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Código del borrador de SOL (SOL-AAMM-XXXXXXXX).",
+            "title": "Codigo"
+          },
           "condicionPagoDoble": {
             "title": "Condicionpagodoble",
             "type": "boolean"
@@ -6719,6 +7283,18 @@
               }
             ],
             "title": "Primervencimiento"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Revisión del borrador de SOL.",
+            "title": "Revision"
           },
           "ronda": {
             "anyOf": [
@@ -7891,6 +8467,80 @@
           }
         ],
         "summary": "Eventos",
+        "tags": [
+          "auditoría"
+        ]
+      }
+    },
+    "/coredb/auditoria/eventos": {
+      "post": {
+        "description": "Registra en la bitácora un evento que reporta un módulo sin base propia (SOL), una sola\nvez por `idEvento`. El módulo sale del token; el detalle guarda además el id de origen y el\nusuario de servicio que lo reportó.",
+        "operationId": "registrar_evento_coredb_auditoria_eventos_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventoModulo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "El mismo evento ya se había recibido"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventoRegistrado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO: el mismo id con otro contenido"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Evento",
         "tags": [
           "auditoría"
         ]
@@ -11651,6 +12301,156 @@
         ]
       }
     },
+    "/coredb/creditos/borradores": {
+      "post": {
+        "description": "Crea el borrador de SOL: una solicitud REGISTRADA con sus garantías y fiadores. Lo hace el\nasesor con su token, que SOL reenvía. Repetirlo con el mismo contenido responde 200 con lo\nmismo; con otro, 409.",
+        "operationId": "crear_borrador_coredb_creditos_borradores_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorradorCrear"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "El mismo borrador ya se había creado"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorradorRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO o REVISION_DESACTUALIZADA"
+          },
+          "422": {
+            "description": "CLIENTE_NO_HABILITADO, GARANTIA_NO_ADMITIDA, FIADOR_NO_ADMITIDO o SOLICITUD_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Crear Borrador",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
+    "/coredb/creditos/borradores/{id_solicitud}": {
+      "put": {
+        "description": "Reemplaza el borrador (condiciones, garantías y fiadores) si `revision` es la vigente; si\notra sesión lo cambió, 409 REVISION_DESACTUALIZADA. Repetir la última edición devuelve la\nrevisión guardada. Un borrador enviado a Evaluación ya no se edita (422).",
+        "operationId": "editar_borrador_coredb_creditos_borradores__id_solicitud__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitud",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitud",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorradorEditar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BorradorRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "404": {
+            "description": "SOLICITUD_NO_ENCONTRADA"
+          },
+          "409": {
+            "description": "IDEMPOTENCIA_CONFLICTO o REVISION_DESACTUALIZADA"
+          },
+          "422": {
+            "description": "CLIENTE_NO_HABILITADO, GARANTIA_NO_ADMITIDA, FIADOR_NO_ADMITIDO o SOLICITUD_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Editar Borrador",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
     "/coredb/creditos/conciliacion/desembolsos": {
       "get": {
         "description": "Órdenes confirmadas frente a lo abonado en las cuentas, por día de negocio (Lima) y\nmoneda. Sin `fecha`, los últimos días con desembolsos.",
@@ -12490,7 +13290,7 @@
     },
     "/coredb/creditos/solicitudes": {
       "get": {
-        "description": "Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente.",
+        "description": "Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente. Sin\n`estado`, todas menos los borradores de SOL (REGISTRADA), salvo con `borradores=true`; con\n`estado=REGISTRADA`, solo ellos.",
         "operationId": "bandeja_coredb_creditos_solicitudes_get",
         "parameters": [
           {
@@ -12532,6 +13332,18 @@
                 }
               ],
               "title": "Codcliente"
+            }
+          },
+          {
+            "description": "Sin estado: incluir también los borradores de SOL.",
+            "in": "query",
+            "name": "borradores",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Sin estado: incluir también los borradores de SOL.",
+              "title": "Borradores",
+              "type": "boolean"
             }
           },
           {
@@ -12669,9 +13481,72 @@
         ]
       }
     },
+    "/coredb/creditos/solicitudes/conteo": {
+      "get": {
+        "description": "Cuántas solicitudes hay en cada estado, borradores incluidos.",
+        "operationId": "conteo_coredb_creditos_solicitudes_conteo_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "codCliente",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Codcliente"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConteoSolicitudes"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Conteo",
+        "tags": [
+          "créditos: evaluación"
+        ]
+      }
+    },
     "/coredb/creditos/solicitudes/{id_solicitud}": {
       "get": {
-        "description": "La solicitud con su calendario vigente (el PRELIMINAR de SOL o, ya desembolsada, el\nOFICIAL), sus evaluaciones por ronda y su historial de estados.",
+        "description": "La solicitud con su calendario vigente (el PRELIMINAR de SOL o, ya desembolsada, el\nOFICIAL), sus evaluaciones por ronda, su historial de estados y, si nació como borrador de\nSOL, lo que guardó el asesor, sus garantías, sus fiadores y las versiones recibidas.",
         "operationId": "detalle_coredb_creditos_solicitudes__id_solicitud__get",
         "parameters": [
           {

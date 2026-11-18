@@ -199,7 +199,8 @@ Las tres áreas: evaluación, desembolso y cobranza.
 | Ruta | Permiso |
 |---|---|
 | `POST /coredb/creditos/solicitudes` (expediente de SOL, CR-INT-02) | `CREAR_SOLICITUD_CREDITO` |
-| `GET /coredb/creditos/solicitudes`, `GET /coredb/creditos/solicitudes/{id}` | `VER_CREDITO` |
+| `GET /coredb/creditos/solicitudes`, `GET /coredb/creditos/solicitudes/{id}`, `GET /coredb/creditos/solicitudes/conteo` | `VER_CREDITO` |
+| `POST /coredb/creditos/borradores`, `PUT /coredb/creditos/borradores/{id}` (borrador de SOL, `bd-v1.14-mysql`) | `CREAR_SOLICITUD_CREDITO` |
 | `POST /coredb/creditos/solicitudes/{id}/evaluaciones` (RN-EVA-002-P) | `EVALUAR_CREDITO` |
 | `POST /coredb/creditos/evaluaciones/{id}/decision` | `APROBAR_CREDITO` |
 | `POST /coredb/creditos/solicitudes/{id}/revocacion` | `APROBAR_CREDITO` |
@@ -235,6 +236,10 @@ Las tres áreas: evaluación, desembolso y cobranza.
   sin mover dinero. Repetir la referencia devuelve el mismo pago.
 - `POST /coredb/creditos/vencimientos` es la tarea diaria de `svc-cobranza` (la base también la
   corre a las 00:10 de Lima). La mora se registra y se muestra, pero no se cobra.
+- El borrador de SOL es una solicitud `REGISTRADA` con sus garantías y fiadores; lo guarda el
+  asesor con su token, que SOL reenvía. Editar exige la revisión vigente (409
+  `REVISION_DESACTUALIZADA`). La bandeja sin `estado` no muestra borradores. Ver
+  `CONTRATO_CREDITOS.md` §8.
 - El usuario de la API no lee tablas de `creditos`: lee las vistas `v_*_api`.
 - Las rutas de crédito del CORE legado (perfil `legado`) siguen aparte.
 
@@ -312,6 +317,7 @@ para sellar y verificar. Pruebas: `tests/integracion/test_seguridad.py`.
 | `GET /coredb/tarjetas?cod_cliente=` | `VER_TARJETA` | Las tarjetas del cliente, de la más reciente a la más antigua |
 | `GET /coredb/auditoria` | `VER_AUDITORIA` | La bitácora, del evento más reciente al más antiguo, con filtros (con `despues_de_id`, del más antiguo al más reciente) |
 | `GET /coredb/auditoria/sellos` | `VER_AUDITORIA` | Los sellos HMAC de la bitácora (ver «Seguridad») |
+| `POST /coredb/auditoria/eventos` | `REGISTRAR_EVENTO_MODULO` (`svc-sol`) | Registra un evento que reporta un módulo sin base propia, una vez por `idEvento` (201; 200 si se repite; 409 con otro contenido) |
 
 - Un movimiento trae `naturaleza` (`D` débito, `C` crédito) y la moneda de su cuenta, y
   no trae el asiento contable. Una transferencia se lee como `TRANSFERENCIA_ENVIADA` en
