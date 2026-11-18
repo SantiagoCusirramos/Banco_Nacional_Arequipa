@@ -456,3 +456,84 @@ def test_confirmar_sin_cabecera_idempotencia_422(cliente, tarjeta_activa):
         json={"id_canal": "ATM", "id_terminal": "DEV-ATM-01"},
     )
     assert respuesta.status_code in (400, 422), respuesta.text
+
+
+# ── Retenciones vencidas (bd-v1.11) ───────────────────────────────────────────
+
+
+def retencion_antigua(consulta, id_tarjeta, num_cuenta, minutos, monto="100.00"):
+    """Una autorización AUTORIZADA hecha hace `minutos`, para no esperar el plazo."""
+    uuid_autorizacion = str(uuid.uuid4())
+    consulta(
+        "INSERT INTO tarjetas.autorizacion (uuid_autorizacion, tipo_operacion, monto, estado_autorizacion,"
+        " codigo_respuesta, id_terminal, id_tarjeta, num_cuenta, fecha_hora)"
+        " VALUES (UUID_TO_BIN(%s), 'RETIRO', %s, 'AUTORIZADA', '00', 'DEV-ATM-01', UUID_TO_BIN(%s), %s,"
+        " UTC_TIMESTAMP(6) - INTERVAL %s MINUTE)",
+        uuid_autorizacion, monto, id_tarjeta, num_cuenta, minutos,
+    )
+    return uuid_autorizacion
+
+
+def confirmar(cliente, uuid_autorizacion):
+    return cliente.post(
+        f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion",
+        json={"id_terminal": "DEV-ATM-01"},
+        headers={"X-Idempotency-Key": str(uuid.uuid4())},
+    )
+
+
+def test_liberar_retenciones_vencidas_devuelve_el_saldo_una_vez(cliente, tarjeta_activa, consulta):
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    vencida = retencion_antigua(consulta, id_tarjeta, num_cuenta, minutos=5)
+    vigente = autorizar(cliente, id_tarjeta, num_cuenta, monto="50.00").json()["uuid_autorizacion"]
+    assert disponible(cliente, num_cuenta) == Decimal("850.00")
+
+    respuesta = cliente.post("/coredb/autorizaciones/liberaciones", json={"minutos": 1})
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["minutos"] == 1 and respuesta.json()["liberadas"] >= 1
+    liberada = cliente.get(f"/coredb/autorizaciones/{vencida}").json()
+    assert (liberada["estado_autorizacion"], liberada["codigo_respuesta"]) == ("EXTORNADA", "EXT")
+    assert liberada["motivo_rechazo"].startswith("BNA-RETENCION")
+    assert cliente.get(f"/coredb/autorizaciones/{vigente}").json()["estado_autorizacion"] == "AUTORIZADA"
+    assert disponible(cliente, num_cuenta) == Decimal("950.00")
+
+    otra_vez = cliente.post("/coredb/autorizaciones/liberaciones", json={"minutos": 1})
+    assert otra_vez.status_code == 200
+    assert disponible(cliente, num_cuenta) == Decimal("950.00")
+
+    rechazada = confirmar(cliente, vencida)
+    assert rechazada.status_code == 422, rechazada.text
+    assert rechazada.json()["error"]["code"] == "BNA-CONFIRMACION"
+    assert disponible(cliente, num_cuenta) == Decimal("950.00")
+
+
+def test_sin_plazo_usa_el_de_omision_y_no_toca_una_retencion_reciente(cliente, tarjeta_activa, consulta):
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    reciente = retencion_antigua(consulta, id_tarjeta, num_cuenta, minutos=5)
+    respuesta = cliente.post("/coredb/autorizaciones/liberaciones", json={})
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["minutos"] == 15
+    assert cliente.get(f"/coredb/autorizaciones/{reciente}").json()["estado_autorizacion"] == "AUTORIZADA"
+
+
+def test_confirmar_una_retencion_vencida_422(cliente, tarjeta_activa, consulta):
+    """Pasado el plazo no se confirma, aunque el evento de la base aún no la haya liberado."""
+    id_tarjeta, num_cuenta = tarjeta_activa()
+    vencida = retencion_antigua(consulta, id_tarjeta, num_cuenta, minutos=20)
+    respuesta = confirmar(cliente, vencida)
+    assert respuesta.status_code == 422, respuesta.text
+    assert respuesta.json()["error"]["code"] == "BNA-CONFIRMACION"
+    assert consulta("SELECT COUNT(*) AS n FROM cuentas.movimiento WHERE uuid_transaccion = UUID_TO_BIN(%s)",
+                    vencida)[0]["n"] == 0
+
+
+@pytest.mark.parametrize("minutos", [0, 1441])
+def test_un_plazo_fuera_de_rango_422(cliente, datos_base, minutos):
+    respuesta = cliente.post("/coredb/autorizaciones/liberaciones", json={"minutos": minutos})
+    assert respuesta.status_code == 422
+
+
+def test_un_auditor_no_libera_retenciones(sesion_de, datos_base):
+    encabezados, _ = sesion_de("AUDITOR")
+    respuesta = TestClient(app, headers=encabezados).post("/coredb/autorizaciones/liberaciones", json={})
+    assert respuesta.status_code == 403
