@@ -125,6 +125,8 @@ services:
         python -m COREDB.scripts.crear_servicio --modulo CLIENTES --username svc-captacion --nombre "Captación de clientes"
         && CORE_DB_SERVICIO_SECRETO="$$COBRANZA_COREDB_SECRETO"
         python -m COREDB.scripts.crear_servicio --modulo COBRANZA --username svc-cobranza --nombre Cobranza
+        && CORE_DB_SERVICIO_SECRETO="$$BILLETERA_COREDB_SECRETO"
+        python -m COREDB.scripts.crear_servicio --modulo BILLETERA --username svc-billetera --nombre "Billetera Digital"
     environment:
       <<: *coredb-entorno
       BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
@@ -133,6 +135,7 @@ services:
       DESEMBOLSO_COREDB_SECRETO: ${DESEMBOLSO_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       CAPTACION_COREDB_SECRETO: ${CAPTACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       COBRANZA_COREDB_SECRETO: ${COBRANZA_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+      BILLETERA_COREDB_SECRETO: ${BILLETERA_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
     networks: [core]
     depends_on:
       db:
@@ -379,6 +382,40 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8019/ready", timeout=3)
 
+  # ── BILLETERA: API de Chaski (Billetera Digital, canal BD), sobre COREDB ──
+  # Sin base propia: opera por /coredb/billetera/* a través del Bus, con su usuario de
+  # servicio svc-billetera y el token del cliente que COREDB emite al validar celular y PIN.
+  # La app móvil la llama en el puerto de abajo. Ver billetera-chaski/README.md.
+  billetera:
+    image: bna/billetera:local
+    build:
+      context: ./billetera-chaski/backend
+      dockerfile: ../../docker/billetera/Dockerfile
+    environment:
+      # COREDB, a través del Bus (fase 2), con la credencial de BILLETERA.
+      COREDB_URL: http://bus:8018/bus/coredb
+      BUS_TOKEN: ${BUS_TOKEN_BILLETERA:?Falta en .env. Ejecute ./bna up}
+      CHASKI_COREDB_USUARIO: svc-billetera
+      CHASKI_COREDB_SECRETO: ${BILLETERA_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+      PORT: "3000"
+    depends_on:
+      bus:
+        condition: service_healthy
+      coredb:
+        condition: service_healthy
+      coredb-init:
+        condition: service_completed_successfully
+    networks: [default, canales]
+    ports:
+      - "127.0.0.1:${BNA_PUERTO_BILLETERA:-8020}:3000"
+    healthcheck:
+      <<: *sonda
+      test:
+        - CMD
+        - node
+        - -e
+        - 'fetch("http://127.0.0.1:3000/api/listo").then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))'
+
   # ── Seguridad: prototipo sobre SQLite ───────────────────────────────────
   seguridad:
     image: bna/seguridad:local
@@ -421,9 +458,10 @@ services:
       BUS_URL_COBRANZA: http://cobranza:8014
       BUS_URL_SEGURIDAD: http://seguridad:8013
       BUS_URL_ATM: http://atm:8019
+      BUS_URL_BILLETERA: http://billetera:3000
       # FRONTEND: los puentes del frontend. PRUEBAS: el flujo de extremo a extremo. El resto:
       # cada módulo que llama a COREDB (fase 2).
-      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM
+      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA
       BUS_TOKEN_FRONTEND: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_PRUEBAS: ${BUS_TOKEN_PRUEBAS:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_CUENTAS: ${BUS_TOKEN_CUENTAS:?Falta en .env. Ejecute ./bna up}
@@ -433,6 +471,7 @@ services:
       BUS_TOKEN_DESEMBOLSO: ${BUS_TOKEN_DESEMBOLSO:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_COBRANZA: ${BUS_TOKEN_COBRANZA:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_ATM: ${BUS_TOKEN_ATM:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_BILLETERA: ${BUS_TOKEN_BILLETERA:?Falta en .env. Ejecute ./bna up}
     networks: [default, canales, core]
     ports:
       - "127.0.0.1:${BNA_PUERTO_BUS:-8018}:8018"

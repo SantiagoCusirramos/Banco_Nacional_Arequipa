@@ -1,6 +1,56 @@
 {
   "components": {
     "schemas": {
+      "AccesoPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "celular": {
+            "description": "El celular de clientes.cliente.",
+            "pattern": "^9[0-9]{8}$",
+            "title": "Celular",
+            "type": "string"
+          },
+          "pin": {
+            "pattern": "^[0-9]{6}$",
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "celular",
+          "pin"
+        ],
+        "title": "AccesoPeticion",
+        "type": "object"
+      },
+      "AccesoRespuesta": {
+        "properties": {
+          "access_token": {
+            "description": "Va en X-Cliente-Token; no sirve como Authorization.",
+            "title": "Access Token",
+            "type": "string"
+          },
+          "cliente": {
+            "$ref": "#/components/schemas/ClienteSesion"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "cliente"
+        ],
+        "title": "AccesoRespuesta",
+        "type": "object"
+      },
       "AcuseSolicitud": {
         "properties": {
           "estado": {
@@ -35,6 +85,64 @@
           "estado"
         ],
         "title": "AcuseSolicitud",
+        "type": "object"
+      },
+      "AfiliacionPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "cod_cliente": {
+            "maxLength": 12,
+            "minLength": 1,
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "pin": {
+            "pattern": "^[0-9]{6}$",
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "num_cuenta",
+          "pin"
+        ],
+        "title": "AfiliacionPeticion",
+        "type": "object"
+      },
+      "AfiliacionRespuesta": {
+        "properties": {
+          "cod_cliente": {
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "nueva": {
+            "description": "False si ya estaba afiliado: cambió el PIN o la cuenta y quedó ACTIVA.",
+            "title": "Nueva",
+            "type": "boolean"
+          },
+          "num_cuenta": {
+            "title": "Num Cuenta",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "num_cuenta",
+          "estado",
+          "nueva"
+        ],
+        "title": "AfiliacionRespuesta",
         "type": "object"
       },
       "AgenciaRespuesta": {
@@ -355,6 +463,189 @@
         "title": "AutorizacionRespuesta",
         "type": "object"
       },
+      "COREDB__routers__auth__PerfilRespuesta": {
+        "properties": {
+          "acciones": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Acciones",
+            "type": "array"
+          },
+          "id_usuario": {
+            "format": "uuid",
+            "title": "Id Usuario",
+            "type": "string"
+          },
+          "modulo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modulo"
+          },
+          "rol": {
+            "title": "Rol",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_usuario",
+          "username",
+          "rol",
+          "modulo",
+          "acciones"
+        ],
+        "title": "PerfilRespuesta",
+        "type": "object"
+      },
+      "COREDB__routers__billetera__MovimientoRespuesta": {
+        "properties": {
+          "estado_transaccion": {
+            "title": "Estado Transaccion",
+            "type": "string"
+          },
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "glosa": {
+            "title": "Glosa",
+            "type": "string"
+          },
+          "id_canal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Canal"
+          },
+          "moneda": {
+            "title": "Moneda",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "naturaleza": {
+            "title": "Naturaleza",
+            "type": "string"
+          },
+          "num_cuenta": {
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "tipo_operacion": {
+            "title": "Tipo Operacion",
+            "type": "string"
+          },
+          "uuid_transaccion": {
+            "format": "uuid",
+            "title": "Uuid Transaccion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_transaccion",
+          "num_cuenta",
+          "tipo_operacion",
+          "naturaleza",
+          "monto",
+          "moneda",
+          "glosa",
+          "id_canal",
+          "estado_transaccion",
+          "fecha_hora"
+        ],
+        "title": "MovimientoRespuesta",
+        "type": "object"
+      },
+      "COREDB__routers__billetera__PerfilRespuesta": {
+        "properties": {
+          "cod_cliente": {
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "consumido_hoy": {
+            "title": "Consumido Hoy",
+            "type": "string"
+          },
+          "disponible_hoy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disponible Hoy"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "nombre_corto": {
+            "title": "Nombre Corto",
+            "type": "string"
+          },
+          "notificaciones_sin_leer": {
+            "title": "Notificaciones Sin Leer",
+            "type": "integer"
+          },
+          "num_cuenta": {
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "saldo_disponible": {
+            "title": "Saldo Disponible",
+            "type": "string"
+          },
+          "solicitudes_pendientes": {
+            "title": "Solicitudes Pendientes",
+            "type": "integer"
+          },
+          "tope_diario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tope Diario"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "nombre_corto",
+          "num_cuenta",
+          "estado",
+          "saldo_disponible",
+          "tope_diario",
+          "consumido_hoy",
+          "disponible_hoy",
+          "notificaciones_sin_leer",
+          "solicitudes_pendientes"
+        ],
+        "title": "PerfilRespuesta",
+        "type": "object"
+      },
       "COREDB__routers__clientes__EstadoCambiar": {
         "additionalProperties": false,
         "properties": {
@@ -376,6 +667,25 @@
           "motivo"
         ],
         "title": "EstadoCambiar",
+        "type": "object"
+      },
+      "COREDB__routers__movimientos__MovimientoRespuesta": {
+        "properties": {
+          "repetido": {
+            "title": "Repetido",
+            "type": "boolean"
+          },
+          "uuid_transaccion": {
+            "format": "uuid",
+            "title": "Uuid Transaccion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_transaccion",
+          "repetido"
+        ],
+        "title": "MovimientoRespuesta",
         "type": "object"
       },
       "COREDB__routers__tarjetas__EstadoCambiar": {
@@ -1333,6 +1643,24 @@
         "title": "ClienteRespuesta",
         "type": "object"
       },
+      "ClienteSesion": {
+        "properties": {
+          "cod_cliente": {
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "nombre_corto": {
+            "title": "Nombre Corto",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cod_cliente",
+          "nombre_corto"
+        ],
+        "title": "ClienteSesion",
+        "type": "object"
+      },
       "CodigoCredito": {
         "properties": {
           "codigo": {
@@ -1349,6 +1677,107 @@
           "descripcion"
         ],
         "title": "CodigoCredito",
+        "type": "object"
+      },
+      "ComercioPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "razon_social": {
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Razon Social",
+            "type": "string"
+          },
+          "ruc": {
+            "pattern": "^(10|15|17|20)[0-9]{9}$",
+            "title": "Ruc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ruc",
+          "razon_social",
+          "num_cuenta"
+        ],
+        "title": "ComercioPeticion",
+        "type": "object"
+      },
+      "ComercioPublico": {
+        "properties": {
+          "id_comercio": {
+            "format": "uuid",
+            "title": "Id Comercio",
+            "type": "string"
+          },
+          "id_qr": {
+            "format": "uuid",
+            "title": "Id Qr",
+            "type": "string"
+          },
+          "razon_social": {
+            "title": "Razon Social",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_comercio",
+          "razon_social",
+          "id_qr"
+        ],
+        "title": "ComercioPublico",
+        "type": "object"
+      },
+      "ComercioRespuesta": {
+        "properties": {
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "id_comercio": {
+            "format": "uuid",
+            "title": "Id Comercio",
+            "type": "string"
+          },
+          "id_qr": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Qr"
+          },
+          "num_cuenta": {
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "razon_social": {
+            "title": "Razon Social",
+            "type": "string"
+          },
+          "ruc": {
+            "title": "Ruc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_comercio",
+          "ruc",
+          "razon_social",
+          "num_cuenta",
+          "estado",
+          "id_qr"
+        ],
+        "title": "ComercioRespuesta",
         "type": "object"
       },
       "ConciliacionDesembolso": {
@@ -1696,6 +2125,35 @@
           "fuente"
         ],
         "title": "ConsultaRiesgoCaptacionRegistrar",
+        "type": "object"
+      },
+      "ContactoPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "celular": {
+            "description": "El celular de clientes.cliente.",
+            "pattern": "^9[0-9]{8}$",
+            "title": "Celular",
+            "type": "string"
+          }
+        },
+        "required": [
+          "celular"
+        ],
+        "title": "ContactoPeticion",
+        "type": "object"
+      },
+      "ContactoRespuesta": {
+        "properties": {
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nombre"
+        ],
+        "title": "ContactoRespuesta",
         "type": "object"
       },
       "CredencialRegistrar": {
@@ -3459,6 +3917,19 @@
         "title": "LoginPeticion",
         "type": "object"
       },
+      "MarcadasRespuesta": {
+        "properties": {
+          "marcadas": {
+            "title": "Marcadas",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "marcadas"
+        ],
+        "title": "MarcadasRespuesta",
+        "type": "object"
+      },
       "MonedaRespuesta": {
         "properties": {
           "cod_moneda": {
@@ -3698,23 +4169,256 @@
         "title": "MovimientoRegistrar",
         "type": "object"
       },
-      "MovimientoRespuesta": {
+      "NotificacionRespuesta": {
         "properties": {
-          "repetido": {
-            "title": "Repetido",
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "id_notificacion": {
+            "title": "Id Notificacion",
+            "type": "integer"
+          },
+          "id_operacion": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Operacion"
+          },
+          "id_solicitud": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Solicitud"
+          },
+          "leida": {
+            "title": "Leida",
             "type": "boolean"
           },
-          "uuid_transaccion": {
-            "format": "uuid",
-            "title": "Uuid Transaccion",
+          "mensaje": {
+            "title": "Mensaje",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
             "type": "string"
           }
         },
         "required": [
-          "uuid_transaccion",
+          "id_notificacion",
+          "tipo",
+          "mensaje",
+          "leida",
+          "id_operacion",
+          "id_solicitud",
+          "fecha_hora"
+        ],
+        "title": "NotificacionRespuesta",
+        "type": "object"
+      },
+      "OperacionCreada": {
+        "properties": {
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "id_operacion": {
+            "format": "uuid",
+            "title": "Id Operacion",
+            "type": "string"
+          },
+          "id_qr": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Qr"
+          },
+          "id_solicitud": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Solicitud"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "nombre_destino": {
+            "title": "Nombre Destino",
+            "type": "string"
+          },
+          "nombre_origen": {
+            "title": "Nombre Origen",
+            "type": "string"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          },
+          "repetido": {
+            "description": "True si la llave ya se había usado: es la misma operación.",
+            "title": "Repetido",
+            "type": "boolean"
+          },
+          "sentido": {
+            "enum": [
+              "ENVIADA",
+              "RECIBIDA"
+            ],
+            "title": "Sentido",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "uuid_debito": {
+            "format": "uuid",
+            "title": "Uuid Debito",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_operacion",
+          "tipo",
+          "sentido",
+          "nombre_origen",
+          "nombre_destino",
+          "monto",
+          "referencia",
+          "id_qr",
+          "id_solicitud",
+          "uuid_debito",
+          "fecha_hora",
           "repetido"
         ],
-        "title": "MovimientoRespuesta",
+        "title": "OperacionCreada",
+        "type": "object"
+      },
+      "OperacionRespuesta": {
+        "properties": {
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "id_operacion": {
+            "format": "uuid",
+            "title": "Id Operacion",
+            "type": "string"
+          },
+          "id_qr": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Qr"
+          },
+          "id_solicitud": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Solicitud"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "nombre_destino": {
+            "title": "Nombre Destino",
+            "type": "string"
+          },
+          "nombre_origen": {
+            "title": "Nombre Origen",
+            "type": "string"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          },
+          "sentido": {
+            "enum": [
+              "ENVIADA",
+              "RECIBIDA"
+            ],
+            "title": "Sentido",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          },
+          "uuid_debito": {
+            "format": "uuid",
+            "title": "Uuid Debito",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_operacion",
+          "tipo",
+          "sentido",
+          "nombre_origen",
+          "nombre_destino",
+          "monto",
+          "referencia",
+          "id_qr",
+          "id_solicitud",
+          "uuid_debito",
+          "fecha_hora"
+        ],
+        "title": "OperacionRespuesta",
         "type": "object"
       },
       "OrdenConfirmada": {
@@ -4216,6 +4920,29 @@
         "title": "OtpCaptacionVerificar",
         "type": "object"
       },
+      "PagoQrPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Obligatorio en un QR estático.",
+            "title": "Monto"
+          }
+        },
+        "title": "PagoQrPeticion",
+        "type": "object"
+      },
       "PagoRegistrado": {
         "properties": {
           "aplicaciones": {
@@ -4519,50 +5246,6 @@
         "title": "PerfilCaptacionRegistrar",
         "type": "object"
       },
-      "PerfilRespuesta": {
-        "properties": {
-          "acciones": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Acciones",
-            "type": "array"
-          },
-          "id_usuario": {
-            "format": "uuid",
-            "title": "Id Usuario",
-            "type": "string"
-          },
-          "modulo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Modulo"
-          },
-          "rol": {
-            "title": "Rol",
-            "type": "string"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id_usuario",
-          "username",
-          "rol",
-          "modulo",
-          "acciones"
-        ],
-        "title": "PerfilRespuesta",
-        "type": "object"
-      },
       "PerfilRiesgoCaptacion": {
         "properties": {
           "calificacion": {
@@ -4608,6 +5291,34 @@
           "vigente"
         ],
         "title": "PerfilRiesgoCaptacion",
+        "type": "object"
+      },
+      "PinPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "pattern": "^[0-9]{6}$",
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ],
+        "title": "PinPeticion",
+        "type": "object"
+      },
+      "PinRespuesta": {
+        "properties": {
+          "valido": {
+            "title": "Valido",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valido"
+        ],
+        "title": "PinRespuesta",
         "type": "object"
       },
       "ProductoAhorroRespuesta": {
@@ -4683,6 +5394,102 @@
         "title": "ProductoCreditoRespuesta",
         "type": "object"
       },
+      "QrPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "minutos": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Vigencia del QR dinámico (15).",
+            "title": "Minutos"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sin monto: el QR estático del cliente.",
+            "title": "Monto"
+          }
+        },
+        "title": "QrPeticion",
+        "type": "object"
+      },
+      "QrRespuesta": {
+        "properties": {
+          "beneficiario": {
+            "title": "Beneficiario",
+            "type": "string"
+          },
+          "es_comercio": {
+            "title": "Es Comercio",
+            "type": "boolean"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fecha_expiracion": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Expiracion"
+          },
+          "id_qr": {
+            "format": "uuid",
+            "title": "Id Qr",
+            "type": "string"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monto"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_qr",
+          "tipo",
+          "monto",
+          "estado",
+          "beneficiario",
+          "es_comercio",
+          "fecha_expiracion"
+        ],
+        "title": "QrRespuesta",
+        "type": "object"
+      },
       "RechazoRegistrar": {
         "additionalProperties": false,
         "properties": {
@@ -4749,6 +5556,49 @@
           "resultado"
         ],
         "title": "ReglaEvaluacion",
+        "type": "object"
+      },
+      "RespuestaPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "accion": {
+            "enum": [
+              "ACEPTAR",
+              "RECHAZAR",
+              "CANCELAR"
+            ],
+            "title": "Accion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accion"
+        ],
+        "title": "RespuestaPeticion",
+        "type": "object"
+      },
+      "RespuestaSolicitud": {
+        "properties": {
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "operacion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperacionCreada"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "estado",
+          "operacion"
+        ],
+        "title": "RespuestaSolicitud",
         "type": "object"
       },
       "ResultadoEvaluacion": {
@@ -5188,6 +6038,118 @@
         "title": "SolicitudDetalle",
         "type": "object"
       },
+      "SolicitudPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "celular": {
+            "description": "El celular de clientes.cliente.",
+            "pattern": "^9[0-9]{8}$",
+            "title": "Celular",
+            "type": "string"
+          },
+          "concepto": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concepto"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          }
+        },
+        "required": [
+          "celular",
+          "monto"
+        ],
+        "title": "SolicitudPeticion",
+        "type": "object"
+      },
+      "SolicitudRespuesta": {
+        "properties": {
+          "concepto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concepto"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "fecha_respuesta": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Respuesta"
+          },
+          "fecha_solicitud": {
+            "format": "date-time",
+            "title": "Fecha Solicitud",
+            "type": "string"
+          },
+          "fecha_vencimiento": {
+            "format": "date-time",
+            "title": "Fecha Vencimiento",
+            "type": "string"
+          },
+          "id_solicitud": {
+            "format": "uuid",
+            "title": "Id Solicitud",
+            "type": "string"
+          },
+          "monto": {
+            "title": "Monto",
+            "type": "string"
+          },
+          "nombre_pagador": {
+            "title": "Nombre Pagador",
+            "type": "string"
+          },
+          "nombre_solicitante": {
+            "title": "Nombre Solicitante",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_solicitud",
+          "nombre_solicitante",
+          "nombre_pagador",
+          "monto",
+          "concepto",
+          "estado",
+          "fecha_solicitud",
+          "fecha_vencimiento",
+          "fecha_respuesta"
+        ],
+        "title": "SolicitudRespuesta",
+        "type": "object"
+      },
       "SolicitudResumen": {
         "properties": {
           "codCliente": {
@@ -5290,6 +6252,30 @@
           "primerVencimiento"
         ],
         "title": "SolicitudResumen",
+        "type": "object"
+      },
+      "SolicitudesRespuesta": {
+        "properties": {
+          "enviadas": {
+            "items": {
+              "$ref": "#/components/schemas/SolicitudRespuesta"
+            },
+            "title": "Enviadas",
+            "type": "array"
+          },
+          "recibidas": {
+            "items": {
+              "$ref": "#/components/schemas/SolicitudRespuesta"
+            },
+            "title": "Recibidas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "recibidas",
+          "enviadas"
+        ],
+        "title": "SolicitudesRespuesta",
         "type": "object"
       },
       "TarjetaEmitir": {
@@ -5501,6 +6487,47 @@
           "usuario"
         ],
         "title": "TokenRespuesta",
+        "type": "object"
+      },
+      "TransferenciaPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "celular_destino": {
+            "description": "El celular de clientes.cliente.",
+            "pattern": "^9[0-9]{8}$",
+            "title": "Celular Destino",
+            "type": "string"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "referencia": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referencia"
+          }
+        },
+        "required": [
+          "celular_destino",
+          "monto"
+        ],
+        "title": "TransferenciaPeticion",
         "type": "object"
       },
       "TransferenciaRegistrar": {
@@ -6397,7 +7424,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PerfilRespuesta"
+                  "$ref": "#/components/schemas/COREDB__routers__auth__PerfilRespuesta"
                 }
               }
             },
@@ -6636,6 +7663,1283 @@
         "summary": "Extornar",
         "tags": [
           "tarjetas"
+        ]
+      }
+    },
+    "/coredb/billetera/acceso": {
+      "post": {
+        "description": "Valida celular y PIN y entrega el token del cliente (rol CLIENTE). Un PIN equivocado y\nun celular sin billetera responden lo mismo; el tercer PIN equivocado bloquea la billetera\nhasta que el banco la afilie otra vez.",
+        "operationId": "acceso_coredb_billetera_acceso_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccesoPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccesoRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "CREDENCIALES_INVALIDAS: PIN equivocado o celular sin billetera"
+          },
+          "403": {
+            "description": "BILLETERA_BLOQUEADA (tercer PIN equivocado), BILLETERA_NO_DISPONIBLE"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Acceso",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/afiliaciones": {
+      "post": {
+        "description": "Afilia a un cliente ACTIVO que ya existe (punto R-01: la billetera no crea clientes)\ncon una cuenta individual en soles suya y su PIN de 6 dígitos. Repetirlo cambia el PIN o\nla cuenta y reactiva una billetera bloqueada.",
+        "operationId": "afiliar_coredb_billetera_afiliaciones_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AfiliacionPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AfiliacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "BNA-BILLETERA-*, BNA-CLIENTE-NO-ACTIVO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Afiliar",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/comercios": {
+      "get": {
+        "description": "Los comercios activos con su QR estático.",
+        "operationId": "comercios_coredb_billetera_comercios_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ComercioPublico"
+                  },
+                  "title": "Response Comercios Coredb Billetera Comercios Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Comercios",
+        "tags": [
+          "billetera"
+        ]
+      },
+      "post": {
+        "description": "Afilia un comercio con su cuenta de abono en soles y le genera su QR estático.",
+        "operationId": "registrar_comercio_coredb_billetera_comercios_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComercioPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComercioRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "BNA-COMERCIO-DUPLICADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Registrar Comercio",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/contactos": {
+      "post": {
+        "description": "El nombre corto («Ana D.») de quien tiene billetera con ese celular, para confirmar un\nenvío. No devuelve su código ni sus datos; el propio celular no se encuentra.",
+        "operationId": "buscar_contacto_coredb_billetera_contactos_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactoPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactoRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "CONTACTO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Buscar Contacto",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/movimientos": {
+      "get": {
+        "description": "Los movimientos de la cuenta de la billetera, del más reciente al más antiguo.",
+        "operationId": "movimientos_coredb_billetera_movimientos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/COREDB__routers__billetera__MovimientoRespuesta"
+                  },
+                  "title": "Response Movimientos Coredb Billetera Movimientos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Movimientos",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/notificaciones": {
+      "get": {
+        "operationId": "notificaciones_coredb_billetera_notificaciones_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 40,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NotificacionRespuesta"
+                  },
+                  "title": "Response Notificaciones Coredb Billetera Notificaciones Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Notificaciones",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/notificaciones/leidas": {
+      "post": {
+        "operationId": "marcar_leidas_coredb_billetera_notificaciones_leidas_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarcadasRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Marcar Leidas",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/operaciones": {
+      "get": {
+        "description": "Envíos, pagos con QR y cobros del cliente, enviados o recibidos.",
+        "operationId": "operaciones_coredb_billetera_operaciones_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OperacionRespuesta"
+                  },
+                  "title": "Response Operaciones Coredb Billetera Operaciones Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Operaciones",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/pin/verificacion": {
+      "post": {
+        "description": "Confirma el PIN del cliente de la sesión antes de una operación (la app lo pide si el\ncelular no tiene biometría). Cuenta intentos como el acceso: el tercero bloquea.",
+        "operationId": "verificar_pin_coredb_billetera_pin_verificacion_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "PIN_INCORRECTO"
+          },
+          "403": {
+            "description": "BILLETERA_BLOQUEADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Verificar Pin",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/qr": {
+      "post": {
+        "description": "Sin monto, el QR estático del cliente (siempre el mismo); con monto, uno dinámico que\nse paga una vez y vence.",
+        "operationId": "crear_qr_coredb_billetera_qr_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QrPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QrRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Crear Qr",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/qr/{id_qr}": {
+      "get": {
+        "description": "Lo que el pagador ve antes de pagar: beneficiario (nombre corto o razón social), monto\ny vigencia. Sin la cuenta ni el código del beneficiario.",
+        "operationId": "ver_qr_coredb_billetera_qr__id_qr__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_qr",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Qr",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QrRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Ver Qr",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/qr/{id_qr}/pagos": {
+      "post": {
+        "description": "Paga un QR de otra billetera o de un comercio, por el canal BD.",
+        "operationId": "pagar_qr_coredb_billetera_qr__id_qr__pagos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_qr",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Qr",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "X-Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagoQrPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionCreada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "BNA-QR"
+          },
+          "409": {
+            "description": "BNA-QR-NO-VIGENTE, BNA-IDEMPOTENCIA"
+          },
+          "422": {
+            "description": "BNA-SALDO, RN-TOP-001, BNA-QR-MONTO, BNA-QR-PROPIO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Pagar Qr",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/solicitudes": {
+      "get": {
+        "description": "Las recibidas (por pagar) y las enviadas, con su estado (VENCIDA a las 48 horas).",
+        "operationId": "listar_solicitudes_coredb_billetera_solicitudes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudesRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Listar Solicitudes",
+        "tags": [
+          "billetera"
+        ]
+      },
+      "post": {
+        "description": "Pide dinero a otra billetera por su celular; vence a las 48 horas.",
+        "operationId": "crear_solicitud_coredb_billetera_solicitudes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "BNA-BILLETERA-DESTINO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Crear Solicitud",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/solicitudes/{id_solicitud}/respuesta": {
+      "post": {
+        "description": "ACEPTAR (paga; exige X-Idempotency-Key) o RECHAZAR, solo quien debe pagar; CANCELAR,\nsolo quien la pidió.",
+        "operationId": "responder_solicitud_coredb_billetera_solicitudes__id_solicitud__respuesta_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_solicitud",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Solicitud",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Idempotency-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespuestaPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespuestaSolicitud"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "BNA-SOLICITUD-PERMISO"
+          },
+          "404": {
+            "description": "BNA-SOLICITUD"
+          },
+          "409": {
+            "description": "BNA-SOLICITUD-NO-PENDIENTE, BNA-IDEMPOTENCIA"
+          },
+          "422": {
+            "description": "ACEPTAR sin X-Idempotency-Key, BNA-SALDO, RN-TOP-001"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Responder Solicitud",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/transferencias": {
+      "post": {
+        "description": "Envía dinero a otra billetera por su celular (P2P), por el canal BD.",
+        "operationId": "transferir_coredb_billetera_transferencias_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "X-Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferenciaPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperacionCreada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "BNA-BILLETERA-DESTINO"
+          },
+          "409": {
+            "description": "BNA-IDEMPOTENCIA"
+          },
+          "422": {
+            "description": "BNA-SALDO, RN-TOP-001, BNA-BILLETERA-PROPIA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Transferir",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/yo": {
+      "get": {
+        "description": "Saldo disponible de la cuenta de la billetera, tope y consumo del día en el canal BD.",
+        "operationId": "yo_coredb_billetera_yo_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/COREDB__routers__billetera__PerfilRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Yo",
+        "tags": [
+          "billetera"
         ]
       }
     },
@@ -10590,7 +12894,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MovimientoRespuesta"
+                  "$ref": "#/components/schemas/COREDB__routers__movimientos__MovimientoRespuesta"
                 }
               }
             },

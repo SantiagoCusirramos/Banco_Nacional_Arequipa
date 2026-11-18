@@ -455,3 +455,22 @@ def test_por_la_red_real_llega_y_vuelve_igual():
     assert eco["cabeceras"]["x-idempotency-key"] == "k-7"
     assert eco["cabeceras"]["x-correlation-id"] == "c-7"
     assert "x-bus-token" not in eco["cabeceras"]
+
+
+def test_la_billetera_tiene_ruta_y_credencial_propias_y_el_bus_reenvia_el_token_del_cliente():
+    token_billetera = "w" * 48
+    modulo = Modulo()
+    with cliente(modulo, BUS_URL_BILLETERA="http://billetera:3000",
+                 BUS_CONSUMIDORES="FRONTEND,PRUEBAS,BILLETERA", BUS_TOKEN_BILLETERA=token_billetera) as c:
+        salud = c.get("/bus/billetera/api/salud", headers=AUT)
+        envio = c.post("/bus/coredb/coredb/billetera/transferencias", content=b"{}",
+                       headers={"X-Bus-Token": token_billetera, "X-Cliente-Token": "del-cliente",
+                                "X-Idempotency-Key": "k"})
+        metricas = c.get("/metricas", headers=AUT).json()
+    assert salud.status_code == 200 and envio.status_code == 200
+    assert str(modulo.recibidas[0].url) == "http://billetera:3000/api/salud"
+    assert modulo.recibidas[1].headers["X-Cliente-Token"] == "del-cliente"
+    assert modulo.recibidas[1].headers["X-Idempotency-Key"] == "k"
+    assert "X-Bus-Token" not in modulo.recibidas[1].headers
+    assert metricas["reenvios"]["PRUEBAS"] == {"BILLETERA": 1}
+    assert metricas["reenvios"]["BILLETERA"] == {"COREDB": 1}

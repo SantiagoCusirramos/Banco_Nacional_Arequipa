@@ -1,0 +1,35 @@
+# Compila la app para iPhone en una Mac de GitHub (Windows no puede compilar iOS).
+# Genera Chaski-sin-firma.ipa: hay que firmarlo para instalarlo (Sideloadly/AltStore con
+# un Apple ID gratuito, o Xcode con una cuenta Apple Developer para TestFlight).
+name: Build iOS (.ipa)
+
+on:
+  workflow_dispatch:
+    inputs:
+      servidor:
+        description: URL de la API de Chaski que usará la app
+        required: true
+        default: http://192.168.15.2:3000
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: app_movil
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign --dart-define=SERVIDOR=${{ inputs.servidor }}
+      - name: Empaquetar .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr Chaski-sin-firma.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Chaski-iOS
+          path: app_movil/Chaski-sin-firma.ipa

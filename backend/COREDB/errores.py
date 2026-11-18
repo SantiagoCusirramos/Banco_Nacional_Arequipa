@@ -17,6 +17,15 @@ ESTADOS_POR_REGLA = {
     "BNA-IDEMPOTENCIA": 409,
     "BNA-AUTORIZACION": 404,
     "BNA-EXTORNO": 409,
+    # Billetera Digital (bd-v1.9). Los mensajes de la base no repiten el celular.
+    "BNA-BILLETERA": 403,
+    "BNA-BILLETERA-DESTINO": 404,
+    "BNA-QR": 404,
+    "BNA-QR-NO-VIGENTE": 409,
+    "BNA-SOLICITUD": 404,
+    "BNA-SOLICITUD-PERMISO": 403,
+    "BNA-SOLICITUD-NO-PENDIENTE": 409,
+    "BNA-COMERCIO-DUPLICADO": 409,
 }
 # El mensaje de la base incluye saldos o consumos, que no se devuelven al cliente.
 MENSAJES_POR_REGLA = {

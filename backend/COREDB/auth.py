@@ -11,9 +11,11 @@ de la petición. Sigue siendo una dependencia reemplazable:
 
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 
-from fastapi import Depends
+from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from COREDB import permisos, tokens
@@ -22,7 +24,7 @@ from COREDB.database import db_session
 from COREDB.errores import ErrorAutenticacion, ErrorCoreDb
 from COREDB.models import Usuario
 
-__all__ = ["Actor", "actor_actual", "requiere_permiso"]
+__all__ = ["Actor", "ClienteBilletera", "actor_actual", "cliente_actual", "requiere_permiso"]
 
 _bearer = HTTPBearer(auto_error=False, scheme_name="JWT")
 
@@ -56,3 +58,39 @@ def requiere_permiso(accion: str) -> Callable[..., Actor]:
 
     _dependencia.accion = accion  # lo lee la prueba que exige un permiso en cada escritura
     return _dependencia
+
+
+@dataclass(frozen=True)
+class ClienteBilletera:
+    """El cliente de la Billetera Digital por el que actúa el módulo BILLETERA (bd-v1.9)."""
+
+    cod_cliente: str
+    num_cuenta: str
+    servicio: Actor
+
+    @property
+    def actor(self) -> str:
+        """El actor de la bitácora: el cliente, no el usuario de servicio."""
+        return f"cliente:{self.cod_cliente}"
+
+
+def cliente_actual(
+    servicio: Actor = Depends(requiere_permiso("OPERAR_BILLETERA")),
+    x_cliente_token: str | None = Header(default=None, alias="X-Cliente-Token"),
+    db: Session = Depends(db_session),
+) -> ClienteBilletera:
+    """Exige el token del módulo (Authorization, con OPERAR_BILLETERA) y el del cliente
+    (X-Cliente-Token, que emite POST /coredb/billetera/acceso). Vuelve a leer la afiliación:
+    una billetera bloqueada o reafiliada a otra cuenta corta la sesión en la siguiente petición."""
+    if not x_cliente_token:
+        raise ErrorAutenticacion(
+            "CLIENTE_TOKEN_REQUERIDO", "Falta el encabezado X-Cliente-Token del cliente."
+        )
+    claims = tokens.decodificar_cliente(x_cliente_token)
+    fila = db.execute(
+        text("SELECT num_cuenta, estado FROM billetera.v_afiliacion_api WHERE cod_cliente = :c"),
+        {"c": claims["sub"]},
+    ).first()
+    if fila is None or fila.estado != "ACTIVA":
+        raise ErrorAutenticacion("CLIENTE_NO_VIGENTE", "La billetera del cliente no está activa.")
+    return ClienteBilletera(claims["sub"], fila.num_cuenta, servicio)

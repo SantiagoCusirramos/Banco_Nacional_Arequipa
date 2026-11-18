@@ -9,6 +9,7 @@ on:
     paths:
       - k8s/**
       - backend/BUS_SERVICIOS/**
+      - billetera-chaski/backend/**
       - docker/**
       - database/**
       - compose.yaml
