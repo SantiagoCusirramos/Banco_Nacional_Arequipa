@@ -30,6 +30,13 @@ export default function CuentaPage() {
   const [cuentaDestino, setCuentaDestino] = useState("");
   const [montoOp, setMontoOp] = useState("");
   const [tipoOp, setTipoOp] = useState<Operacion>("deposito");
+  // Llave de idempotencia de la operación: se mantiene si se repite el mismo envío (doble
+  // clic, reintento tras un error o un timeout) y cambia al editar un dato o al registrarse.
+  const [llaveOp, setLlaveOp] = useState(() => crypto.randomUUID());
+  const editarOperacion = <T,>(cambiar: (valor: T) => void) => (valor: T) => {
+    cambiar(valor);
+    setLlaveOp(crypto.randomUUID());
+  };
 
   // Movimientos
   const [cuentaMovs, setCuentaMovs] = useState("");
@@ -79,15 +86,17 @@ export default function CuentaPage() {
   function ejecutarOperacion(e: React.FormEvent) {
     e.preventDefault();
     const monto = Number(montoOp).toFixed(2);
+    const llave = llaveOp;
     void ejecutar(async () => {
       if (tipoOp === "transferencia") {
-        const resultado = await transferir(cuentaOrigen.trim(), cuentaDestino.trim(), monto);
+        const resultado = await transferir(cuentaOrigen.trim(), cuentaDestino.trim(), monto, llave);
         setNotice({ text: `Transferencia registrada. Débito ${resultado.uuid_debito}, abono ${resultado.uuid_abono}.`, error: false });
       } else {
         const operar = tipoOp === "deposito" ? depositar : retirar;
-        const resultado = await operar(cuentaOrigen.trim(), monto);
+        const resultado = await operar(cuentaOrigen.trim(), monto, llave);
         setNotice({ text: `Operación registrada: ${resultado.uuid_transaccion}.`, error: false });
       }
+      setLlaveOp(crypto.randomUUID());
     });
   }
 
@@ -255,7 +264,7 @@ export default function CuentaPage() {
               <form onSubmit={ejecutarOperacion} className="sol-form-grid" style={{ marginTop: "20px" }}>
                 <div className="sol-field">
                   <label htmlFor="operacion-tipo">Tipo de Operación</label>
-                  <select id="operacion-tipo" value={tipoOp} onChange={(e) => setTipoOp(e.target.value as Operacion)}>
+                  <select id="operacion-tipo" value={tipoOp} onChange={(e) => editarOperacion(setTipoOp)(e.target.value as Operacion)}>
                     <option value="deposito">Depositar (Depósito)</option>
                     <option value="retiro">Retiro</option>
                     <option value="transferencia">Hacer Transferencia</option>
@@ -263,17 +272,17 @@ export default function CuentaPage() {
                 </div>
                 <div className="sol-field">
                   <label htmlFor="operacion-cuenta">{tipoOp === "transferencia" ? "Cuenta de Origen" : "Número de Cuenta"}</label>
-                  <input id="operacion-cuenta" value={cuentaOrigen} onChange={(e) => setCuentaOrigen(e.target.value)} required placeholder="Ej. 1010000001" />
+                  <input id="operacion-cuenta" value={cuentaOrigen} onChange={(e) => editarOperacion(setCuentaOrigen)(e.target.value)} required placeholder="Ej. 1010000001" />
                 </div>
                 {tipoOp === "transferencia" && (
                   <div className="sol-field">
                     <label htmlFor="operacion-destino">Cuenta de Destino</label>
-                    <input id="operacion-destino" value={cuentaDestino} onChange={(e) => setCuentaDestino(e.target.value)} required placeholder="Ej. 1010000002" />
+                    <input id="operacion-destino" value={cuentaDestino} onChange={(e) => editarOperacion(setCuentaDestino)(e.target.value)} required placeholder="Ej. 1010000002" />
                   </div>
                 )}
                 <div className="sol-field">
                   <label htmlFor="operacion-monto">Monto</label>
-                  <input id="operacion-monto" type="number" step="0.01" min="0.01" value={montoOp} onChange={(e) => setMontoOp(e.target.value)} required placeholder="0.00" />
+                  <input id="operacion-monto" type="number" step="0.01" min="0.01" value={montoOp} onChange={(e) => editarOperacion(setMontoOp)(e.target.value)} required placeholder="0.00" />
                 </div>
                 <div style={{ gridColumn: "1 / -1", marginTop: "10px" }}>
                   <button className="sol-button primary" type="submit" disabled={loading}>
