@@ -504,3 +504,80 @@ def test_los_registros_no_guardan_consulta_cuerpo_ni_credenciales(caplog):
     assert modulo.recibidas[0].url.query == b"documento=12345678"
     assert "CAPTACION" in caplog.text and "/bus/captacion/cap/references/search" in caplog.text
     assert [s for s in sensibles if s in caplog.text] == []
+
+
+# ── Ideas de #105 (Gaboootj10): consumidores permitidos, canal público, /modulos ──
+
+def test_modulo_restringido_a_ciertos_consumidores():
+    modulo = Modulo()
+    with cliente(modulo, BUS_PERMITIDOS_SEGURIDAD="FRONTEND") as c:
+        negado = c.get("/bus/seguridad/v1/estado", headers=AUT)
+        aceptado = c.get("/bus/seguridad/v1/estado", headers={"X-Bus-Token": TOKEN_FRONTEND})
+        assert c.get("/bus/cuentas/x", headers=AUT).status_code == 200  # los demás, sin cambio
+    assert negado.status_code == 403
+    assert negado.json() == {"detail": "El consumidor no puede usar el módulo SEGURIDAD.",
+                             "codigo": "BUS_CONSUMIDOR_NO_AUTORIZADO", "modulo": "SEGURIDAD"}
+    assert aceptado.status_code == 200
+    assert [str(p.url) for p in modulo.recibidas] == [
+        "http://seguridad.interno:9000/v1/estado", "http://cuentas.interno:9000/x"]
+
+
+def test_modulo_publico_sin_credencial_llega_como_publico():
+    modulo = Modulo(R(200, json={"token": "t"}))
+    with cliente(modulo, BUS_MODULOS_PUBLICOS="BILLETERA") as c:
+        respuesta = c.post("/bus/billetera/api/login", json={"celular": "900000001"},
+                           headers={"Authorization": "Bearer usuario", "Idempotency-Key": "k-1"})
+        assert respuesta.status_code == 200
+        peticion = modulo.recibidas[0]
+        assert str(peticion.url) == "http://billetera.interno:9000/api/login"
+        assert peticion.headers["authorization"] == "Bearer usuario"
+        assert peticion.headers["idempotency-key"] == "k-1"
+        # Los demás módulos siguen exigiendo credencial, y una credencial falsa no se tolera.
+        assert c.get("/bus/cuentas/x").status_code == 401
+        assert c.get("/bus/billetera/api/me", headers={"X-Bus-Token": "falsa"}).status_code == 401
+        assert c.get("/bus/BILLETERA/api/me").status_code == 401
+        assert c.get("/metricas", headers=AUT).json()["reenvios"]["PUBLICO"] == {"BILLETERA": 1}
+    assert len(modulo.recibidas) == 1
+
+
+def test_sin_modulos_publicos_todo_exige_credencial():
+    with cliente(Modulo()) as c:
+        assert c.get("/bus/billetera/api/salud").status_code == 401
+
+
+def test_varios_modulos_publicos():
+    with cliente(Modulo(), BUS_MODULOS_PUBLICOS="BILLETERA, seguridad") as c:
+        assert c.get("/bus/billetera/api/salud").status_code == 200
+        assert c.get("/bus/seguridad/").status_code == 200
+        assert c.get("/bus/cuentas/health").status_code == 401
+        assert c.get("/metricas", headers=AUT).json()["reenvios"]["PUBLICO"] == {"BILLETERA": 1, "SEGURIDAD": 1}
+
+
+@pytest.mark.parametrize("cambios, mensaje", [
+    ({"BUS_PERMITIDOS_CUENTAS": "FRONTEND,NADIE"}, "BUS_PERMITIDOS_CUENTAS: no están en BUS_CONSUMIDORES: NADIE"),
+    ({"BUS_MODULOS_PUBLICOS": "NOEXISTE"}, "BUS_MODULOS_PUBLICOS: el módulo NOEXISTE no está en el Bus"),
+    ({"BUS_MODULOS_PUBLICOS": "CUENTAS", "BUS_PERMITIDOS_CUENTAS": "FRONTEND"},
+     "BUS_MODULOS_PUBLICOS: CUENTAS tiene BUS_PERMITIDOS_CUENTAS"),
+    ({"BUS_MODULOS_PUBLICOS": "COREDB"}, "BUS_MODULOS_PUBLICOS: COREDB no puede ser público"),
+    ({"BUS_CONSUMIDORES": "FRONTEND,PUBLICO", "BUS_TOKEN_PUBLICO": "u" * 40}, "PUBLICO está reservado"),
+])
+def test_configuracion_de_permitidos_y_publicos_invalida(cambios, mensaje):
+    with pytest.raises(ConfiguracionInvalida, match=mensaje):
+        cargar(entorno(**cambios))
+
+
+def test_modulos_dice_cual_contesta_y_cual_no():
+    def modulo(peticion):
+        if peticion.url.host == "tarjetas.interno":
+            raise httpx.ConnectError("caído", request=peticion)
+        return httpx.Response(404)
+
+    app = crear_app(cargar(entorno()), transport=httpx.MockTransport(modulo))
+    with TestClient(app) as c:
+        assert c.get("/modulos").status_code == 401
+        cuerpo = c.get("/modulos", headers=AUT).json()
+
+    assert cuerpo["total"] == len(MODULOS)
+    assert cuerpo["disponibles"] == len(MODULOS) - 1
+    assert cuerpo["modulos"]["TARJETAS"] == {"estado": "NO_DISPONIBLE", "motivo": "ConnectError"}
+    assert cuerpo["modulos"]["CUENTAS"]["estado"] == "DISPONIBLE"

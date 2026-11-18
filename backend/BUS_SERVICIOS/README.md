@@ -33,12 +33,13 @@ Por ejemplo, `GET /bus/cuentas/api/v1/cuentas/001-...` llega a CUENTAS como `GET
 | Código | `codigo` | Cuándo |
 |---|---|---|
 | 401 | `BUS_CREDENCIAL_INVALIDA` | Falta `X-Bus-Token` o no es de ningún consumidor. No reenvía nada |
+| 403 | `BUS_CONSUMIDOR_NO_AUTORIZADO` | El módulo tiene `BUS_PERMITIDOS_<MÓDULO>` y el consumidor no está en la lista. No reenvía nada |
 | 404 | `MODULO_DESCONOCIDO` | El módulo no está en la tabla |
 | 503 | `MODULO_NO_DISPONIBLE` | El módulo no acepta la conexión (caído) |
 | 504 | `MODULO_SIN_RESPUESTA` | El módulo no responde en `BUS_TIMEOUT_SEG` |
 | 502 | `MODULO_RESPUESTA_INVALIDA` | El módulo cortó la respuesta a medias |
 
-Además: `GET /salud` (sin credencial, no depende de los módulos) y `GET /metricas` (con credencial): cuántas peticiones reenvió por consumidor y módulo desde que arrancó. El flujo de extremo a extremo la usa para comprobar que todo pasó por el Bus.
+Además: `GET /salud` (sin credencial, no depende de los módulos), `GET /metricas` (con credencial): cuántas peticiones reenvió por consumidor y módulo desde que arrancó (el flujo de extremo a extremo la usa para comprobar que todo pasó por el Bus), y `GET /modulos` (con credencial): si cada módulo contesta ahora (`DISPONIBLE` con sus milisegundos, o `NO_DISPONIBLE` con el motivo); cualquier respuesta HTTP cuenta como disponible.
 
 En el registro escribe una línea por petición: consumidor, método, módulo, código, milisegundos y correlación. Nunca el cuerpo, la consulta ni las cabeceras.
 
@@ -51,6 +52,8 @@ Sin valores por omisión para direcciones ni credenciales: si falta algo, no arr
 | `BUS_URL_<MÓDULO>` | Dirección de cada módulo de la tabla, `http(s)://host:puerto[/prefijo]`, sin credenciales ni consulta. Las diez son obligatorias |
 | `BUS_CONSUMIDORES` | Nombres de los consumidores, separados por comas (mayúsculas, dígitos y `_`). En el producto: `FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA` |
 | `BUS_TOKEN_<CONSUMIDOR>` | Credencial de cada consumidor, que presenta en `X-Bus-Token`. Al menos 32 caracteres, distinta de las demás. `./bna up` las genera en `.env` (`BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS` y una por módulo: `BUS_TOKEN_CUENTAS`…) |
+| `BUS_PERMITIDOS_<MÓDULO>` | Opcional. Consumidores que pueden usar ese módulo, separados por comas; los demás reciben 403. Sin ella, todo consumidor con credencial lo usa |
+| `BUS_MODULOS_PUBLICOS` | Opcional, vacía en el producto. Módulos a los que se llega **sin** `X-Bus-Token`, como consumidor `PUBLICO` (en `/metricas`): para la app móvil, que no puede guardar un secreto; el módulo debe autenticar a su usuario (como BILLETERA con el token del cliente). Una `X-Bus-Token` presente pero inválida sigue siendo 401. COREDB nunca puede ser público, ni un módulo con `BUS_PERMITIDOS_<MÓDULO>`. `PUBLICO` no se puede declarar como consumidor |
 | `BUS_TIMEOUT_SEG` | Segundos que espera la respuesta de un módulo. Por omisión 9, menos que los 10 del puente del frontend, para que el navegador vea el 504 del Bus |
 | `BUS_TIMEOUT_CONEXION_SEG` | Segundos para conectar con un módulo. Por omisión 2 |
 

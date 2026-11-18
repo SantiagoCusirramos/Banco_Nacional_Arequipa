@@ -8,9 +8,15 @@ un POST repetido lo decide el módulo con su llave de idempotencia.
 
 Lo único que el Bus responde por su cuenta: 401 si el consumidor no presenta su
 credencial (X-Bus-Token), 404 si el módulo no existe, 503 si el módulo no acepta la
-conexión, 504 si no responde a tiempo y 502 si corta la respuesta a medias.
+conexión, 504 si no responde a tiempo y 502 si corta la respuesta a medias. Y 403 si el
+módulo solo atiende a ciertos consumidores (BUS_PERMITIDOS_<MÓDULO>) y este no es uno.
+
+A un módulo público (BUS_MODULOS_PUBLICOS) se llega sin X-Bus-Token, como consumidor PUBLICO:
+es para la app móvil, que no puede guardar un secreto; ese módulo autentica a su usuario.
+Una X-Bus-Token presente pero inválida sigue siendo 401.
 """
 
+import asyncio
 import hmac
 import logging
 import time
@@ -22,6 +28,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from BUS_SERVICIOS import registros
+from BUS_SERVICIOS.config import PUBLICO
 
 CABECERA_CREDENCIAL = "x-bus-token"
 # Cabeceras de salto a salto (RFC 9110 §7.6.1): son de cada conexión, no del mensaje.
@@ -43,6 +50,8 @@ def _de_salto(cabeceras):
 
 def crear_app(config, transport=None):
     estado = {"cliente": None}
+    permitidos = config.permitidos or {}
+    publicos = config.publicos or frozenset()
     reenvios = defaultdict(lambda: defaultdict(int))
 
     @asynccontextmanager
@@ -96,15 +105,40 @@ def crear_app(config, transport=None):
             return error(401, "BUS_CREDENCIAL_INVALIDA", "Credencial del Bus ausente o inválida.", request)
         return {"reenvios": {c: dict(m) for c, m in reenvios.items()}}
 
+    async def sondear(nombre, base):
+        """Cualquier respuesta HTTP del módulo cuenta como disponible: solo se mira si contesta."""
+        inicio = time.monotonic()
+        try:
+            respuesta = await estado["cliente"].get(base + "/")
+            await respuesta.aclose()
+        except httpx.HTTPError as falla:
+            return nombre, {"estado": "NO_DISPONIBLE", "motivo": type(falla).__name__}
+        return nombre, {"estado": "DISPONIBLE", "ms": round((time.monotonic() - inicio) * 1000)}
+
+    @app.get("/modulos", tags=["Sistema"], summary="Estado en vivo de cada módulo conectado al Bus")
+    async def modulos(request: Request):
+        if consumidor(request) is None:
+            return error(401, "BUS_CREDENCIAL_INVALIDA", "Credencial del Bus ausente o inválida.", request)
+        resultados = await asyncio.gather(*(sondear(n, b) for n, b in sorted(config.modulos.items())))
+        return {"modulos": dict(resultados),
+                "disponibles": sum(r["estado"] == "DISPONIBLE" for _, r in resultados),
+                "total": len(resultados)}
+
     @app.api_route("/bus/{modulo}/{ruta:path}", methods=METODOS, tags=["Módulos"])
     async def reenviar(modulo: str, ruta: str, request: Request):
         llamador = consumidor(request)
+        nombre = modulo.upper()
+        if (llamador is None and CABECERA_CREDENCIAL not in request.headers
+                and nombre in publicos and modulo == modulo.lower()):
+            llamador = PUBLICO
         if llamador is None:
             return error(401, "BUS_CREDENCIAL_INVALIDA", "Credencial del Bus ausente o inválida.", request)
-        nombre = modulo.upper()
         base = config.modulos.get(nombre)
         if base is None or modulo != modulo.lower():
             return error(404, "MODULO_DESCONOCIDO", "El Bus no tiene ese módulo.", request)
+        if nombre in permitidos and llamador not in permitidos[nombre]:
+            return error(403, "BUS_CONSUMIDOR_NO_AUTORIZADO",
+                         f"El consumidor no puede usar el módulo {nombre}.", request, nombre)
 
         # Ruta y consulta crudas: lo que sigue a /bus/<módulo>, sin decodificar.
         # (uvicorn deja la consulta fuera de raw_path; el cliente de pruebas de Starlette, no).
