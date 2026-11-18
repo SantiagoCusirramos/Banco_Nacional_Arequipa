@@ -1,7 +1,7 @@
 # database/
 
 Esta carpeta es una copia de [bna-core-db](https://github.com/miguelpro324/bna-core-db),
-rama `mysql`, en la etiqueta **`bd-v1.12-mysql`**.
+rama `mysql`, en la etiqueta **`bd-v1.13-mysql`**.
 
 **No se edita aquí.** Un cambio directo se perdería o chocaría con la siguiente
 actualización. Todo cambio de la base va primero a bna-core-db: rama nueva desde
@@ -89,6 +89,9 @@ permisos sobre `billetera.*`; también exige recrear la base.
 rechaza confirmar una vencida; también exige recrear la base.
 `bd-v1.12-mysql` bloquea el login de una persona 15 minutos tras 5 fallos seguidos (sección 17:
 `core.bloqueo_login`, `core.registrar_login_fallido`, `core.desbloquear_login`); también exige
+recrear la base.
+`bd-v1.13-mysql` guarda lo que el módulo Seguridad tenía en SQLite (sección 18:
+`core.evaluar_operacion` con su desafío, `core.sellar_auditoria`, incidentes); también exige
 recrear la base.
 Con el producto completo:
 `./bna reset`.
