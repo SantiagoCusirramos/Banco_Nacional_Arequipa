@@ -251,3 +251,62 @@ def test_el_arranque_con_si_falta_no_falla_si_ya_hay_administrador(consulta, tok
     assert clave_admin not in resultado.stderr + resultado.stdout
     despues = consulta("SELECT COUNT(*) n FROM core.usuario_sistema WHERE rol='ADMINISTRADOR'")[0]["n"]
     assert despues == antes
+
+
+# ── Bloqueo del login tras fallos seguidos (bd-v1.12) ─────────────────────────
+
+
+def fallar(cliente, username, veces):
+    for _ in range(veces):
+        assert login(cliente, username, "clave-incorrecta").status_code == 401
+
+
+def test_cinco_fallos_bloquean_el_login_aunque_luego_llegue_la_clave_buena(cliente, sesion_de, consulta):
+    _, persona = sesion_de("ASESOR")
+    fallar(cliente, persona["username"], 5)
+    bloqueado = login(cliente, persona["username"], CLAVE)
+    assert bloqueado.status_code == 401
+    assert bloqueado.json() == login(cliente, "nadie-" + uuid.uuid4().hex[:8], CLAVE).json()
+    acciones = [f["accion"] for f in consulta(
+        "SELECT accion FROM core.evento_auditoria WHERE id_entidad = %s ORDER BY id_evento", persona["id_usuario"])]
+    assert acciones.count("BLOQUEAR_LOGIN") == 1 and acciones.count("LOGIN_FALLIDO") == 6
+
+
+def test_un_login_exitoso_reinicia_los_fallos(cliente, sesion_de):
+    _, persona = sesion_de("ASESOR")
+    fallar(cliente, persona["username"], 4)
+    bearer(login(cliente, persona["username"], CLAVE))
+    fallar(cliente, persona["username"], 4)
+    bearer(login(cliente, persona["username"], CLAVE))
+
+
+def test_el_administrador_ve_y_levanta_el_bloqueo(cliente, sesion_de, autorizacion):
+    _, persona = sesion_de("ASESOR")
+    fallar(cliente, persona["username"], 5)
+    visto = cliente.get(f"/coredb/usuarios/{persona['id_usuario']}", headers=autorizacion)
+    assert visto.status_code == 200 and visto.json()["bloqueado_hasta"] is not None
+    desbloqueado = cliente.post(f"/coredb/usuarios/{persona['id_usuario']}/desbloqueo", headers=autorizacion)
+    assert desbloqueado.status_code == 200, desbloqueado.text
+    assert desbloqueado.json()["bloqueado_hasta"] is None
+    bearer(login(cliente, persona["username"], CLAVE))
+
+
+def test_solo_quien_gestiona_usuarios_desbloquea(cliente, sesion_de):
+    encabezados, _ = sesion_de("ASESOR")
+    _, persona = sesion_de("ASESOR")
+    respuesta = cliente.post(f"/coredb/usuarios/{persona['id_usuario']}/desbloqueo", headers=encabezados)
+    assert respuesta.status_code == 403
+
+
+def test_desbloquear_un_usuario_inexistente_404(cliente, autorizacion):
+    respuesta = cliente.post(f"/coredb/usuarios/{uuid.uuid4()}/desbloqueo", headers=autorizacion)
+    assert respuesta.status_code == 404
+
+
+def test_un_usuario_de_servicio_no_se_bloquea(cliente, autorizacion):
+    creado = cliente.post("/coredb/usuarios/servicios", headers=autorizacion, json={
+        "modulo": "CLIENTES", "username": "svc-" + uuid.uuid4().hex[:8], "nombre": "Servicio de prueba"})
+    assert creado.status_code == 201, creado.text
+    username = creado.json()["usuario"]["username"]
+    fallar(cliente, username, 6)
+    bearer(login(cliente, username, creado.json()["secreto"]))

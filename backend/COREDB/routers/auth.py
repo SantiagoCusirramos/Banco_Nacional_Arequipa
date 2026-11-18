@@ -16,7 +16,10 @@ from COREDB.services import usuarios
 router = APIRouter(prefix="/coredb/auth", tags=["autenticación"])
 
 # Ninguno se distingue en la respuesta: ver CORE/AUTENTICACION.md.
-FALLOS_DE_LOGIN = {"CREDENCIALES_INVALIDAS", "USUARIO_INACTIVO", "PASSWORD_NO_ADMITIDA", "BNA-USUARIO"}
+FALLOS_DE_LOGIN = {
+    "CREDENCIALES_INVALIDAS", "USUARIO_INACTIVO", "PASSWORD_NO_ADMITIDA", "BNA-USUARIO",
+    "LOGIN_BLOQUEADO", "BNA-LOGIN-BLOQUEADO",
+}
 
 
 class LoginPeticion(BaseModel):
@@ -73,10 +76,15 @@ def login(
     db: Session = Depends(db_session),
     x_correlation_id: str | None = Header(default=None),
 ):
-    """Usuario inexistente, clave incorrecta, usuario inactivo y contraseña no admitida
-    responden el mismo 401. Un login exitoso queda en la bitácora (LOGIN)."""
+    """Usuario inexistente, clave incorrecta, usuario inactivo, login bloqueado y contraseña
+    no admitida responden el mismo 401. Un login exitoso queda en la bitácora (LOGIN); cada
+    fallo de un usuario que existe, como LOGIN_FALLIDO. Cinco fallos seguidos bloquean a una
+    persona 15 minutos (BLOQUEAR_LOGIN); los usuarios de servicio no se bloquean."""
     try:
-        usuario = usuarios.autenticar(db, username=datos.username, password=datos.password)
+        usuario = usuarios.autenticar(
+            db, username=datos.username, password=datos.password,
+            correlation_id=_correlacion(x_correlation_id),
+        )
         token, vigencia = tokens.crear_token(
             id_usuario=usuario.id_usuario, username=usuario.username, rol=usuario.rol,
             modulo=usuario.modulo,

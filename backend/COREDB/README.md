@@ -35,10 +35,17 @@ integrada y con PyJWT:
 
 - `POST /coredb/auth/login` con `{"username", "password"}` entrega
   `{access_token, token_type, expires_in, usuario}`. Usuario inexistente, clave incorrecta,
-  usuario inactivo y contraseña no admitida responden el mismo 401
+  usuario inactivo, login bloqueado y contraseña no admitida responden el mismo 401
   `CREDENCIALES_INVALIDAS`, y el tiempo se iguala con una verificación bcrypt simulada.
   Cada login exitoso queda en la bitácora (`LOGIN`), con el `X-Correlation-ID` si es un
-  UUID. Los intentos fallidos no se registran ni bloquean la cuenta, como en CORE.
+  UUID, y cada fallo de un usuario que existe como `LOGIN_FALLIDO`.
+- **Bloqueo (bd-v1.12):** 5 fallos seguidos bloquean el login de una persona 15 minutos
+  (`BLOQUEAR_LOGIN`); con el login bloqueado ni la contraseña correcta entra. Un login
+  exitoso reinicia la cuenta. Los usuarios de servicio no se bloquean (su secreto es
+  aleatorio; bloquearlos dejaría a un módulo sin acceso a pedido de cualquiera).
+  `GET /coredb/usuarios/{id}` muestra `bloqueado_hasta` y
+  `POST /coredb/usuarios/{id}/desbloqueo` (`CREAR_USUARIO`) lo levanta antes. Los números
+  son provisionales: los decide el equipo (pregunta en #34).
 - Las demás rutas exigen `Authorization: Bearer <token>`. El token lleva `sub`,
   `username`, `rol`, `modulo`, `type`, `iss` (`bna-coredb`), `aud` (`coredb`), `iat`, `exp`
   y `jti`, todos obligatorios. El algoritmo lo fija el servidor (`CORE_DB_JWT_ALGORITMO`,
