@@ -9,10 +9,14 @@ Servicios, RNF-22).
 from fastapi import APIRouter, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError
 
 from CORE.exceptions import CoreError
 from CORE.routers import admin, auth, catalogos, clientes, creditos, cuentas, movimientos, tarjetas
 
+# Códigos de MySQL de un valor que la base rechaza: los de COREDB (`COREDB/errores.py`)
+# más 1265, el de un ENUM en modo estricto (el esquema `bna` usa ENUM; COREDB no).
+ERRORES_DATOS = {1048, 1216, 1217, 1264, 1265, 1292, 1366, 1406, 1451, 1452, 3819}
 
 
 def _montar_error(exc: CoreError, request: Request) -> JSONResponse:
@@ -94,3 +98,12 @@ def montar_en(app) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validacion_handler(request: Request, exc: RequestValidationError):
         return _montar_error_validacion(exc)
+
+    @app.exception_handler(DBAPIError)
+    async def _base_datos_handler(request: Request, exc: DBAPIError):
+        """422 sin repetir el valor cuando MySQL rechaza un dato (ENUM, FK, CHECK); lo demás sigue como 500."""
+        argumentos = getattr(exc.orig, "args", ())
+        if argumentos and argumentos[0] in ERRORES_DATOS:
+            error = CoreError("DATOS_INVALIDOS", "Los datos no cumplen las reglas de la base.", 422)
+            return _montar_error(error, request)
+        raise exc
