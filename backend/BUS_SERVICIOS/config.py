@@ -9,6 +9,11 @@ from urllib.parse import urlsplit
 # Una ruta por módulo del producto: /bus/<módulo en minúsculas>/<ruta del módulo>.
 MODULOS = ("COREDB", "CUENTAS", "TARJETAS", "CAPTACION", "SOL", "EVALUACION", "DESEMBOLSO", "COBRANZA", "SEGURIDAD", "ATM", "BILLETERA")
 
+# Nunca públicos: COREDB es el núcleo, y a él solo llegan módulos con su credencial.
+NUNCA_PUBLICOS = ("COREDB",)
+# Nombre del consumidor de un módulo público (sin X-Bus-Token); no se puede declarar.
+PUBLICO = "PUBLICO"
+
 LARGO_MINIMO_TOKEN = 32
 _NOMBRE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
@@ -23,6 +28,8 @@ class Configuracion:
     consumidores: dict     # token -> NOMBRE del consumidor
     timeout: float         # segundos que espera la respuesta de un módulo
     timeout_conexion: float
+    permitidos: dict = None            # NOMBRE del módulo -> consumidores que pueden usarlo
+    publicos: frozenset = frozenset()  # módulos a los que se llega sin X-Bus-Token (PUBLICO)
 
 
 def _url(nombre, valor, errores):
@@ -67,6 +74,9 @@ def cargar(entorno):
     if not lista:
         faltan.append("BUS_CONSUMIDORES")
     for consumidor in lista:
+        if consumidor == PUBLICO:
+            errores.append("BUS_CONSUMIDORES: PUBLICO está reservado para el canal sin credencial")
+            continue
         if not _NOMBRE.match(consumidor):
             errores.append(f"BUS_CONSUMIDORES: nombre inválido {consumidor!r} (mayúsculas, dígitos y _)")
             continue
@@ -81,6 +91,32 @@ def cargar(entorno):
         else:
             consumidores[token] = consumidor
 
+    # BUS_PERMITIDOS_<MÓDULO>: solo esos consumidores usan el módulo; los demás, 403.
+    permitidos = {}
+    for modulo in MODULOS:
+        nombre = f"BUS_PERMITIDOS_{modulo}"
+        lista = [c.strip() for c in entorno.get(nombre, "").split(",") if c.strip()]
+        if lista:
+            desconocidos = [c for c in lista if c not in consumidores.values()]
+            if desconocidos:
+                errores.append(f"{nombre}: no están en BUS_CONSUMIDORES: {', '.join(desconocidos)}")
+            else:
+                permitidos[modulo] = frozenset(lista)
+
+    # BUS_MODULOS_PUBLICOS: módulos con autenticación propia de usuario a los que un canal
+    # sin credencial del Bus (la app móvil: un token dentro de la app no sería secreto)
+    # llega como PUBLICO.
+    publicos = set()
+    for modulo in [m.strip().upper() for m in entorno.get("BUS_MODULOS_PUBLICOS", "").split(",") if m.strip()]:
+        if modulo not in MODULOS:
+            errores.append(f"BUS_MODULOS_PUBLICOS: el módulo {modulo} no está en el Bus")
+        elif modulo in NUNCA_PUBLICOS:
+            errores.append(f"BUS_MODULOS_PUBLICOS: {modulo} no puede ser público")
+        elif modulo in permitidos:
+            errores.append(f"BUS_MODULOS_PUBLICOS: {modulo} tiene BUS_PERMITIDOS_{modulo}; no puede ser público")
+        else:
+            publicos.add(modulo)
+
     timeout = _segundos(entorno, "BUS_TIMEOUT_SEG", "9", errores)
     timeout_conexion = _segundos(entorno, "BUS_TIMEOUT_CONEXION_SEG", "2", errores)
 
@@ -88,4 +124,4 @@ def cargar(entorno):
         errores.insert(0, "faltan " + ", ".join(faltan))
     if errores:
         raise ConfiguracionInvalida("Configuración del Bus inválida: " + "; ".join(errores))
-    return Configuracion(modulos, consumidores, timeout, timeout_conexion)
+    return Configuracion(modulos, consumidores, timeout, timeout_conexion, permitidos, frozenset(publicos))
