@@ -24,7 +24,8 @@ from COREDB.database import db_session
 from COREDB.errores import ErrorAutenticacion, ErrorCoreDb
 from COREDB.models import Usuario
 
-__all__ = ["Actor", "ClienteBilletera", "actor_actual", "cliente_actual", "requiere_permiso"]
+__all__ = ["Actor", "ClienteBilletera", "PersonaSeguridad", "actor_actual", "cliente_actual", "persona_por_seguridad",
+           "requiere_permiso"]
 
 _bearer = HTTPBearer(auto_error=False, scheme_name="JWT")
 
@@ -94,3 +95,48 @@ def cliente_actual(
     if fila is None or fila.estado != "ACTIVA":
         raise ErrorAutenticacion("CLIENTE_NO_VIGENTE", "La billetera del cliente no está activa.")
     return ClienteBilletera(claims["sub"], fila.num_cuenta, servicio)
+
+
+@dataclass(frozen=True)
+class PersonaSeguridad:
+    """La persona por la que actúa el módulo Seguridad (bd-v1.13) y el servicio que la trae."""
+
+    persona: Actor
+    servicio: Actor
+
+    @property
+    def actor(self) -> str:
+        """El actor de la bitácora: la persona, no el usuario de servicio."""
+        return self.persona.usuario
+
+
+def persona_por_seguridad(*acciones: str) -> Callable[..., PersonaSeguridad]:
+    """Exige el token del módulo Seguridad (Authorization, con OPERAR_SEGURIDAD) y el de la
+    persona por la que actúa (X-Persona-Token), con alguna de `acciones`. Como en
+    `actor_actual`, la persona se relee: desactivarla corta el acceso en la siguiente petición.
+    Un usuario de servicio no puede ser la persona."""
+    if not acciones or any(a not in permisos.ACCIONES for a in acciones):
+        raise ValueError(f"Acciones desconocidas: {acciones}")
+
+    def _dependencia(
+        servicio: Actor = Depends(requiere_permiso(permisos.OPERAR_SEGURIDAD)),
+        x_persona_token: str | None = Header(default=None, alias="X-Persona-Token"),
+        db: Session = Depends(db_session),
+    ) -> PersonaSeguridad:
+        if not x_persona_token:
+            raise ErrorAutenticacion(
+                "PERSONA_TOKEN_REQUERIDO", "Falta el encabezado X-Persona-Token de la persona."
+            )
+        claims = tokens.decodificar(x_persona_token)
+        usuario = db.get(Usuario, uuid.UUID(claims["sub"]))
+        if usuario is None or not usuario.activo or usuario.rol == "SERVICIO":
+            raise ErrorAutenticacion("PERSONA_NO_VIGENTE", "La persona ya no está habilitada.")
+        persona = Actor(usuario.id_usuario, usuario.username, usuario.rol, usuario.modulo)
+        if not any(permisos.puede(persona, accion) for accion in acciones):
+            raise ErrorCoreDb(
+                "PERMISO_DENEGADO", f"El rol {persona.rol} no puede ejecutar {' ni '.join(acciones)}.", 403
+            )
+        return PersonaSeguridad(persona, servicio)
+
+    _dependencia.accion = permisos.OPERAR_SEGURIDAD  # lo lee la prueba de permisos de escritura
+    return _dependencia

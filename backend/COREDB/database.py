@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.types import BINARY, DateTime, TypeDecorator
 
 from COREDB.config import get_settings
-from COREDB.errores import ErrorBaseDatos
+from COREDB.errores import ErrorBaseDatos, ErrorCoreDb
 
 # El mismo modo de database/conf/mysql/bna.cnf.
 SQL_MODE = (
@@ -31,6 +31,7 @@ _PROCEDIMIENTO = re.compile(r"[a-z_]+\.[a-z_]+")
 
 _engine: Engine | None = None
 _sesiones: sessionmaker[Session] | None = None
+_sesiones_seguridad: sessionmaker[Session] | None = None
 
 
 class UuidBinario(TypeDecorator):
@@ -75,6 +76,23 @@ def get_session_factory() -> sessionmaker[Session]:
     if _sesiones is None:
         _sesiones = sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
     return _sesiones
+
+
+def sesion_seguridad() -> Session:
+    """Sesión como bna_seguridad_user, que solo ejecuta tarjetas.desbloquear_tarjeta. La usa
+    únicamente el desbloqueo; sin contraseña configurada, 503."""
+    global _sesiones_seguridad
+    if _sesiones_seguridad is None:
+        configuracion = get_settings()
+        if not configuracion.seguridad_password:
+            raise ErrorCoreDb("SEGURIDAD_NO_CONFIGURADA",
+                              "El desbloqueo de tarjetas no está configurado en COREDB.", 503)
+        motor = create_engine(
+            configuracion.seguridad_url, pool_pre_ping=True, pool_recycle=1800, pool_size=2,
+            hide_parameters=True, connect_args={"init_command": INIT_COMMAND},
+        )
+        _sesiones_seguridad = sessionmaker(bind=motor, autoflush=False, expire_on_commit=False)
+    return _sesiones_seguridad()
 
 
 def db_session() -> Iterator[Session]:
