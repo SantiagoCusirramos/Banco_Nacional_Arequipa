@@ -185,3 +185,19 @@ def test_evaluacion_rechazada_guarda_monto_sugerido_cero(con_empleado):
     assert r.status_code == 201, r.text
     assert r.json()["resultado"] == "RECHAZADO"
     assert float(r.json()["monto_maximo_sugerido"]) == 0
+
+
+@pytest.mark.parametrize("cambio,valor", [
+    ({"fiadores": [{**FIADOR, "tipo_fiador": "OTRO-X1"}]}, "OTRO-X1"),
+    ({"garantias": [{**GARANTIA, "tipo_garantia": "OTRA-X2"}]}, "OTRA-X2"),
+    ({"moneda": "XYZ"}, "XYZ"),
+    ({"garantias": [{**GARANTIA, "valor_tasacion": "-1"}]}, "-1"),
+], ids=["enum-fiador", "enum-garantia", "fk-moneda", "check-tasacion"])
+def test_valor_rechazado_por_mysql_responde_422_sin_repetirlo(con_empleado, cambio, valor):
+    """Issue #66: ENUM (1265), clave foránea (1452) y CHECK (3819) daban 500."""
+    antes = sql("select count(*) n from sol_solicitud")[0]["n"]
+    r = con_empleado.post("/core/creditos/solicitudes", json={**SOLICITUD, **cambio})
+    assert r.status_code == 422, r.text
+    assert r.json()["error"]["code"] == "DATOS_INVALIDOS"
+    assert valor not in r.text
+    assert sql("select count(*) n from sol_solicitud")[0]["n"] == antes
