@@ -86,11 +86,12 @@
       <div class="msg" id="msgCuentas"></div>
 
       <div class="nota">
-        Flujo del prototipo:<br>
-        1) <code>POST /bus/v1/tarjetas/verificar-titularidad</code> → módulo <b>Tarjetas</b>
-        confirma que la tarjeta pertenece al cliente.<br>
-        2) <code>POST /bus/v1/cuentas/posicion</code> → interfaz <b>INT-08</b> del módulo
-        <b>Cuentas</b> devuelve las cuentas activas con saldos.
+        Flujo del prototipo (usando puentes del frontend Next.js):<br>
+        1) <code>GET /api/tarjeta/cliente/{codCliente}</code> → módulo <b>Tarjetas</b>
+        lista las tarjetas del cliente.<br>
+        2) <code>GET /api/cuenta/consolidada/{codCliente}</code> → interfaz <b>INT-08</b> del módulo
+        <b>Cuentas</b> devuelve las cuentas activas con saldos.<br>
+        <i>Nota: Verificar titularidad no disponible en esta versión (requiere endpoint /api/tarjeta/{id}/verificar-titularidad).</i>
       </div>
     </section>
 
@@ -152,7 +153,6 @@
   </div>
 </main>
 
-<script src="js/datos.js"></script>
 <script src="js/bus.js"></script>
 <script src="js/comun.js"></script>
 <script src="js/cuentas.js"></script>

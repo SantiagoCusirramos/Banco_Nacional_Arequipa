@@ -953,7 +953,11 @@ def flujo():
            f"Puente a COBRANZA: {estado} {respuesta}")
     estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
     exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
-    paso("frontend: sus puentes llegan a COREDB, a CUENTAS, a TARJETAS, a CAPTACION y a COBRANZA con el token del usuario")
+    # K-5: el Home Banking se sirve desde public/.
+    estado, pagina = pedir("GET", f"{FRONTEND}/homebanking/index.html")
+    exigir(estado == 200 and "formLogin" in str(pagina), f"Home Banking en /homebanking/index.html: {estado}")
+    paso("frontend: sus puentes llegan a COREDB, a CUENTAS, a TARJETAS, a CAPTACION y a COBRANZA con el token del "
+         "usuario, y sirve el Home Banking en /homebanking/index.html")
 
     # ── SOL por el proxy del frontend: escribir exige el Origin del propio frontend ──
     exigir(SOL_PASSWORD, "Falta SOL_INITIAL_PASSWORD para entrar a SOL por el frontend")

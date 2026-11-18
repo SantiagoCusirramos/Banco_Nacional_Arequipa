@@ -8,6 +8,7 @@
   const msg = document.getElementById("msgLogin");
   const cod = document.getElementById("codCliente");
   const clave = document.getElementById("claveWeb");
+  const usuario = document.getElementById("usuario");
 
   (async function verificarCanal() {
     const etiqueta = document.getElementById("estadoCanal");
@@ -17,12 +18,11 @@
       return;
     }
     try {
-      const r = await fetch("/bus/v1/salud");
-      const j = await r.json();
-      if (etiqueta && j.ok) etiqueta.textContent = `Bus local REST/JSON · ${j.data.estado}`;
+      const r = await fetch("/api/core/coredb/salud");
+      if (etiqueta && r.ok) etiqueta.textContent = "COREDB · en línea";
     } catch (e) {
-      if (etiqueta) etiqueta.textContent = "Bus local no disponible";
-      mostrarMensaje(msg, "warn", "El Bus de Servicios local no responde. Verifique que ./iniciar.sh esté en ejecución.");
+      if (etiqueta) etiqueta.textContent = "COREDB no disponible";
+      mostrarMensaje(msg, "warn", "COREDB no responde. Verifique que los servicios estén en ejecución.");
     }
   })();
 
@@ -31,9 +31,6 @@
     return;
   }
 
-  clave.addEventListener("input", () => {
-    clave.value = clave.value.replace(/\D/g, "").slice(0, 6);
-  });
 
   form.addEventListener("submit", async e => {
     e.preventDefault();
@@ -46,18 +43,15 @@
       mostrarMensaje(msg, "error", "Ingrese su código de cliente.");
       return;
     }
-    if (!/^\d{6}$/.test(claveWeb)) {
-      mostrarMensaje(msg, "error", "La clave debe contener exactamente 6 dígitos numéricos.");
+    if (!usuario.value.trim() || !claveWeb) {
+      mostrarMensaje(msg, "error", "Ingrese el usuario y la clave del banco.");
       return;
     }
 
     cargando(btn, true, "Validando");
     try {
-      const r = await Bus.invocar(
-        "/bus/v1/seguridad/autenticar",
-        { codCliente, claveWeb, canal: DATOS_BNA.parametros.canal, ipOrigen: "190.12.44.107" },
-        "RF-HB-001"
-      );
+      // Usa Bus.autenticar (POST /api/core/coredb/auth/login)
+      const r = await Bus.autenticar(usuario.value.trim(), claveWeb, codCliente);
 
       Sesion.guardar({
         codCliente: r.datosSesion.cliente.codCliente,

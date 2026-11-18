@@ -1,4 +1,7 @@
-/* RF-HB-004 / 005 / 006 / 008 / 009 – Transferencias con Token Matriz, riesgo y topes */
+/* RF-HB-004 / 005 / 006 / 008 / 009 – Transferencias con Token Matriz, riesgo y topes
+   Usa puentes: /api/cuenta/consolidada, /api/cuenta/transferencia
+   NOTA: Evaluar riesgo (INT-12), validar topes (INT-17) y Token Matriz (INT-03) NO DISPONIBLES en esta versión
+*/
 
 (function () {
   const sesion = Sesion.exigir();
@@ -29,10 +32,15 @@
   let tipo = "PROPIA";
   let idemActual = null;
 
+  // Límites diarios (hardcoded)
+  const LIMITE_DIARIO_PEN = 10000;
+  const LIMITE_DIARIO_USD = 3000;
+  const CANAL = "HB_WEB";
+
   if (!Bus.esApi) {
     avisoModoLocal(msg);
     btn.disabled = true;
-    btn.title = "Ejecute ./iniciar.sh para habilitar transferencias";
+    btn.title = "Transferencias requieren backend COREDB y CUENTAS";
   }
 
   const cuentaActual = () => cuentas.find(c => c.numCuenta === selOrigen.value);
@@ -47,7 +55,7 @@
     }
     txtDisponible.value = fmt.moneda(c.saldoDisponible, c.moneda);
     txtMoneda.value = c.moneda;
-    const limite = c.moneda === "USD" ? DATOS_BNA.parametros.limiteDiarioUSD : DATOS_BNA.parametros.limiteDiarioPEN;
+    const limite = c.moneda === "USD" ? LIMITE_DIARIO_USD : LIMITE_DIARIO_PEN;
     monto.max = Math.min(c.saldoDisponible, limite);
   }
 
@@ -65,7 +73,7 @@
 
   async function cargarCuentas(conservarOrigen = true) {
     try {
-      const pos = await Bus.invocar("/bus/v1/cuentas/posicion", {}, "INT-08");
+      const pos = await Bus.consultarPosicion(sesion.codCliente, null);
       cuentas = pos.cuentas || [];
       const anterior = conservarOrigen ? selOrigen.value : null;
       selOrigen.innerHTML = cuentas.map(c =>
@@ -121,7 +129,7 @@
       mostrarMensaje(msg, "error", "El monto supera el saldo disponible de la cuenta de origen.");
       return null;
     }
-    const limite = c.moneda === "USD" ? DATOS_BNA.parametros.limiteDiarioUSD : DATOS_BNA.parametros.limiteDiarioPEN;
+    const limite = c.moneda === "USD" ? LIMITE_DIARIO_USD : LIMITE_DIARIO_PEN;
     if (valor > limite) {
       mostrarMensaje(msg, "error", `El monto supera el tope diario de ${fmt.moneda(limite, c.moneda)}.`);
       return null;
@@ -150,7 +158,7 @@
       monto: v.monto,
       moneda: v.cuenta.moneda,
       descripcion: glosa.value.trim(),
-      canal: DATOS_BNA.parametros.canal,
+      canal: CANAL,
       ipOrigen: "190.12.44.107"
     };
     if (tipo === "PROPIA") {
@@ -166,7 +174,7 @@
     return p;
   }
 
-  function pintarResultado(r, riesgo, tope) {
+  function pintarResultado(r) {
     resultado.hidden = false;
     subResultado.textContent = `Operación ${r.estado} · ${r.fechaHora}`;
     const constancia = Bus.constanciaUrl(r.constanciaPDF);
@@ -183,14 +191,12 @@
           <div><span>Entidad destino</span><b>${r.entidadDestino}</b></div>
           <div><span>Titular destino</span><b>${r.titularDestino || "—"}</b></div>
           <div><span>Estado</span><b>${r.estado}</b></div>
-          <div><span>Riesgo</span><b>${riesgo.nivelRiesgo} · ${riesgo.accionRequerida}</b></div>
-          <div><span>Tope restante</span><b>${fmt.moneda(r.tope.montoRestanteCanal, r.moneda)}</b></div>
-          <div><span>Saldo disponible</span><b>${fmt.moneda(r.saldoActualizado.saldoDisponible, r.moneda)}</b></div>
-          <div><span>Asiento Core</span><b class="num">${r.idAsientoCore}</b></div>
-          <div><span>UUID</span><b class="num">${r.uuidTransaccion}</b></div>
+          <div><span>Saldo disponible</span><b>${fmt.moneda(r.saldoActualizado?.saldoDisponible || 0, r.moneda)}</b></div>
+          <div><span>Asiento Core</span><b class="num">${r.idAsientoCore || "N/D"}</b></div>
+          <div><span>UUID</span><b class="num">${r.uuidTransaccion || "N/D"}</b></div>
         </div>
         <div class="constancia-acciones">
-          <a class="btn" href="${constancia}" target="_blank" rel="noopener">Descargar constancia PDF</a>
+          ${constancia ? `<a class="btn" href="${constancia}" target="_blank" rel="noopener">Descargar constancia PDF</a>` : ""}
           <button type="button" class="btn btn-sec" id="btnNuevaTrans">Nueva transferencia</button>
         </div>
       </div>`;
@@ -219,33 +225,18 @@
     const payload = construirPayload(v);
     cargando(btn, true, "Procesando");
     try {
-      const token = await TokenMatriz.pedirYValidar({ titulo: "Token Matriz · Transferencia" });
-      mostrarMensaje(msg, "info", "Token validado. Evaluando riesgo y tope diario…");
-      const riesgo = await Bus.invocar("/bus/v1/seguridad/evaluar-riesgo", {
-        monto: v.monto, moneda: v.cuenta.moneda, ubicacionGeo: "Arequipa"
-      }, "INT-12");
-      if (riesgo.accionRequerida === "BLOQUEAR") {
-        mostrarMensaje(msg, "error", "La operación fue bloqueada por la evaluación de riesgo. No se debitó ningún saldo.");
-        idemActual = null;
-        return;
-      }
-      const tope = await Bus.invocar("/bus/v1/core/topes/validar", {
-        monto: v.monto, moneda: v.cuenta.moneda, idCanal: DATOS_BNA.parametros.canal
-      }, "INT-17");
-      if (!tope.autorizado) {
-        mostrarMensaje(msg, "error", `Tope diario excedido. Disponible hoy: ${fmt.moneda(tope.montoRestanteCanal, v.cuenta.moneda)}.`);
-        idemActual = null;
-        return;
-      }
-      const r = await Bus.invocar("/bus/v1/cuentas/transferencias", {
+      // Token Matriz, evaluación de riesgo y topes no tienen ruta en el producto: no se piden.
+      // Los topes del canal los aplica COREDB al registrar la transferencia.
+      // Transferencia (INT-09) - usa /api/cuenta/transferencia
+      const r = await Bus.transferencia({
         ...payload,
-        tokenTransaccional: token.tokenTransaccional,
         uuidTransaccion: idemActual,
         idempotencyKey: idemActual
-      }, "INT-09");
+      }, idemActual);
+
       mostrarMensaje(msg, "ok", `Transferencia ${r.idTransferencia} procesada correctamente.`);
-      pintarResultado(r, riesgo, tope);
-      idemActual = null;
+      pintarResultado(r);
+      idemActual = null;  // confirmada: la próxima operación lleva otra llave
       await cargarCuentas(true);
     } catch (err) {
       if (err.codigo === "TOKEN_CANCELADO") {
@@ -256,7 +247,8 @@
       } else {
         mostrarMensaje(msg, "error", err.mensaje || "La transferencia no pudo procesarse.");
       }
-      if (err.codigo !== "TOKEN_CANCELADO") idemActual = null;
+      // La llave se conserva: si la respuesta se perdió, reintentar con los mismos datos no
+      // transfiere dos veces (CUENTAS devuelve la operación original). Cambia al editar un dato.
     } finally {
       cargando(btn, false);
     }
