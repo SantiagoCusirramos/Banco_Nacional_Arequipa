@@ -1,81 +1,88 @@
-# Chaski — Billetera Digital BNA (app móvil Flutter + API PostgreSQL)
+# Chaski — Billetera Digital BNA (app móvil Flutter + API sobre COREDB)
 
-📄 Documentación completa: [docs/Documentacion_Chaski.pdf](docs/Documentacion_Chaski.pdf)
+📄 Documentación del prototipo original: [docs/Documentacion_Chaski.pdf](docs/Documentacion_Chaski.pdf)
+(describe la versión con PostgreSQL propio; la integración al producto cambió el backend, ver abajo).
 
-Versión móvil de Chaski. Toma la PWA web anterior como base y la lleva a una app Android
-hecha en **Flutter**, alineada con la Fase I TOGAF del módulo Billetera Digital (RF-BD-001 a RF-BD-009).
+Versión móvil de Chaski, hecha en **Flutter**, alineada con la Fase I TOGAF del módulo
+Billetera Digital (RF-BD-001 a RF-BD-009). Trabajo de RoBeRaMe, recuperado en el PR #94 e
+integrado al producto: la API ya no tiene base propia y opera sobre la base integrada.
 
 ```
-trabajo final chaski/
-├── backend/          API REST/JSON (Node.js + Express) sobre PostgreSQL
-│   ├── sql/schema.sql   esquema de la base de datos (el del diagrama + extensiones)
-│   ├── db.js            conexión, transacciones ACID, saldo, tope diario, datos demo
-│   ├── server.js        endpoints /api/*
-│   └── test/            prueba de humo de toda la API (npm test)
+billetera-chaski/
+├── backend/          API REST/JSON (Node.js + Express) para la app, sobre COREDB por el Bus
+│   ├── server.js        endpoints /api/* (las mismas rutas que usa la app)
+│   ├── coredb.js        cliente de COREDB a través del Bus de Servicios
+│   └── test/            pruebas de la API contra un COREDB falso (npm test)
 └── app_movil/        app Flutter (Android Studio)
-    └── lib/
-        ├── main.dart
-        ├── models.dart          modelos = tablas del diagrama
-        ├── state/app_state.dart estado global (sesión, saldo, avisos, carrito)
-        ├── services/            api.dart · cache_db.dart (SQLite local) · autorizacion.dart (huella/PIN)
-        ├── screens/             login, inicio, movimientos, avisos, perfil, enviar/solicitar,
-        │                        QR, promos y cupones, ofertas, tienda, carrito, pedidos, servicios
-        └── widgets/comunes.dart
+    └── lib/              pantallas, estado, caché SQLite local y autorización con huella/PIN
 ```
 
-## Arquitectura
+## Arquitectura (integrada al producto)
 
 ```
-App Flutter (Android)  ──REST/JSON──►  API Chaski (Express)  ──►  PostgreSQL (ACID)
-  SQLite local (caché del saldo                ▲ token firmado, idempotencia
-  e historial, modo fuera de línea)            ▲ tope diario, auditoría
+App Flutter ──REST/JSON──► API Chaski (Express, puerto 8020) ──► Bus de Servicios ──► COREDB ──► base integrada
+                             sin base propia                       /bus/coredb          /coredb/billetera/*   esquema billetera
 ```
 
-| Requisito del informe | Cómo está resuelto |
+- **Sin base propia.** Clientes, cuentas, saldos, QR, solicitudes de cobro, operaciones y avisos
+  están en la base integrada (esquema `billetera` desde `bd-v1.9-mysql`). Cada envío, pago con QR
+  o cobro aceptado es una transferencia del CORE por el canal BD, con su asiento contable y el
+  tope diario del canal (S/ 500, `core.limite_canal`).
+- **Por el Bus.** Chaski llama a `http://bus:8018/bus/coredb` con su credencial ante el Bus
+  (`BUS_TOKEN_BILLETERA`) y el token de su usuario de servicio en COREDB (`svc-billetera`,
+  rol SERVICIO, módulo BILLETERA). La app llega a Chaski en el puerto 8020 (o por el Bus,
+  `/bus/billetera/api/...`).
+- **Acceso del cliente.** `POST /api/login` (celular y PIN de 6 dígitos) lo valida COREDB
+  (`POST /coredb/billetera/acceso`), que cuenta los intentos (al tercero la billetera queda
+  bloqueada) y entrega un **token de cliente** (rol CLIENTE). Ese token es la sesión de la app:
+  Chaski lo reenvía en `X-Cliente-Token` y COREDB identifica al cliente por él, nunca por lo
+  que diga Chaski. Chaski no firma ni guarda nada.
+- **Los clientes no los crea Chaski (punto R-01).** Los registra el módulo Clientes (hoy,
+  CAPTACION) y un usuario del banco los afilia a la billetera con su cuenta en soles y su PIN
+  (`POST /coredb/billetera/afiliaciones`, roles ADMINISTRADOR, ASESOR u OPERADOR); los comercios
+  con `POST /coredb/billetera/comercios`. `POST /api/registro` responde 403 y lo explica.
+- **Idempotencia (RN-BUS-002).** La app manda su `uuid_transaccion` (cabecera `Idempotency-Key`
+  o en el cuerpo) y Chaski lo pasa como `X-Idempotency-Key`: repetir la operación devuelve la
+  misma (`repetida: true`) sin cobrar dos veces.
+- **El celular nunca en claro.** Ni la bitácora, ni los avisos, ni la glosa de los movimientos,
+  ni los errores lo guardan; Chaski no registra cuerpos ni consultas, y a COREDB el celular le
+  llega en el cuerpo, nunca en la ruta.
+
+| Requisito | En el producto integrado |
 |---|---|
-| RF-BD-001 Transferir P2P por celular | Enviar → celular → monto → confirmar → huella/PIN → constancia |
-| RF-BD-002 Solicitar cobro | Solicitar; el otro lo ve en **Avisos** (pagar / rechazar). Expira a las 48 h |
-| RF-BD-003 Pagar con QR | Escáner con cámara (`mobile_scanner`), código manual o lista de comercios. Mi QR fijo o con monto (vence en 15 min, se paga una vez) |
-| RF-BD-004 Saldo e historial | Inicio y Movimientos; si el servidor no responde muestra el último saldo guardado con *“Modo fuera de línea - Saldo no actualizado”* |
-| RF-BD-005 Enrolamiento | Crear cuenta con DNI, celular, PIN y aceptación de términos |
-| RF-BD-006 Servicios | Recargas (Claro, Movistar, Entel, Bitel) y pago de luz, agua, gas, internet |
-| RF-BD-007 Promos y cupones | Catálogo filtrable por comercio y **Obtener cupón** (código + QR para canje) |
-| RF-BD-008 BNA Tienda | Catálogo, carrito multi-tienda, pago y código de retiro |
-| RF-BD-009 Notificaciones | Cada operación genera notificación; la app consulta cada 8 s |
-| RN-TOP-001 Tope S/ 500 | Tope **acumulado diario** (hora de Lima) validado en el servidor dentro de la transacción |
-| RN-BUS-002 Idempotencia | Cada operación de dinero envía un `uuidTransaccion` (cabecera `Idempotency-Key`); un reintento no cobra dos veces |
-| Timeout 15 s | La app anula la petición a los 15 s y reintenta una vez con el mismo uuid |
-| INT-13 Auditoría | Tabla `auditoria`: toda operación exitosa o rechazada |
-| Biometría / PIN | `local_auth` (huella o rostro); si el celular no tiene, pide el PIN y lo valida el servidor |
+| RF-BD-001 Transferir P2P por celular | `POST /api/transferencias` → `billetera.transferir` |
+| RF-BD-002 Solicitar cobro | `POST /api/solicitudes`, `GET /api/solicitudes`, `POST /api/solicitudes/:id/responder`; vence a las 48 h |
+| RF-BD-003 Pagar con QR | `POST /api/qr` (fijo o con monto, vence en 15 min y se paga una vez), `GET /api/qr/:id`, `POST /api/qr/:id/pagar`, `GET /api/comercios` |
+| RF-BD-004 Saldo e historial | `GET /api/me`, `GET /api/movimientos`, `GET /api/operaciones` |
+| RF-BD-005 Enrolamiento | Lo hace el banco (afiliación); falta el registro por la app con verificación del celular (OTP) |
+| RF-BD-009 Notificaciones | `GET /api/notificaciones`, `POST /api/notificaciones/leidas` |
+| RN-TOP-001 / RN-BD-002 Tope S/ 500 | Lo aplica la base: tope diario del canal BD por cuenta |
+| Biometría / PIN | Sin biometría, `POST /api/pin/verificar` lo valida COREDB con los mismos intentos |
 
-## Base de datos
-
-`backend/sql/schema.sql` respeta el diagrama: `cliente`, `cuenta`, `comercio`, `transferencia`,
-`solicitud_cobro`, `codigo_qr`, `pago_qr`, `movimiento` y `notificacion`, con sus tipos
-(`bigserial`, `numeric(14,2)`, `timestamptz`…) y enums (`estado_general`, `estado_transferencia`,
-`estado_solicitud`, `tipo_qr`, `estado_pago`, `tipo_movimiento`, `estado_envio`).
-
-Extensiones (no están en el diagrama): `credencial` (PIN con scrypt), `producto`, `promocion`,
-`cupon`, `oferta`, `orden`, `orden_item`, `servicio_pago`, `operacion_idempotente` y `auditoria`;
-y en `movimiento` dos FK opcionales: `id_orden` e `id_pago_servicio`.
-
-La app guarda en el celular (SQLite con `sqflite`) las tablas `cuenta_cache` y `movimiento_cache`.
+**Fuera de esta versión** (decisión pendiente del equipo, PR #94): tienda, promociones, cupones,
+ofertas, órdenes (RF-BD-007, RF-BD-008), recargas y pago de servicios (RF-BD-006). Las rutas
+existen para que la app cargue: las listas vienen vacías y las acciones responden 501.
 
 ## Cómo correrlo
 
-### 1. Backend (PC)
+### 1. Backend (en el producto)
 
-Requisitos: Node.js 22.13+ y PostgreSQL (ya tienes PostgreSQL 18).
+Con el producto: `./bna up` desde la raíz del repositorio. La API queda en
+`http://127.0.0.1:8020` (`GET /api/salud`). Para entrar, un usuario del banco afilia antes a un
+cliente (por ejemplo, uno registrado por CAPTACION) con su cuenta en soles y un PIN:
 
 ```bash
-cd backend
-copy .env.example .env      # y escribe la contraseña de tu usuario postgres
-npm install
-npm start
+curl -X POST http://127.0.0.1:8018/bus/coredb/coredb/billetera/afiliaciones \
+  -H "X-Bus-Token: $BUS_TOKEN_PRUEBAS" -H "Authorization: Bearer <token de admin>" \
+  -H "Content-Type: application/json" -d '{"cod_cliente": "...", "num_cuenta": "...", "pin": "246810"}'
 ```
 
-La primera vez crea la base `chaski`, las tablas y los datos demo. Usuarios demo (PIN `123456`):
-`900000001`, `900000002`, `900000003`. Prueba de la API (con el servidor corriendo): `npm test`.
+Pruebas de la API: `docker run --rm bna/billetera:local npm test` (o la suite «BILLETERA
+(Chaski)» de `./bna test`). El flujo de extremo a extremo (`./bna smoke`) recorre un envío por
+celular y un pago con QR contra el producto real.
+
+Fuera de compose: `cp .env.example .env`, completar `BUS_TOKEN` y `CHASKI_COREDB_SECRETO` (los
+del `.env` del producto), `npm install` y `npm start`.
 
 ### 2. App (Android Studio)
 
@@ -86,22 +93,22 @@ La primera vez crea la base `chaski`, las tablas y los datos demo. Usuarios demo
 
 En la pantalla de ingreso, el engranaje ⚙ permite cambiar el servidor:
 
-- Emulador de Android: `http://10.0.2.2:3000` (por defecto)
-- Celular real por Wi-Fi: `http://IP-de-tu-PC:3000` (la consola del backend muestra la IP). Abre el puerto 3000 en el Firewall de Windows si no conecta.
+- Emulador de Android: `http://10.0.2.2:8020` con el producto levantado (`./bna up`).
+- Celular real por Wi-Fi: `http://IP-de-tu-PC:8020`. El producto publica el puerto solo en `127.0.0.1`: para un celular real hay que exponerlo (por ejemplo, un túnel) bajo tu responsabilidad.
 
 ## Compartir la app con compañeros
 
-**El backend tiene que estar encendido y accesible**: la app no funciona sola, necesita la API.
-- Misma red Wi-Fi: deja `npm start` corriendo en tu PC y permite el puerto 3000 en el Firewall de Windows.
-  El APK de `entregables/` ya apunta a `http://192.168.15.2:3000` (tu IP de hoy; si cambia, cada uno la corrige con el ⚙ de la pantalla de ingreso).
-- Desde cualquier lugar: `npx cloudflared tunnel --url http://localhost:3000` y que cada uno ponga en ⚙ la URL `https://….trycloudflare.com`.
+**El producto tiene que estar levantado y accesible** (`./bna up`): la app no funciona sola, necesita la API de Chaski y COREDB.
+- Misma red Wi-Fi: con el producto levantado (`./bna up`), expón el puerto 8020 y permítelo en el Firewall.
+  El APK de `entregables/` es del prototipo original (ids numéricos, puerto 3000): no sirve con esta API hasta adaptar la app.
+- Desde cualquier lugar: `npx cloudflared tunnel --url http://localhost:8020` y que cada uno ponga en ⚙ la URL `https://….trycloudflare.com`.
 
 **Android** — envía `entregables/Chaski.apk` (WhatsApp, Drive…). Al abrirlo, Android pide permitir
 "instalar apps de origen desconocido". Para volver a generarlo:
 
 ```bash
 cd app_movil
-flutter build apk --release --dart-define=SERVIDOR=http://TU-IP:3000
+flutter build apk --release --dart-define=SERVIDOR=http://TU-IP:8020
 ```
 
 **iPhone** — Apple no permite instalar un archivo como un APK, y en Windows no se compila iOS. Opciones:
@@ -113,14 +120,19 @@ flutter build apk --release --dart-define=SERVIDOR=http://TU-IP:3000
 
 ## Verificación realizada
 
-- Backend: `npm test` contra PostgreSQL 18 → 12/12 pruebas (P2P con idempotencia, tope diario, solicitudes,
-  QR con promo, QR dinámico de un solo pago, cupones, tienda, recargas y servicios, movimientos, avisos).
-- App: `flutter analyze` sin observaciones, `flutter test` 6/6 y `flutter build apk --debug` correcto (Flutter 3.47.7).
-- La app aún no se probó en un emulador o celular.
+- Integración (PR que cierra #94): `npm test` 16/16 contra un COREDB falso; COREDB contra MySQL
+  real (acceso, envíos, QR, solicitudes, concurrencia con la misma llave y con llaves distintas);
+  `./bna test` y el flujo de extremo a extremo con dos clientes de CAPTACION.
+- **La app móvil no se adaptó ni se compiló en la integración** (no había Flutter en el equipo).
+  Para usarla con esta API hay que cambiar en `lib/models.dart` los ids numéricos (`idCliente`,
+  `idCuenta`, `idMovimiento`, `id_solicitud`, `idQr`, `idComercio`…) a texto, porque ahora son
+  los UUID de la base integrada; quitar o esconder el registro, la tienda, las promociones y los
+  servicios; y no esperar el celular ni el nombre completo en `/api/me` (llega el nombre corto).
+- Prototipo original (PostgreSQL propio): `npm test` 12/12, `flutter analyze`, `flutter test` 6/6
+  y `flutter build apk --debug` (Flutter 3.47.7).
 
 ## Notas
 
-- El saldo es de prueba; no se conecta a ningún banco. Las deudas de servicios son simuladas.
-- OAuth2/Keycloak, Bus de Servicios, notificaciones push (Firebase) y biometría facial contra
-  el Módulo CLIENTES están fuera del alcance del prototipo: la API cumple el papel del Bus y
-  emite un token firmado (HMAC, 12 h).
+- El saldo es el de la cuenta de ahorro del cliente en la base integrada (datos de desarrollo).
+- Quedan fuera de esta versión: notificaciones push (Firebase), biometría facial contra el
+  módulo Clientes, el registro por la app con OTP, y lo listado en «Fuera de esta versión».

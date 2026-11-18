@@ -1,3 +1,8 @@
+NOTA (integración al producto BNA, PR que cierra #94): la API ya no usa PostgreSQL. Opera
+sobre COREDB a través del Bus de Servicios; los clientes los registra el módulo Clientes y el
+banco los afilia. Lo de abajo sobre PostgreSQL, el registro y los datos demo describe el
+prototipo original. Ver README.md.
+
 ==============================================================================
   CHASKI - BILLETERA DIGITAL
   Módulo Billetera Digital (BNA) - Trabajo final UCSM
