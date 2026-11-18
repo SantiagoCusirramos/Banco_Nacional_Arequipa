@@ -473,7 +473,13 @@ def flujo():
                f"El cajero no debe servir {ruta}: {estado}")
     estado, _ = pedir("GET", f"{atm_base}/registro")
     exigir(estado == 401, f"El registro del canal del cajero debía exigir al operador: {estado}")
-    paso("ATM: la pantalla se sirve por el Bus, ninguna ruta lee fuera de static/ y el registro exige al operador")
+    # El operador abre el cajero con su usuario de COREDB; con ese token lee el registro.
+    estado, apertura = pedir("POST", f"{atm_base}/apertura", {"username": USUARIO, "password": PASSWORD})
+    exigir(estado == 200 and apertura["data"]["access_token"], f"Apertura del cajero: {estado} {apertura}")
+    token_operador = apertura["data"]["access_token"]
+    estado, registro = pedir("GET", f"{atm_base}/registro", token=token_operador)
+    exigir(estado == 200 and isinstance(registro, list), f"Registro del canal con el operador: {estado} {registro}")
+    paso("ATM: la pantalla se sirve por el Bus, ninguna ruta lee fuera de static/; el operador abre el cajero y solo él lee el registro")
     estado, respuesta = pedir("PUT", f"{base}/{tarjeta}/credenciales/PIN_ATM", {"valor": "4821"}, token)
     exigir(estado == 200, f"Registrar el PIN por TARJETAS: {estado} {respuesta}")
     # Primero validar PIN (el ATM llama a TARJETAS por el Bus)
