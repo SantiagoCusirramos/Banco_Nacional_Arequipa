@@ -155,6 +155,7 @@ Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica 
 | `GET /coredb/autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Una autorización |
 | `POST /coredb/autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Extorna una autorización sin movimiento |
 | `POST /coredb/autorizaciones/{uuid_autorizacion}/confirmacion` | `REGISTRAR_MOVIMIENTO` | Confirma una autorización retenida: registra el movimiento real |
+| `POST /coredb/autorizaciones/liberaciones` | `REGISTRAR_MOVIMIENTO` | Libera las retenciones vencidas (`{"minutos": 1..1440}`, sin él el plazo de la base, 15 por omisión; pregunta #34). La base ya lo hace cada minuto; una retención vencida no se confirma (`BNA-CONFIRMACION`) |
 | `PUT /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}` | `CREAR_TARJETA` | Asigna o cambia el `PIN_ATM` o la `CLAVE_WEB` |
 | `POST /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion` | `REGISTRAR_MOVIMIENTO` | Valida el PIN o la clave web |
 

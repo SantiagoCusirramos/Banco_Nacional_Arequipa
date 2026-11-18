@@ -952,6 +952,12 @@ BEGIN
         IF v_anterior NOT IN ('AUTORIZADA', 'DISPENSADA') OR v_trx IS NOT NULL THEN
             CALL core.fallar('BNA-CONFIRMACION: la autorización no está en estado vigente');
         END IF;
+        -- v1.11: una retención que pasó el plazo ya no se confirma, aunque el evento aún
+        -- no la haya liberado (sección 16).
+        IF v_anterior = 'AUTORIZADA'
+           AND v_fecha_hora < UTC_TIMESTAMP(6) - INTERVAL tarjetas.fn_minutos_retencion() MINUTE THEN
+            CALL core.fallar('BNA-CONFIRMACION: la retención venció');
+        END IF;
         -- Valida que el canal/terminal coincida con la autorización (seguridad).
         -- La autorización tiene either id_canal OR id_terminal (CHECK constraint).
         -- Aceptamos si el canal proporcionado coincide con el de la autorización
@@ -5092,3 +5098,105 @@ GRANT SELECT ON billetera.v_qr_api TO bna_api;
 GRANT SELECT ON billetera.v_operacion_api TO bna_api;
 GRANT SELECT ON billetera.v_solicitud_api TO bna_api;
 GRANT SELECT ON billetera.v_notificacion_api TO bna_api;
+
+-- ---------------------------------------------------------------------
+-- 16. Retenciones de tarjeta con caducidad (v1.11)
+-- ---------------------------------------------------------------------
+-- Una autorización AUTORIZADA retiene el saldo disponible y el tope del día hasta que se
+-- confirma (v1.8) o se extorna. Si el cajero cae entre autorizar y confirmar, nadie la
+-- extorna y el saldo queda retenido sin plazo. Desde v1.11 se libera sola.
+-- DECISIÓN (v1.11): el plazo por omisión es de 15 minutos (tarjetas.fn_minutos_retencion),
+--   como el QR dinámico de la billetera. Es un valor provisional: el plazo lo decide el
+--   equipo (pregunta abierta en el issue #34). Cambiarlo es cambiar esa función.
+-- DECISIÓN (v1.11): tarjetas.liberar_retenciones_vencidas extorna, como
+--   extornar_autorizacion, las AUTORIZADA sin movimiento cuya hora pasó el plazo; los
+--   triggers devuelven el disponible y el tope del día en que se comprometieron. Las
+--   DISPENSADA (el cajero ya entregó el efectivo) no se tocan. Quien llama puede dar un
+--   plazo menor, de 1 a 1440 minutos (un operador que sabe que el cajero cayó). El evento
+--   tarjetas.ev_liberar_retenciones lo llama cada minuto con el plazo por omisión.
+-- DECISIÓN (v1.11): la liberación lee con FOR UPDATE SKIP LOCKED: una autorización que una
+--   confirmación tiene bloqueada se salta y la confirmación gana; si la liberación la
+--   bloquea primero, la confirmación espera y falla porque ya no está vigente. Una
+--   confirmación de una retención vencida falla aunque aún no se haya liberado.
+CREATE INDEX ix_autorizacion_estado_fecha ON tarjetas.autorizacion (estado_autorizacion, fecha_hora);
+
+DELIMITER //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION tarjetas.fn_minutos_retencion() RETURNS SMALLINT
+    DETERMINISTIC NO SQL
+    COMMENT 'Minutos que una autorización sin confirmar retiene el saldo (pregunta #34).'
+BEGIN
+    RETURN 15;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE tarjetas.liberar_retenciones_vencidas(
+    IN p_minutos SMALLINT, IN p_actor VARCHAR(40), OUT p_liberadas INT)
+    COMMENT 'Extorna las autorizaciones sin confirmar que pasaron el plazo de retención.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_minutos SMALLINT DEFAULT coalesce(p_minutos, tarjetas.fn_minutos_retencion());
+    DECLARE v_limite DATETIME(6);
+    DECLARE v_uuid BINARY(16);
+    DECLARE v_fin BOOLEAN DEFAULT FALSE;
+    DECLARE v_correlacion BINARY(16) DEFAULT core.uuid_v4();
+    DECLARE c_vencidas CURSOR FOR
+        SELECT uuid_autorizacion FROM tarjetas.autorizacion
+         WHERE estado_autorizacion = 'AUTORIZADA' AND uuid_transaccion IS NULL AND fecha_hora < v_limite
+         ORDER BY fecha_hora
+           FOR UPDATE SKIP LOCKED;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_fin = TRUE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_actor IS NULL THEN
+            CALL core.fallar('BNA-ACTOR: falta el actor');
+        END IF;
+        IF v_minutos IS NULL OR v_minutos < 1 OR v_minutos > 1440 THEN
+            CALL core.fallar('BNA-PLAZO: el plazo de una retención es de 1 a 1440 minutos');
+        END IF;
+        SET v_limite = UTC_TIMESTAMP(6) - INTERVAL v_minutos MINUTE;
+        SET p_liberadas = 0;
+        OPEN c_vencidas;
+        liberar: LOOP
+            FETCH c_vencidas INTO v_uuid;
+            IF v_fin THEN
+                LEAVE liberar;
+            END IF;
+            UPDATE tarjetas.autorizacion
+               SET estado_autorizacion = 'EXTORNADA', codigo_respuesta = 'EXT',
+                   motivo_rechazo = 'BNA-RETENCION: venció sin confirmarse'
+             WHERE uuid_autorizacion = v_uuid;
+            CALL core.registrar_evento('CORE', 'autorizacion', BIN_TO_UUID(v_uuid), 'LIBERAR_RETENCION', p_actor,
+                                       v_correlacion, JSON_OBJECT('estado_anterior', 'AUTORIZADA',
+                                                                  'plazo_minutos', v_minutos));
+            SET p_liberadas = p_liberadas + 1;
+        END LOOP;
+        CLOSE c_vencidas;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' EVENT tarjetas.ev_liberar_retenciones
+    ON SCHEDULE EVERY 1 MINUTE STARTS '2026-01-01 00:00:00'
+    ON COMPLETION PRESERVE ENABLE
+    COMMENT 'Cada minuto: extorna las autorizaciones sin confirmar que pasaron el plazo de retención.'
+    DO CALL tarjetas.liberar_retenciones_vencidas(NULL, 'SISTEMA', @bna_retenciones_liberadas) //
+
+DELIMITER ;
+
+GRANT EXECUTE ON FUNCTION tarjetas.fn_minutos_retencion TO bna_api, bna_app, bna_admin;
+GRANT EXECUTE ON PROCEDURE tarjetas.liberar_retenciones_vencidas TO bna_api, bna_app, bna_admin;

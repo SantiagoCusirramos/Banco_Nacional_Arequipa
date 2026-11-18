@@ -3894,6 +3894,45 @@
         "title": "HistorialRespuesta",
         "type": "object"
       },
+      "LiberacionRegistrar": {
+        "additionalProperties": false,
+        "properties": {
+          "minutos": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Libera las retenciones más antiguas que este plazo. Sin él, el de la base (tarjetas.fn_minutos_retencion, 15 minutos por omisión; pregunta #34).",
+            "title": "Minutos"
+          }
+        },
+        "title": "LiberacionRegistrar",
+        "type": "object"
+      },
+      "LiberacionRespuesta": {
+        "properties": {
+          "liberadas": {
+            "title": "Liberadas",
+            "type": "integer"
+          },
+          "minutos": {
+            "title": "Minutos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minutos",
+          "liberadas"
+        ],
+        "title": "LiberacionRespuesta",
+        "type": "object"
+      },
       "LoginPeticion": {
         "additionalProperties": false,
         "properties": {
@@ -7527,6 +7566,46 @@
           }
         ],
         "summary": "Autorizar",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/autorizaciones/liberaciones": {
+      "post": {
+        "description": "Extorna las autorizaciones AUTORIZADA sin movimiento que pasaron el plazo y devuelve el\nsaldo disponible y el tope que retenían. La base ya lo hace cada minuto con el plazo por\nomisión (evento tarjetas.ev_liberar_retenciones); esta ruta es para un operador que sabe\nque un cajero cayó. Una retención liberada ya no se confirma (BNA-CONFIRMACION).",
+        "operationId": "liberar_vencidas_coredb_autorizaciones_liberaciones_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiberacionRegistrar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiberacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "BNA-PLAZO"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Liberar Vencidas",
         "tags": [
           "tarjetas"
         ]

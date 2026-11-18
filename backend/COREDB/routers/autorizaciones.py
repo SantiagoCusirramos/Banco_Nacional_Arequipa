@@ -1,4 +1,5 @@
-"""Autorizaciones de operaciones con tarjeta, su extorno y confirmación (bd-v1.8).
+"""Autorizaciones de operaciones con tarjeta, su extorno y confirmación (bd-v1.8) y la
+liberación de las retenciones vencidas (bd-v1.11).
 
 Las reglas (tarjeta operativa y vigente, canal, saldo, tope diario, cajero) las aplica la
 base. Una regla que no se cumple no es un error de la petición: la autorización queda
@@ -14,6 +15,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from COREDB.auth import Actor, requiere_permiso
@@ -82,6 +84,21 @@ class ConfirmacionRegistrar(BaseModel):
         return self
 
 
+class LiberacionRegistrar(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    minutos: int | None = Field(
+        default=None, ge=1, le=1440,
+        description="Libera las retenciones más antiguas que este plazo. Sin él, el de la base "
+                    "(tarjetas.fn_minutos_retencion, 15 minutos por omisión; pregunta #34).",
+    )
+
+
+class LiberacionRespuesta(BaseModel):
+    minutos: int
+    liberadas: int
+
+
 class AutorizacionRespuesta(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -142,6 +159,28 @@ def autorizar(
         nombre="autorizar_operacion",
     )
     return _obtener(db, datos.uuid_autorizacion)
+
+
+@router.post("/liberaciones", response_model=LiberacionRespuesta,
+             responses={422: {"description": "BNA-PLAZO"}})
+def liberar_vencidas(
+    datos: LiberacionRegistrar,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
+):
+    """Extorna las autorizaciones AUTORIZADA sin movimiento que pasaron el plazo y devuelve el
+    saldo disponible y el tope que retenían. La base ya lo hace cada minuto con el plazo por
+    omisión (evento tarjetas.ev_liberar_retenciones); esta ruta es para un operador que sabe
+    que un cajero cayó. Una retención liberada ya no se confirma (BNA-CONFIRMACION)."""
+    (liberadas,) = con_reintentos(
+        db,
+        lambda: llamar(db, "tarjetas.liberar_retenciones_vencidas", datos.minutos, actor.usuario, salidas=1),
+        nombre="liberar_retenciones_vencidas",
+    )
+    minutos = datos.minutos
+    if minutos is None:
+        minutos = db.execute(text("SELECT tarjetas.fn_minutos_retencion()")).scalar_one()
+    return LiberacionRespuesta(minutos=minutos, liberadas=liberadas)
 
 
 @router.get("/{uuid_autorizacion}", response_model=AutorizacionRespuesta,

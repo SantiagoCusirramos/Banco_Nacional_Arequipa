@@ -7,7 +7,8 @@ Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
 saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
 COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
-módulo TARJETAS (con un retiro autorizado y extornado), una solicitud de crédito
+módulo TARJETAS (con un retiro autorizado y extornado, y una retención que el cajero no
+confirma y que COREDB libera pasado el plazo), una solicitud de crédito
 por EVALUACIÓN (expediente con el formato de SOL → evaluación → decisión, todo en
 COREDB), su desembolso por DESEMBOLSO (identidad → orden → validación → confirmación,
 que abona una sola vez y crea el crédito), un prospecto captado y habilitado por
@@ -540,6 +541,17 @@ def flujo():
     exigir(float(saldo_otra) == 30.0, f"Repetir confirmación no debía debitar de nuevo: {saldo_otra}")
     paso("ATM: repetir confirmación con misma llave no debita dos veces (idempotencia)")
 
+    # Un cajero que cae entre autorizar y confirmar: la retención queda sin confirmar y la
+    # base la libera pasado el plazo (bd-v1.11). Se comprueba al final del flujo.
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/autorizaciones", {**retiro, "monto": "10.00"}, token,
+                              cabeceras={"X-Idempotency-Key": str(uuid.uuid4())})
+    exigir(estado == 201 and respuesta["data"]["aprobada"] is True,
+           f"Autorización que el cajero no confirmará: {estado} {respuesta}")
+    retencion_huerfana = respuesta["data"]["uuid_autorizacion"]
+    retenida_desde = time.monotonic()
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 20.0, f"La retención sin confirmar debía retener 10.00: disponible {disponible}")
+
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
            f"Bloqueo por TARJETAS: {estado} {respuesta}")
@@ -984,6 +996,26 @@ def flujo():
     exigir(estado == 401, f"La sesión de SOL debía quedar revocada tras cerrar: respondió {estado}")
     paso("frontend: SOL por su proxy, con login desde el origen del frontend (otro origen, 403), "
          "sesión en cookie HttpOnly, consulta, búsqueda por documento en el cuerpo y cierre de sesión")
+
+    # ── Retención vencida: la del cajero que cayó se libera y ya no se confirma ──
+    # El plazo de la base es de 15 minutos; el operador libera con 1 para no esperarlo.
+    time.sleep(max(0.0, 61 - (time.monotonic() - retenida_desde)))
+    liberacion = coredb("POST", "/coredb/autorizaciones/liberaciones", 200, {"minutos": 1}, token)
+    exigir(liberacion["liberadas"] >= 1, f"La liberación debía extornar la retención vencida: {liberacion}")
+    huerfana = coredb("GET", f"/coredb/autorizaciones/{retencion_huerfana}", 200, token=token)
+    exigir(huerfana["estado_autorizacion"] == "EXTORNADA" and huerfana["codigo_respuesta"] == "EXT",
+           f"La retención vencida debía quedar EXTORNADA: {huerfana}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 30.0, f"La liberación debía devolver los 10.00 retenidos: disponible {disponible}")
+    coredb("POST", "/coredb/autorizaciones/liberaciones", 200, {"minutos": 1}, token)
+    estado, respuesta = pedir("POST", f"{COREDB}/coredb/autorizaciones/{retencion_huerfana}/confirmacion",
+                              {"id_terminal": "DEV-ATM-01"}, token, cabeceras={"X-Idempotency-Key": str(uuid.uuid4())})
+    exigir(estado == 422 and respuesta["error"]["code"] == "BNA-CONFIRMACION",
+           f"Confirmar una retención liberada debía fallar: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 30.0, f"Liberar dos veces o confirmar tarde no debía mover el saldo: {disponible}")
+    paso("COREDB: la retención de 10.00 que el cajero no confirmó se liberó (EXTORNADA) y devolvió el saldo una "
+         "vez; liberar de nuevo no cambia nada y confirmarla tarde da 422 BNA-CONFIRMACION")
 
     # ── Todo pasó por el Bus: el flujo y cada puente del frontend ────────────
     despues = metricas_bus()
