@@ -778,10 +778,12 @@ def flujo():
         return captacion("POST", f"/casos/{id_caso}/habilitar", 200)["cod_cliente"], celular_nuevo
 
     beto, celular_beto = captar("Alberto", "Quispe")
+    # Números de cuenta nuevos (más adelante que los del inicio del flujo).
+    base_billetera = int(time.time() * 1000) % 10**15 * 10
     billeteras = {}
     for indice, (titular, cel, pin) in enumerate(((cod_cliente, celular_cap, "246810"),
                                                   (beto, celular_beto, "135790"))):
-        numero = base + 50 + indice
+        numero = base_billetera + indice
         cuenta = coredb("POST", "/coredb/cuentas", 201, {
             "num_cuenta": f"CTA-{numero:016d}", "cci": f"{numero:020d}", "moneda": "PEN",
             "regimen": "INDIVIDUAL", "id_agencia": AGENCIA, "titulares": [titular]}, token)["num_cuenta"]
