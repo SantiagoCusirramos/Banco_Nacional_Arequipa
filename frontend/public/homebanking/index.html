@@ -35,15 +35,19 @@
     <div class="login-cuerpo-int">
       <form id="formLogin" autocomplete="off" novalidate>
         <div class="campo">
-          <label for="codCliente">Código de cliente</label>
-          <input type="text" id="codCliente" name="codCliente" placeholder="CL-0000000" maxlength="12" required>
+          <label for="usuario">Usuario del banco (COREDB)</label>
+          <input type="text" id="usuario" name="usuario" maxlength="60" required>
         </div>
 
         <div class="campo">
-          <label for="claveWeb">Clave de Home Banking</label>
-          <input type="password" id="claveWeb" name="claveWeb" inputmode="numeric" pattern="[0-9]{6}"
-                 maxlength="6" placeholder="6 dígitos" class="mono" required>
-          <div class="pista">Exactamente 6 caracteres numéricos (RN-TAR-001).</div>
+          <label for="claveWeb">Clave</label>
+          <input type="password" id="claveWeb" name="claveWeb" maxlength="200" required>
+          <div class="pista">Todavía no hay acceso de clientes al Home Banking: entra un usuario del banco y atiende a un cliente.</div>
+        </div>
+
+        <div class="campo">
+          <label for="codCliente">Código del cliente atendido</label>
+          <input type="text" id="codCliente" name="codCliente" placeholder="CLI000000001" maxlength="12" required>
         </div>
 
         <button type="submit" class="btn ancho-total" id="btnIngresar">Ingresar</button>
@@ -79,7 +83,6 @@
   </div>
 </main>
 
-<script src="js/datos.js"></script>
 <script src="js/bus.js"></script>
 <script src="js/comun.js"></script>
 <script src="js/login.js"></script>

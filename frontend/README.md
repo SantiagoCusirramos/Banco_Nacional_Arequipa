@@ -7,11 +7,15 @@ Banca personal del BNA en [Next.js](https://nextjs.org) 16 (App Router) con Reac
 | Ruta | Qué es | De dónde salen los datos |
 |---|---|---|
 | `/login` | Inicio de sesión. El formulario de registro de usuarios solo funciona con una sesión que tenga el permiso `CREAR_USUARIO` | COREDB (`/coredb/auth/login`, `/coredb/usuarios`) |
-| `/` | Banca personal. Exige una sesión vigente | "Abrir una cuenta" y "Modificar cuenta" usan CUENTAS y COREDB. El resumen, las transferencias, los movimientos y las tarjetas de esta pantalla son datos de demostración, sin conexión con el banco |
+| `/` | Banca personal (portada). Exige una sesión vigente | Saluda al usuario por nombre. Menú con enlaces a 7 pantallas reales + Home Banking. "Crear cuenta" y "Modificar cuenta" usan CUENTAS y COREDB. |
 | `/cuenta` | Módulo de cuentas: abrir, consultar, depositar, retirar, transferir y ver movimientos | CUENTAS |
 | `/tarjetas` | Módulo de tarjetas, para el personal: tarjetas de un cliente, consulta, emisión, bloqueo y cambio de estado | TARJETAS |
+| `/evaluacion` | Evaluación de créditos: expedientes, reglas, decisiones | EVALUACION |
+| `/desembolso` | Desembolso: identidad, órdenes, validación, confirmación | DESEMBOLSO |
+| `/captacion` | Captación: prospectos, consentimientos, OTP, validaciones, habilitación | CAPTACION |
+| `/solicitud-credito` | Solicitud de crédito (asesor) | SOL |
 | `/pagar-cuota` | Pago de cuotas de crédito (CR-INT-08): créditos de un cliente, monto a pagar hoy, pago desde una cuenta de ahorros y su resultado | COBRANZA, con las cuentas del cliente desde CUENTAS |
-| `/solicitud-credito` | Solicitud de crédito | SOL, con sus propias cuentas (ver [`EMPEZAR_AQUI_SOL.md`](../EMPEZAR_AQUI_SOL.md)) |
+| `/homebanking/index.html` | Home Banking estático (prototipo HTML+JS) | Servido por Next.js desde `public/`. Usa puentes `/api/*`. |
 
 El cambio de estado de una cuenta se muestra deshabilitado: COREDB todavía no ofrece esa operación (issue #41).
 
@@ -27,9 +31,23 @@ El navegador solo llama a rutas de este mismo servidor, que las reenvía desde e
 | `/api/solicitud-credito/*` | SOL, `/gateway/sol/*` | `SOL_GATEWAY_URL` |
 | `/api/cobranza/*` | COBRANZA por el Bus | `COBRANZA_GATEWAY_URL` |
 
-Las variables se leen al ejecutar, no al construir. De cada petición se reenvían `Authorization`, `X-Idempotency-Key`, `X-Channel-ID` y `X-Request-Timestamp`; si falta `X-Correlation-ID`, se genera uno. La sesión de COREDB (el token) se guarda en `localStorage`; la de SOL, en una cookie que maneja su propio puente.
+Las variables se leen al ejecutar, no al construir. De cada petición se reenvían `Authorization`, `X-Idempotency-Key`, `X-Channel-ID` y `X-Request-Timestamp`; si falta `X-Correlation-ID`, se genera uno. La sesión de COREDB (el token) se guarda en `localStorage` con clave `bna_access_token`; la de SOL, en una cookie que maneja su propio puente.
 
 Cobranza funciona igual que los demás: el puente `/api/cobranza` reenvía el bearer token de COREDB y `X-Bus-Token`; sin claves propias.
+
+## Home Banking (prototipo estático)
+
+El prototipo de Home Banking de Tamara-Martinez (commit c73fa20, issue #100) estaba en `app/homebanking/`, donde Next no lo servía, y llamaba a 14 rutas `/bus/v1/...` que no existen, con datos simulados en `js/datos.js`. Ahora está en `public/homebanking/` y se abre en `/homebanking/index.html`.
+
+- **Acceso:** el Home Banking todavía no tiene autenticación de clientes (CR-INT-08 sigue sin canal propio). Entra un usuario del banco con su clave de COREDB e indica el código del cliente que atiende. El token queda en `localStorage` (`bna_access_token`), como en el resto del frontend.
+- **Rutas que usa** (`js/bus.js`, solo puentes de `app/api/`):
+  - `POST /api/core/coredb/auth/login`, `GET /api/core/coredb/auth/me`; auditoría: `GET /api/core/coredb/auditoria` (administrador).
+  - Cuentas: `GET /api/cuenta/consolidada/{codCliente}`, `GET /api/cuenta/{numCuenta}`, `GET /api/cuenta/{numCuenta}/movimientos`, `POST /api/cuenta/transferencia`.
+  - Tarjetas: `GET /api/tarjeta/cliente/{codCliente}`.
+  - Créditos: `GET /api/cobranza/clientes/{codCliente}/creditos`, `GET /api/cobranza/creditos/{codCredito}/monto-a-pagar`, `POST /api/cobranza/cr-int-08/pagos`.
+- **Dinero:** la transferencia y el pago de cuota llevan una llave por operación (`X-Idempotency-Key`; en el pago, `referenciaTransaccion`). Se conserva si se reintenta tras un error o un timeout y cambia al editar los datos o cuando la operación se registra.
+- **Fuera de esta versión** (no hacen ninguna petición): Token Matriz, verificar titularidad, evaluación de riesgo, validación de topes (los aplica COREDB al registrar), transferencias interbancarias, constancias PDF y el reinicio de la demo.
+- Pruebas: `__tests__/homebanking.test.ts`; el flujo de extremo a extremo pide `/homebanking/index.html`.
 
 ## Ejecutar
 
@@ -61,3 +79,4 @@ Sin Node en la máquina, `./bna test` desde la raíz corre el lint y las pruebas
 
 - `AGENTS.md` y `CLAUDE.md` los genera `next dev`. Piden leer la documentación incluida en `node_modules/next/dist/docs/` antes de escribir código, porque esta versión de Next.js cambia API y convenciones.
 - La imagen del producto se construye con [`docker/frontend/Dockerfile`](../docker/frontend/Dockerfile).
+- Prototipo Home Banking original de Tamara-Martinez (ID 203461599).

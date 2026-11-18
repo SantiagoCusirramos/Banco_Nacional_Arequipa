@@ -19,7 +19,7 @@
   /* ---------- Tarjetas del cliente ---------- */
   (async function cargarTarjetas() {
     try {
-      const r = await Bus.invocar("/bus/v1/tarjetas/asociadas", { codCliente: sesion.codCliente }, "Tarjetas · listado");
+      const r = await Bus.obtenerTarjetasAsociadas(sesion.codCliente);
       chips.innerHTML = "";
       r.tarjetas.forEach(t => {
         const b = document.createElement("button");
@@ -94,24 +94,31 @@
 
     cargando(btn, true, "Consultando");
     try {
-      /* 1. Módulo Tarjetas: ¿la tarjeta es del cliente y está habilitada? */
-      const tar = await Bus.invocar(
-        "/bus/v1/tarjetas/verificar-titularidad",
-        { codCliente: sesion.codCliente, numTarjeta: num },
-        "Tarjetas · titularidad"
-      );
+      /* 1. Módulo Tarjetas: verificar titularidad - NO DISPONIBLE EN ESTA VERSIÓN */
+      try {
+        await Bus.verificarTitularidad(sesion.codCliente, num);
+      } catch (err) {
+        if (err.codigo === "NO_DISPONIBLE") {
+          mostrarMensaje(msg, "warn", "Verificar titularidad: No disponible en esta versión. Se omite esta validación.");
+        } else {
+          throw err;
+        }
+      }
 
       /* 2. Módulo Cuentas: posición consolidada (INT-08) */
-      const pos = await Bus.invocar(
-        "/bus/v1/cuentas/posicion",
-        { codCliente: sesion.codCliente, filtroMes: null, uuidSesion: sesion.tokenSesion },
-        "INT-08"
-      );
+      const pos = await Bus.consultarPosicion(sesion.codCliente, null);
 
-      pintarResultado(tar.tarjeta, pos);
+      // Crear objeto tarjeta simulado para pintarResultado (sin verificar titularidad)
+      const tarjeta = {
+        numTarjeta: num,
+        marca: "Tarjeta",
+        vencimiento: "--/--",
+        estado: "DESCONOCIDA"
+      };
+      pintarResultado(tarjeta, pos);
       pintarPasos(true);
       try { sessionStorage.setItem("hb_ultima_tarjeta", num); } catch (e) { /* no disponible */ }
-      mostrarMensaje(msg, "ok", `Tarjeta ${tar.tarjeta.numTarjeta} verificada. Se obtuvieron ${pos.totalCuentasActivas} cuenta(s) activa(s).`);
+      mostrarMensaje(msg, "ok", `Se obtuvieron ${pos.totalCuentasActivas} cuenta(s) activa(s).`);
     } catch (err) {
       pintarPasos(false);
       if (err.codigo === "BUS_TIMEOUT") {

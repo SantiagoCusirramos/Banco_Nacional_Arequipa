@@ -34,11 +34,7 @@
 
     cargando(btn, true, "Consultando");
     try {
-      const r = await Bus.invocar(
-        "/bus/v1/cuentas/movimientos",
-        { codCliente: sesion.codCliente, numCuenta, filtroMes: inp.value || null, uuidSesion: sesion.tokenSesion },
-        "INT-08"
-      );
+      const r = await Bus.consultarMovimientos(sesion.codCliente, numCuenta, inp.value || null);
       pintar(r);
       if (r.totalMovimientos === 0) {
         mostrarMensaje(msg, "warn", `No existen movimientos para el periodo ${inp.value || "seleccionado"}.`);

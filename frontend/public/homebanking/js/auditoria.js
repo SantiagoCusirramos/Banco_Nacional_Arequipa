@@ -23,25 +23,8 @@
     btnCsv.disabled = true;
   }
 
-  function cabeceras() {
-    const s = Sesion.leer();
-    return s && s.tokenSesion ? { Authorization: `Bearer ${s.tokenSesion}` } : {};
-  }
-
   async function consultar(limit, filtros = {}) {
-    const qs = new URLSearchParams({ limit: String(limit) });
-    Object.entries(filtros).forEach(([k, v]) => { if (v) qs.set(k, v); });
-    const resp = await fetch(`/bus/v1/auditoria/eventos?${qs.toString()}`, { headers: cabeceras() });
-    const json = await resp.json();
-    if (!resp.ok || json.ok === false) {
-      const err = json.error || {};
-      throw Object.assign(new Error(err.mensaje || "Error de auditoría"), {
-        codigo: err.codigo || "ERR_AUDITORIA",
-        mensaje: err.mensaje || "No se pudo consultar la auditoría.",
-        status: resp.status
-      });
-    }
-    return json.data;
+    return Bus.consultarAuditoria(limit, filtros);
   }
 
   function opciones(select, valores, etiquetaTodos) {
@@ -113,7 +96,11 @@
         window.location.href = "index.html";
         return;
       }
-      mostrarMensaje(msg, "error", e.mensaje || "No se pudo consultar la auditoría.");
+      if (e.codigo === "NO_DISPONIBLE") {
+        mostrarMensaje(msg, "error", "Auditoría: No disponible en esta versión (requiere endpoint /api/core/coredb/auditoria).");
+      } else {
+        mostrarMensaje(msg, "error", e.mensaje || "No se pudo consultar la auditoría.");
+      }
     }
   }
 

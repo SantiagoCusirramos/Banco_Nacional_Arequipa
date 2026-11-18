@@ -1,4 +1,8 @@
-/* RF-HB-007 – Pago de cuota de crédito (INT-14) con Token Matriz, riesgo y topes */
+/* RF-HB-007 – Pago de cuota de crédito (CR-INT-08)
+   Usa puentes: /api/cobranza/clientes/{codCliente}/creditos, /api/cobranza/creditos/{codCredito}/monto-a-pagar,
+   /api/cobranza/cr-int-08/pagos
+   NOTA: Token Matriz, evaluar-riesgo y validar topes NO DISPONIBLES en esta versión
+*/
 
 (function () {
   const sesion = Sesion.exigir();
@@ -26,7 +30,7 @@
   if (!Bus.esApi) {
     avisoModoLocal(msg);
     btn.disabled = true;
-    btn.title = "Ejecute ./iniciar.sh para habilitar el pago de créditos";
+    btn.title = "Pago de créditos requiere COBRANZA y CUENTAS";
   }
 
   function pintarCreditos() {
@@ -98,8 +102,8 @@
   async function cargar() {
     try {
       const [rc, rp] = await Promise.all([
-        Bus.invocar("/bus/v1/creditos", {}, "RF-HB-007"),
-        Bus.invocar("/bus/v1/cuentas/posicion", {}, "INT-08")
+        Bus.obtenerCreditosCliente(),
+        Bus.consultarPosicion(sesion.codCliente, null)
       ]);
       creditos = rc.creditos || [];
       cuentas = rp.cuentas || [];
@@ -132,7 +136,7 @@
     return { cuenta, monto: Math.round(valor * 100) / 100 };
   }
 
-  function pintarResultado(r, riesgo) {
+  function pintarResultado(r) {
     resultado.hidden = false;
     subResultado.textContent = `Pago ${r.estadoPago} · ${r.fechaHora}`;
     const constancia = Bus.constanciaUrl(r.constanciaPDF || r.constancia);
@@ -146,14 +150,12 @@
           <div><span>Monto pagado</span><b>${fmt.moneda(r.montoPagado, r.moneda)}</b></div>
           <div><span>Saldo del crédito</span><b>${fmt.moneda(r.saldoCredito, r.moneda)}</b></div>
           <div><span>Cuotas pendientes</span><b>${r.cuotasPendientes}</b></div>
-          <div><span>Riesgo</span><b>${riesgo.nivelRiesgo} · ${riesgo.accionRequerida}</b></div>
-          <div><span>Tope restante</span><b>${fmt.moneda(r.tope.montoRestanteCanal, r.moneda)}</b></div>
-          <div><span>Saldo disponible</span><b>${fmt.moneda(r.saldoActualizado.saldoDisponible, r.moneda)}</b></div>
-          <div><span>Asiento Core</span><b class="num">${r.idAsientoCore}</b></div>
-          <div><span>UUID</span><b class="num">${r.uuidTransaccion}</b></div>
+          <div><span>Saldo disponible</span><b>${fmt.moneda(r.saldoActualizado?.saldoDisponible || 0, r.moneda)}</b></div>
+          <div><span>Asiento Core</span><b class="num">${r.idAsientoCore || "N/D"}</b></div>
+          <div><span>UUID</span><b class="num">${r.uuidTransaccion || "N/D"}</b></div>
         </div>
         <div class="constancia-acciones">
-          <a class="btn" href="${constancia}" target="_blank" rel="noopener">Descargar constancia PDF</a>
+          ${constancia ? `<a class="btn" href="${constancia}" target="_blank" rel="noopener">Descargar constancia PDF</a>` : ""}
           <button type="button" class="btn btn-sec" id="btnNuevoPago">Nuevo pago</button>
         </div>
       </div>`;
@@ -178,37 +180,17 @@
 
     cargando(btn, true, "Procesando");
     try {
-      const token = await TokenMatriz.pedirYValidar({ titulo: "Token Matriz · Pago de crédito" });
-      mostrarMensaje(msg, "info", "Token validado. Evaluando riesgo y tope diario…");
-      const riesgo = await Bus.invocar("/bus/v1/seguridad/evaluar-riesgo", {
-        monto: v.monto, moneda: creditoActual.moneda, ubicacionGeo: "Arequipa"
-      }, "INT-12");
-      if (riesgo.accionRequerida === "BLOQUEAR") {
-        mostrarMensaje(msg, "error", "El pago fue bloqueado por la evaluación de riesgo.");
-        idemActual = null;
-        return;
-      }
-      const tope = await Bus.invocar("/bus/v1/core/topes/validar", {
-        monto: v.monto, moneda: creditoActual.moneda, idCanal: DATOS_BNA.parametros.canal
-      }, "INT-17");
-      if (!tope.autorizado) {
-        mostrarMensaje(msg, "error", `Tope diario excedido. Disponible hoy: ${fmt.moneda(tope.montoRestanteCanal, creditoActual.moneda)}.`);
-        idemActual = null;
-        return;
-      }
-      const r = await Bus.invocar("/bus/v1/creditos/pagar", {
-        codCredito: creditoActual.codCredito,
+      // Token Matriz, evaluación de riesgo y topes no tienen ruta en el producto: no se piden.
+
+      // Pago CR-INT-08
+      const r = await Bus.pagarCuota(creditoActual.codCredito, {
         numCuentaOrigen: v.cuenta.numCuenta,
         montoPago: v.monto,
-        moneda: creditoActual.moneda,
-        tokenTransaccional: token.tokenTransaccional,
-        uuidTransaccion: idemActual,
-        idempotencyKey: idemActual,
-        canal: DATOS_BNA.parametros.canal,
-        ipOrigen: "190.12.44.107"
-      }, "INT-14");
-      mostrarMensaje(msg, "ok", `Pago ${r.idPago} procesado correctamente.`);
-      pintarResultado(r, riesgo);
+        moneda: creditoActual.moneda
+      }, idemActual);
+
+      mostrarMensaje(msg, "ok", `Pago ${r.idPago || r.uuidTransaccion} procesado correctamente.`);
+      pintarResultado(r);
       idemActual = null;
       await cargar();
     } catch (err) {
@@ -217,10 +199,13 @@
       } else if (err.codigo === "BUS_TIMEOUT") {
         mostrarMensaje(msg, "warn",
           "El Bus no respondió. El pago queda PENDIENTE / NO CONFIRMADA. No se reintentó automáticamente; verifique antes de repetir.");
+      } else if (err.codigo === "NO_DISPONIBLE") {
+        mostrarMensaje(msg, "error", "Pago de crédito: No disponible en esta versión (requiere endpoint /api/cobranza/cr-int-08/pagos).");
       } else {
         mostrarMensaje(msg, "error", err.mensaje || "El pago no pudo procesarse.");
       }
-      if (err.codigo !== "TOKEN_CANCELADO") idemActual = null;
+      // La llave (referenciaTransaccion) se conserva: reintentar el mismo pago no cobra dos
+      // veces. Cambia al editar el monto o la cuenta.
     } finally {
       cargando(btn, false);
     }
