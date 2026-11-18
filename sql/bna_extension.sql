@@ -4209,3 +4209,883 @@ GRANT SELECT ON clientes.v_otp_captacion_api TO bna_api;
 GRANT SELECT ON clientes.v_validacion_captacion_api TO bna_api;
 GRANT SELECT ON clientes.v_consulta_riesgo_captacion_api TO bna_api;
 GRANT SELECT ON clientes.v_perfil_riesgo_captacion_api TO bna_api;
+
+-- ---------------------------------------------------------------------
+-- 15. Billetera Digital (v1.9)
+-- ---------------------------------------------------------------------
+-- La Billetera Digital «Chaski» (canal BD) sobre las cuentas del núcleo: no tiene
+-- saldo propio. Su cuenta es una cuenta de ahorro en soles del cliente, y cada envío,
+-- pago con QR o cobro aceptado es una cuenta.registrar_transferencia con canal BD, su
+-- asiento y el tope diario del canal (core.limite_canal, RN-BD-002).
+-- DECISIÓN (v1.9): el esquema billetera guarda solo lo propio de la billetera: la
+--   afiliación (PIN de 6 dígitos y cuenta), comercios, códigos QR, solicitudes de
+--   cobro, operaciones y notificaciones. Tienda, promociones, cupones, recargas y pago
+--   de servicios quedan fuera hasta que el equipo los defina.
+-- DECISIÓN (v1.9): la billetera no crea clientes (punto R-01). Se afilia un cliente
+--   ACTIVO que ya existe, con una cuenta individual en soles de la que es titular. El
+--   celular del cliente es el de clientes.cliente, que registró el módulo Clientes.
+-- DECISIÓN (v1.9): el PIN se guarda como SHA2(CONCAT(sal, pin), 256) con sal aleatoria,
+--   como las credenciales de tarjeta (v1.5); bna_api no lee la tabla. Al tercer intento
+--   fallido la afiliación queda BLOQUEADA; una nueva afiliación (cambio de PIN) la
+--   reactiva.
+-- DECISIÓN (v1.9): ni la bitácora, ni las notificaciones, ni la glosa de los
+--   movimientos, ni los mensajes de error guardan el celular ni el PIN. Identifican al
+--   cliente por su código y muestran su nombre corto («Ana D.»).
+-- DECISIÓN (v1.9): cada operación de dinero exige una llave de idempotencia y la
+--   reserva antes de bloquear nada, en su misma transacción: una petición repetida
+--   espera a la primera y devuelve la misma operación. Después llama a
+--   cuentas.registrar_transferencia sin llave. Los procedimientos usan el savepoint
+--   bna_billetera, distinto del bna_op de registrar_transferencia, para que este no
+--   reemplace al suyo cuando se los llama dentro de una transacción.
+-- DECISIÓN (v1.9): una solicitud de cobro vence a las 48 horas (Chaski, CUS-BD-002
+--   FA-02); las vistas la muestran VENCIDA sin que nadie la actualice.
+CREATE DATABASE IF NOT EXISTS billetera CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs;
+GRANT ALL PRIVILEGES ON billetera.* TO 'bna_owner'@'%';
+
+-- El modelo deja libre el id 10 entre SEGURIDAD y SOLICITUD DE CREDITO.
+INSERT INTO core.modulo (id_modulo, nombre) VALUES (10, 'BILLETERA') AS nueva
+ON DUPLICATE KEY UPDATE nombre = nueva.nombre;
+
+CREATE TABLE billetera.afiliacion (
+    cod_cliente                 VARCHAR(12),
+    num_cuenta                  VARCHAR(20) NOT NULL,
+    hash_pin                    CHAR(64) NOT NULL,
+    sal                         CHAR(32) NOT NULL,
+    intentos_fallidos           SMALLINT DEFAULT 0 NOT NULL,
+    estado                      VARCHAR(15) DEFAULT 'ACTIVA' NOT NULL,
+    fecha_afiliacion            DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    fecha_ultimo_cambio         DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_afiliacion PRIMARY KEY (cod_cliente),
+    CONSTRAINT uk_afiliacion_cuenta UNIQUE (num_cuenta),
+    CONSTRAINT fk_afiliacion_cliente FOREIGN KEY (cod_cliente) REFERENCES clientes.cliente (cod_cliente),
+    CONSTRAINT fk_afiliacion_cuenta FOREIGN KEY (num_cuenta) REFERENCES cuentas.cuenta_ahorro (num_cuenta),
+    CONSTRAINT ck_afiliacion_intentos CHECK (intentos_fallidos BETWEEN 0 AND 3),
+    CONSTRAINT ck_afiliacion_estado CHECK (estado IN ('ACTIVA', 'BLOQUEADA'))
+) ENGINE = InnoDB COMMENT = 'Extensión v1.9: cliente afiliado a la Billetera Digital, su PIN y su cuenta.';
+
+CREATE TABLE billetera.comercio (
+    id_comercio                 BINARY(16),
+    ruc                         CHAR(11) NOT NULL,
+    razon_social                VARCHAR(150) NOT NULL,
+    num_cuenta                  VARCHAR(20) NOT NULL,
+    estado                      VARCHAR(15) DEFAULT 'ACTIVO' NOT NULL,
+    fecha_afiliacion            DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_comercio PRIMARY KEY (id_comercio),
+    CONSTRAINT uk_comercio_ruc UNIQUE (ruc),
+    CONSTRAINT fk_comercio_cuenta FOREIGN KEY (num_cuenta) REFERENCES cuentas.cuenta_ahorro (num_cuenta),
+    CONSTRAINT ck_comercio_ruc CHECK (REGEXP_LIKE(ruc, '^(10|15|17|20)[0-9]{9}$')),
+    CONSTRAINT ck_comercio_estado CHECK (estado IN ('ACTIVO', 'INACTIVO'))
+) ENGINE = InnoDB COMMENT = 'Extensión v1.9: comercio afiliado que cobra con QR en su cuenta.';
+
+CREATE TABLE billetera.codigo_qr (
+    id_qr                       BINARY(16),
+    tipo                        VARCHAR(10) NOT NULL,
+    num_cuenta                  VARCHAR(20) NOT NULL,
+    cod_cliente                 VARCHAR(12),
+    id_comercio                 BINARY(16),
+    monto                       DECIMAL(15,2),
+    estado                      VARCHAR(10) DEFAULT 'ACTIVO' NOT NULL,
+    fecha_generacion            DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    fecha_expiracion            DATETIME(6),
+    CONSTRAINT pk_codigo_qr PRIMARY KEY (id_qr),
+    CONSTRAINT fk_codigo_qr_cuenta FOREIGN KEY (num_cuenta) REFERENCES cuentas.cuenta_ahorro (num_cuenta),
+    CONSTRAINT fk_codigo_qr_cliente FOREIGN KEY (cod_cliente) REFERENCES billetera.afiliacion (cod_cliente),
+    CONSTRAINT fk_codigo_qr_comercio FOREIGN KEY (id_comercio) REFERENCES billetera.comercio (id_comercio),
+    CONSTRAINT ck_codigo_qr_tipo CHECK (tipo IN ('ESTATICO', 'DINAMICO')),
+    CONSTRAINT ck_codigo_qr_estado CHECK (estado IN ('ACTIVO', 'PAGADO', 'ANULADO')),
+    CONSTRAINT ck_codigo_qr_dueno CHECK ((cod_cliente IS NULL) <> (id_comercio IS NULL)),
+    CONSTRAINT ck_codigo_qr_monto CHECK ((tipo = 'ESTATICO' AND monto IS NULL AND fecha_expiracion IS NULL)
+                                      OR (tipo = 'DINAMICO' AND monto > 0 AND fecha_expiracion IS NOT NULL))
+) ENGINE = InnoDB COMMENT = 'Extensión v1.9: QR estático (monto libre) o dinámico (monto fijo, un solo pago, vence).';
+
+CREATE TABLE billetera.solicitud_cobro (
+    id_solicitud                BINARY(16),
+    cod_solicitante             VARCHAR(12) NOT NULL,
+    cod_pagador                 VARCHAR(12) NOT NULL,
+    monto                       DECIMAL(15,2) NOT NULL,
+    concepto                    VARCHAR(100),
+    estado                      VARCHAR(15) DEFAULT 'PENDIENTE' NOT NULL,
+    fecha_solicitud             DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    fecha_vencimiento           DATETIME(6) NOT NULL,
+    fecha_respuesta             DATETIME(6),
+    CONSTRAINT pk_solicitud_cobro PRIMARY KEY (id_solicitud),
+    CONSTRAINT fk_solicitud_cobro_solicitante FOREIGN KEY (cod_solicitante) REFERENCES billetera.afiliacion (cod_cliente),
+    CONSTRAINT fk_solicitud_cobro_pagador FOREIGN KEY (cod_pagador) REFERENCES billetera.afiliacion (cod_cliente),
+    CONSTRAINT ck_solicitud_cobro_monto CHECK (monto > 0),
+    CONSTRAINT ck_solicitud_cobro_partes CHECK (cod_solicitante <> cod_pagador),
+    CONSTRAINT ck_solicitud_cobro_estado CHECK (estado IN ('PENDIENTE', 'PAGADA', 'RECHAZADA', 'CANCELADA'))
+) ENGINE = InnoDB COMMENT = 'Extensión v1.9: un cliente pide dinero a otro; si la acepta, se transfiere.';
+
+CREATE TABLE billetera.operacion (
+    id_operacion                BINARY(16),
+    tipo                        VARCHAR(10) NOT NULL,
+    cod_cliente_origen          VARCHAR(12) NOT NULL,
+    cod_cliente_destino         VARCHAR(12),
+    id_comercio                 BINARY(16),
+    num_cuenta_origen           VARCHAR(20) NOT NULL,
+    num_cuenta_destino          VARCHAR(20) NOT NULL,
+    monto                       DECIMAL(15,2) NOT NULL,
+    referencia                  VARCHAR(100),
+    id_qr                       BINARY(16),
+    id_solicitud                BINARY(16),
+    uuid_debito                 BINARY(16) NOT NULL,
+    uuid_abono                  BINARY(16) NOT NULL,
+    fecha_hora                  DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_operacion PRIMARY KEY (id_operacion),
+    CONSTRAINT uk_operacion_debito UNIQUE (uuid_debito),
+    CONSTRAINT uk_operacion_abono UNIQUE (uuid_abono),
+    CONSTRAINT uk_operacion_solicitud UNIQUE (id_solicitud),
+    CONSTRAINT fk_operacion_origen FOREIGN KEY (cod_cliente_origen) REFERENCES billetera.afiliacion (cod_cliente),
+    CONSTRAINT fk_operacion_destino FOREIGN KEY (cod_cliente_destino) REFERENCES billetera.afiliacion (cod_cliente),
+    CONSTRAINT fk_operacion_comercio FOREIGN KEY (id_comercio) REFERENCES billetera.comercio (id_comercio),
+    CONSTRAINT fk_operacion_qr FOREIGN KEY (id_qr) REFERENCES billetera.codigo_qr (id_qr),
+    CONSTRAINT fk_operacion_solicitud FOREIGN KEY (id_solicitud) REFERENCES billetera.solicitud_cobro (id_solicitud),
+    CONSTRAINT fk_operacion_debito FOREIGN KEY (uuid_debito) REFERENCES cuentas.movimiento (uuid_transaccion),
+    CONSTRAINT fk_operacion_abono FOREIGN KEY (uuid_abono) REFERENCES cuentas.movimiento (uuid_transaccion),
+    CONSTRAINT ck_operacion_tipo CHECK (tipo IN ('P2P', 'QR', 'SOLICITUD')),
+    CONSTRAINT ck_operacion_monto CHECK (monto > 0),
+    CONSTRAINT ck_operacion_qr CHECK ((tipo = 'QR') = (id_qr IS NOT NULL)),
+    CONSTRAINT ck_operacion_solicitud CHECK ((tipo = 'SOLICITUD') = (id_solicitud IS NOT NULL)),
+    CONSTRAINT ck_operacion_destino CHECK ((cod_cliente_destino IS NULL) <> (id_comercio IS NULL))
+) ENGINE = InnoDB COMMENT = 'Extensión v1.9: cada envío, pago con QR o cobro pagado, con sus dos movimientos.';
+
+CREATE TABLE billetera.notificacion (
+    id_notificacion             BIGINT AUTO_INCREMENT,
+    cod_cliente                 VARCHAR(12) NOT NULL,
+    tipo                        VARCHAR(30) NOT NULL,
+    mensaje                     VARCHAR(200) NOT NULL,
+    leida                       TINYINT(1) DEFAULT 0 NOT NULL,
+    id_operacion                BINARY(16),
+    id_solicitud                BINARY(16),
+    fecha_hora                  DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_notificacion PRIMARY KEY (id_notificacion),
+    CONSTRAINT fk_notificacion_cliente FOREIGN KEY (cod_cliente) REFERENCES billetera.afiliacion (cod_cliente),
+    CONSTRAINT fk_notificacion_operacion FOREIGN KEY (id_operacion) REFERENCES billetera.operacion (id_operacion),
+    CONSTRAINT fk_notificacion_solicitud FOREIGN KEY (id_solicitud) REFERENCES billetera.solicitud_cobro (id_solicitud),
+    CONSTRAINT ck_notificacion_leida CHECK (leida IN (0, 1))
+) ENGINE = InnoDB COMMENT = 'Extensión v1.9: avisos de la billetera para el cliente.';
+
+CREATE INDEX ix_codigo_qr_cliente ON billetera.codigo_qr (cod_cliente, tipo, estado);
+CREATE INDEX ix_operacion_destino ON billetera.operacion (cod_cliente_destino, fecha_hora);
+CREATE INDEX ix_operacion_origen ON billetera.operacion (cod_cliente_origen, fecha_hora);
+CREATE INDEX ix_solicitud_cobro_pagador ON billetera.solicitud_cobro (cod_pagador, estado);
+CREATE INDEX ix_notificacion_cliente ON billetera.notificacion (cod_cliente, leida);
+
+DELIMITER //
+
+-- «Ana D.»: el nombre que la billetera muestra de otro cliente.
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION billetera.fn_nombre_corto(p_cod_cliente VARCHAR(12))
+    RETURNS VARCHAR(80) READS SQL DATA
+    COMMENT 'Interno. Primer nombre e inicial del apellido paterno.'
+BEGIN
+    DECLARE v_nombre VARCHAR(80);
+    SELECT CONCAT(SUBSTRING_INDEX(TRIM(nombres), ' ', 1), ' ', LEFT(apellido_paterno, 1), '.') INTO v_nombre
+      FROM clientes.cliente WHERE cod_cliente = p_cod_cliente;
+    RETURN v_nombre;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION billetera.fn_soles(p_monto DECIMAL(15,2))
+    RETURNS VARCHAR(30) DETERMINISTIC
+    COMMENT 'Interno. «S/ 12.50».'
+BEGIN
+    RETURN CONCAT('S/ ', FORMAT(p_monto, 2, 'en_US'));
+END //
+
+-- Interno. La cuenta de la billetera de un cliente que puede operar; si no, falla.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.cuenta_activa(IN p_cod_cliente VARCHAR(12), OUT p_num_cuenta VARCHAR(20))
+    COMMENT 'Interno. Exige una afiliación ACTIVA de un cliente que puede operar.'
+BEGIN
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_opera BOOLEAN;
+    SELECT a.num_cuenta, a.estado, e.permite_operar INTO p_num_cuenta, v_estado, v_opera
+      FROM billetera.afiliacion a
+      JOIN clientes.cliente c ON c.cod_cliente = a.cod_cliente
+      JOIN clientes.estado_cliente e ON e.cod_estado = c.estado_cliente
+     WHERE a.cod_cliente = p_cod_cliente;
+    IF p_num_cuenta IS NULL OR v_estado <> 'ACTIVA' OR NOT v_opera THEN
+        CALL core.fallar('BNA-BILLETERA: el cliente no tiene una billetera activa');
+    END IF;
+END //
+
+-- Interno. El cliente con billetera de un celular, que puede recibir; si no, falla.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.destino_por_celular(
+    IN p_celular VARCHAR(20), OUT p_cod_cliente VARCHAR(12), OUT p_num_cuenta VARCHAR(20))
+    COMMENT 'Interno. Busca la billetera de un celular sin repetirlo en el error.'
+BEGIN
+    DECLARE v_opera BOOLEAN;
+    SELECT a.cod_cliente, a.num_cuenta, e.permite_operar INTO p_cod_cliente, p_num_cuenta, v_opera
+      FROM clientes.cliente c
+      JOIN clientes.estado_cliente e ON e.cod_estado = c.estado_cliente
+      JOIN billetera.afiliacion a ON a.cod_cliente = c.cod_cliente
+     WHERE c.celular = p_celular;
+    IF p_cod_cliente IS NULL OR NOT v_opera THEN
+        CALL core.fallar('BNA-BILLETERA-DESTINO: el celular no tiene una billetera que pueda recibir');
+    END IF;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.exigir_llave(IN p_llave VARCHAR(64), IN p_huella CHAR(64))
+    COMMENT 'Interno. Una operación de dinero exige llave y huella.'
+BEGIN
+    IF p_llave IS NULL OR p_huella IS NULL THEN
+        CALL core.fallar('BNA-IDEMPOTENCIA: la llave de idempotencia es obligatoria');
+    END IF;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.notificar(
+    IN p_cod_cliente VARCHAR(12), IN p_tipo VARCHAR(30), IN p_mensaje VARCHAR(200), IN p_id_operacion BINARY(16),
+    IN p_id_solicitud BINARY(16))
+    COMMENT 'Interno. Agrega un aviso para el cliente.'
+BEGIN
+    INSERT INTO billetera.notificacion (cod_cliente, tipo, mensaje, id_operacion, id_solicitud)
+    VALUES (p_cod_cliente, p_tipo, p_mensaje, p_id_operacion, p_id_solicitud);
+END //
+
+-- Afilia a un cliente o cambia su PIN y su cuenta; reinicia los intentos y reactiva una
+-- afiliación BLOQUEADA.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.afiliar(
+    IN p_cod_cliente VARCHAR(12), IN p_num_cuenta VARCHAR(20), IN p_pin VARCHAR(64), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_nueva BOOLEAN)
+    COMMENT 'Afilia un cliente ACTIVO a la Billetera Digital con su cuenta y su PIN.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado_cliente, v_estado_cuenta, v_regimen VARCHAR(25);
+    DECLARE v_moneda CHAR(3);
+    DECLARE v_conjunta BOOLEAN;
+    DECLARE v_otro VARCHAR(12);
+    DECLARE v_sal CHAR(32);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_billetera;
+        RELEASE SAVEPOINT bna_billetera;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_billetera; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_billetera; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF NOT coalesce(REGEXP_LIKE(p_pin, '^[0-9]{6}$'), FALSE) THEN
+            CALL core.fallar('BNA-BILLETERA-PIN: el PIN debe tener 6 dígitos');
+        END IF;
+        SELECT estado_cliente INTO v_estado_cliente FROM clientes.cliente WHERE cod_cliente = p_cod_cliente FOR SHARE;
+        IF v_estado_cliente IS NULL THEN
+            CALL core.fallar('BNA-CLIENTE: el cliente no existe');
+        END IF;
+        IF v_estado_cliente <> 'ACTIVO' THEN
+            CALL core.fallar('BNA-CLIENTE-NO-ACTIVO: el cliente no está ACTIVO');
+        END IF;
+        SELECT c.moneda, c.estado_cuenta, c.regimen, r.firma_conjunta
+          INTO v_moneda, v_estado_cuenta, v_regimen, v_conjunta
+          FROM cuentas.cuenta_ahorro c JOIN cuentas.regimen_cuenta r ON r.cod_regimen = c.regimen
+         WHERE c.num_cuenta = p_num_cuenta FOR SHARE;
+        IF v_moneda IS NULL THEN
+            CALL core.fallar('BNA-CUENTA: la cuenta no existe');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM cuentas.titularidad WHERE cod_cliente = p_cod_cliente AND num_cuenta = p_num_cuenta) THEN
+            CALL core.fallar('BNA-BILLETERA-TITULAR: el cliente no es titular de la cuenta');
+        END IF;
+        IF v_moneda <> 'PEN' THEN
+            CALL core.fallar('BNA-BILLETERA-MONEDA: la billetera opera solo en soles (RN-BD-002)');
+        END IF;
+        IF v_conjunta OR v_estado_cuenta <> 'ACTIVA' THEN
+            CALL core.fallar('BNA-BILLETERA-CUENTA: la cuenta debe estar ACTIVA y no exigir firma conjunta');
+        END IF;
+        SELECT cod_cliente INTO v_otro FROM billetera.afiliacion WHERE num_cuenta = p_num_cuenta FOR UPDATE;
+        IF v_otro IS NOT NULL AND v_otro <> p_cod_cliente THEN
+            CALL core.fallar('BNA-BILLETERA-CUENTA: la cuenta ya es de otra billetera');
+        END IF;
+        SELECT COUNT(*) = 0 INTO p_nueva FROM billetera.afiliacion WHERE cod_cliente = p_cod_cliente FOR UPDATE;
+        -- Con otra cuenta, sus QR anteriores dejan de cobrar en la cuenta vieja.
+        UPDATE billetera.codigo_qr SET estado = 'ANULADO'
+         WHERE cod_cliente = p_cod_cliente AND estado = 'ACTIVO' AND num_cuenta <> p_num_cuenta;
+        SET v_sal = HEX(RANDOM_BYTES(16));
+        INSERT INTO billetera.afiliacion (cod_cliente, num_cuenta, hash_pin, sal)
+        VALUES (p_cod_cliente, p_num_cuenta, SHA2(CONCAT(v_sal, p_pin), 256), v_sal) AS nueva
+        ON DUPLICATE KEY UPDATE num_cuenta = nueva.num_cuenta, hash_pin = nueva.hash_pin, sal = nueva.sal,
+                                intentos_fallidos = 0, estado = 'ACTIVA', fecha_ultimo_cambio = UTC_TIMESTAMP(6);
+        CALL core.registrar_evento('BILLETERA', 'afiliacion', p_cod_cliente, IF(p_nueva, 'AFILIAR', 'CAMBIAR_PIN'),
+                                   p_actor, p_correlation_id, JSON_OBJECT('num_cuenta', p_num_cuenta));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_billetera; END IF;
+    END;
+END //
+
+-- Un PIN equivocado no es un error: cuenta el intento y, al tercero, bloquea. Resultados:
+-- EXITOSO, FALLIDO, BLOQUEADA, NO_AFILIADO (el celular no tiene billetera) y
+-- CLIENTE_NO_OPERA. Solo EXITOSO devuelve el cliente.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.validar_acceso(
+    IN p_celular VARCHAR(20), IN p_pin VARCHAR(64), IN p_correlation_id BINARY(16),
+    OUT p_cod_cliente VARCHAR(12), OUT p_resultado VARCHAR(20), OUT p_intentos_restantes SMALLINT)
+    COMMENT 'Valida el celular y el PIN de la billetera y registra el intento.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_cliente VARCHAR(12);
+    DECLARE v_opera BOOLEAN;
+    DECLARE v_hash CHAR(64);
+    DECLARE v_sal CHAR(32);
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_intentos SMALLINT;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_billetera;
+        RELEASE SAVEPOINT bna_billetera;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_billetera; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_billetera; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SET p_cod_cliente = NULL, p_intentos_restantes = 0;
+        SELECT c.cod_cliente, e.permite_operar INTO v_cliente, v_opera
+          FROM clientes.cliente c JOIN clientes.estado_cliente e ON e.cod_estado = c.estado_cliente
+         WHERE c.celular = p_celular;
+        IF v_cliente IS NOT NULL THEN
+            SELECT hash_pin, sal, estado, intentos_fallidos INTO v_hash, v_sal, v_estado, v_intentos
+              FROM billetera.afiliacion WHERE cod_cliente = v_cliente FOR UPDATE;
+        END IF;
+        IF v_hash IS NULL THEN
+            SET p_resultado = 'NO_AFILIADO';
+        ELSE
+            IF v_estado = 'BLOQUEADA' THEN
+                SET p_resultado = 'BLOQUEADA';
+            ELSEIF NOT v_opera THEN
+                SET p_resultado = 'CLIENTE_NO_OPERA';
+            ELSEIF SHA2(CONCAT(v_sal, coalesce(p_pin, '')), 256) = v_hash THEN
+                SET p_resultado = 'EXITOSO', p_cod_cliente = v_cliente, v_intentos = 0;
+                UPDATE billetera.afiliacion SET intentos_fallidos = 0 WHERE cod_cliente = v_cliente;
+            ELSE
+                SET p_resultado = 'FALLIDO', v_intentos = LEAST(v_intentos + 1, 3);
+                UPDATE billetera.afiliacion
+                   SET intentos_fallidos = v_intentos, estado = IF(v_intentos >= 3, 'BLOQUEADA', estado)
+                 WHERE cod_cliente = v_cliente;
+            END IF;
+            SET p_intentos_restantes = 3 - v_intentos;
+            CALL core.registrar_evento('BILLETERA', 'afiliacion', v_cliente, 'VALIDAR_ACCESO', CONCAT('cliente:', v_cliente),
+                                       p_correlation_id, JSON_OBJECT('resultado', p_resultado,
+                                                                     'intentos_restantes', p_intentos_restantes));
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_billetera; END IF;
+    END;
+END //
+
+-- El nombre corto del dueño de un celular con billetera, o NULL (sin billetera o propio).
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.buscar_contacto(
+    IN p_cod_cliente VARCHAR(12), IN p_celular VARCHAR(20), OUT p_nombre VARCHAR(80))
+    COMMENT 'Nombre corto del destinatario de un envío; no devuelve su código ni sus datos.'
+BEGIN
+    DECLARE v_cliente VARCHAR(12);
+    DECLARE v_opera BOOLEAN;
+    SET p_nombre = NULL;
+    SELECT a.cod_cliente, e.permite_operar INTO v_cliente, v_opera
+      FROM clientes.cliente c
+      JOIN clientes.estado_cliente e ON e.cod_estado = c.estado_cliente
+      JOIN billetera.afiliacion a ON a.cod_cliente = c.cod_cliente
+     WHERE c.celular = p_celular;
+    IF v_cliente IS NOT NULL AND v_opera AND v_cliente <> p_cod_cliente THEN
+        SET p_nombre = billetera.fn_nombre_corto(v_cliente);
+    END IF;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.registrar_comercio(
+    IN p_ruc CHAR(11), IN p_razon_social VARCHAR(150), IN p_num_cuenta VARCHAR(20), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_id_comercio BINARY(16), OUT p_id_qr BINARY(16))
+    COMMENT 'Afilia un comercio con su cuenta de abono y le genera su QR estático.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_moneda CHAR(3);
+    DECLARE v_estado_cuenta VARCHAR(25);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_billetera;
+        RELEASE SAVEPOINT bna_billetera;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_billetera; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_billetera; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF NOT coalesce(REGEXP_LIKE(p_ruc, '^(10|15|17|20)[0-9]{9}$'), FALSE) THEN
+            CALL core.fallar('BNA-COMERCIO-RUC: el RUC debe tener 11 dígitos');
+        END IF;
+        IF coalesce(TRIM(p_razon_social), '') = '' THEN
+            CALL core.fallar('BNA-COMERCIO: la razón social es obligatoria');
+        END IF;
+        SELECT moneda, estado_cuenta INTO v_moneda, v_estado_cuenta FROM cuentas.cuenta_ahorro
+         WHERE num_cuenta = p_num_cuenta FOR SHARE;
+        IF v_moneda IS NULL THEN
+            CALL core.fallar('BNA-CUENTA: la cuenta no existe');
+        END IF;
+        IF v_moneda <> 'PEN' OR v_estado_cuenta <> 'ACTIVA' THEN
+            CALL core.fallar('BNA-BILLETERA-CUENTA: la cuenta de abono debe estar ACTIVA y en soles');
+        END IF;
+        IF EXISTS (SELECT 1 FROM billetera.comercio WHERE ruc = p_ruc FOR UPDATE) THEN
+            CALL core.fallar('BNA-COMERCIO-DUPLICADO: el RUC ya está afiliado');
+        END IF;
+        SET p_id_comercio = core.uuid_v4(), p_id_qr = core.uuid_v4();
+        INSERT INTO billetera.comercio (id_comercio, ruc, razon_social, num_cuenta)
+        VALUES (p_id_comercio, p_ruc, TRIM(p_razon_social), p_num_cuenta);
+        INSERT INTO billetera.codigo_qr (id_qr, tipo, num_cuenta, id_comercio)
+        VALUES (p_id_qr, 'ESTATICO', p_num_cuenta, p_id_comercio);
+        CALL core.registrar_evento('BILLETERA', 'comercio', BIN_TO_UUID(p_id_comercio), 'REGISTRAR_COMERCIO', p_actor,
+                                   p_correlation_id, JSON_OBJECT('ruc', p_ruc, 'num_cuenta', p_num_cuenta,
+                                                                 'id_qr', BIN_TO_UUID(p_id_qr)));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_billetera; END IF;
+    END;
+END //
+
+-- Sin monto: el QR estático del cliente (el mismo cada vez). Con monto: uno dinámico que
+-- vence en p_minutos (1 a 60, 15 por omisión) y se paga una sola vez.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.crear_qr(
+    IN p_cod_cliente VARCHAR(12), IN p_monto DECIMAL(15,2), IN p_minutos SMALLINT, IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_id_qr BINARY(16), OUT p_nuevo BOOLEAN)
+    COMMENT 'Genera el QR de cobro de un cliente.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_cuenta VARCHAR(20);
+    DECLARE v_minutos SMALLINT DEFAULT coalesce(p_minutos, 15);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_billetera;
+        RELEASE SAVEPOINT bna_billetera;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_billetera; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_billetera; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL billetera.cuenta_activa(p_cod_cliente, v_cuenta);
+        -- Serializa la creación del QR estático de un mismo cliente.
+        SELECT num_cuenta INTO v_cuenta FROM billetera.afiliacion WHERE cod_cliente = p_cod_cliente FOR UPDATE;
+        SET p_nuevo = TRUE, p_id_qr = NULL;
+        IF p_monto IS NULL THEN
+            SELECT id_qr INTO p_id_qr FROM billetera.codigo_qr
+             WHERE cod_cliente = p_cod_cliente AND tipo = 'ESTATICO' AND estado = 'ACTIVO' AND num_cuenta = v_cuenta
+             LIMIT 1;
+            IF p_id_qr IS NOT NULL THEN
+                SET p_nuevo = FALSE;
+            ELSE
+                SET p_id_qr = core.uuid_v4();
+                INSERT INTO billetera.codigo_qr (id_qr, tipo, num_cuenta, cod_cliente)
+                VALUES (p_id_qr, 'ESTATICO', v_cuenta, p_cod_cliente);
+            END IF;
+        ELSE
+            IF p_monto <= 0 THEN
+                CALL core.fallar('BNA-BILLETERA-MONTO: el monto debe ser mayor que cero');
+            END IF;
+            IF v_minutos NOT BETWEEN 1 AND 60 THEN
+                CALL core.fallar('BNA-QR: la vigencia de un QR dinámico va de 1 a 60 minutos');
+            END IF;
+            SET p_id_qr = core.uuid_v4();
+            INSERT INTO billetera.codigo_qr (id_qr, tipo, num_cuenta, cod_cliente, monto, fecha_expiracion)
+            VALUES (p_id_qr, 'DINAMICO', v_cuenta, p_cod_cliente, p_monto, UTC_TIMESTAMP(6) + INTERVAL v_minutos MINUTE);
+        END IF;
+        IF p_nuevo THEN
+            CALL core.registrar_evento('BILLETERA', 'codigo_qr', BIN_TO_UUID(p_id_qr), 'CREAR_QR', p_actor, p_correlation_id,
+                                       JSON_OBJECT('cod_cliente', p_cod_cliente, 'monto', p_monto));
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_billetera; END IF;
+    END;
+END //
+
+-- Interno. Mueve el dinero y registra la operación; quien llama ya reservó la llave.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.ejecutar_operacion(
+    IN p_tipo VARCHAR(10), IN p_origen VARCHAR(12), IN p_cuenta_origen VARCHAR(20), IN p_destino VARCHAR(12),
+    IN p_id_comercio BINARY(16), IN p_cuenta_destino VARCHAR(20), IN p_monto DECIMAL(15,2), IN p_referencia VARCHAR(100),
+    IN p_id_qr BINARY(16), IN p_id_solicitud BINARY(16), IN p_llave VARCHAR(64), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_id_operacion BINARY(16), OUT p_uuid_debito BINARY(16))
+    COMMENT 'Interno. Transferencia por canal BD, operación, llave y avisos.'
+BEGIN
+    DECLARE v_abono BINARY(16);
+    DECLARE v_repetido BOOLEAN;
+    DECLARE v_nombre_origen VARCHAR(80) DEFAULT billetera.fn_nombre_corto(p_origen);
+    DECLARE v_nombre_destino VARCHAR(150);
+    DECLARE v_correlacion BINARY(16) DEFAULT coalesce(p_correlation_id, core.uuid_v4());
+    IF p_monto IS NULL OR p_monto <= 0 THEN
+        CALL core.fallar('BNA-BILLETERA-MONTO: el monto debe ser mayor que cero');
+    END IF;
+    IF p_cuenta_origen = p_cuenta_destino THEN
+        CALL core.fallar('BNA-BILLETERA-PROPIA: el origen y el destino son la misma billetera');
+    END IF;
+    IF p_id_comercio IS NOT NULL THEN
+        SELECT razon_social INTO v_nombre_destino FROM billetera.comercio WHERE id_comercio = p_id_comercio;
+    ELSE
+        SET v_nombre_destino = billetera.fn_nombre_corto(p_destino);
+    END IF;
+    CALL cuentas.registrar_transferencia(p_cuenta_origen, p_cuenta_destino, p_monto,
+                                         LEFT(CONCAT('Billetera ', p_tipo, ': ', v_nombre_origen, ' a ', v_nombre_destino), 200),
+                                         'BD', v_correlacion, NULL, NULL, p_actor, p_uuid_debito, v_abono, v_repetido);
+    SET p_id_operacion = core.uuid_v4();
+    INSERT INTO billetera.operacion (id_operacion, tipo, cod_cliente_origen, cod_cliente_destino, id_comercio,
+                                     num_cuenta_origen, num_cuenta_destino, monto, referencia, id_qr, id_solicitud,
+                                     uuid_debito, uuid_abono)
+    VALUES (p_id_operacion, p_tipo, p_origen, p_destino, p_id_comercio, p_cuenta_origen, p_cuenta_destino, p_monto,
+            NULLIF(TRIM(p_referencia), ''), p_id_qr, p_id_solicitud, p_uuid_debito, v_abono);
+    UPDATE cuentas.idempotencia_movimiento SET uuid_transaccion = p_uuid_debito, uuid_abono = v_abono
+     WHERE llave = p_llave;
+    CALL billetera.notificar(p_origen, CONCAT(p_tipo, '_ENVIADO'),
+                             CONCAT('Enviaste ', billetera.fn_soles(p_monto), ' a ', v_nombre_destino), p_id_operacion,
+                             p_id_solicitud);
+    IF p_destino IS NOT NULL THEN
+        CALL billetera.notificar(p_destino, CONCAT(p_tipo, '_RECIBIDO'),
+                                 CONCAT(v_nombre_origen, ' te envió ', billetera.fn_soles(p_monto)), p_id_operacion,
+                                 p_id_solicitud);
+    END IF;
+    CALL core.registrar_evento('BILLETERA', 'operacion', BIN_TO_UUID(p_id_operacion), CONCAT('OPERACION_', p_tipo),
+                               p_actor, v_correlacion,
+                               JSON_OBJECT('cod_cliente_origen', p_origen, 'cod_cliente_destino', p_destino,
+                                           'id_comercio', BIN_TO_UUID(p_id_comercio), 'monto', p_monto,
+                                           'id_qr', BIN_TO_UUID(p_id_qr), 'id_solicitud', BIN_TO_UUID(p_id_solicitud),
+                                           'uuid_debito', BIN_TO_UUID(p_uuid_debito)));
+END //
+
+-- Interno. Con la llave ya usada, la operación que la usó si es la misma; si no, falla.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.operacion_repetida(
+    IN p_debito BINARY(16), IN p_tipo VARCHAR(10), IN p_origen VARCHAR(12), OUT p_id_operacion BINARY(16))
+    COMMENT 'Interno. Devuelve la operación de una llave repetida.'
+BEGIN
+    SELECT id_operacion INTO p_id_operacion FROM billetera.operacion
+     WHERE uuid_debito = p_debito AND tipo = p_tipo AND cod_cliente_origen = p_origen;
+    IF p_id_operacion IS NULL THEN
+        CALL core.fallar('BNA-IDEMPOTENCIA: la llave se usó en otra operación');
+    END IF;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.transferir(
+    IN p_cod_cliente VARCHAR(12), IN p_celular_destino VARCHAR(20), IN p_monto DECIMAL(15,2),
+    IN p_referencia VARCHAR(100), IN p_llave VARCHAR(64), IN p_huella CHAR(64), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_id_operacion BINARY(16), OUT p_uuid_debito BINARY(16),
+    OUT p_repetido BOOLEAN)
+    COMMENT 'Envío de dinero a otra billetera por su celular (P2P), idempotente.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_abono BINARY(16);
+    DECLARE v_cuenta, v_cuenta_destino VARCHAR(20);
+    DECLARE v_destino VARCHAR(12);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_billetera;
+        RELEASE SAVEPOINT bna_billetera;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_billetera; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_billetera; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL billetera.exigir_llave(p_llave, p_huella);
+        CALL cuentas.reservar_llave(p_llave, p_huella, p_repetido, p_uuid_debito, v_abono);
+        IF p_repetido THEN
+            CALL billetera.operacion_repetida(p_uuid_debito, 'P2P', p_cod_cliente, p_id_operacion);
+        ELSE
+            CALL billetera.cuenta_activa(p_cod_cliente, v_cuenta);
+            CALL billetera.destino_por_celular(p_celular_destino, v_destino, v_cuenta_destino);
+            IF v_destino = p_cod_cliente THEN
+                CALL core.fallar('BNA-BILLETERA-PROPIA: el origen y el destino son la misma billetera');
+            END IF;
+            CALL billetera.ejecutar_operacion('P2P', p_cod_cliente, v_cuenta, v_destino, NULL, v_cuenta_destino, p_monto,
+                                              p_referencia, NULL, NULL, p_llave, p_actor, p_correlation_id,
+                                              p_id_operacion, p_uuid_debito);
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_billetera; END IF;
+    END;
+END //
+
+-- Un QR dinámico cobra su monto (si p_monto llega, debe ser el mismo) y queda PAGADO; uno
+-- estático cobra p_monto. El QR se bloquea después de reservar la llave: un pago repetido
+-- espera al primero y devuelve su operación en vez de encontrar el QR ya pagado.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.pagar_qr(
+    IN p_cod_cliente VARCHAR(12), IN p_id_qr BINARY(16), IN p_monto DECIMAL(15,2), IN p_llave VARCHAR(64),
+    IN p_huella CHAR(64), IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16),
+    OUT p_id_operacion BINARY(16), OUT p_uuid_debito BINARY(16), OUT p_repetido BOOLEAN)
+    COMMENT 'Pago con QR a otra billetera o a un comercio, idempotente.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_abono BINARY(16);
+    DECLARE v_cuenta VARCHAR(20);
+    DECLARE v_tipo, v_estado VARCHAR(10);
+    DECLARE v_cuenta_qr VARCHAR(20);
+    DECLARE v_dueno VARCHAR(12);
+    DECLARE v_comercio BINARY(16);
+    DECLARE v_monto_qr, v_monto DECIMAL(15,2);
+    DECLARE v_expira DATETIME(6);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_billetera;
+        RELEASE SAVEPOINT bna_billetera;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_billetera; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_billetera; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL billetera.exigir_llave(p_llave, p_huella);
+        CALL cuentas.reservar_llave(p_llave, p_huella, p_repetido, p_uuid_debito, v_abono);
+        IF p_repetido THEN
+            CALL billetera.operacion_repetida(p_uuid_debito, 'QR', p_cod_cliente, p_id_operacion);
+            IF NOT EXISTS (SELECT 1 FROM billetera.operacion WHERE id_operacion = p_id_operacion AND id_qr = p_id_qr) THEN
+                CALL core.fallar('BNA-IDEMPOTENCIA: la llave se usó en otra operación');
+            END IF;
+        ELSE
+            CALL billetera.cuenta_activa(p_cod_cliente, v_cuenta);
+            SELECT q.tipo, q.estado, q.num_cuenta, q.cod_cliente, q.id_comercio, q.monto, q.fecha_expiracion
+              INTO v_tipo, v_estado, v_cuenta_qr, v_dueno, v_comercio, v_monto_qr, v_expira
+              FROM billetera.codigo_qr q WHERE q.id_qr = p_id_qr FOR UPDATE;
+            IF v_tipo IS NULL THEN
+                CALL core.fallar('BNA-QR: el código QR no existe');
+            END IF;
+            IF v_estado <> 'ACTIVO' OR v_expira < UTC_TIMESTAMP(6)
+               OR (v_comercio IS NOT NULL AND (SELECT estado FROM billetera.comercio WHERE id_comercio = v_comercio) <> 'ACTIVO')
+               OR (v_dueno IS NOT NULL AND (SELECT estado FROM billetera.afiliacion WHERE cod_cliente = v_dueno) <> 'ACTIVA') THEN
+                CALL core.fallar('BNA-QR-NO-VIGENTE: el código QR ya no está vigente');
+            END IF;
+            IF v_dueno = p_cod_cliente OR v_cuenta_qr = v_cuenta THEN
+                CALL core.fallar('BNA-QR-PROPIO: no se puede pagar un código QR propio');
+            END IF;
+            IF v_tipo = 'DINAMICO' THEN
+                IF p_monto IS NOT NULL AND p_monto <> v_monto_qr THEN
+                    CALL core.fallar('BNA-QR-MONTO: el monto no es el del código QR');
+                END IF;
+                SET v_monto = v_monto_qr;
+                UPDATE billetera.codigo_qr SET estado = 'PAGADO' WHERE id_qr = p_id_qr;
+            ELSE
+                SET v_monto = p_monto;
+            END IF;
+            CALL billetera.ejecutar_operacion('QR', p_cod_cliente, v_cuenta, v_dueno, v_comercio, v_cuenta_qr, v_monto,
+                                              NULL, p_id_qr, NULL, p_llave, p_actor, p_correlation_id,
+                                              p_id_operacion, p_uuid_debito);
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_billetera; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.crear_solicitud(
+    IN p_cod_cliente VARCHAR(12), IN p_celular_pagador VARCHAR(20), IN p_monto DECIMAL(15,2),
+    IN p_concepto VARCHAR(100), IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16), OUT p_id_solicitud BINARY(16))
+    COMMENT 'Pide dinero a otra billetera por su celular; vence a las 48 horas.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_cuenta, v_cuenta_pagador VARCHAR(20);
+    DECLARE v_pagador VARCHAR(12);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_billetera;
+        RELEASE SAVEPOINT bna_billetera;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_billetera; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_billetera; END IF;
+            END;
+            RESIGNAL;
+        END;
+        CALL billetera.cuenta_activa(p_cod_cliente, v_cuenta);
+        CALL billetera.destino_por_celular(p_celular_pagador, v_pagador, v_cuenta_pagador);
+        IF v_pagador = p_cod_cliente THEN
+            CALL core.fallar('BNA-BILLETERA-PROPIA: el origen y el destino son la misma billetera');
+        END IF;
+        IF p_monto IS NULL OR p_monto <= 0 THEN
+            CALL core.fallar('BNA-BILLETERA-MONTO: el monto debe ser mayor que cero');
+        END IF;
+        SET p_id_solicitud = core.uuid_v4();
+        INSERT INTO billetera.solicitud_cobro (id_solicitud, cod_solicitante, cod_pagador, monto, concepto, fecha_vencimiento)
+        VALUES (p_id_solicitud, p_cod_cliente, v_pagador, p_monto, NULLIF(TRIM(p_concepto), ''),
+                UTC_TIMESTAMP(6) + INTERVAL 48 HOUR);
+        CALL billetera.notificar(v_pagador, 'SOLICITUD_RECIBIDA',
+                                 CONCAT(billetera.fn_nombre_corto(p_cod_cliente), ' te pide ', billetera.fn_soles(p_monto)),
+                                 NULL, p_id_solicitud);
+        CALL core.registrar_evento('BILLETERA', 'solicitud_cobro', BIN_TO_UUID(p_id_solicitud), 'CREAR_SOLICITUD', p_actor,
+                                   p_correlation_id, JSON_OBJECT('cod_solicitante', p_cod_cliente, 'cod_pagador', v_pagador,
+                                                                 'monto', p_monto));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_billetera; END IF;
+    END;
+END //
+
+-- ACEPTAR (paga; exige llave) o RECHAZAR, solo el pagador; CANCELAR, solo quien la pidió.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.responder_solicitud(
+    IN p_cod_cliente VARCHAR(12), IN p_id_solicitud BINARY(16), IN p_accion VARCHAR(10), IN p_llave VARCHAR(64),
+    IN p_huella CHAR(64), IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16), OUT p_estado VARCHAR(15),
+    OUT p_id_operacion BINARY(16), OUT p_uuid_debito BINARY(16), OUT p_repetido BOOLEAN)
+    COMMENT 'Acepta, rechaza o cancela una solicitud de cobro.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_abono BINARY(16);
+    DECLARE v_solicitante, v_pagador VARCHAR(12);
+    DECLARE v_estado VARCHAR(15);
+    DECLARE v_monto DECIMAL(15,2);
+    DECLARE v_concepto VARCHAR(100);
+    DECLARE v_vence DATETIME(6);
+    DECLARE v_cuenta, v_cuenta_solicitante VARCHAR(20);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_billetera;
+        RELEASE SAVEPOINT bna_billetera;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_billetera; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_billetera; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_accion IS NULL OR p_accion NOT IN ('ACEPTAR', 'RECHAZAR', 'CANCELAR') THEN
+            CALL core.fallar('BNA-SOLICITUD-ACCION: la acción debe ser ACEPTAR, RECHAZAR o CANCELAR');
+        END IF;
+        SET p_repetido = FALSE, p_id_operacion = NULL, p_uuid_debito = NULL;
+        IF p_accion = 'ACEPTAR' THEN
+            CALL billetera.exigir_llave(p_llave, p_huella);
+            CALL cuentas.reservar_llave(p_llave, p_huella, p_repetido, p_uuid_debito, v_abono);
+        END IF;
+        IF p_repetido THEN
+            CALL billetera.operacion_repetida(p_uuid_debito, 'SOLICITUD', p_cod_cliente, p_id_operacion);
+            IF NOT EXISTS (SELECT 1 FROM billetera.operacion WHERE id_operacion = p_id_operacion
+                                                               AND id_solicitud = p_id_solicitud) THEN
+                CALL core.fallar('BNA-IDEMPOTENCIA: la llave se usó en otra operación');
+            END IF;
+            SET p_estado = 'PAGADA';
+        ELSE
+            SELECT cod_solicitante, cod_pagador, estado, monto, concepto, fecha_vencimiento
+              INTO v_solicitante, v_pagador, v_estado, v_monto, v_concepto, v_vence
+              FROM billetera.solicitud_cobro WHERE id_solicitud = p_id_solicitud FOR UPDATE;
+            IF v_estado IS NULL THEN
+                CALL core.fallar('BNA-SOLICITUD: la solicitud no existe');
+            END IF;
+            IF (p_accion = 'CANCELAR' AND p_cod_cliente <> v_solicitante)
+               OR (p_accion <> 'CANCELAR' AND p_cod_cliente <> v_pagador) THEN
+                CALL core.fallar('BNA-SOLICITUD-PERMISO: el cliente no puede responder esta solicitud');
+            END IF;
+            IF v_estado <> 'PENDIENTE' OR v_vence < UTC_TIMESTAMP(6) THEN
+                CALL core.fallar('BNA-SOLICITUD-NO-PENDIENTE: la solicitud ya no está pendiente');
+            END IF;
+            SET p_estado = CASE p_accion WHEN 'ACEPTAR' THEN 'PAGADA' WHEN 'RECHAZAR' THEN 'RECHAZADA' ELSE 'CANCELADA' END;
+            IF p_accion = 'ACEPTAR' THEN
+                CALL billetera.cuenta_activa(v_pagador, v_cuenta);
+                SELECT num_cuenta INTO v_cuenta_solicitante FROM billetera.afiliacion WHERE cod_cliente = v_solicitante;
+                CALL billetera.ejecutar_operacion('SOLICITUD', v_pagador, v_cuenta, v_solicitante, NULL,
+                                                  v_cuenta_solicitante, v_monto, v_concepto, NULL, p_id_solicitud,
+                                                  p_llave, p_actor, p_correlation_id, p_id_operacion, p_uuid_debito);
+            ELSEIF p_accion = 'RECHAZAR' THEN
+                CALL billetera.notificar(v_solicitante, 'SOLICITUD_RECHAZADA',
+                                         CONCAT(billetera.fn_nombre_corto(v_pagador), ' rechazó tu solicitud de ',
+                                                billetera.fn_soles(v_monto)), NULL, p_id_solicitud);
+            END IF;
+            UPDATE billetera.solicitud_cobro SET estado = p_estado, fecha_respuesta = UTC_TIMESTAMP(6)
+             WHERE id_solicitud = p_id_solicitud;
+            CALL core.registrar_evento('BILLETERA', 'solicitud_cobro', BIN_TO_UUID(p_id_solicitud),
+                                       CONCAT('SOLICITUD_', p_estado), p_actor, p_correlation_id,
+                                       JSON_OBJECT('cod_cliente', p_cod_cliente, 'monto', v_monto,
+                                                   'id_operacion', BIN_TO_UUID(p_id_operacion)));
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_billetera; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.marcar_notificaciones_leidas(
+    IN p_cod_cliente VARCHAR(12), OUT p_filas INT)
+    COMMENT 'Marca como leídos los avisos de un cliente.'
+BEGIN
+    UPDATE billetera.notificacion SET leida = 1 WHERE cod_cliente = p_cod_cliente AND leida = 0;
+    SET p_filas = ROW_COUNT();
+END //
+
+DELIMITER ;
+
+-- Lecturas de la API: sin el hash ni la sal del PIN, sin celulares ni documentos. Los
+-- estados vencidos se calculan al leer.
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW billetera.v_afiliacion_api AS
+SELECT a.cod_cliente, billetera.fn_nombre_corto(a.cod_cliente) AS nombre_corto, a.num_cuenta, a.estado,
+       a.intentos_fallidos, a.fecha_afiliacion, a.fecha_ultimo_cambio, c.saldo_disponible,
+       l.monto_maximo_diario AS tope_diario,
+       coalesce((SELECT d.monto_acumulado FROM core.consumo_diario d
+                  WHERE d.num_cuenta = a.num_cuenta AND d.id_canal = 'BD'
+                    AND d.fecha_corte = core.fn_fecha_negocio(UTC_TIMESTAMP(6))), 0) AS consumido_hoy
+  FROM billetera.afiliacion a
+  JOIN cuentas.cuenta_ahorro c ON c.num_cuenta = a.num_cuenta
+  LEFT JOIN core.limite_canal l ON l.id_canal = 'BD' AND l.moneda = c.moneda;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW billetera.v_comercio_api AS
+SELECT BIN_TO_UUID(m.id_comercio) AS id_comercio, m.ruc, m.razon_social, m.num_cuenta, m.estado, m.fecha_afiliacion,
+       (SELECT BIN_TO_UUID(q.id_qr) FROM billetera.codigo_qr q
+         WHERE q.id_comercio = m.id_comercio AND q.tipo = 'ESTATICO' AND q.estado = 'ACTIVO' LIMIT 1) AS id_qr
+  FROM billetera.comercio m;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW billetera.v_qr_api AS
+SELECT BIN_TO_UUID(q.id_qr) AS id_qr, q.tipo, q.monto,
+       CASE WHEN q.estado = 'ACTIVO' AND q.fecha_expiracion < UTC_TIMESTAMP(6) THEN 'VENCIDO' ELSE q.estado END AS estado,
+       q.cod_cliente, BIN_TO_UUID(q.id_comercio) AS id_comercio, q.num_cuenta,
+       coalesce(m.razon_social, billetera.fn_nombre_corto(q.cod_cliente)) AS beneficiario,
+       q.fecha_generacion, q.fecha_expiracion
+  FROM billetera.codigo_qr q
+  LEFT JOIN billetera.comercio m ON m.id_comercio = q.id_comercio;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW billetera.v_operacion_api AS
+SELECT BIN_TO_UUID(o.id_operacion) AS id_operacion, o.tipo, o.cod_cliente_origen, o.cod_cliente_destino,
+       BIN_TO_UUID(o.id_comercio) AS id_comercio, billetera.fn_nombre_corto(o.cod_cliente_origen) AS nombre_origen,
+       coalesce(m.razon_social, billetera.fn_nombre_corto(o.cod_cliente_destino)) AS nombre_destino,
+       o.num_cuenta_origen, o.num_cuenta_destino, o.monto, o.referencia, BIN_TO_UUID(o.id_qr) AS id_qr,
+       BIN_TO_UUID(o.id_solicitud) AS id_solicitud, BIN_TO_UUID(o.uuid_debito) AS uuid_debito,
+       BIN_TO_UUID(o.uuid_abono) AS uuid_abono, o.fecha_hora
+  FROM billetera.operacion o
+  LEFT JOIN billetera.comercio m ON m.id_comercio = o.id_comercio;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW billetera.v_solicitud_api AS
+SELECT BIN_TO_UUID(s.id_solicitud) AS id_solicitud, s.cod_solicitante, s.cod_pagador,
+       billetera.fn_nombre_corto(s.cod_solicitante) AS nombre_solicitante,
+       billetera.fn_nombre_corto(s.cod_pagador) AS nombre_pagador, s.monto, s.concepto,
+       CASE WHEN s.estado = 'PENDIENTE' AND s.fecha_vencimiento < UTC_TIMESTAMP(6) THEN 'VENCIDA' ELSE s.estado END AS estado,
+       s.fecha_solicitud, s.fecha_vencimiento, s.fecha_respuesta
+  FROM billetera.solicitud_cobro s;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW billetera.v_notificacion_api AS
+SELECT id_notificacion, cod_cliente, tipo, mensaje, leida, BIN_TO_UUID(id_operacion) AS id_operacion,
+       BIN_TO_UUID(id_solicitud) AS id_solicitud, fecha_hora
+  FROM billetera.notificacion;
+
+GRANT EXECUTE ON PROCEDURE billetera.afiliar TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.validar_acceso TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.buscar_contacto TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.registrar_comercio TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.crear_qr TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.transferir TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.pagar_qr TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.crear_solicitud TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.responder_solicitud TO bna_api;
+GRANT EXECUTE ON PROCEDURE billetera.marcar_notificaciones_leidas TO bna_api;
+GRANT SELECT ON billetera.v_afiliacion_api TO bna_api;
+GRANT SELECT ON billetera.v_comercio_api TO bna_api;
+GRANT SELECT ON billetera.v_qr_api TO bna_api;
+GRANT SELECT ON billetera.v_operacion_api TO bna_api;
+GRANT SELECT ON billetera.v_solicitud_api TO bna_api;
+GRANT SELECT ON billetera.v_notificacion_api TO bna_api;
