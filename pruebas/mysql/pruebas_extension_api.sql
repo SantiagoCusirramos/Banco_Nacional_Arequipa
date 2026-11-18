@@ -1527,3 +1527,78 @@ CALL prueba.verifica('X639', 'Extensión', 'Billetera', 'Ni la glosa, ni los avi
              "CALL billetera.crear_solicitud('C002', '959000001', 5, NULL, 'cliente:C002', NULL, @s)"),
   "SELECT (SELECT COUNT(*) FROM cuentas.v_movimiento_api WHERE id_canal = 'BD') = 2 AND (SELECT COUNT(*) FROM cuentas.v_movimiento_api WHERE glosa LIKE '%9590000%') = 0 AND (SELECT COUNT(*) FROM billetera.v_notificacion_api WHERE mensaje LIKE '%9590000%') = 0 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE detalle LIKE '%9590000%' AND modulo IN ('BILLETERA', 'CUENTAS')) = 0",
   'sin celulares', "SELECT GROUP_CONCAT(glosa) FROM cuentas.v_movimiento_api WHERE id_canal = 'BD'", 'procedimiento');
+
+-- Bloqueo del login del personal (v1.12): 5 fallos seguidos (core.fn_intentos_login)
+-- bloquean el login 15 minutos (core.fn_minutos_bloqueo_login). Los usuarios de
+-- servicio no se bloquean. @usr_bl crea a la persona; @f5 suma cinco fallos.
+SET @usr_bl = "CALL core.crear_usuario(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), 'ana.x700', 'Ana', 'ASESOR', 'h', 'BCRYPT', 'v2', NULL, TRUE, 'pruebas')";
+SET @fallo_bl = "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), NULL, @b)";
+SET @bl_hasta = "core.fn_login_bloqueado_hasta(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'))";
+
+CALL prueba.verifica('X700', 'Extensión', 'Login', 'Cuatro fallos seguidos no bloquean el login',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl),
+  CONCAT("@b IS NULL AND ", @bl_hasta, " IS NULL AND core.fn_intentos_login() = 5"),
+  'sin bloqueo; intentos 5', CONCAT("CONCAT('bloqueado hasta ', coalesce(", @bl_hasta, ", 'nunca'))"), 'procedimiento');
+
+CALL prueba.verifica('X701', 'Extensión', 'Login', 'El quinto fallo bloquea el login 15 minutos y lo audita',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl),
+  CONCAT("@b BETWEEN UTC_TIMESTAMP(6) + INTERVAL 14 MINUTE AND UTC_TIMESTAMP(6) + INTERVAL 15 MINUTE AND ", @bl_hasta, " = @b",
+         " AND core.fn_minutos_bloqueo_login() = 15",
+         " AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000001' AND accion = 'LOGIN_FALLIDO' AND actor = 'ana.x700') = 5",
+         " AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000001' AND accion = 'BLOQUEAR_LOGIN') = 1"),
+  'bloqueado 15 minutos; 5 LOGIN_FALLIDO y 1 BLOQUEAR_LOGIN',
+  "CONCAT('hasta ', coalesce(@b, 'nunca'), ', fallidos ', (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000001' AND accion = 'LOGIN_FALLIDO'))", 'procedimiento');
+
+CALL prueba.rechaza('X702', 'Extensión', 'Login', 'Con el login bloqueado no se registra un login exitoso',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl,
+             "CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), NULL)"),
+  '^BNA-LOGIN-BLOQUEADO:', 'procedimiento');
+
+CALL prueba.verifica('X703', 'Extensión', 'Login', 'Un login exitoso reinicia la cuenta de fallos',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl,
+             "CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), NULL)",
+             @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl),
+  CONCAT("@b IS NULL AND ", @bl_hasta, " IS NULL"), 'sin bloqueo tras 4 + login + 4',
+  CONCAT("CONCAT('bloqueado hasta ', coalesce(", @bl_hasta, ", 'nunca'))"), 'procedimiento');
+
+CALL prueba.verifica('X704', 'Extensión', 'Login', 'Un usuario de servicio no se bloquea, pero sus fallos se auditan',
+  JSON_ARRAY("CALL core.crear_usuario_servicio(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), 'svc-x704', 'S', 'CLIENTES', 'h', 'BCRYPT', 'v2', 'pruebas')",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b1)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b2)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b3)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b4)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b5)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b6)",
+             "CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL)"),
+  "@b6 IS NULL AND core.fn_login_bloqueado_hasta(UUID_TO_BIN('70000000-0000-4000-8000-000000000004')) IS NULL AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000004' AND accion = 'LOGIN_FALLIDO') = 6",
+  'sin bloqueo; 6 LOGIN_FALLIDO; login registrado',
+  "CONCAT('fallidos ', (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000004' AND accion = 'LOGIN_FALLIDO'))", 'procedimiento');
+
+CALL prueba.verifica('X705', 'Extensión', 'Login', 'El administrador desbloquea el login y queda auditado',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl,
+             "CALL core.desbloquear_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), 'admin.x705')",
+             "CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), NULL)",
+             @fallo_bl),
+  CONCAT(@bl_hasta, " IS NULL AND @b IS NULL AND EXISTS (SELECT 1 FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000001' AND accion = 'DESBLOQUEAR_LOGIN' AND actor = 'admin.x705')"),
+  'desbloqueado, login registrado, la cuenta empieza de cero',
+  CONCAT("CONCAT('bloqueado hasta ', coalesce(", @bl_hasta, ", 'nunca'))"), 'procedimiento');
+
+CALL prueba.verifica('X706', 'Extensión', 'Login', 'Un fallo de un usuario que no existe no deja rastro (no se guarda lo que se escribió)',
+  JSON_ARRAY("SET @n0 = (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'LOGIN_FALLIDO')",
+             "CALL core.registrar_login_fallido(NULL, NULL, @b)"),
+  "@b IS NULL AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'LOGIN_FALLIDO') = @n0",
+  'sin error ni evento', "CONCAT('eventos nuevos ', (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'LOGIN_FALLIDO') - @n0)", 'procedimiento');
+
+CALL prueba.verifica('X707', 'Extensión', 'Login', 'Los fallos durante el bloqueo no lo alargan',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl,
+             "SET @hasta = @b", "DO SLEEP(0.01)", @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl),
+  CONCAT(@bl_hasta, " = @hasta AND @b = @hasta"), 'el mismo fin de bloqueo',
+  CONCAT("CONCAT(@hasta, ' / ', coalesce(", @bl_hasta, ", 'nunca'))"), 'procedimiento');
+
+CALL prueba.rechaza('X708', 'Extensión', 'Login', 'No se desbloquea un usuario que no existe',
+  JSON_ARRAY("CALL core.desbloquear_login(UUID_TO_BIN(UUID()), 'pruebas')"),
+  '^BNA-USUARIO:', 'procedimiento');
+
+CALL prueba.rechaza('X709', 'Extensión', 'bna_api', 'bna_api no lee core.bloqueo_login',
+  JSON_ARRAY("SELECT COUNT(*) INTO @n FROM core.bloqueo_login"),
+  'denied', 'privilegio');
