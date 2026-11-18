@@ -6,7 +6,8 @@ from ATM.core_client import CoreClient
 from ATM.exceptions import AtmError
 from ATM.errores import validar_monto, validar_resultado_dispensacion, traducir
 from ATM.schemas.atm import (
-    AutorizarIn, AutorizacionOut, ConfirmarIn, ExtornarIn, SaldoOut, ValidarPinIn, ValidarPinOut,
+    AutorizarIn, AutorizacionOut, ConfirmarIn, CuentaSaldoOut, ExtornarIn, SaldoOut, ValidarPinIn,
+    ValidarPinOut,
 )
 
 
@@ -126,7 +127,22 @@ async def consultar_saldo(core: CoreClient, id_tarjeta: str,
         correlation_id=correlation_id,
         authorization=authorization,
     )
-    return SaldoOut(**resp)
+    if isinstance(resp, dict):
+        return SaldoOut(**resp)
+    # CUENTAS responde la consolidada como lista de cuentas (data: [{num_cuenta, moneda,
+    # saldo_disponible, ...}]); el cajero la presenta con el número enmascarado.
+    return SaldoOut(
+        lista_cuentas=[
+            CuentaSaldoOut(
+                id_cuenta=c["num_cuenta"],
+                num_cuenta_enmascarado="****" + c["num_cuenta"][-4:],
+                moneda=c["moneda"],
+                saldo_disponible=str(c["saldo_disponible"]),
+            )
+            for c in resp
+        ],
+        uuid_consulta=correlation_id,
+    )
 
 
 async def consultar_movimientos(core: CoreClient, num_cuenta: str,

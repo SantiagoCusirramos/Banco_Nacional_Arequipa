@@ -419,6 +419,24 @@ def test_consultar_saldo_ok(client, core, sesion):
     assert "cuentas" in core.llamadas[1]["ruta"]
 
 
+def test_consultar_saldo_con_la_consolidada_real_de_cuentas(client, core, sesion):
+    # CUENTAS envuelve la respuesta y su data es la lista de cuentas del cliente.
+    consolidada = {"success": True, "status_code": 200, "data": [
+        {"num_cuenta": "CTA-0017950393637777", "cci": "00000017950393637777", "moneda": "PEN",
+         "regimen": "INDIVIDUAL", "estado_cuenta": "ACTIVA", "saldo_contable": "2000.00",
+         "saldo_disponible": "2000.00", "id_agencia": "AQP01", "titulares": ["CLI001"]},
+    ]}
+    core.respuesta = [
+        httpx.Response(200, json={"id_tarjeta": ID_TARJETA, "cod_cliente": "CLI001", "estado_tarjeta": "ACTIVA"}),
+        httpx.Response(200, json=consolidada),
+    ]
+    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR, **sesion})
+    assert r.status_code == 200
+    cuentas = r.json()["data"]["lista_cuentas"]
+    assert cuentas == [{"id_cuenta": "CTA-0017950393637777", "num_cuenta_enmascarado": "****7777",
+                        "moneda": "PEN", "saldo_disponible": "2000.00"}]
+
+
 def test_consultar_saldo_sin_cuentas(client, core, sesion):
     core.respuesta = [
         httpx.Response(200, json={"id_tarjeta": ID_TARJETA, "cod_cliente": "CLI001", "estado_tarjeta": "ACTIVA"}),
