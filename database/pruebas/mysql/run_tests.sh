@@ -83,6 +83,8 @@ root_ < "$ROOT/sql/bna_extension.sql"
 root_ < "$HERE/arnes_creditos.sql"
 # Ayudantes de las pruebas de captación (v1.7).
 root_ < "$HERE/arnes_captacion.sql"
+# Ayudantes de las pruebas de la Billetera Digital (v1.9).
+root_ < "$HERE/arnes_billetera.sql"
 root_ -e "INSERT INTO core.periodo_contable VALUES (2001, 1, '2001-01-01', '2001-01-31', 'CERRADO'),
                                                    (2002, 1, '2002-01-01', '2002-01-31', 'ABIERTO')"
 root_ -e "CREATE USER 'bna_api_user'@'%' IDENTIFIED BY 'api' DEFAULT ROLE bna_api;
@@ -210,6 +212,85 @@ ok=0
 if [ "$(root_ -N -e "SELECT count(*) = 1 FROM cuentas.movimiento WHERE uuid_transaccion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000010')")" = 1 ] && ! echo "$b" | grep -q ERROR; then ok=1; fi
 registrar X509 bna_app_user Concurrencia 'Extensión v1.8' 'Dos confirmaciones simultáneas con la misma llave: la segunda es idempotente' procedimiento \
   'un solo débito; segunda operación: aceptada' "$(root_ -N -e "SELECT CONCAT('débitos: ', count(*)) FROM cuentas.movimiento WHERE uuid_transaccion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000010')"); segunda: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+
+# Billetera Digital (v1.9): dos peticiones simultáneas, como bna_api_user. Las
+# afiliaciones de C001 (CTA-PEN-1) y C002 (CTA-PEN-2) quedan confirmadas para estas
+# pruebas y las de pruebas_sin_transaccion.sh.
+root_ -e "CALL billetera.afiliar('C001', 'CTA-PEN-1', '123456', 'asesor.bd', NULL, @n);
+          CALL billetera.afiliar('C002', 'CTA-PEN-2', '654321', 'asesor.bd', NULL, @n)"
+# bd_simultaneas ID DESC SQL_A SQL_B: A espera 2 s antes de confirmar; B empieza 1 s después.
+# Deja la salida de B en $OUT/ID-b.log y en $bd_b.
+bd_simultaneas() {
+  local id="$1" sql_a="$2" sql_b="$3" a
+  printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\n' "$sql_a" | api_ > "$OUT/$id-a.log" 2>&1 &
+  a=$!
+  sleep 1
+  bd_b="$(printf 'START TRANSACTION;\n%s;\nCOMMIT;\n' "$sql_b" | api_ -N 2>&1 || true)"
+  wait "$a" || true
+  echo "$bd_b" > "$OUT/$id-b.log"
+}
+bd_qr_dinamico() {
+  root_ -N -e "CALL billetera.crear_qr('C002', $1, NULL, 'cliente:C002', NULL, @q, @n); SELECT HEX(@q)"
+}
+# X650: el mismo envío dos veces a la vez (misma llave): uno solo mueve el dinero y el
+# segundo devuelve la misma operación.
+bd_simultaneas X650 \
+  "CALL billetera.transferir('C001', '959000002', 20, NULL, 'k650', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)" \
+  "CALL billetera.transferir('C001', '959000002', 20, NULL, 'k650', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r); SELECT @r"
+n="$(root_ -N -e "SELECT COUNT(*) FROM billetera.operacion o JOIN cuentas.idempotencia_movimiento i ON i.uuid_transaccion = o.uuid_debito WHERE i.llave = 'k650'")"
+ok=0; [ "$n" = 1 ] && ! echo "$bd_b" | grep -q ERROR && [ "$(echo "$bd_b" | tail -1)" = 1 ] && ok=1
+registrar X650 bna_api_user Concurrencia 'Extensión v1.9' 'Dos envíos simultáneos con la misma llave mueven el dinero una vez' procedimiento \
+  'operaciones: 1; segunda: repetida' "operaciones: $n; segunda: $(echo "$bd_b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+# X651: dos pagos simultáneos de un QR dinámico con llaves distintas: el segundo espera
+# al primero y encuentra el QR pagado.
+q="$(bd_qr_dinamico 30)"
+bd_simultaneas X651 \
+  "CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k651a', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)" \
+  "CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k651b', REPEAT('b', 64), 'cliente:C001', NULL, @o, @d, @r)"
+n="$(root_ -N -e "SELECT COUNT(*) FROM billetera.operacion WHERE id_qr = UNHEX('$q')")"
+k="$(root_ -N -e "SELECT COUNT(*) FROM cuentas.idempotencia_movimiento WHERE llave = 'k651b'")"
+ok=0; [ "$n" = 1 ] && [ "$k" = 0 ] && echo "$bd_b" | grep -q 'BNA-QR-NO-VIGENTE' && ok=1
+registrar X651 bna_api_user Concurrencia 'Extensión v1.9' 'Dos pagos simultáneos de un QR dinámico con llaves distintas cobran una vez' procedimiento \
+  'pagos: 1; segunda: BNA-QR-NO-VIGENTE' "pagos: $n, llave b: $k; segunda: $(echo "$bd_b" | grep -m1 ERROR | cut -c1-80 | tr -d "'")" "$ok"
+# X652: el mismo pago de QR dos veces a la vez (misma llave): la llave se reserva antes de
+# bloquear el QR, así que el segundo devuelve el pago del primero en vez de fallar.
+q="$(bd_qr_dinamico 15)"
+bd_simultaneas X652 \
+  "CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k652', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)" \
+  "CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k652', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r); SELECT @r"
+n="$(root_ -N -e "SELECT COUNT(*) FROM billetera.operacion WHERE id_qr = UNHEX('$q')")"
+ok=0; [ "$n" = 1 ] && ! echo "$bd_b" | grep -q ERROR && [ "$(echo "$bd_b" | tail -1)" = 1 ] && ok=1
+registrar X652 bna_api_user Concurrencia 'Extensión v1.9' 'Dos pagos simultáneos de un QR con la misma llave: el segundo es el mismo pago' procedimiento \
+  'pagos: 1; segunda: repetida' "pagos: $n; segunda: $(echo "$bd_b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+# X653: aceptar dos veces a la vez una solicitud con llaves distintas: se paga una vez.
+s="$(root_ -N -e "CALL billetera.crear_solicitud('C002', '959000001', 25, NULL, 'cliente:C002', NULL, @s); SELECT HEX(@s)")"
+bd_simultaneas X653 \
+  "CALL billetera.responder_solicitud('C001', UNHEX('$s'), 'ACEPTAR', 'k653a', REPEAT('a', 64), 'cliente:C001', NULL, @e, @o, @d, @r)" \
+  "CALL billetera.responder_solicitud('C001', UNHEX('$s'), 'ACEPTAR', 'k653b', REPEAT('b', 64), 'cliente:C001', NULL, @e, @o, @d, @r)"
+n="$(root_ -N -e "SELECT COUNT(*) FROM billetera.operacion WHERE id_solicitud = UNHEX('$s')")"
+ok=0; [ "$n" = 1 ] && echo "$bd_b" | grep -q 'BNA-SOLICITUD-NO-PENDIENTE' && ok=1
+registrar X653 bna_api_user Concurrencia 'Extensión v1.9' 'Dos aceptaciones simultáneas de una solicitud con llaves distintas pagan una vez' procedimiento \
+  'pagos: 1; segunda: BNA-SOLICITUD-NO-PENDIENTE' "pagos: $n; segunda: $(echo "$bd_b" | grep -m1 ERROR | cut -c1-80 | tr -d "'")" "$ok"
+
+# X654 y X655 (v1.10): como X650 y X652, pero la sesión B ya leyó sin bloqueo antes de
+# llamar, como la API (que lee la afiliación del cliente). Con REPEATABLE READ esa lectura
+# fija la instantánea: la operación repetida se busca con una lectura con bloqueo, que ve
+# lo que la primera confirmó mientras B esperaba.
+bd_simultaneas X654 \
+  "CALL billetera.transferir('C001', '959000002', 5, NULL, 'k654', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)" \
+  "SELECT COUNT(*) INTO @antes FROM billetera.v_afiliacion_api; CALL billetera.transferir('C001', '959000002', 5, NULL, 'k654', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r); SELECT @r"
+n="$(root_ -N -e "SELECT COUNT(*) FROM billetera.operacion o JOIN cuentas.idempotencia_movimiento i ON i.uuid_transaccion = o.uuid_debito WHERE i.llave = 'k654'")"
+ok=0; [ "$n" = 1 ] && ! echo "$bd_b" | grep -q ERROR && [ "$(echo "$bd_b" | tail -1)" = 1 ] && ok=1
+registrar X654 bna_api_user Concurrencia 'Extensión v1.10' 'Un envío repetido a la vez devuelve la misma operación aunque la sesión ya hubiera leído' procedimiento \
+  'operaciones: 1; segunda: repetida' "operaciones: $n; segunda: $(echo "$bd_b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+q="$(bd_qr_dinamico 6)"
+bd_simultaneas X655 \
+  "CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k655', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)" \
+  "SELECT COUNT(*) INTO @antes FROM billetera.v_qr_api; CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k655', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r); SELECT @r"
+n="$(root_ -N -e "SELECT COUNT(*) FROM billetera.operacion WHERE id_qr = UNHEX('$q')")"
+ok=0; [ "$n" = 1 ] && ! echo "$bd_b" | grep -q ERROR && [ "$(echo "$bd_b" | tail -1)" = 1 ] && ok=1
+registrar X655 bna_api_user Concurrencia 'Extensión v1.10' 'Un pago de QR repetido a la vez devuelve el mismo pago aunque la sesión ya hubiera leído' procedimiento \
+  'pagos: 1; segunda: repetida' "pagos: $n; segunda: $(echo "$bd_b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
 
 # X234 (v1.1): dos registros simultáneos con el mismo correo; el segundo espera en el
 # índice único y se rechaza cuando el primero confirma.

@@ -324,6 +324,46 @@ X440	bna_api_user	Cada paso del expediente se audita con su actor, sin el docume
 X441	bna_api_user	La vista de OTP de la API no expone el hash del código	pasa
 X442	bna_api_user	bna_api no puede: leer clientes.otp_captacion (el hash del código)	pasa
 X443	bna_api_user	bna_api no puede: UPDATE en clientes.caso_captacion	pasa
+X600	bna_api_user	Un cliente ACTIVO se afilia con su cuenta en soles y queda auditado sin el PIN	pasa
+X601	bna_api_user	El PIN de la billetera tiene 6 dígitos	pasa
+X602	bna_api_user	Un cliente que no está ACTIVO no se afilia	pasa
+X603	bna_api_user	La cuenta de la billetera es del cliente	pasa
+X604	bna_api_user	La billetera opera solo en soles	pasa
+X605	bna_api_user	Una cuenta de firma conjunta no es de billetera	pasa
+X606	bna_api_user	Celular y PIN correctos devuelven el cliente	pasa
+X607	bna_api_user	Un PIN equivocado no es un error: cuenta el intento y no devuelve el cliente	pasa
+X608	bna_api_user	Al tercer PIN equivocado la billetera se bloquea, y luego ni el PIN correcto entra	pasa
+X609	bna_api_user	Un celular sin billetera o desconocido es NO_AFILIADO	pasa
+X610	bna_api_user	Afiliar otra vez cambia el PIN, desbloquea y reinicia los intentos	pasa
+X611	bna_api_user	La bitácora del acceso no guarda el celular ni el PIN	pasa
+X612	bna_api_user	Un envío por celular mueve el dinero por el canal BD, registra la operación y avisa a los dos	pasa
+X613	bna_api_user	Repetir un envío con la misma llave devuelve la misma operación y no cobra dos veces	pasa
+X614	bna_api_user	La misma llave con otros parámetros se rechaza	pasa
+X615	bna_api_user	Un celular sin billetera no recibe, y el error no repite el celular	pasa
+X616	bna_api_user	Nadie se envía dinero a sí mismo	pasa
+X617	bna_api_user	Un envío respeta el tope diario del canal BD (500 PEN)	pasa
+X618	bna_api_user	Una operación de dinero sin llave de idempotencia se rechaza	pasa
+X619	bna_api_user	El QR estático de un cliente es siempre el mismo	pasa
+X620	bna_api_user	Un QR dinámico lleva su monto y vence a los 15 minutos	pasa
+X621	bna_api_user	Pagar un QR dinámico cobra su monto y lo deja PAGADO	pasa
+X622	bna_api_user	Un QR dinámico ya pagado no se paga otra vez con otra llave	pasa
+X623	bna_api_user	Repetir el pago de un QR dinámico con la misma llave devuelve el mismo pago	pasa
+X624	bna_api_user	Nadie paga su propio QR	pasa
+X625	bna_api_user	Un QR estático exige el monto	pasa
+X626	bna_api_user	Un QR dinámico no acepta otro monto	pasa
+X627	bna_api_user	Un comercio afiliado cobra en su cuenta con su QR estático	pasa
+X628	bna_api_user	Un RUC se afilia una sola vez	pasa
+X629	bna_api_user	Una solicitud de cobro aceptada paga a quien la pidió	pasa
+X630	bna_api_user	Aceptar otra vez con la misma llave devuelve el mismo pago	pasa
+X631	bna_api_user	Solo el pagador acepta una solicitud	pasa
+X632	bna_api_user	Una solicitud rechazada ya no se acepta	pasa
+X633	bna_api_user	Quien pidió el cobro lo cancela sin mover dinero	pasa
+X634	bna_api_user	Buscar un contacto devuelve solo el nombre corto de quien tiene billetera	pasa
+X635	bna_api_user	Marcar los avisos como leídos solo toca los del cliente	pasa
+X636	bna_api_user	Las vistas de la billetera no exponen el hash, la sal, el PIN ni el celular	pasa
+X637	bna_api_user	bna_api no puede: leer billetera.afiliacion (el hash del PIN)	pasa
+X638	bna_api_user	bna_api no puede: INSERT en billetera.operacion	pasa
+X639	bna_api_user	Ni la glosa, ni los avisos, ni la bitácora guardan el celular	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
@@ -337,8 +377,15 @@ X205	bna_admin_user	Un usuario SERVICIO sin módulo se rechaza aun con privilegi
 X206	bna_admin_user	Una persona con módulo se rechaza aun con privilegios	pasa
 X207	bna_admin_user	bna_admin ejecuta los procedimientos de clientes por su privilegio sobre la base	pasa
 X342	bna_admin_user	bna_admin ejecuta los procedimientos de créditos	pasa
+X670	bna_admin_user	bna_admin lee las tablas de la billetera y ejecuta sus procedimientos	pasa
 X508	bna_app_user	Dos confirmaciones simultáneas con llaves distintas: la segunda falla con BNA-CONFIRMACION	pasa
 X509	bna_app_user	Dos confirmaciones simultáneas con la misma llave: la segunda es idempotente	pasa
+X650	bna_api_user	Dos envíos simultáneos con la misma llave mueven el dinero una vez	pasa
+X651	bna_api_user	Dos pagos simultáneos de un QR dinámico con llaves distintas cobran una vez	pasa
+X652	bna_api_user	Dos pagos simultáneos de un QR con la misma llave: el segundo es el mismo pago	pasa
+X653	bna_api_user	Dos aceptaciones simultáneas de una solicitud con llaves distintas pagan una vez	pasa
+X654	bna_api_user	Un envío repetido a la vez devuelve la misma operación aunque la sesión ya hubiera leído	pasa
+X655	bna_api_user	Un pago de QR repetido a la vez devuelve el mismo pago aunque la sesión ya hubiera leído	pasa
 X234	bna_app_user	Dos registros simultáneos con el mismo correo dejan un solo cliente	pasa
 X70	bna_api_user	Una transferencia a una cuenta bloqueada no deja nada (C1)	pasa
 X71	bna_api_user	Repetir la llave tras un fallo no informa éxito (C1)	pasa
@@ -441,3 +488,8 @@ X445	bna_api_user	Un expediente completo en autocommit queda HABILITADO con su c
 X446	bna_api_user	abrir_caso_captacion no deja el caso si falla el evento (v1.7)	pasa
 X447	bna_api_user	registrar_consentimientos_captacion deshace solo lo suyo dentro de una transacción (v1.7)	pasa
 X448	bna_api_user	Un OTP vencido queda EXPIRADO aunque el código sea correcto, y no verifica el celular (v1.7)	pasa
+X660	bna_api_user	transferir no deja la llave, la operación ni asientos si el abono falla (v1.9)	pasa
+X661	bna_api_user	pagar_qr confirma el pago, la operación y la llave con sus dos movimientos (v1.9)	pasa
+X662	bna_api_user	Un QR dinámico vencido no se paga, no deja la llave y la vista lo muestra VENCIDO (v1.9)	pasa
+X663	bna_api_user	validar_acceso confirma el intento fallido aunque no haya transacción (v1.9)	pasa
+X664	bna_api_user	Dentro de una transacción, un envío que falla deshace solo lo suyo y no el envío anterior (v1.9)	pasa

@@ -290,6 +290,49 @@ real al dispensar el efectivo.
 `bna_api` ejecuta este procedimiento y lee la autorización en `tarjetas.v_autorizacion_api`.
 Solo agrega un procedimiento: una base anterior necesita un volumen nuevo para tenerlo.
 
+### Billetera Digital (desde `bd-v1.9-mysql`)
+
+La billetera «Chaski» (canal BD) en el esquema nuevo `billetera`, sobre las cuentas del
+núcleo y sin saldo propio: su cuenta es una cuenta de ahorro individual en soles del
+cliente, y cada envío, pago con QR o cobro aceptado es una
+`cuentas.registrar_transferencia` por el canal BD, con su asiento y el tope diario del
+canal (500 PEN, `core.limite_canal`). Tablas: `afiliacion` (PIN de 6 dígitos con sal,
+intentos y cuenta), `comercio`, `codigo_qr`, `solicitud_cobro`, `operacion` y
+`notificacion`. Agrega el módulo `BILLETERA` (id 10) a `core.modulo`.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `billetera.afiliar` | Afilia a un cliente ACTIVO que ya existe (punto R-01: la billetera no crea clientes) con una cuenta suya, ACTIVA, en soles y sin firma conjunta; repetirlo cambia el PIN o la cuenta, reinicia los intentos y anula los QR de la cuenta anterior |
+| `billetera.validar_acceso` | Celular (el de `clientes.cliente`) y PIN: EXITOSO devuelve el cliente; FALLIDO cuenta el intento y al tercero deja la afiliación BLOQUEADA; también BLOQUEADA, NO_AFILIADO y CLIENTE_NO_OPERA. No es un error, así que el intento queda confirmado |
+| `billetera.buscar_contacto` | El nombre corto («Ana D.») del dueño de un celular con billetera, o nulo |
+| `billetera.registrar_comercio` | Comercio con RUC, razón social y cuenta de abono en soles, y su QR estático |
+| `billetera.crear_qr` | Sin monto, el QR estático del cliente (siempre el mismo); con monto, uno dinámico que vence en 1 a 60 minutos (15 por omisión) |
+| `billetera.transferir` | Envío a otra billetera por su celular (P2P) |
+| `billetera.pagar_qr` | Pago de un QR de cliente o de comercio; un dinámico cobra su monto y queda PAGADO |
+| `billetera.crear_solicitud` / `responder_solicitud` | Pedir dinero por celular (vence a las 48 horas); el pagador acepta (paga) o rechaza, quien la pidió la cancela |
+| `billetera.marcar_notificaciones_leidas` | Los avisos del cliente |
+
+Las operaciones de dinero exigen una llave de idempotencia y la reservan antes de
+bloquear el QR o la solicitud, en su misma transacción: la petición repetida espera a la
+primera y devuelve su operación (`p_repetido`), y la misma llave con otros parámetros se
+rechaza. Después llaman a `registrar_transferencia` sin llave. Usan el savepoint
+`bna_billetera`: con el `bna_op` de `registrar_transferencia`, el savepoint anidado
+reemplazaría al suyo dentro de la transacción de quien llama. Ni la bitácora, ni los
+avisos, ni la glosa de los movimientos, ni los errores guardan el celular o el PIN.
+`bna_api` ejecuta los procedimientos y lee `billetera.v_*_api` (sin hash, sal, PIN ni
+celular; los QR y las solicitudes vencidos se muestran VENCIDO); no lee ni escribe las
+tablas. Tienda, promociones, cupones, recargas y pago de servicios quedan fuera. Solo
+agrega objetos: una base anterior necesita un volumen nuevo para tenerlos.
+
+### Billetera: lecturas con bloqueo (desde `bd-v1.10-mysql`)
+
+Una operación de dinero repetida a la vez (misma llave) busca la operación de la primera
+con una lectura con bloqueo (`FOR SHARE`): si quien llama ya había leído en su transacción,
+como la API al validar al cliente, una lectura sin bloqueo vería esa instantánea y
+respondería `BNA-IDEMPOTENCIA` en vez de la misma operación (pruebas X654 y X655).
+`bna_admin` recibe sobre `billetera.*` lo mismo que sobre los demás esquemas (X670).
+Solo cambia procedimientos y permisos: una base anterior necesita un volumen nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.
