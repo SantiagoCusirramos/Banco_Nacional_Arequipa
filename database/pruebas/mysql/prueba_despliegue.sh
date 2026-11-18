@@ -143,9 +143,9 @@ comprobar 'acento en un mensaje de la extensión' 'un débito por ATM exige una 
   "$(utf8 -e "CALL cuentas.registrar_movimiento('CTA-DESPLIEGUE', 'RETIRO', 1, 'x', 'ATM', UUID_TO_BIN(UUID()), NULL, NULL, 'x', @m, @r)" 2>&1 || true)"
 exacto 'rutinas y triggers cargados en utf8mb4' 0 "$(root_despliegue -N -e "
   SELECT (SELECT COUNT(*) FROM information_schema.routines
-           WHERE routine_schema IN ('core', 'clientes', 'cuentas', 'tarjetas', 'creditos') AND character_set_client <> 'utf8mb4')
+           WHERE routine_schema IN ('core', 'clientes', 'cuentas', 'tarjetas', 'creditos', 'billetera') AND character_set_client <> 'utf8mb4')
        + (SELECT COUNT(*) FROM information_schema.triggers
-           WHERE trigger_schema IN ('core', 'clientes', 'cuentas', 'tarjetas', 'creditos') AND character_set_client <> 'utf8mb4')" 2>&1)"
+           WHERE trigger_schema IN ('core', 'clientes', 'cuentas', 'tarjetas', 'creditos', 'billetera') AND character_set_client <> 'utf8mb4')" 2>&1)"
 exacto 'bna_app_user lee exactamente lecturas_api.txt' "$(cat "$HERE/lecturas_api.txt")" "$(lecturas_de root_despliegue utf8 2>&1 || true)"
 exacto 'bna_api sin concesiones amplias' 0 "$(root_despliegue -N -e "$CONCESIONES_AMPLIAS_API" 2>&1)"
 

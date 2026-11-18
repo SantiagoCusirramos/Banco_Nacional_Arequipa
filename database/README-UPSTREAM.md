@@ -1,7 +1,7 @@
 # database/
 
 Esta carpeta es una copia de [bna-core-db](https://github.com/miguelpro324/bna-core-db),
-rama `mysql`, en la etiqueta **`bd-v1.8-mysql`**.
+rama `mysql`, en la etiqueta **`bd-v1.9-mysql`**.
 
 **No se edita aquí.** Un cambio directo se perdería o chocaría con la siguiente
 actualización. Todo cambio de la base va primero a bna-core-db: rama nueva desde
@@ -80,5 +80,7 @@ ligarlos a un usuario por la API; también exige recrear la base.
 `clientes.*_captacion`, sus procedimientos y vistas); también exige recrear la base.
 `bd-v1.8-mysql` agrega `tarjetas.confirmar_autorizacion` (confirma una autorización retenida:
 registra el débito y la deja DISPENSADA); también exige recrear la base.
+`bd-v1.9-mysql` agrega la Billetera Digital (sección 15: esquema `billetera`, módulo
+BILLETERA, sus procedimientos y vistas `billetera.v_*_api`); también exige recrear la base.
 Con el producto completo:
 `./bna reset`.

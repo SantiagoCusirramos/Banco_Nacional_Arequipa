@@ -796,3 +796,50 @@ caso X448 'Un OTP vencido queda EXPIRADO aunque el código sea correcto, y no ve
       AND (SELECT COUNT(*) FROM clientes.validacion_captacion WHERE id_caso = UUID_TO_BIN('35100000-0000-4000-8000-000000000448')) = 0" <<'SQL'
 CALL clientes.verificar_otp_captacion(UUID_TO_BIN('35200000-0000-4000-8000-000000000448'), UUID_TO_BIN('35100000-0000-4000-8000-000000000448'), REPEAT('a', 64), 'asesor.cap', UUID_TO_BIN(UUID()), @cod, @rest, @e);
 SQL
+
+# Billetera Digital (v1.9). run_tests.sh ya confirmó las afiliaciones de C001
+# (CTA-PEN-1) y C002 (CTA-PEN-2). C003 recibe en AC-W3, que se bloquea después de
+# afiliarla.
+root_ -e "INSERT INTO cuentas.cuenta_ahorro (num_cuenta, cci, moneda, regimen, estado_cuenta, id_agencia)
+          VALUES ('AC-W3', '00000000000000000074', 'PEN', 'INDIVIDUAL', 'ACTIVA', 'AQP01');
+          INSERT INTO cuentas.titularidad (cod_cliente, num_cuenta) VALUES ('C003', 'AC-W3');
+          CALL billetera.afiliar('C003', 'AC-W3', '333333', 'asesor.bd', NULL, @n);
+          UPDATE cuentas.cuenta_ahorro SET estado_cuenta = 'BLOQUEADA' WHERE num_cuenta = 'AC-W3'"
+saldo1="$(root_ -N -e "SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1'")"
+n="$(asientos)"
+caso X660 'transferir no deja la llave, la operación ni asientos si el abono falla (v1.9)' \
+  "SELECT (SELECT COUNT(*) FROM cuentas.idempotencia_movimiento WHERE llave = 'k660') = 0
+      AND (SELECT COUNT(*) FROM billetera.operacion WHERE cod_cliente_destino = 'C003') = 0
+      AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = $saldo1
+      AND (SELECT COUNT(*) FROM core.asiento_contable) = $n" <<'SQL'
+CALL billetera.transferir('C001', '959000003', 10, NULL, 'k660', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r);
+SQL
+root_ -e "CALL billetera.crear_qr('C002', NULL, NULL, 'cliente:C002', NULL, @q, @n)"
+caso X661 'pagar_qr confirma el pago, la operación y la llave con sus dos movimientos (v1.9)' \
+  "SELECT (SELECT COUNT(*) FROM billetera.operacion o JOIN cuentas.idempotencia_movimiento i
+             ON i.uuid_transaccion = o.uuid_debito AND i.uuid_abono = o.uuid_abono WHERE i.llave = 'k661') = 1" <<'SQL'
+SELECT UUID_TO_BIN(id_qr) INTO @q FROM billetera.v_qr_api WHERE cod_cliente = 'C002' AND tipo = 'ESTATICO' AND estado = 'ACTIVO';
+CALL billetera.pagar_qr('C001', @q, 10, 'k661', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r);
+SQL
+q="$(root_ -N -e "CALL billetera.crear_qr('C002', 7, 1, 'cliente:C002', NULL, @q, @n); SELECT HEX(@q)")"
+root_ -e "UPDATE billetera.codigo_qr SET fecha_expiracion = UTC_TIMESTAMP(6) - INTERVAL 1 SECOND WHERE id_qr = UNHEX('$q')"
+caso X662 'Un QR dinámico vencido no se paga, no deja la llave y la vista lo muestra VENCIDO (v1.9)' \
+  "SELECT (SELECT COUNT(*) FROM cuentas.idempotencia_movimiento WHERE llave = 'k662') = 0
+      AND (SELECT COUNT(*) FROM billetera.operacion WHERE id_qr = UNHEX('$q')) = 0
+      AND (SELECT estado FROM billetera.v_qr_api WHERE id_qr = BIN_TO_UUID(UNHEX('$q'))) = 'VENCIDO'" <<SQL
+CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k662', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r);
+SQL
+caso X663 'validar_acceso confirma el intento fallido aunque no haya transacción (v1.9)' \
+  "SELECT intentos_fallidos = 1 FROM billetera.afiliacion WHERE cod_cliente = 'C002'" <<'SQL'
+CALL billetera.validar_acceso('959000002', '000000', NULL, @c, @r, @i);
+SQL
+caso X664 'Dentro de una transacción, un envío que falla deshace solo lo suyo y no el envío anterior (v1.9)' \
+  "SELECT (SELECT uuid_transaccion IS NOT NULL FROM cuentas.idempotencia_movimiento WHERE llave = 'k664a')
+      AND (SELECT COUNT(*) FROM cuentas.idempotencia_movimiento WHERE llave = 'k664b') = 0
+      AND (SELECT COUNT(*) FROM billetera.operacion o JOIN cuentas.idempotencia_movimiento i
+             ON i.uuid_transaccion = o.uuid_debito WHERE i.llave = 'k664a') = 1" <<'SQL'
+START TRANSACTION;
+CALL billetera.transferir('C001', '959000002', 10, NULL, 'k664a', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r);
+CALL billetera.transferir('C001', '959000002', 600, NULL, 'k664b', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r);
+COMMIT;
+SQL
