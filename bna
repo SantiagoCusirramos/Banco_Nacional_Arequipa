@@ -121,6 +121,9 @@ resumen() {
                     API: http://127.0.0.1:$(valor BNA_PUERTO_EVALUACION)/docs
   Desembolso        http://localhost:$(valor BNA_PUERTO_FRONTEND)/desembolso
                     API: http://127.0.0.1:$(valor BNA_PUERTO_DESEMBOLSO)/docs
+  Cajero (ATM)      http://127.0.0.1:$(valor BNA_PUERTO_ATM)
+                    API: http://127.0.0.1:$(valor BNA_PUERTO_ATM)/docs
+  Billetera Chaski  http://127.0.0.1:$(valor BNA_PUERTO_BILLETERA)/api/salud
   MySQL (CORE)      127.0.0.1:$(valor BNA_PUERTO_DB)
 
   Administrador de COREDB: usuario $(valor BNA_ADMIN_USUARIO); su contraseña está en
