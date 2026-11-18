@@ -82,7 +82,11 @@ correr "COBRANZA contra COREDB y MySQL" \
 correr "CAPTACION contra COREDB y MySQL" \
   env CAPTACION_IMAGEN_PRUEBAS=bna/backend:local CAPTACION_IMAGEN_COREDB=bna/coredb:local \
   CAPTACION_IMAGEN_SOL=bna/sol:local backend/CAPTACION/scripts/pruebas_integracion.sh
-correr "Seguridad" docker run --rm bna/seguridad:local $PYTEST seguridad/tests
+# Seguridad sin base propia: las unitarias con un COREDB en memoria y las de integración con
+# COREDB y la base integrada reales, a través del Bus.
+correr "Seguridad contra COREDB y MySQL" \
+  env SEGURIDAD_IMAGEN_PRUEBAS=bna/seguridad:local SEGURIDAD_IMAGEN_COREDB=bna/coredb:local \
+  SEGURIDAD_IMAGEN_BUS=bna/backend:local backend/seguridad/scripts/pruebas_integracion.sh
 correr "COREDB, unitarias" \
   docker run --rm bna/coredb:local sh -c "cd COREDB && $PYTEST"
 # Lo que CUENTAS y TARJETAS envían a COREDB, contra los esquemas de COREDB: solo su

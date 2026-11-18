@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     jwt_clave: str = ""
     jwt_algoritmo: str = "HS256"
     jwt_minutos: int = 30
+    # Solo para desbloquear tarjetas (bd-v1.13): la base lo permite únicamente al rol
+    # bna_seguridad. Sin contraseña, POST /coredb/tarjetas/{id}/desbloqueo responde 503.
+    seguridad_user: str = "bna_seguridad_user"
+    seguridad_password: str = ""
 
     @property
     def database_url(self) -> URL:
@@ -31,6 +35,17 @@ class Settings(BaseSettings):
             "mysql+pymysql",
             username=self.app_user,
             password=self.app_password,
+            host=self.host,
+            port=self.port,
+            query={"charset": "utf8mb4"},
+        )
+
+    @property
+    def seguridad_url(self) -> URL:
+        return URL.create(
+            "mysql+pymysql",
+            username=self.seguridad_user,
+            password=self.seguridad_password,
             host=self.host,
             port=self.port,
             query={"charset": "utf8mb4"},

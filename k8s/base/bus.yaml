@@ -47,6 +47,8 @@ spec:
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_ATM } }
             - name: BUS_TOKEN_BILLETERA
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_BILLETERA } }
+            - name: BUS_TOKEN_SEGURIDAD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_SEGURIDAD } }
           ports:
             - { name: http, containerPort: 8018 }
           # /salud solo dice que el Bus atiende: no depende de los módulos.

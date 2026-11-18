@@ -60,7 +60,8 @@ la llave sale siempre el mismo id de tarjeta (UUIDv5), que se envia a COREDB:
   es `FISICA` y existe solo en los datos de desarrollo; la base de produccion no trae ningun BIN. Los BIN
   reales los dara el emisor (issue #116). Mientras no haya un BIN `VIRTUAL`, el modulo emite solo
   tarjetas fisicas.
-- El desbloqueo (de BLOQUEADA a ACTIVA) lo rechaza COREDB: es de Seguridad.
+- El desbloqueo (de BLOQUEADA a ACTIVA) lo rechaza COREDB: se hace solo por el módulo Seguridad
+  (`POST /seguridad/tarjetas/{id}/desbloqueo`).
 
 ## Respuestas (ITIL-02)
 

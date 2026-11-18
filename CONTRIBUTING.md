@@ -15,7 +15,7 @@ Este repositorio es el producto integrado del BNA. Lo que llega a `main` lo usa 
 - **No se sube nada directo a `main`.** Eso incluye «Add files via upload» desde la web: en ese formulario hay que elegir «Create a new branch for this commit and start a pull request». Cada push directo abre un aviso automático para su autor (`.github/workflows/aviso-push-directo.yml`). El aviso no revierte nada.
 - No se versionan claves (`.env`), datos personales reales, documentos de la empresa ni archivos generados como registros o resultados de pruebas. La CI falla si aparece un archivo de claves.
 - No se edita `database/`. La base integrada vive en [bna-core-db](https://github.com/miguelpro324/bna-core-db): el cambio va allá, sale con una etiqueta nueva y llega aquí con `git subtree pull` (ver [`database/README-UPSTREAM.md`](database/README-UPSTREAM.md)).
-- Ningún módulo se conecta a la base integrada: todo dato del CORE se lee y se escribe por COREDB (`backend/COREDB`), a través del Bus de Servicios. Un módulo nuevo no tiene base propia; las dos excepciones de hoy, SOL (`bna_sol_mvp` en `db-aux`) y el prototipo de Seguridad (SQLite), no se conectan con el CORE.
+- Ningún módulo se conecta a la base integrada: todo dato del CORE se lee y se escribe por COREDB (`backend/COREDB`), a través del Bus de Servicios. Un módulo nuevo no tiene base propia; la única excepción de hoy, SOL (`bna_sol_mvp` en `db-aux`), no se conecta con el CORE.
 
 ## Un módulo nuevo
 

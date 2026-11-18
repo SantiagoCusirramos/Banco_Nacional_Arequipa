@@ -119,6 +119,19 @@ spec:
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BILLETERA_COREDB_SECRETO } }
           resources: *recursos-arranque
           securityContext: *contenedor-seguro
+        # Crea o alinea el usuario de servicio de Seguridad con el secreto del Secret.
+        - name: servicio-seguridad
+          image: bna/coredb:local
+          command: [python, -m, COREDB.scripts.crear_servicio, --modulo, SEGURIDAD, --username, svc-seguridad, --nombre, Seguridad]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_SERVICIO_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: SEGURIDAD_COREDB_SECRETO } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
       containers:
         - name: coredb
           image: bna/coredb:local
@@ -130,6 +143,9 @@ spec:
               valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
             - name: CORE_DB_JWT_CLAVE
               valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_JWT_CLAVE } }
+            # Solo para desbloquear tarjetas: la base lo permite únicamente a bna_seguridad.
+            - name: CORE_DB_SEGURIDAD_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_SEGURIDAD_PASSWORD } }
           ports:
             - { name: http, containerPort: 8012 }
           startupProbe:

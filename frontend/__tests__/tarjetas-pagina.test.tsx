@@ -163,13 +163,13 @@ describe("Página del módulo Tarjetas", () => {
 
   it("TJ-07 Un desbloqueo rechazado muestra el aviso del servicio", async () => {
     post.mockRejectedValue(errorTarjetas(403, "ERR-TAR-DESBLOQUEO-NO-PERMITIDO",
-      "El desbloqueo de tarjetas no está disponible: pendiente de un cliente de Seguridad."));
+      "El desbloqueo de tarjetas solo se hace por el módulo Seguridad."));
     render(<TarjetasPage />);
     await pestana("Bloqueos y estados");
     escribir(screen.getByLabelText("Identificador de la tarjeta"), TARJETA.id_tarjeta);
     await userEvent.selectOptions(screen.getByLabelText("Nuevo estado"), "ACTIVA");
     await userEvent.click(screen.getByRole("button", { name: "Aplicar cambio" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("pendiente de un cliente de Seguridad");
+    expect(await screen.findByRole("alert")).toHaveTextContent("solo se hace por el módulo Seguridad");
     expect(post.mock.calls[0][1]).toEqual({ estado: "ACTIVA" });
   });
 

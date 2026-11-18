@@ -669,6 +669,126 @@
         "title": "EstadoCambiar",
         "type": "object"
       },
+      "COREDB__routers__creditos_evaluacion__EvaluacionRespuesta": {
+        "properties": {
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "deudaMensual": {
+            "title": "Deudamensual",
+            "type": "string"
+          },
+          "esUltima": {
+            "title": "Esultima",
+            "type": "boolean"
+          },
+          "fechaDecision": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fechadecision"
+          },
+          "fechaEvaluacion": {
+            "format": "date-time",
+            "title": "Fechaevaluacion",
+            "type": "string"
+          },
+          "idAnalista": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idanalista"
+          },
+          "idEvaluacion": {
+            "format": "uuid",
+            "title": "Idevaluacion",
+            "type": "string"
+          },
+          "ingresoMensual": {
+            "title": "Ingresomensual",
+            "type": "string"
+          },
+          "limite": {
+            "title": "Limite",
+            "type": "string"
+          },
+          "regla": {
+            "title": "Regla",
+            "type": "string"
+          },
+          "resultado": {
+            "description": "La decisión del analista si la hay; si no, el de la regla.",
+            "title": "Resultado",
+            "type": "string"
+          },
+          "resultadoRegla": {
+            "title": "Resultadoregla",
+            "type": "string"
+          },
+          "resultadoVerificacion": {
+            "title": "Resultadoverificacion",
+            "type": "string"
+          },
+          "ronda": {
+            "title": "Ronda",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idEvaluacion",
+          "ronda",
+          "fechaEvaluacion",
+          "score",
+          "limite",
+          "regla",
+          "resultadoRegla",
+          "ingresoMensual",
+          "deudaMensual",
+          "resultadoVerificacion",
+          "decision",
+          "comentario",
+          "fechaDecision",
+          "idAnalista",
+          "resultado",
+          "esUltima"
+        ],
+        "title": "EvaluacionRespuesta",
+        "type": "object"
+      },
       "COREDB__routers__movimientos__MovimientoRespuesta": {
         "properties": {
           "repetido": {
@@ -686,6 +806,78 @@
           "repetido"
         ],
         "title": "MovimientoRespuesta",
+        "type": "object"
+      },
+      "COREDB__routers__seguridad__EvaluacionRespuesta": {
+        "properties": {
+          "consumido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Consumo real del día de la cuenta en el canal.",
+            "title": "Consumido"
+          },
+          "decision": {
+            "enum": [
+              "AUTORIZADA",
+              "RECHAZADA",
+              "DESAFIO_REQUERIDO",
+              "DESAFIO_RECHAZADO"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "enum": [
+                  "CUENTA",
+                  "CANAL",
+                  "TOPE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "repetida": {
+            "title": "Repetida",
+            "type": "boolean"
+          },
+          "tope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tope del día del canal; null si el canal no tiene.",
+            "title": "Tope"
+          },
+          "uuid_operacion": {
+            "format": "uuid",
+            "title": "Uuid Operacion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_operacion",
+          "decision",
+          "tope",
+          "consumido",
+          "repetida"
+        ],
+        "title": "EvaluacionRespuesta",
         "type": "object"
       },
       "COREDB__routers__tarjetas__EstadoCambiar": {
@@ -2847,6 +3039,98 @@
         "title": "DecisionRegistrar",
         "type": "object"
       },
+      "DesafioPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "maxLength": 5,
+            "minLength": 1,
+            "pattern": "^[A-Z]+$",
+            "title": "Canal",
+            "type": "string"
+          },
+          "hmac_codigo": {
+            "description": "HMAC-SHA256 del código en hexadecimal; la clave es de Seguridad.",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Hmac Codigo",
+            "type": "string"
+          },
+          "id_desafio": {
+            "format": "uuid",
+            "title": "Id Desafio",
+            "type": "string"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "uuid_operacion": {
+            "format": "uuid",
+            "title": "Uuid Operacion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_desafio",
+          "uuid_operacion",
+          "num_cuenta",
+          "canal",
+          "monto",
+          "hmac_codigo"
+        ],
+        "title": "DesafioPeticion",
+        "type": "object"
+      },
+      "DesafioRespuesta": {
+        "properties": {
+          "id_desafio": {
+            "format": "uuid",
+            "title": "Id Desafio",
+            "type": "string"
+          },
+          "vence_en": {
+            "format": "date-time",
+            "title": "Vence En",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_desafio",
+          "vence_en"
+        ],
+        "title": "DesafioRespuesta",
+        "type": "object"
+      },
+      "DesbloqueoPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "motivo": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Motivo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "title": "DesbloqueoPeticion",
+        "type": "object"
+      },
       "DocumentoVerificado": {
         "properties": {
           "cliente": {
@@ -3116,6 +3400,76 @@
         "title": "EstadoCredito",
         "type": "object"
       },
+      "EvaluacionPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "canal": {
+            "description": "Un canal de core.canal: ATM, HB, BD, VEN, AGE.",
+            "maxLength": 5,
+            "minLength": 1,
+            "pattern": "^[A-Z]+$",
+            "title": "Canal",
+            "type": "string"
+          },
+          "hmac_codigo": {
+            "anyOf": [
+              {
+                "description": "HMAC-SHA256 del código en hexadecimal; la clave es de Seguridad.",
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hmac Codigo"
+          },
+          "id_desafio": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Desafio"
+          },
+          "monto": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Monto"
+          },
+          "num_cuenta": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Num Cuenta",
+            "type": "string"
+          },
+          "uuid_operacion": {
+            "description": "Lo genera quien llama (RN-BUS-002); repetirlo devuelve la misma decisión.",
+            "format": "uuid",
+            "title": "Uuid Operacion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid_operacion",
+          "num_cuenta",
+          "canal",
+          "monto"
+        ],
+        "title": "EvaluacionPeticion",
+        "type": "object"
+      },
       "EvaluacionRegistrar": {
         "additionalProperties": false,
         "properties": {
@@ -3171,126 +3525,6 @@
           "verificada"
         ],
         "title": "EvaluacionRegistrar",
-        "type": "object"
-      },
-      "EvaluacionRespuesta": {
-        "properties": {
-          "comentario": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comentario"
-          },
-          "decision": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decision"
-          },
-          "deudaMensual": {
-            "title": "Deudamensual",
-            "type": "string"
-          },
-          "esUltima": {
-            "title": "Esultima",
-            "type": "boolean"
-          },
-          "fechaDecision": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fechadecision"
-          },
-          "fechaEvaluacion": {
-            "format": "date-time",
-            "title": "Fechaevaluacion",
-            "type": "string"
-          },
-          "idAnalista": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Idanalista"
-          },
-          "idEvaluacion": {
-            "format": "uuid",
-            "title": "Idevaluacion",
-            "type": "string"
-          },
-          "ingresoMensual": {
-            "title": "Ingresomensual",
-            "type": "string"
-          },
-          "limite": {
-            "title": "Limite",
-            "type": "string"
-          },
-          "regla": {
-            "title": "Regla",
-            "type": "string"
-          },
-          "resultado": {
-            "description": "La decisión del analista si la hay; si no, el de la regla.",
-            "title": "Resultado",
-            "type": "string"
-          },
-          "resultadoRegla": {
-            "title": "Resultadoregla",
-            "type": "string"
-          },
-          "resultadoVerificacion": {
-            "title": "Resultadoverificacion",
-            "type": "string"
-          },
-          "ronda": {
-            "title": "Ronda",
-            "type": "integer"
-          },
-          "score": {
-            "title": "Score",
-            "type": "string"
-          }
-        },
-        "required": [
-          "idEvaluacion",
-          "ronda",
-          "fechaEvaluacion",
-          "score",
-          "limite",
-          "regla",
-          "resultadoRegla",
-          "ingresoMensual",
-          "deudaMensual",
-          "resultadoVerificacion",
-          "decision",
-          "comentario",
-          "fechaDecision",
-          "idAnalista",
-          "resultado",
-          "esUltima"
-        ],
-        "title": "EvaluacionRespuesta",
         "type": "object"
       },
       "EventoCreditoRespuesta": {
@@ -3892,6 +4126,123 @@
           "motivo"
         ],
         "title": "HistorialRespuesta",
+        "type": "object"
+      },
+      "IncidenteAvanzar": {
+        "additionalProperties": false,
+        "properties": {
+          "estado": {
+            "enum": [
+              "EN_PROGRESO",
+              "RESUELTO",
+              "CERRADO"
+            ],
+            "title": "Estado",
+            "type": "string"
+          },
+          "resolucion": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolucion"
+          }
+        },
+        "required": [
+          "estado"
+        ],
+        "title": "IncidenteAvanzar",
+        "type": "object"
+      },
+      "IncidenteCrear": {
+        "additionalProperties": false,
+        "properties": {
+          "prioridad": {
+            "enum": [
+              "P1",
+              "P2",
+              "P3",
+              "P4"
+            ],
+            "title": "Prioridad",
+            "type": "string"
+          },
+          "titulo": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Titulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prioridad",
+          "titulo"
+        ],
+        "title": "IncidenteCrear",
+        "type": "object"
+      },
+      "IncidenteRespuesta": {
+        "properties": {
+          "abierto_por": {
+            "title": "Abierto Por",
+            "type": "string"
+          },
+          "actualizado_en": {
+            "format": "date-time",
+            "title": "Actualizado En",
+            "type": "string"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "estado": {
+            "title": "Estado",
+            "type": "string"
+          },
+          "id_incidente": {
+            "format": "uuid",
+            "title": "Id Incidente",
+            "type": "string"
+          },
+          "prioridad": {
+            "title": "Prioridad",
+            "type": "string"
+          },
+          "resolucion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolucion"
+          },
+          "titulo": {
+            "title": "Titulo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_incidente",
+          "prioridad",
+          "titulo",
+          "estado",
+          "resolucion",
+          "abierto_por",
+          "creado_en",
+          "actualizado_en"
+        ],
+        "title": "IncidenteRespuesta",
         "type": "object"
       },
       "LiberacionRegistrar": {
@@ -5758,6 +6109,80 @@
         "title": "RolAsignar",
         "type": "object"
       },
+      "SelloCrear": {
+        "additionalProperties": false,
+        "properties": {
+          "eventos": {
+            "description": "Cuántos eventos tiene el tramo, según quien lo selló.",
+            "minimum": 1.0,
+            "title": "Eventos",
+            "type": "integer"
+          },
+          "hasta_evento": {
+            "description": "Último evento del tramo; el tramo empieza tras el último sello.",
+            "minimum": 1.0,
+            "title": "Hasta Evento",
+            "type": "integer"
+          },
+          "hmac": {
+            "description": "HMAC encadenado del tramo, con la clave de Seguridad.",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Hmac",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hasta_evento",
+          "eventos",
+          "hmac"
+        ],
+        "title": "SelloCrear",
+        "type": "object"
+      },
+      "SelloRespuesta": {
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "desde_evento": {
+            "title": "Desde Evento",
+            "type": "integer"
+          },
+          "eventos": {
+            "title": "Eventos",
+            "type": "integer"
+          },
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "hasta_evento": {
+            "title": "Hasta Evento",
+            "type": "integer"
+          },
+          "hmac": {
+            "title": "Hmac",
+            "type": "string"
+          },
+          "id_sello": {
+            "title": "Id Sello",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id_sello",
+          "desde_evento",
+          "hasta_evento",
+          "eventos",
+          "hmac",
+          "actor",
+          "fecha_hora"
+        ],
+        "title": "SelloRespuesta",
+        "type": "object"
+      },
       "ServicioCrear": {
         "additionalProperties": false,
         "properties": {
@@ -6019,7 +6444,7 @@
           },
           "evaluaciones": {
             "items": {
-              "$ref": "#/components/schemas/EvaluacionRespuesta"
+              "$ref": "#/components/schemas/COREDB__routers__creditos_evaluacion__EvaluacionRespuesta"
             },
             "title": "Evaluaciones",
             "type": "array"
@@ -7278,7 +7703,7 @@
   "paths": {
     "/coredb/auditoria": {
       "get": {
-        "description": "Los eventos de la bitácora, del más reciente al más antiguo. Cada operación de la\nAPI deja el suyo con el usuario que la hizo. El detalle no lleva datos personales.",
+        "description": "Los eventos de la bitácora, del más reciente al más antiguo (con `despues_de_id`, al\nrevés). Cada operación de la API deja el suyo con el usuario que la hizo. El detalle no\nlleva datos personales.",
         "operationId": "eventos_coredb_auditoria_get",
         "parameters": [
           {
@@ -7413,6 +7838,25 @@
               "description": "Solo eventos con un id menor (para paginar).",
               "title": "Antes De Id"
             }
+          },
+          {
+            "description": "Solo eventos con un id mayor, del más antiguo al más reciente (para sellar).",
+            "in": "query",
+            "name": "despues_de_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Solo eventos con un id mayor, del más antiguo al más reciente (para sellar).",
+              "title": "Despues De Id"
+            }
           }
         ],
         "responses": {
@@ -7447,6 +7891,122 @@
           }
         ],
         "summary": "Eventos",
+        "tags": [
+          "auditoría"
+        ]
+      }
+    },
+    "/coredb/auditoria/sellos": {
+      "get": {
+        "description": "Los sellos de la bitácora, del más antiguo al más reciente. Cada uno cubre los eventos\n(desde_evento, hasta_evento] y encadena el HMAC del anterior.",
+        "operationId": "sellos_coredb_auditoria_sellos_get",
+        "parameters": [
+          {
+            "description": "Solo sellos con un id mayor (para paginar).",
+            "in": "query",
+            "name": "despues_de_id",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Solo sellos con un id mayor (para paginar).",
+              "minimum": 0,
+              "title": "Despues De Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SelloRespuesta"
+                  },
+                  "title": "Response Sellos Coredb Auditoria Sellos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Sellos",
+        "tags": [
+          "auditoría"
+        ]
+      },
+      "post": {
+        "description": "Guarda el sello que calculó el módulo Seguridad (solo él, con OPERAR_SEGURIDAD). La base\ncomprueba que el tramo sigue al último sello y que tiene los eventos declarados.",
+        "operationId": "sellar_coredb_auditoria_sellos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelloCrear"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelloRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "BNA-SELLO: el tramo no sigue al último sello o no tiene esos eventos"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Sellar",
         "tags": [
           "auditoría"
         ]
@@ -13217,6 +13777,359 @@
         ]
       }
     },
+    "/coredb/seguridad/desafios": {
+      "post": {
+        "description": "Guarda el desafío ligado a la operación con el HMAC de su código. Vence a los 120 s y\ntres fallos lo agotan. COREDB nunca recibe el código.",
+        "operationId": "crear_desafio_coredb_seguridad_desafios_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Persona-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Persona-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesafioPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesafioRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "BNA-DESAFIO: la operación ya tiene una decisión"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Crear Desafio",
+        "tags": [
+          "seguridad"
+        ]
+      }
+    },
+    "/coredb/seguridad/evaluaciones": {
+      "post": {
+        "description": "Evalúa una operación contra el tope real del canal y el consumo real del día. No mueve\ndinero. Sobre el 80 % del tope responde DESAFIO_REQUERIDO; con el desafío y el HMAC del\ncódigo, AUTORIZADA o DESAFIO_RECHAZADO (el intento queda contado).",
+        "operationId": "evaluar_coredb_seguridad_evaluaciones_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Persona-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Persona-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluacionPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/COREDB__routers__seguridad__EvaluacionRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "BNA-CUENTA"
+          },
+          "409": {
+            "description": "BNA-IDEMPOTENCIA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Evaluar",
+        "tags": [
+          "seguridad"
+        ]
+      }
+    },
+    "/coredb/seguridad/incidentes": {
+      "get": {
+        "description": "Los incidentes, del más reciente al más antiguo.",
+        "operationId": "incidentes_coredb_seguridad_incidentes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Persona-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Persona-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IncidenteRespuesta"
+                  },
+                  "title": "Response Incidentes Coredb Seguridad Incidentes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Incidentes",
+        "tags": [
+          "seguridad"
+        ]
+      },
+      "post": {
+        "operationId": "abrir_incidente_coredb_seguridad_incidentes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Persona-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Persona-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidenteCrear"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidenteRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Abrir Incidente",
+        "tags": [
+          "seguridad"
+        ]
+      }
+    },
+    "/coredb/seguridad/incidentes/{id_incidente}/estado": {
+      "post": {
+        "description": "ABIERTO → EN_PROGRESO → RESUELTO (exige la resolución) → CERRADO, sin saltos.",
+        "operationId": "avanzar_incidente_coredb_seguridad_incidentes__id_incidente__estado_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_incidente",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Incidente",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Persona-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Persona-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidenteAvanzar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidenteRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "INCIDENTE_NO_ENCONTRADO"
+          },
+          "409": {
+            "description": "BNA-INCIDENTE-TRANSICION"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Avanzar Incidente",
+        "tags": [
+          "seguridad"
+        ]
+      }
+    },
     "/coredb/tarjetas": {
       "get": {
         "description": "Las tarjetas del cliente, de la más reciente a la más antigua. No hay una ruta que\nliste todas las tarjetas.",
@@ -13490,9 +14403,93 @@
         ]
       }
     },
+    "/coredb/tarjetas/{id_tarjeta}/desbloqueo": {
+      "post": {
+        "description": "Devuelve a ACTIVA una tarjeta BLOQUEADA o RETENIDA, con origen SEGURIDAD. La base solo lo\npermite al rol bna_seguridad: esta ruta usa esa cuenta y nada más. El actor es la persona.",
+        "operationId": "desbloquear_tarjeta_coredb_tarjetas__id_tarjeta__desbloqueo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Persona-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Persona-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesbloqueoPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TarjetaRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "TARJETA_NO_ENCONTRADA"
+          },
+          "409": {
+            "description": "TARJETA_NO_BLOQUEADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "SEGURIDAD_NO_CONFIGURADA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Desbloquear Tarjeta",
+        "tags": [
+          "seguridad"
+        ]
+      }
+    },
     "/coredb/tarjetas/{id_tarjeta}/estado": {
       "post": {
-        "description": "Cambia el estado de una tarjeta. El origen viene del token, no de la petición. El\ndesbloqueo no está disponible: pendiente de un cliente de Seguridad (403 BNA-DESBLOQUEO).",
+        "description": "Cambia el estado de una tarjeta. El origen viene del token, no de la petición. El\ndesbloqueo lo hace solo el módulo Seguridad, por POST /coredb/tarjetas/{id}/desbloqueo (aquí,\n403 BNA-DESBLOQUEO).",
         "operationId": "cambiar_estado_coredb_tarjetas__id_tarjeta__estado_post",
         "parameters": [
           {

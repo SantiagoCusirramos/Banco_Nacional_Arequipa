@@ -20,6 +20,8 @@ core.producto_credito
 core.tipo_cambio
 core.usuario_sistema
 core.v_evento_auditoria_api
+core.v_incidente_api
+core.v_sello_auditoria_api
 creditos.v_aprobacion_api
 creditos.v_calendario_api
 creditos.v_conciliacion_cobranza

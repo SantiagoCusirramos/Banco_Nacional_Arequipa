@@ -33,11 +33,18 @@ AFILIAR_BILLETERA = "AFILIAR_BILLETERA"
 REGISTRAR_COMERCIO = "REGISTRAR_COMERCIO"
 OPERAR_BILLETERA = "OPERAR_BILLETERA"
 ACCIONES_BILLETERA = frozenset({AFILIAR_BILLETERA, REGISTRAR_COMERCIO, OPERAR_BILLETERA})
+# Propias de COREDB para el módulo Seguridad (bd-v1.13). OPERAR_SEGURIDAD la tiene solo su
+# usuario de servicio: las rutas /coredb/seguridad/* y el desbloqueo de tarjetas exigen además
+# el token de la persona por la que actúa (X-Persona-Token), con su propio permiso, y la
+# registran a ella en la bitácora. GESTIONAR_INCIDENTES abre y avanza incidentes.
+OPERAR_SEGURIDAD = "OPERAR_SEGURIDAD"
+GESTIONAR_INCIDENTES = "GESTIONAR_INCIDENTES"
 ACCIONES = (ACCIONES_CORE | {VALIDAR_IDENTIDAD, DESEMBOLSAR_CREDITO, REGISTRAR_MORA, REGISTRAR_EMPLEADO}
-            | ACCIONES_BILLETERA)
+            | ACCIONES_BILLETERA | {OPERAR_SEGURIDAD, GESTIONAR_INCIDENTES})
 
 PERMISOS: dict[str, frozenset[str]] = {
-    "ADMINISTRADOR": ACCIONES_CORE | {DESEMBOLSAR_CREDITO, REGISTRAR_MORA, REGISTRAR_EMPLEADO} | ACCIONES_BILLETERA,
+    "ADMINISTRADOR": (ACCIONES_CORE | {DESEMBOLSAR_CREDITO, REGISTRAR_MORA, REGISTRAR_EMPLEADO} | ACCIONES_BILLETERA
+                      | {GESTIONAR_INCIDENTES}),
     "ANALISTA": frozenset({
         "APROBAR_CREDITO", "CONSULTAR_DEUDA", "EVALUAR_CREDITO", "VER_CLIENTE", "VER_CREDITO",
         "VER_CUENTA",
@@ -55,7 +62,7 @@ PERMISOS: dict[str, frozenset[str]] = {
         "MODIFICAR_CUENTA", "REGISTRAR_MOVIMIENTO", "REGISTRAR_PAGO", "VER_CLIENTE",
         "VER_CREDITO", "VER_CUENTA", "VER_TARJETA", DESEMBOLSAR_CREDITO,
         # La verificación del documento en ventanilla es la evidencia IDENTIDAD del desembolso.
-        VALIDAR_IDENTIDAD, AFILIAR_BILLETERA, REGISTRAR_COMERCIO,
+        VALIDAR_IDENTIDAD, AFILIAR_BILLETERA, REGISTRAR_COMERCIO, GESTIONAR_INCIDENTES,
     }),
     "SERVICIO:CLIENTES": frozenset({
         "VER_CLIENTE", "CREAR_CLIENTE", "MODIFICAR_CLIENTE", VALIDAR_IDENTIDAD,
@@ -67,6 +74,8 @@ PERMISOS: dict[str, frozenset[str]] = {
     "SERVICIO:COBRANZA": frozenset({"VER_CREDITO", "CONSULTAR_DEUDA", REGISTRAR_MORA}),
     # La billetera (Chaski) solo opera por el cliente que le dio su token.
     "SERVICIO:BILLETERA": frozenset({OPERAR_BILLETERA}),
+    # Seguridad sella la bitácora con su clave (por eso la lee) y actúa por personas.
+    "SERVICIO:SEGURIDAD": frozenset({OPERAR_SEGURIDAD, "VER_AUDITORIA"}),
 }
 
 

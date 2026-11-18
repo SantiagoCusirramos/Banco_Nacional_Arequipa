@@ -26,10 +26,14 @@ ESTADOS_POR_REGLA = {
     "BNA-SOLICITUD-PERMISO": 403,
     "BNA-SOLICITUD-NO-PENDIENTE": 409,
     "BNA-COMERCIO-DUPLICADO": 409,
+    # Seguridad (bd-v1.13).
+    "BNA-SELLO": 409,
+    "BNA-DESAFIO": 409,
+    "BNA-INCIDENTE-TRANSICION": 409,
 }
 # El mensaje de la base incluye saldos o consumos, que no se devuelven al cliente.
 MENSAJES_POR_REGLA = {
-    "BNA-DESBLOQUEO": "El desbloqueo de tarjetas no está disponible: pendiente de un cliente de Seguridad.",
+    "BNA-DESBLOQUEO": "El desbloqueo de tarjetas solo se hace por el módulo Seguridad.",
     "BNA-SALDO": "Saldo disponible insuficiente.",
     "RN-TOP-001": "Se superó el tope diario del canal.",
     "ERR-TAR-007": "Se superó el tope diario del canal.",

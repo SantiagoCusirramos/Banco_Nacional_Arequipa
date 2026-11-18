@@ -146,6 +146,35 @@ class EventoAuditoria(Base):
     fecha_hora: Mapped[datetime] = mapped_column(FechaUtc)
 
 
+class SelloAuditoria(Base):
+    # Sellos HMAC encadenados de la bitácora (bd-v1.13); los calcula el módulo Seguridad.
+    __tablename__ = "v_sello_auditoria_api"
+    __table_args__ = {"schema": "core"}
+
+    id_sello: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    desde_evento: Mapped[int] = mapped_column(BigInteger)
+    hasta_evento: Mapped[int] = mapped_column(BigInteger)
+    eventos: Mapped[int] = mapped_column(BigInteger)
+    hmac: Mapped[str] = mapped_column(String(64))
+    actor: Mapped[str] = mapped_column(String(40))
+    fecha_hora: Mapped[datetime] = mapped_column(FechaUtc)
+
+
+class IncidenteSeguridad(Base):
+    # Incidentes de seguridad (bd-v1.13); la vista publica el id como texto.
+    __tablename__ = "v_incidente_api"
+    __table_args__ = {"schema": "core"}
+
+    id_incidente: Mapped[str] = mapped_column(String(36), primary_key=True)
+    prioridad: Mapped[str] = mapped_column(String(2))
+    titulo: Mapped[str] = mapped_column(String(200))
+    estado: Mapped[str] = mapped_column(String(15))
+    resolucion: Mapped[str | None] = mapped_column(String(500))
+    abierto_por: Mapped[str] = mapped_column(String(40))
+    creado_en: Mapped[datetime] = mapped_column(FechaUtc)
+    actualizado_en: Mapped[datetime] = mapped_column(FechaUtc)
+
+
 class Tarjeta(Base):
     # La vista no incluye pan_token: bna_api no lee la tabla.
     __tablename__ = "v_tarjeta_api"

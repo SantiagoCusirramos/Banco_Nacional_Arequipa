@@ -33,6 +33,10 @@ Lo que no tiene valor por omisión está en el issue #116, «Pendientes tras la 
 | # | Decisión | Valor | Origen | Módulo afectado |
 |---|---|---|---|---|
 | 15 | Bloqueo del login del personal | 5 fallos seguidos bloquean el usuario 15 minutos (`core.fn_intentos_login`, `core.fn_minutos_bloqueo_login`, bd-v1.12-mysql). El login bloqueado responde el mismo 401. Los usuarios de servicio no se bloquean | PR #114 | Seguridad, COREDB |
+| 19 | Base del módulo Seguridad | Ninguna propia: COREDB/bna-core-db es la única base (decisión de Santiago Cusirramos). Seguridad usa los usuarios, el login y el bloqueo de COREDB y guarda sus datos en la base integrada (bd-v1.13-mysql); no hay rol CLIENTE ni revocación de sesiones | Santiago Cusirramos, PR de Seguridad sin base propia | Seguridad, COREDB |
+| 20 | Topes de la evaluación de Seguridad | Los reales de `core.limite_canal` con el consumo real del día (`core.consumo_diario`), no los del prototipo (ATM 1000, HB 5000, BILLETERA 500, acumulando decisiones). Evaluar no suma al consumo | Decisión 12 y bd-v1.13-mysql | Seguridad |
+| 21 | Desafío de Seguridad | Sobre el 80 % del tope, vence a los 120 s y se agota al tercer fallo (`core.fn_umbral_desafio`, `fn_segundos_desafio`, `fn_intentos_desafio`): los valores del prototipo de Seguridad. El código se muestra por el mismo canal (simulación) | Prototipo de Seguridad (Barca318) | Seguridad |
+| 22 | Quién desbloquea una tarjeta | Una persona con `BLOQUEAR_TARJETA` (OPERADOR, ADMINISTRADOR), solo por el módulo Seguridad; en la base, solo `bna_seguridad` ejecuta `desbloquear_tarjeta` | bna-core-db (rol `bna_seguridad`) y PR de Seguridad | Seguridad, Tarjetas |
 
 ## Créditos
 

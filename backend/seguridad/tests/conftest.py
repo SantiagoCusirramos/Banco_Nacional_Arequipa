@@ -1,25 +1,40 @@
+"""Pruebas de Seguridad. Las unitarias usan un COREDB en memoria (coredb_simulado.py); las de
+integración, COREDB y la base integrada reales a través del Bus (scripts/pruebas_integracion.sh)."""
 import pytest
-from uuid import uuid4
 from fastapi.testclient import TestClient
-from seguridad.app import app
-from seguridad.config import Settings
-from seguridad.store import Store
-from seguridad.security import HASHER
+
+from seguridad.app import Contexto, crear_app
+from seguridad.auth import Verificador
+from seguridad.config import Config
+from seguridad.coredb import ClienteCoreDb
+from seguridad.tests.coredb_simulado import SECRETO_SERVICIO, CoreDbSimulado
+
+CLAVE = "clave-de-pruebas-" + "k" * 32
 
 
 @pytest.fixture
-def client(tmp_path):
-    state = Store(Settings(str(tmp_path / 'test.sqlite3'), 'test-only-' + 'x' * 40))
-    with state.transaction() as db:
-        for name, role in [('admin', 'ADMINISTRADOR'), ('cliente', 'CLIENTE'), ('auditor', 'AUDITOR')]:
-            db.execute('INSERT INTO users(id,username,password_hash,role) VALUES(?,?,?,?)',
-                       (str(uuid4()), name, HASHER.hash('Local-Test-2026!'), role))
-    app.state.seguridad_store = state
-    with TestClient(app, headers={'X-Correlation-ID': 'pytest-seguridad'}) as c:
-        yield c
+def coredb():
+    return CoreDbSimulado()
 
 
-def login(client, username='admin'):
-    r = client.post('/seguridad/auth/login', json={'username': username, 'password': 'Local-Test-2026!'})
-    assert r.status_code == 200, r.text
-    return {'Authorization': 'Bearer ' + r.json()['access_token']}
+@pytest.fixture
+def config():
+    return Config(clave=CLAVE, servicio_secreto=SECRETO_SERVICIO, coredb_url="http://coredb.prueba",
+                  sellado_seg=0, sellado_antiguedad_seg=60)
+
+
+@pytest.fixture
+def ctx(coredb, config):
+    cliente = ClienteCoreDb(config.coredb_url, config.servicio_usuario, config.servicio_secreto,
+                            transporte=coredb.transporte())
+    return Contexto(config, cliente, Verificador(cliente, recordar_seg=0))
+
+
+@pytest.fixture
+def api(ctx):
+    with TestClient(crear_app(contexto=ctx), headers={"X-Correlation-ID": "pytest-seguridad"}) as cliente:
+        yield cliente
+
+
+def como(usuario: str) -> dict:
+    return {"Authorization": f"Bearer tok-{usuario}"}

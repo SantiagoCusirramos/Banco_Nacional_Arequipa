@@ -1017,6 +1017,95 @@ def flujo():
     paso("COREDB: la retención de 10.00 que el cajero no confirmó se liberó (EXTORNADA) y devolvió el saldo una "
          "vez; liberar de nuevo no cambia nada y confirmarla tarde da 422 BNA-CONFIRMACION")
 
+    # ── SEGURIDAD: sin base propia; guarda en la base integrada por COREDB, a través del Bus ──
+    seg = f"{SEGURIDAD}/seguridad"
+
+    def seguridad(metodo, ruta, esperado, cuerpo=None, token_persona=None):
+        estado, respuesta = pedir(metodo, seg + ruta, cuerpo, token_persona,
+                                  cabeceras={"X-Correlation-ID": str(uuid.uuid4())})
+        exigir(estado == esperado, f"Seguridad {metodo} {ruta}: esperaba {esperado}, recibió {estado} {respuesta}")
+        return respuesta
+
+    estado_seg = seguridad("GET", "/estado", 200)
+    exigir(estado_seg["base_propia"] is False and estado_seg["coredb_disponible"] is True,
+           f"Seguridad debía operar sin base propia y alcanzar COREDB: {estado_seg}")
+    exigir(seguridad("POST", "/operaciones/evaluar", 401, {"uuid_operacion": str(uuid.uuid4()), "num_cuenta": origen,
+                                                          "canal": "ATM", "monto": "1.00"}) ["error"]["code"]
+           == "TOKEN_REQUERIDO", "Seguridad debía exigir el token de la persona")
+    # El tope y el consumo reales del canal ATM para la cuenta: una evaluación de 1.00 los devuelve.
+    base_eval = {"num_cuenta": origen, "canal": "ATM"}
+    sonda = seguridad("POST", "/operaciones/evaluar", 200, {**base_eval, "uuid_operacion": str(uuid.uuid4()),
+                                                            "monto": "1.00"}, token_op)
+    exigir(sonda["decision"] == "AUTORIZADA" and sonda["efecto_financiero"] is False,
+           f"Evaluación de 1.00 por ATM: {sonda}")
+    tope, consumido = float(sonda["tope"]), float(sonda["consumido"])
+    operacion = {**base_eval, "uuid_operacion": str(uuid.uuid4()), "monto": f"{tope * 0.9 - consumido:.2f}"}
+    pedido = seguridad("POST", "/operaciones/evaluar", 200, operacion, token_op)
+    exigir(pedido["decision"] == "DESAFIO_REQUERIDO" and len(pedido["codigo_demo"]) == 6,
+           f"Sobre el 80 % del tope debía pedir un desafío: {pedido}")
+    con_codigo = {**operacion, "id_desafio": pedido["id_desafio"], "codigo": pedido["codigo_demo"]}
+    otro = "000000" if pedido["codigo_demo"] != "000000" else "111111"
+    exigir(seguridad("POST", "/operaciones/evaluar", 200, {**con_codigo, "codigo": otro}, token_op)["decision"]
+           == "DESAFIO_RECHAZADO", "Un código equivocado debía dar DESAFIO_RECHAZADO")
+    autorizada = seguridad("POST", "/operaciones/evaluar", 200, con_codigo, token_op)
+    exigir(autorizada["decision"] == "AUTORIZADA" and autorizada["repetida"] is False,
+           f"El código correcto debía autorizar: {autorizada}")
+    repetida = seguridad("POST", "/operaciones/evaluar", 200, operacion, token_op)
+    exigir(repetida["decision"] == "AUTORIZADA" and repetida["repetida"] is True,
+           f"Repetir la operación debía devolver la misma decisión: {repetida}")
+    sobre_tope = seguridad("POST", "/operaciones/evaluar", 200,
+                           {**base_eval, "uuid_operacion": str(uuid.uuid4()), "monto": f"{tope - consumido + 1:.2f}"},
+                           token_op)
+    exigir((sobre_tope["decision"], sobre_tope["motivo"]) == ("RECHAZADA", "TOPE"),
+           f"Sobre el tope debía rechazar: {sobre_tope}")
+    disponible = coredb("GET", f"/coredb/cuentas/{origen}", 200, token=token)["saldo_disponible"]
+    exigir(disponible == "350.00", f"Evaluar no debía mover el saldo: {disponible}")
+    eventos = coredb("GET", f"/coredb/auditoria?modulo=SEGURIDAD&id_entidad={operacion['uuid_operacion']}", 200,
+                     token=token)
+    exigir({(e["accion"], e["actor"]) for e in eventos} >= {("CREAR_DESAFIO", operador),
+                                                           ("RECHAZAR_DESAFIO", operador),
+                                                           ("EVALUAR_OPERACION", operador)},
+           f"La bitácora debía tener el desafío y la decisión a nombre de {operador}: {eventos}")
+    paso(f"SEGURIDAD: {operador} evalúa contra el tope real de ATM ({tope:.2f}, consumido {consumido:.2f}): sobre el "
+         "80 % pide un desafío, el código equivocado se rechaza, el correcto autoriza, repetir devuelve lo mismo, sobre "
+         "el tope se rechaza; sin mover dinero y con todo en la bitácora de COREDB")
+
+    incidente = seguridad("POST", "/incidentes", 201, {"prioridad": "P2", "titulo": "Intentos de acceso repetidos"},
+                          token_op)
+    exigir(incidente["estado"] == "ABIERTO" and incidente["abierto_por"] == operador
+           and incidente["sla_atencion_min"] == 30, f"Incidente abierto: {incidente}")
+    salto = seguridad("PATCH", f"/incidentes/{incidente['id_incidente']}", 409,
+                      {"estado": "RESUELTO", "resolucion": "Sin pasar por EN_PROGRESO"}, token_op)
+    exigir(salto["error"]["code"] == "BNA-INCIDENTE-TRANSICION", f"Saltar un estado debía dar 409: {salto}")
+    for estado_inc, extra in (("EN_PROGRESO", {}), ("RESUELTO", {"resolucion": "Se bloqueó el origen"}),
+                              ("CERRADO", {})):
+        incidente = seguridad("PATCH", f"/incidentes/{incidente['id_incidente']}", 200,
+                              {"estado": estado_inc, **extra}, token_op)
+    exigir(incidente["estado"] == "CERRADO" and incidente["resolucion"] == "Se bloqueó el origen",
+           f"El incidente debía quedar CERRADO con su resolución: {incidente}")
+    paso(f"SEGURIDAD: {operador} abre un incidente P2 (SLA 30/240 min), no puede saltar de ABIERTO a RESUELTO, y lo "
+         "lleva a EN_PROGRESO, RESUELTO con resolución y CERRADO")
+
+    desbloqueo = seguridad("POST", f"/tarjetas/{tarjeta}/desbloqueo", 200,
+                           {"motivo": "El cliente confirmó su identidad"}, token_op)
+    exigir(desbloqueo["estado_tarjeta"] == "ACTIVA", f"Desbloqueo por Seguridad: {desbloqueo}")
+    seguridad("POST", f"/tarjetas/{tarjeta}/desbloqueo", 409, {"motivo": "Otra vez"}, token_op)
+    eventos = coredb("GET", f"/coredb/auditoria?accion=DESBLOQUEAR_TARJETA&id_entidad={tarjeta}", 200, token=token)
+    exigir([e["actor"] for e in eventos] == [operador],
+           f"El desbloqueo debía quedar en la bitácora a nombre de {operador}: {eventos}")
+    paso(f"SEGURIDAD: {operador} desbloquea la tarjeta que TARJETAS no puede desbloquear (ACTIVA, origen SEGURIDAD, "
+         "actor en la bitácora); desbloquearla otra vez da 409")
+
+    seguridad("POST", "/auditoria/sellos", 200, token_persona=token)
+    verificacion = seguridad("GET", "/auditoria/verificar", 200, token_persona=token)
+    exigir(verificacion["valida"] is True and verificacion["sellos_verificados"] >= 1,
+           f"La bitácora sellada debía verificarse: {verificacion}")
+    exigir(seguridad("GET", "/auditoria/verificar", 403, token_persona=token_op)["error"]["code"] == "PERMISO_DENEGADO",
+           "Verificar la bitácora exige VER_AUDITORIA")
+    paso(f"SEGURIDAD: la bitácora de COREDB queda sellada con HMAC encadenado y se verifica "
+         f"({verificacion['sellos_verificados']} sellos, hasta el evento {verificacion['ultimo_evento_sellado']}); "
+         "un operador no la verifica")
+
     # ── Todo pasó por el Bus: el flujo y cada puente del frontend ────────────
     despues = metricas_bus()
 
@@ -1033,11 +1122,12 @@ def flujo():
     # Fase 2: cada módulo llegó a COREDB a través del Bus, con su propia credencial.
     # ATM no llama a COREDB directo; llama a TARJETAS por el Bus con su propia credencial.
     exigir(crecio("ATM", "TARJETAS"), "El ATM no llegó a TARJETAS por el Bus con su credencial")
-    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA", "BILLETERA")
-              if not crecio(m, "COREDB")]
+    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA", "BILLETERA",
+                          "SEGURIDAD") if not crecio(m, "COREDB")]
     exigir(not faltan, f"Estos módulos no llegaron a COREDB por el Bus: {faltan}")
     paso("Bus de Servicios: el flujo y los ocho puentes del frontend llegaron a los módulos por el Bus, "
-         "CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO, COBRANZA y BILLETERA llegaron a COREDB por él "
+         "CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO, COBRANZA, BILLETERA y SEGURIDAD llegaron a COREDB "
+         "por él "
          "y el ATM llegó a TARJETAS por él")
 
 

@@ -168,7 +168,8 @@ def cambiar_estado(
     actor: Actor = Depends(requiere_permiso("BLOQUEAR_TARJETA")),
 ):
     """Cambia el estado de una tarjeta. El origen viene del token, no de la petición. El
-    desbloqueo no está disponible: pendiente de un cliente de Seguridad (403 BNA-DESBLOQUEO)."""
+    desbloqueo lo hace solo el módulo Seguridad, por POST /coredb/tarjetas/{id}/desbloqueo (aquí,
+    403 BNA-DESBLOQUEO)."""
     tarjeta = _obtener(db, id_tarjeta)
     aplicar_cambio_estado(
         db, id_tarjeta, datos.estado, datos.motivo, actor.origen, actor.usuario

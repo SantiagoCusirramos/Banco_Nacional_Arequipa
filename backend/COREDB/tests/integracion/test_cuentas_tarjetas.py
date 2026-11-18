@@ -237,7 +237,7 @@ def test_acentos_llegan_exactos(cliente, abrir_cuenta, consulta):
     ]
 
 
-def test_desbloqueo_pendiente_de_un_cliente_de_seguridad(cliente, abrir_cuenta, consulta):
+def test_el_desbloqueo_solo_se_hace_por_seguridad(cliente, abrir_cuenta, consulta):
     id_tarjeta = emitir(cliente, abrir_cuenta()).json()["id_tarjeta"]
     url = f"/coredb/tarjetas/{id_tarjeta}/estado"
     cliente.post(url, json={"estado": "ACTIVA"})
@@ -246,7 +246,7 @@ def test_desbloqueo_pendiente_de_un_cliente_de_seguridad(cliente, abrir_cuenta, 
     assert respuesta.status_code == 403
     error = respuesta.json()["error"]
     assert error["code"] == "BNA-DESBLOQUEO"
-    assert "pendiente de un cliente de Seguridad" in error["message"]
+    assert "módulo Seguridad" in error["message"]
     assert consulta(
         "SELECT estado_tarjeta e FROM tarjetas.tarjeta WHERE id_tarjeta=UUID_TO_BIN(%s)", id_tarjeta
     ) == [{"e": "BLOQUEADA"}]
