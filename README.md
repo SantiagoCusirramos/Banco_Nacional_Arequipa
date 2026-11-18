@@ -371,6 +371,29 @@ y reinicia los fallos tras uno exitoso. El bloqueo vence solo. Un usuario de ser
 sin acceso a pedido de cualquiera; sus fallos se auditan igual (pruebas X700 a X710).
 Agrega una tabla: una base anterior necesita un volumen nuevo.
 
+### Seguridad sin base propia (desde `bd-v1.13-mysql`)
+
+El módulo Seguridad guardaba en SQLite sus usuarios, sus decisiones, sus desafíos, una
+bitácora firmada y sus incidentes. Usuarios, login y bloqueo ya estaban aquí (secciones 1,
+10 y 17) y la bitácora es `core.evento_auditoria`; v1.13 agrega lo que faltaba, y el
+módulo llega a ello solo por COREDB:
+
+| Objeto | Qué hace |
+|---|---|
+| `core.evaluar_operacion(uuid, cuenta, canal, monto, desafío, hmac, actor, OUT decisión, motivo, tope, consumido, repetida)` | Compara el monto con el tope real del canal en la moneda de la cuenta (`core.limite_canal`) y el consumo real del día (`core.consumo_diario`). AUTORIZADA; RECHAZADA con motivo `CUENTA` (no ACTIVA), `CANAL` (sin fila o deshabilitado) o `TOPE`; sobre el 80 % del tope, `DESAFIO_REQUERIDO`. No mueve dinero ni suma al consumo. La decisión final se guarda en `core.evaluacion_operacion` (solo inserción): repetir el uuid con los mismos datos la devuelve, con otros falla con `BNA-IDEMPOTENCIA` |
+| `core.crear_desafio(id, uuid, cuenta, canal, monto, hmac, actor, OUT vence)` | Guarda el desafío ligado a la operación con el **HMAC** del código, que calcula el módulo con su clave: la base no ve el código ni la clave. Vence a los 120 s; tres fallos lo agotan. Un código incorrecto devuelve `DESAFIO_RECHAZADO` (no es un error: el intento queda) |
+| `core.sellar_auditoria(hasta, eventos, hmac, actor, OUT id, OUT desde)` | Guarda el sello HMAC encadenado del tramo (último sello, hasta] que calculó el módulo; rechaza con `BNA-SELLO` un tramo que no sigue al último sello o que no tiene los eventos declarados. `core.sello_auditoria` es de solo inserción |
+| `core.abrir_incidente` / `core.avanzar_incidente` | Incidente P1 a P4: ABIERTO → EN_PROGRESO → RESUELTO (exige resolución) → CERRADO, sin saltos (`BNA-INCIDENTE-TRANSICION`) |
+| `core.fn_umbral_desafio()` / `fn_segundos_desafio()` / `fn_intentos_desafio()` | 0.80, 120 y 3: los valores del prototipo de Seguridad |
+
+`bna_api` ejecuta los procedimientos y lee `core.v_sello_auditoria_api` y
+`core.v_incidente_api`; no lee los desafíos ni escribe las tablas. Cada operación deja su
+evento (`EVALUAR_OPERACION`, `CREAR_DESAFIO`, `RECHAZAR_DESAFIO`, `ABRIR_INCIDENTE`,
+`INCIDENTE_<estado>`), sin el código ni el HMAC; sellar no deja evento. Con la clave del
+HMAC fuera de la base, borrar o cambiar un evento sellado, o vaciar la bitácora (G03), se
+detecta al verificar los sellos; lo no sellado no queda protegido. Pruebas X720 a X761.
+Agrega tablas: una base anterior necesita un volumen nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.

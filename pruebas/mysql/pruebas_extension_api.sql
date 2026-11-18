@@ -1602,3 +1602,191 @@ CALL prueba.rechaza('X708', 'Extensión', 'Login', 'No se desbloquea un usuario 
 CALL prueba.rechaza('X709', 'Extensión', 'bna_api', 'bna_api no lee core.bloqueo_login',
   JSON_ARRAY("SELECT COUNT(*) INTO @n FROM core.bloqueo_login"),
   'denied', 'privilegio');
+
+-- ---------------------------------------------------------------------
+-- Seguridad (v1.13): evaluación con desafío, sellos de la bitácora e incidentes.
+-- Cada prueba abre su propia cuenta (SEG-1), sin consumo del día.
+-- ---------------------------------------------------------------------
+SET @seg_cta = "CALL cuentas.abrir_cuenta('SEG-1', '00219100000000007201', 'PEN', 'INDIVIDUAL', NULL, JSON_ARRAY('C001'), 'pruebas')";
+SET @seg_op = "UUID_TO_BIN('72000000-0000-4000-8000-000000000001')";
+SET @seg_d1 = "UUID_TO_BIN('72000000-0000-4000-8000-0000000000d1')";
+SET @seg_ok = "REPEAT('a', 64)";
+SET @seg_mal = "REPEAT('b', 64)";
+-- @seg_eval(canal, monto, desafío, hmac) para la operación @seg_op, actor op.seg.
+SET @seg_eval_atm = CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'ATM', 1300, ");
+SET @seg_desafio = CONCAT("CALL core.crear_desafio(", @seg_d1, ", ", @seg_op, ", 'SEG-1', 'ATM', 1300, ", @seg_ok, ", 'op.seg', @vence)");
+SET @seg_sin = CONCAT(@seg_eval_atm, "NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)");
+SET @seg_bien = CONCAT(@seg_eval_atm, @seg_d1, ", ", @seg_ok, ", 'op.seg', @d, @m, @l, @a, @r)");
+SET @seg_falla = CONCAT(@seg_eval_atm, @seg_d1, ", ", @seg_mal, ", 'op.seg', @d, @m, @l, @a, @r)");
+SET @seg_eventos = "(SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '72000000-0000-4000-8000-000000000001' AND modulo = 'SEGURIDAD' AND accion = ";
+
+CALL prueba.verifica('X720', 'Extensión', 'Seguridad', 'Bajo el 80 % del tope del canal la operación se autoriza y se audita',
+  JSON_ARRAY(@seg_cta, CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'ATM', 1000, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)")),
+  CONCAT("@d = 'AUTORIZADA' AND @m IS NULL AND @l = 1500 AND @a = 0 AND NOT @r AND ", @seg_eventos, "'EVALUAR_OPERACION' AND actor = 'op.seg') = 1"),
+  'AUTORIZADA, tope 1500, consumido 0, un evento', "CONCAT_WS(' ', @d, @m, @l, @a, @r)", 'procedimiento');
+
+CALL prueba.verifica('X721', 'Extensión', 'Seguridad', 'Sobre el tope del canal la operación se rechaza (TOPE)',
+  JSON_ARRAY(@seg_cta, CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'ATM', 1500.01, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)")),
+  "@d = 'RECHAZADA' AND @m = 'TOPE' AND @l = 1500", 'RECHAZADA TOPE', "CONCAT_WS(' ', @d, @m, @l, @a)", 'procedimiento');
+
+CALL prueba.verifica('X722', 'Extensión', 'Seguridad', 'Sobre el 80 % pide un desafío y no guarda decisión',
+  JSON_ARRAY(@seg_cta, @seg_sin, "SET @d1 = @d", @seg_sin),
+  CONCAT("@d1 = 'DESAFIO_REQUERIDO' AND @d = 'DESAFIO_REQUERIDO' AND NOT @r AND core.fn_umbral_desafio() = 0.80 AND ",
+         @seg_eventos, "'EVALUAR_OPERACION') = 0"),
+  'DESAFIO_REQUERIDO dos veces, sin evento de decisión', "CONCAT_WS(' ', @d1, @d, @r)", 'procedimiento');
+
+CALL prueba.verifica('X723', 'Extensión', 'Seguridad', 'Con el código correcto el desafío autoriza una vez',
+  JSON_ARRAY(@seg_cta, @seg_sin, @seg_desafio, @seg_bien),
+  CONCAT("@d = 'AUTORIZADA' AND NOT @r AND @vence BETWEEN UTC_TIMESTAMP(6) + INTERVAL 119 SECOND AND UTC_TIMESTAMP(6) + INTERVAL 120 SECOND",
+         " AND core.fn_segundos_desafio() = 120 AND ", @seg_eventos, "'CREAR_DESAFIO') = 1 AND ",
+         @seg_eventos, "'EVALUAR_OPERACION' AND JSON_EXTRACT(detalle, '$.con_desafio') = TRUE) = 1"),
+  'AUTORIZADA; vence en 120 s; CREAR_DESAFIO y EVALUAR_OPERACION con desafío', "CONCAT_WS(' ', @d, @r, @vence)", 'procedimiento');
+
+CALL prueba.verifica('X724', 'Extensión', 'Seguridad', 'Un código incorrecto no es un error: DESAFIO_RECHAZADO, y el correcto sigue sirviendo',
+  JSON_ARRAY(@seg_cta, @seg_desafio, @seg_falla, "SET @d1 = @d", @seg_bien),
+  CONCAT("@d1 = 'DESAFIO_RECHAZADO' AND @d = 'AUTORIZADA' AND ", @seg_eventos, "'RECHAZAR_DESAFIO') = 1"),
+  'DESAFIO_RECHAZADO y luego AUTORIZADA', "CONCAT_WS(' ', @d1, @d)", 'procedimiento');
+
+CALL prueba.verifica('X725', 'Extensión', 'Seguridad', 'Tres códigos incorrectos agotan el desafío',
+  JSON_ARRAY(@seg_cta, @seg_desafio, @seg_falla, @seg_falla, @seg_falla, @seg_bien),
+  "@d = 'DESAFIO_RECHAZADO' AND core.fn_intentos_desafio() = 3", 'DESAFIO_RECHAZADO con el código correcto', "@d", 'procedimiento');
+
+CALL prueba.verifica('X726', 'Extensión', 'Seguridad', 'El desafío de otra operación no sirve ni gasta sus intentos',
+  JSON_ARRAY(@seg_cta, @seg_desafio,
+             CONCAT("CALL core.evaluar_operacion(UUID_TO_BIN('72000000-0000-4000-8000-000000000002'), 'SEG-1', 'ATM', 1300, ", @seg_d1, ", ", @seg_ok, ", 'op.seg', @d, @m, @l, @a, @r)"),
+             "SET @d1 = @d",
+             CONCAT("CALL core.evaluar_operacion(UUID_TO_BIN('72000000-0000-4000-8000-000000000002'), 'SEG-1', 'ATM', 1300, ", @seg_d1, ", ", @seg_ok, ", 'op.seg', @d, @m, @l, @a, @r)"),
+             CONCAT("CALL core.evaluar_operacion(UUID_TO_BIN('72000000-0000-4000-8000-000000000002'), 'SEG-1', 'ATM', 1300, ", @seg_d1, ", ", @seg_ok, ", 'op.seg', @d, @m, @l, @a, @r)"),
+             CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'ATM', 1300, ", @seg_d1, ", ", @seg_ok, ", 'otro.seg', @d, @m, @l, @a, @r)"),
+             "SET @d2 = @d", @seg_bien),
+  "@d1 = 'DESAFIO_RECHAZADO' AND @d2 = 'DESAFIO_RECHAZADO' AND @d = 'AUTORIZADA'",
+  'otra operación y otro actor: DESAFIO_RECHAZADO; la suya: AUTORIZADA', "CONCAT_WS(' ', @d1, @d2, @d)", 'procedimiento');
+
+CALL prueba.verifica('X727', 'Extensión', 'Seguridad', 'Repetir la operación devuelve la misma decisión sin otro evento',
+  JSON_ARRAY(@seg_cta, @seg_desafio, @seg_bien, @seg_sin),
+  CONCAT("@d = 'AUTORIZADA' AND @r AND ", @seg_eventos, "'EVALUAR_OPERACION') = 1"),
+  'AUTORIZADA repetida, un evento', "CONCAT_WS(' ', @d, @r)", 'procedimiento');
+
+CALL prueba.rechaza('X728', 'Extensión', 'Seguridad', 'Repetir la operación con otro monto falla',
+  JSON_ARRAY(@seg_cta, CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'ATM', 10, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)"),
+             CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'ATM', 11, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)")),
+  '^BNA-IDEMPOTENCIA:', 'procedimiento');
+
+CALL prueba.verifica('X729', 'Extensión', 'Seguridad', 'La evaluación usa el consumo real del día de la cuenta en el canal',
+  JSON_ARRAY(@seg_cta,
+             "CALL cuentas.registrar_movimiento('SEG-1', 'DEPOSITO', 10000, 'Depósito X729', 'VEN', UUID_TO_BIN(UUID()), NULL, NULL, 'pruebas', @u, @x)",
+             "CALL cuentas.registrar_movimiento('SEG-1', 'RETIRO', 9000, 'Retiro X729', 'HB', UUID_TO_BIN(UUID()), NULL, NULL, 'pruebas', @u, @x)",
+             CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'HB', 600, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)"),
+             "SET @d1 = @d",
+             "CALL core.evaluar_operacion(UUID_TO_BIN('72000000-0000-4000-8000-000000000003'), 'SEG-1', 'HB', 1000.01, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)"),
+  "@d1 = 'DESAFIO_REQUERIDO' AND @d = 'RECHAZADA' AND @m = 'TOPE' AND @a = 9000 AND @l = 10000",
+  'consumido 9000 de 10000: 600 pide desafío, 1000.01 se rechaza', "CONCAT_WS(' ', @d1, @d, @m, @a, @l)", 'procedimiento');
+
+CALL prueba.verifica('X730', 'Extensión', 'Seguridad', 'Un canal sin tope en la moneda se rechaza (CANAL); ventanilla no tiene tope',
+  JSON_ARRAY(@seg_cta,
+             CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'AGE', 10, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)"),
+             "SET @d1 = CONCAT_WS(' ', @d, @m)",
+             "CALL core.evaluar_operacion(UUID_TO_BIN('72000000-0000-4000-8000-000000000003'), 'SEG-1', 'VEN', 999999, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)"),
+  "@d1 = 'RECHAZADA CANAL' AND @d = 'AUTORIZADA' AND @l IS NULL",
+  'AGE: RECHAZADA CANAL; VEN: AUTORIZADA sin tope', "CONCAT_WS(' / ', @d1, CONCAT_WS(' ', @d, coalesce(@l, 'sin tope')))", 'procedimiento');
+
+CALL prueba.rechaza('X731', 'Extensión', 'Seguridad', 'No se evalúa una operación de una cuenta que no existe',
+  JSON_ARRAY(CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'NO-EXISTE', 'ATM', 10, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)")),
+  '^BNA-CUENTA:', 'procedimiento');
+
+CALL prueba.rechaza('X732', 'Extensión', 'Seguridad', 'El desafío exige un HMAC de 64 hexadecimales en minúscula',
+  JSON_ARRAY(@seg_cta, CONCAT("CALL core.crear_desafio(", @seg_d1, ", ", @seg_op, ", 'SEG-1', 'ATM', 1300, REPEAT('A', 64), 'op.seg', @vence)")),
+  '^BNA-DESAFIO:', 'procedimiento');
+
+CALL prueba.rechaza('X733', 'Extensión', 'Seguridad', 'No se crea un desafío para una operación que ya tiene decisión',
+  JSON_ARRAY(@seg_cta, CONCAT("CALL core.evaluar_operacion(", @seg_op, ", 'SEG-1', 'ATM', 10, NULL, NULL, 'op.seg', @d, @m, @l, @a, @r)"),
+             @seg_desafio),
+  '^BNA-DESAFIO:', 'procedimiento');
+
+CALL prueba.rechaza('X734', 'Extensión', 'bna_api', 'bna_api no lee core.desafio_operacion (el HMAC del código)',
+  JSON_ARRAY("SELECT COUNT(*) INTO @n FROM core.desafio_operacion"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X735', 'Extensión', 'bna_api', 'bna_api no escribe core.evaluacion_operacion',
+  JSON_ARRAY(CONCAT("INSERT INTO core.evaluacion_operacion (uuid_operacion, num_cuenta, id_canal, monto, actor, decision, acumulado) VALUES (", @seg_op, ", 'CTA-PEN-1', 'ATM', 1, 'x', 'AUTORIZADA', 0)")),
+  'denied', 'privilegio');
+
+-- Sellos de la bitácora. Ninguna otra prueba deja sellos confirmados; cada una abre un
+-- incidente para que haya al menos un evento que sellar.
+SET @sel_prep = JSON_ARRAY(
+  "CALL core.abrir_incidente(UUID_TO_BIN('72000000-0000-4000-8000-0000000000e0'), 'P4', 'Evento para sellar', 'op.seg')",
+  "SET @sd = coalesce((SELECT max(hasta_evento) FROM core.v_sello_auditoria_api), 0)",
+  "SET @sh = (SELECT max(id_evento) FROM core.v_evento_auditoria_api)",
+  "SET @sn = (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_evento > @sd AND id_evento <= @sh)");
+
+CALL prueba.verifica('X740', 'Extensión', 'Seguridad', 'El sello cubre el tramo que sigue al último sello',
+  JSON_MERGE_PRESERVE(@sel_prep, JSON_ARRAY("CALL core.sellar_auditoria(@sh, @sn, REPEAT('c', 64), 'svc-seguridad', @s, @desde)")),
+  "@desde = @sd AND EXISTS (SELECT 1 FROM core.v_sello_auditoria_api WHERE id_sello = @s AND desde_evento = @sd AND hasta_evento = @sh AND eventos = @sn AND actor = 'svc-seguridad')",
+  'un sello de (último, máximo]', "CONCAT_WS(' ', @s, @desde, @sh, @sn)", 'procedimiento');
+
+CALL prueba.verifica('X741', 'Extensión', 'Seguridad', 'El sello siguiente empieza donde acabó el anterior',
+  JSON_MERGE_PRESERVE(@sel_prep, JSON_ARRAY(
+    "CALL core.sellar_auditoria(@sh, @sn, REPEAT('c', 64), 'svc-seguridad', @s1, @desde1)",
+    "CALL core.abrir_incidente(UUID_TO_BIN('72000000-0000-4000-8000-0000000000e1'), 'P3', 'Evento para el sello X741', 'op.seg')",
+    "SET @sh2 = (SELECT max(id_evento) FROM core.v_evento_auditoria_api)",
+    "CALL core.sellar_auditoria(@sh2, 1, REPEAT('d', 64), 'svc-seguridad', @s2, @desde2)")),
+  "@desde2 = @sh AND @s2 > @s1", 'el segundo tramo empieza en el fin del primero', "CONCAT_WS(' ', @sh, @desde2)", 'procedimiento');
+
+CALL prueba.rechaza('X742', 'Extensión', 'Seguridad', 'El sello rechaza un tramo con otra cantidad de eventos',
+  JSON_MERGE_PRESERVE(@sel_prep, JSON_ARRAY("CALL core.sellar_auditoria(@sh, @sn + 1, REPEAT('c', 64), 'svc-seguridad', @s, @desde)")),
+  '^BNA-SELLO: el tramo no tiene', 'procedimiento');
+
+CALL prueba.rechaza('X743', 'Extensión', 'Seguridad', 'No se vuelve a sellar un tramo ya sellado',
+  JSON_MERGE_PRESERVE(@sel_prep, JSON_ARRAY(
+    "CALL core.sellar_auditoria(@sh, @sn, REPEAT('c', 64), 'svc-seguridad', @s, @desde)",
+    "CALL core.sellar_auditoria(@sh, @sn, REPEAT('c', 64), 'svc-seguridad', @s, @desde)")),
+  '^BNA-SELLO: el tramo no sigue', 'procedimiento');
+
+CALL prueba.rechaza('X744', 'Extensión', 'Seguridad', 'El sello exige un HMAC de 64 hexadecimales',
+  JSON_MERGE_PRESERVE(@sel_prep, JSON_ARRAY("CALL core.sellar_auditoria(@sh, @sn, 'corto', 'svc-seguridad', @s, @desde)")),
+  '^BNA-SELLO:', 'procedimiento');
+
+CALL prueba.rechaza('X745', 'Extensión', 'bna_api', 'bna_api no escribe core.sello_auditoria',
+  JSON_ARRAY("INSERT INTO core.sello_auditoria (desde_evento, hasta_evento, eventos, hmac, actor) VALUES (0, 1, 1, REPEAT('c', 64), 'x')"),
+  'denied', 'privilegio');
+
+-- Incidentes.
+SET @inc = "UUID_TO_BIN('72000000-0000-4000-8000-0000000000f1')";
+SET @inc_abrir = CONCAT("CALL core.abrir_incidente(", @inc, ", 'P2', 'Intentos de acceso repetidos', 'op.seg')");
+
+CALL prueba.verifica('X750', 'Extensión', 'Seguridad', 'Un incidente se abre ABIERTO y queda auditado',
+  JSON_ARRAY(@inc_abrir),
+  "(SELECT CONCAT(estado, ' ', prioridad, ' ', abierto_por) FROM core.v_incidente_api WHERE id_incidente = '72000000-0000-4000-8000-0000000000f1') = 'ABIERTO P2 op.seg' AND EXISTS (SELECT 1 FROM core.v_evento_auditoria_api WHERE id_entidad = '72000000-0000-4000-8000-0000000000f1' AND accion = 'ABRIR_INCIDENTE')",
+  'ABIERTO P2 op.seg, con evento', "(SELECT CONCAT(estado, ' ', prioridad, ' ', abierto_por) FROM core.v_incidente_api WHERE id_incidente = '72000000-0000-4000-8000-0000000000f1')", 'procedimiento');
+
+CALL prueba.verifica('X751', 'Extensión', 'Seguridad', 'El ciclo completo llega a CERRADO y conserva la resolución',
+  JSON_ARRAY(@inc_abrir,
+             CONCAT("CALL core.avanzar_incidente(", @inc, ", 'EN_PROGRESO', NULL, 'op.seg')"),
+             CONCAT("CALL core.avanzar_incidente(", @inc, ", 'RESUELTO', 'Se bloqueó el origen', 'op.seg')"),
+             CONCAT("CALL core.avanzar_incidente(", @inc, ", 'CERRADO', NULL, 'admin.seg')")),
+  "(SELECT CONCAT(estado, ' / ', resolucion) FROM core.v_incidente_api WHERE id_incidente = '72000000-0000-4000-8000-0000000000f1') = 'CERRADO / Se bloqueó el origen' AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '72000000-0000-4000-8000-0000000000f1' AND accion IN ('INCIDENTE_EN_PROGRESO', 'INCIDENTE_RESUELTO', 'INCIDENTE_CERRADO')) = 3",
+  'CERRADO / Se bloqueó el origen; 3 eventos de estado', "(SELECT CONCAT(estado, ' / ', coalesce(resolucion, '')) FROM core.v_incidente_api WHERE id_incidente = '72000000-0000-4000-8000-0000000000f1')", 'procedimiento');
+
+CALL prueba.rechaza('X752', 'Extensión', 'Seguridad', 'Un incidente no salta de ABIERTO a RESUELTO',
+  JSON_ARRAY(@inc_abrir, CONCAT("CALL core.avanzar_incidente(", @inc, ", 'RESUELTO', 'Resuelto sin pasar por EN_PROGRESO', 'op.seg')")),
+  '^BNA-INCIDENTE-TRANSICION:', 'procedimiento');
+
+CALL prueba.rechaza('X753', 'Extensión', 'Seguridad', 'Resolver un incidente exige la resolución',
+  JSON_ARRAY(@inc_abrir, CONCAT("CALL core.avanzar_incidente(", @inc, ", 'EN_PROGRESO', NULL, 'op.seg')"),
+             CONCAT("CALL core.avanzar_incidente(", @inc, ", 'RESUELTO', '  ', 'op.seg')")),
+  '^BNA-INCIDENTE: resolverlo', 'procedimiento');
+
+CALL prueba.rechaza('X754', 'Extensión', 'Seguridad', 'No se avanza un incidente que no existe',
+  JSON_ARRAY(CONCAT("CALL core.avanzar_incidente(", @inc, ", 'EN_PROGRESO', NULL, 'op.seg')")),
+  '^BNA-INCIDENTE: el incidente no existe', 'procedimiento');
+
+CALL prueba.rechaza('X755', 'Extensión', 'Seguridad', 'La prioridad de un incidente es P1 a P4',
+  JSON_ARRAY(CONCAT("CALL core.abrir_incidente(", @inc, ", 'P5', 'Prioridad inexistente', 'op.seg')")),
+  '^BNA-INCIDENTE: la prioridad', 'procedimiento');
+
+-- Al final: cambia la hora de la sesión. Un desafío vencido no autoriza aunque el código sea
+-- el correcto, ni gasta la decisión.
+CALL prueba.verifica('X736', 'Extensión', 'Seguridad', 'Un desafío vencido (más de 120 s) no autoriza',
+  JSON_ARRAY(@seg_cta, @seg_desafio, "SET TIMESTAMP = UNIX_TIMESTAMP() + 121", @seg_bien,
+             "SET TIMESTAMP = DEFAULT"),
+  "@d = 'DESAFIO_RECHAZADO'", 'DESAFIO_RECHAZADO', "@d", 'procedimiento');
+SET TIMESTAMP = DEFAULT;

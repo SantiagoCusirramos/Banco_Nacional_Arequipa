@@ -280,6 +280,42 @@ ok=0; [ "$antes" = 1 ] && [ "$x710" = 'libre sin bloqueo login ' ] && ok=1
 registrar X710 bna_api_user Extensión 'Login v1.12' 'Un bloqueo vencido ya no bloquea y la cuenta de fallos empieza de cero' procedimiento \
   'libre sin bloqueo login' "bloqueado antes: $antes; después: $x710" "$ok"
 
+# X760 (v1.13): dos evaluaciones simultáneas con el mismo desafío y el código correcto. La
+# segunda espera el desafío y devuelve la decisión de la primera; una sola decisión guardada.
+api_ -e "CALL cuentas.abrir_cuenta('SEG-760', '00219100000000007601', 'PEN', 'INDIVIDUAL', NULL, JSON_ARRAY('C001'), 'pruebas');
+  CALL core.crear_desafio(UUID_TO_BIN('76000000-0000-4000-8000-0000000000d1'), UUID_TO_BIN('76000000-0000-4000-8000-000000000001'), 'SEG-760', 'ATM', 1300, REPEAT('a', 64), 'op.seg', @v)"
+x760_sql="CALL core.evaluar_operacion(UUID_TO_BIN('76000000-0000-4000-8000-000000000001'), 'SEG-760', 'ATM', 1300, UUID_TO_BIN('76000000-0000-4000-8000-0000000000d1'), REPEAT('a', 64), 'op.seg', @d, @m, @l, @a, @r)"
+printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\nSELECT @d, @r;\n' "$x760_sql" | api_ -N > "$OUT/X760-a.log" 2>&1 &
+a=$!
+sleep 1
+b="$(printf 'START TRANSACTION;\n%s;\nCOMMIT;\nSELECT @d, @r;\n' "$x760_sql" | api_ -N 2>&1 | tr '\t' ' ' || true)"
+wait "$a" || true
+echo "$b" > "$OUT/X760-b.log"
+x760_a="$(tr '\t' ' ' < "$OUT/X760-a.log")"
+x760_n="$(root_ -N -e "SELECT count(*) FROM core.evaluacion_operacion WHERE uuid_operacion = UUID_TO_BIN('76000000-0000-4000-8000-000000000001')")"
+ok=0; [ "$x760_a" = 'AUTORIZADA 0' ] && [ "$b" = 'AUTORIZADA 1' ] && [ "$x760_n" = 1 ] && ok=1
+registrar X760 bna_api_user Concurrencia 'Seguridad v1.13' 'Dos evaluaciones simultáneas con el mismo desafío: una decisión, la segunda la repite' procedimiento \
+  'primera: AUTORIZADA 0; segunda: AUTORIZADA 1; decisiones: 1' "primera: $x760_a; segunda: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'"); decisiones: $x760_n" "$ok"
+
+# X761 (v1.13): dos sellos simultáneos del mismo tramo. El segundo espera al primero y
+# falla con BNA-SELLO (el tramo ya está sellado, o choca en uk_sello_auditoria_desde);
+# queda un sello.
+api_ -e "CALL core.abrir_incidente(UUID_TO_BIN('76100000-0000-4000-8000-000000000001'), 'P4', 'Evento para sellar X761', 'op.seg')"
+x761_h="$(root_ -N -e "SELECT max(id_evento) FROM core.evento_auditoria")"
+x761_d="$(root_ -N -e "SELECT coalesce(max(hasta_evento), 0) FROM core.sello_auditoria")"
+x761_n="$(root_ -N -e "SELECT count(*) FROM core.evento_auditoria WHERE id_evento > $x761_d AND id_evento <= $x761_h")"
+x761_sql="CALL core.sellar_auditoria($x761_h, $x761_n, REPEAT('e', 64), 'svc-seguridad', @s, @desde)"
+printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\n' "$x761_sql" | api_ > "$OUT/X761-a.log" 2>&1 &
+a=$!
+sleep 1
+b="$(printf 'START TRANSACTION;\n%s;\nCOMMIT;\n' "$x761_sql" | api_ -N 2>&1 || true)"
+wait "$a" || true
+echo "$b" > "$OUT/X761-b.log"
+x761_s="$(root_ -N -e "SELECT count(*) FROM core.sello_auditoria WHERE hasta_evento = $x761_h")"
+ok=0; [ "$x761_s" = 1 ] && ! grep -q ERROR "$OUT/X761-a.log" && echo "$b" | grep -q 'BNA-SELLO:' && ok=1
+registrar X761 bna_api_user Concurrencia 'Seguridad v1.13' 'Dos sellos simultáneos del mismo tramo: uno pasa, el otro falla con BNA-SELLO' procedimiento \
+  'un sello; segundo: BNA-SELLO' "sellos: $x761_s; segundo: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+
 # Billetera Digital (v1.9): dos peticiones simultáneas, como bna_api_user. Las
 # afiliaciones de C001 (CTA-PEN-1) y C002 (CTA-PEN-2) quedan confirmadas para estas
 # pruebas y las de pruebas_sin_transaccion.sh.

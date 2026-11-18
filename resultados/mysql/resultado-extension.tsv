@@ -382,6 +382,35 @@ X706	bna_api_user	Un fallo de un usuario que no existe no deja rastro (no se gua
 X707	bna_api_user	Los fallos durante el bloqueo no lo alargan	pasa
 X708	bna_api_user	No se desbloquea un usuario que no existe	pasa
 X709	bna_api_user	bna_api no lee core.bloqueo_login	pasa
+X720	bna_api_user	Bajo el 80 % del tope del canal la operación se autoriza y se audita	pasa
+X721	bna_api_user	Sobre el tope del canal la operación se rechaza (TOPE)	pasa
+X722	bna_api_user	Sobre el 80 % pide un desafío y no guarda decisión	pasa
+X723	bna_api_user	Con el código correcto el desafío autoriza una vez	pasa
+X724	bna_api_user	Un código incorrecto no es un error: DESAFIO_RECHAZADO, y el correcto sigue sirviendo	pasa
+X725	bna_api_user	Tres códigos incorrectos agotan el desafío	pasa
+X726	bna_api_user	El desafío de otra operación no sirve ni gasta sus intentos	pasa
+X727	bna_api_user	Repetir la operación devuelve la misma decisión sin otro evento	pasa
+X728	bna_api_user	Repetir la operación con otro monto falla	pasa
+X729	bna_api_user	La evaluación usa el consumo real del día de la cuenta en el canal	pasa
+X730	bna_api_user	Un canal sin tope en la moneda se rechaza (CANAL); ventanilla no tiene tope	pasa
+X731	bna_api_user	No se evalúa una operación de una cuenta que no existe	pasa
+X732	bna_api_user	El desafío exige un HMAC de 64 hexadecimales en minúscula	pasa
+X733	bna_api_user	No se crea un desafío para una operación que ya tiene decisión	pasa
+X734	bna_api_user	bna_api no lee core.desafio_operacion (el HMAC del código)	pasa
+X735	bna_api_user	bna_api no escribe core.evaluacion_operacion	pasa
+X740	bna_api_user	El sello cubre el tramo que sigue al último sello	pasa
+X741	bna_api_user	El sello siguiente empieza donde acabó el anterior	pasa
+X742	bna_api_user	El sello rechaza un tramo con otra cantidad de eventos	pasa
+X743	bna_api_user	No se vuelve a sellar un tramo ya sellado	pasa
+X744	bna_api_user	El sello exige un HMAC de 64 hexadecimales	pasa
+X745	bna_api_user	bna_api no escribe core.sello_auditoria	pasa
+X750	bna_api_user	Un incidente se abre ABIERTO y queda auditado	pasa
+X751	bna_api_user	El ciclo completo llega a CERRADO y conserva la resolución	pasa
+X752	bna_api_user	Un incidente no salta de ABIERTO a RESUELTO	pasa
+X753	bna_api_user	Resolver un incidente exige la resolución	pasa
+X754	bna_api_user	No se avanza un incidente que no existe	pasa
+X755	bna_api_user	La prioridad de un incidente es P1 a P4	pasa
+X736	bna_api_user	Un desafío vencido (más de 120 s) no autoriza	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
@@ -402,6 +431,8 @@ X518	root	El evento tarjetas.ev_liberar_retenciones corre cada minuto	pasa
 X519	bna_app_user	Liberación y confirmación simultáneas: gana la liberación y la confirmación falla	pasa
 X520	bna_app_user	Confirmación y liberación simultáneas: gana la confirmación y la liberación la salta	pasa
 X710	bna_api_user	Un bloqueo vencido ya no bloquea y la cuenta de fallos empieza de cero	pasa
+X760	bna_api_user	Dos evaluaciones simultáneas con el mismo desafío: una decisión, la segunda la repite	pasa
+X761	bna_api_user	Dos sellos simultáneos del mismo tramo: uno pasa, el otro falla con BNA-SELLO	pasa
 X650	bna_api_user	Dos envíos simultáneos con la misma llave mueven el dinero una vez	pasa
 X651	bna_api_user	Dos pagos simultáneos de un QR dinámico con llaves distintas cobran una vez	pasa
 X652	bna_api_user	Dos pagos simultáneos de un QR con la misma llave: el segundo es el mismo pago	pasa
