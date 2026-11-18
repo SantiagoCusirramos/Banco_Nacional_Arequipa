@@ -353,6 +353,24 @@ y gana la confirmación; si la liberación llega primero, la confirmación esper
 una función, un procedimiento y un evento, y cambia `confirmar_autorizacion`: una base
 anterior necesita un volumen nuevo.
 
+### Bloqueo del login del personal (desde `bd-v1.12-mysql`)
+
+COREDB verifica la contraseña de una persona del banco; la base cuenta sus fallos
+seguidos en `core.bloqueo_login` (que `bna_api` no lee):
+
+| Objeto | Qué hace |
+|---|---|
+| `core.fn_intentos_login()` / `core.fn_minutos_bloqueo_login()` | **5** fallos seguidos bloquean el login **15 minutos**. Son provisionales: el número lo decide el equipo (pregunta en el issue #34) |
+| `core.registrar_login_fallido(id, correlación, OUT bloqueado_hasta)` | Cuenta el fallo; al quinto bloquea y deja `BLOQUEAR_LOGIN`. Cada fallo deja `LOGIN_FALLIDO`. Con id nulo (usuario que no existe) no hace nada ni guarda lo escrito. Los fallos durante el bloqueo no suman ni lo alargan |
+| `core.fn_login_bloqueado_hasta(id)` | Hasta cuándo está bloqueado, o `NULL` |
+| `core.desbloquear_login(id, actor)` | El administrador levanta el bloqueo (`DESBLOQUEAR_LOGIN`) |
+
+`core.registrar_login` rechaza con `BNA-LOGIN-BLOQUEADO` el login de un usuario bloqueado
+y reinicia los fallos tras uno exitoso. El bloqueo vence solo. Un usuario de servicio
+(rol `SERVICIO`) no se bloquea: su secreto es aleatorio, y bloquearlo dejaría a un módulo
+sin acceso a pedido de cualquiera; sus fallos se auditan igual (pruebas X700 a X710).
+Agrega una tabla: una base anterior necesita un volumen nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.

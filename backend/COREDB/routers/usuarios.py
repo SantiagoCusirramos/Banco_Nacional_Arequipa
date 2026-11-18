@@ -53,6 +53,11 @@ class UsuarioRespuesta(BaseModel):
     id_empleado: uuid.UUID | None
     activo: bool
     creado_en: datetime
+    bloqueado_hasta: datetime | None = Field(
+        default=None,
+        description="Hasta cuándo está bloqueado su login tras 5 fallos seguidos (bd-v1.12); "
+                    "solo en GET /coredb/usuarios/{id} y en el desbloqueo.",
+    )
 
 
 class CredencialRespuesta(BaseModel):
@@ -77,7 +82,18 @@ def listar(
 @router.get("/{id_usuario}", response_model=UsuarioRespuesta,
             dependencies=[Depends(requiere_permiso("CREAR_USUARIO"))])
 def ver(id_usuario: uuid.UUID, db: Session = Depends(db_session)):
-    return usuarios.obtener(db, id_usuario)
+    return usuarios.con_bloqueo(db, usuarios.obtener(db, id_usuario))
+
+
+@router.post("/{id_usuario}/desbloqueo", response_model=UsuarioRespuesta,
+             responses={404: {"description": "USUARIO_NO_ENCONTRADO"}})
+def desbloquear(
+    id_usuario: uuid.UUID,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("CREAR_USUARIO")),
+):
+    """Levanta el bloqueo del login (5 fallos seguidos) antes de que venza a los 15 minutos."""
+    return usuarios.desbloquear_login(db, id_usuario, actor=actor.usuario)
 
 
 @router.post("", response_model=UsuarioRespuesta, status_code=status.HTTP_201_CREATED)

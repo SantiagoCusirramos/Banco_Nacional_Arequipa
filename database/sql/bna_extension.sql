@@ -1345,6 +1345,12 @@ BEGIN
         IF v_username IS NULL OR NOT v_activo THEN
             CALL core.fallar('BNA-USUARIO: el usuario no existe o no está activo');
         END IF;
+        -- v1.12: con el login bloqueado no hay login exitoso; uno exitoso reinicia los
+        -- fallos (sección 17).
+        IF core.fn_login_bloqueado_hasta(p_id) IS NOT NULL THEN
+            CALL core.fallar('BNA-LOGIN-BLOQUEADO: el login del usuario está bloqueado');
+        END IF;
+        UPDATE core.bloqueo_login SET fallos_consecutivos = 0 WHERE id_usuario = p_id;
         CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'LOGIN', v_username, p_correlation_id,
                                    JSON_OBJECT('rol', v_rol, 'modulo', v_modulo));
         IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
@@ -5200,3 +5206,158 @@ DELIMITER ;
 
 GRANT EXECUTE ON FUNCTION tarjetas.fn_minutos_retencion TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.liberar_retenciones_vencidas TO bna_api, bna_app, bna_admin;
+
+-- ---------------------------------------------------------------------
+-- 17. Bloqueo del login del personal (v1.12)
+-- ---------------------------------------------------------------------
+-- COREDB verifica la contraseña de una persona del banco sin límite de intentos: un
+-- atacante puede probar claves sin fin. Desde v1.12 la base cuenta los fallos seguidos
+-- y bloquea el login por un tiempo.
+-- DECISIÓN (v1.12): 5 fallos seguidos (core.fn_intentos_login) bloquean el login 15
+--   minutos (core.fn_minutos_bloqueo_login). Son valores provisionales: el número de
+--   intentos lo decide el equipo (pregunta abierta en el issue #34). El bloqueo vence
+--   solo, para que un atacante no deje a una persona fuera para siempre; un
+--   administrador lo levanta antes (core.desbloquear_login). Un login exitoso reinicia
+--   la cuenta, y los fallos durante el bloqueo no la suman ni lo alargan.
+-- DECISIÓN (v1.12): un usuario de servicio (rol SERVICIO) no se bloquea. Su secreto es
+--   aleatorio y largo, así que adivinarlo no es posible, y bloquearlo dejaría a un módulo
+--   entero sin acceso a pedido de cualquiera. Sus fallos se auditan igual.
+-- DECISIÓN (v1.12): cada fallo de un usuario que existe deja un evento LOGIN_FALLIDO, y el
+--   bloqueo uno BLOQUEAR_LOGIN. El fallo de un usuario que no existe no deja nada: lo
+--   escrito como usuario puede ser una contraseña. COREDB llama igual al procedimiento
+--   (con id nulo) para que el tiempo de respuesta no delate si el usuario existe.
+CREATE TABLE core.bloqueo_login (
+    id_usuario                  BINARY(16) NOT NULL,
+    fallos_consecutivos         SMALLINT NOT NULL DEFAULT 0,
+    bloqueado_hasta             DATETIME(6),
+    fecha_ultimo_fallo          DATETIME(6),
+    CONSTRAINT pk_bloqueo_login PRIMARY KEY (id_usuario),
+    CONSTRAINT fk_bloqueo_login_usuario FOREIGN KEY (id_usuario) REFERENCES core.usuario_sistema (id_usuario),
+    CONSTRAINT ck_bloqueo_login_fallos CHECK (fallos_consecutivos >= 0)
+) ENGINE = InnoDB COMMENT = 'Fallos seguidos de login de cada usuario y su bloqueo temporal (v1.12).';
+
+DELIMITER //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION core.fn_intentos_login() RETURNS SMALLINT
+    DETERMINISTIC NO SQL
+    COMMENT 'Fallos seguidos de login que bloquean a una persona (pregunta #34).'
+BEGIN
+    RETURN 5;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION core.fn_minutos_bloqueo_login() RETURNS SMALLINT
+    DETERMINISTIC NO SQL
+    COMMENT 'Minutos que dura el bloqueo del login.'
+BEGIN
+    RETURN 15;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION core.fn_login_bloqueado_hasta(p_id BINARY(16)) RETURNS DATETIME(6)
+    NOT DETERMINISTIC READS SQL DATA
+    COMMENT 'Hasta cuándo está bloqueado el login del usuario, o NULL si no lo está.'
+BEGIN
+    RETURN (SELECT bloqueado_hasta FROM core.bloqueo_login
+             WHERE id_usuario = p_id AND bloqueado_hasta > UTC_TIMESTAMP(6));
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.registrar_login_fallido(
+    IN p_id BINARY(16), IN p_correlation_id BINARY(16), OUT p_bloqueado_hasta DATETIME(6))
+    COMMENT 'Cuenta un fallo de login y bloquea al usuario al llegar al límite.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_username VARCHAR(40);
+    DECLARE v_rol VARCHAR(15);
+    DECLARE v_fallos SMALLINT;
+    DECLARE v_hasta DATETIME(6);
+    DECLARE v_ahora DATETIME(6) DEFAULT UTC_TIMESTAMP(6);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    bna_fallo: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SET p_bloqueado_hasta = NULL;
+        SELECT username, rol INTO v_username, v_rol FROM core.usuario_sistema WHERE id_usuario = p_id;
+        IF v_username IS NULL THEN
+            IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+            LEAVE bna_fallo;
+        END IF;
+        IF v_rol <> 'SERVICIO' THEN
+            INSERT INTO core.bloqueo_login (id_usuario) VALUES (p_id)
+            ON DUPLICATE KEY UPDATE id_usuario = id_usuario;
+            SELECT fallos_consecutivos, bloqueado_hasta INTO v_fallos, v_hasta
+              FROM core.bloqueo_login WHERE id_usuario = p_id FOR UPDATE;
+            IF v_hasta > v_ahora THEN
+                SET p_bloqueado_hasta = v_hasta;
+            ELSEIF v_fallos + 1 >= core.fn_intentos_login() THEN
+                SET p_bloqueado_hasta = v_ahora + INTERVAL core.fn_minutos_bloqueo_login() MINUTE;
+                UPDATE core.bloqueo_login
+                   SET fallos_consecutivos = 0, bloqueado_hasta = p_bloqueado_hasta, fecha_ultimo_fallo = v_ahora
+                 WHERE id_usuario = p_id;
+                CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'BLOQUEAR_LOGIN', v_username,
+                                           p_correlation_id, JSON_OBJECT('fallos', v_fallos + 1,
+                                                                         'hasta', p_bloqueado_hasta));
+            ELSE
+                UPDATE core.bloqueo_login
+                   SET fallos_consecutivos = v_fallos + 1, bloqueado_hasta = NULL, fecha_ultimo_fallo = v_ahora
+                 WHERE id_usuario = p_id;
+            END IF;
+        END IF;
+        CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'LOGIN_FALLIDO', v_username,
+                                   p_correlation_id, JSON_OBJECT('bloqueado', p_bloqueado_hasta IS NOT NULL));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.desbloquear_login(IN p_id BINARY(16), IN p_actor VARCHAR(40))
+    COMMENT 'Levanta el bloqueo del login de un usuario y reinicia sus fallos.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_hasta DATETIME(6);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_actor IS NULL THEN
+            CALL core.fallar('BNA-ACTOR: falta el actor');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM core.usuario_sistema WHERE id_usuario = p_id) THEN
+            CALL core.fallar('BNA-USUARIO: el usuario no existe');
+        END IF;
+        SET v_hasta = core.fn_login_bloqueado_hasta(p_id);
+        UPDATE core.bloqueo_login SET fallos_consecutivos = 0, bloqueado_hasta = NULL WHERE id_usuario = p_id;
+        CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'DESBLOQUEAR_LOGIN', p_actor, NULL,
+                                   JSON_OBJECT('estaba_bloqueado', v_hasta IS NOT NULL));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+DELIMITER ;
+
+GRANT EXECUTE ON FUNCTION core.fn_intentos_login TO bna_api;
+GRANT EXECUTE ON FUNCTION core.fn_minutos_bloqueo_login TO bna_api;
+GRANT EXECUTE ON FUNCTION core.fn_login_bloqueado_hasta TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.registrar_login_fallido TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.desbloquear_login TO bna_api;

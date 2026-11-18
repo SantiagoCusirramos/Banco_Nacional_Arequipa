@@ -6766,6 +6766,19 @@
             "title": "Activo",
             "type": "boolean"
           },
+          "bloqueado_hasta": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hasta cuándo está bloqueado su login tras 5 fallos seguidos (bd-v1.12); solo en GET /coredb/usuarios/{id} y en el desbloqueo.",
+            "title": "Bloqueado Hasta"
+          },
           "creado_en": {
             "format": "date-time",
             "title": "Creado En",
@@ -7441,7 +7454,7 @@
     },
     "/coredb/auth/login": {
       "post": {
-        "description": "Usuario inexistente, clave incorrecta, usuario inactivo y contraseña no admitida\nresponden el mismo 401. Un login exitoso queda en la bitácora (LOGIN).",
+        "description": "Usuario inexistente, clave incorrecta, usuario inactivo, login bloqueado y contraseña\nno admitida responden el mismo 401. Un login exitoso queda en la bitácora (LOGIN); cada\nfallo de un usuario que existe, como LOGIN_FALLIDO. Cinco fallos seguidos bloquean a una\npersona 15 minutos (BLOQUEAR_LOGIN); los usuarios de servicio no se bloquean.",
         "operationId": "login_coredb_auth_login_post",
         "parameters": [
           {
@@ -13784,6 +13797,58 @@
           }
         ],
         "summary": "Renovar Credencial",
+        "tags": [
+          "usuarios"
+        ]
+      }
+    },
+    "/coredb/usuarios/{id_usuario}/desbloqueo": {
+      "post": {
+        "description": "Levanta el bloqueo del login (5 fallos seguidos) antes de que venza a los 15 minutos.",
+        "operationId": "desbloquear_coredb_usuarios__id_usuario__desbloqueo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_usuario",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Usuario",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "USUARIO_NO_ENCONTRADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Desbloquear",
         "tags": [
           "usuarios"
         ]

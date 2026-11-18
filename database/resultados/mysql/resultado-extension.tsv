@@ -372,6 +372,16 @@ X636	bna_api_user	Las vistas de la billetera no exponen el hash, la sal, el PIN 
 X637	bna_api_user	bna_api no puede: leer billetera.afiliacion (el hash del PIN)	pasa
 X638	bna_api_user	bna_api no puede: INSERT en billetera.operacion	pasa
 X639	bna_api_user	Ni la glosa, ni los avisos, ni la bitácora guardan el celular	pasa
+X700	bna_api_user	Cuatro fallos seguidos no bloquean el login	pasa
+X701	bna_api_user	El quinto fallo bloquea el login 15 minutos y lo audita	pasa
+X702	bna_api_user	Con el login bloqueado no se registra un login exitoso	pasa
+X703	bna_api_user	Un login exitoso reinicia la cuenta de fallos	pasa
+X704	bna_api_user	Un usuario de servicio no se bloquea, pero sus fallos se auditan	pasa
+X705	bna_api_user	El administrador desbloquea el login y queda auditado	pasa
+X706	bna_api_user	Un fallo de un usuario que no existe no deja rastro (no se guarda lo que se escribió)	pasa
+X707	bna_api_user	Los fallos durante el bloqueo no lo alargan	pasa
+X708	bna_api_user	No se desbloquea un usuario que no existe	pasa
+X709	bna_api_user	bna_api no lee core.bloqueo_login	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
@@ -391,6 +401,7 @@ X509	bna_app_user	Dos confirmaciones simultáneas con la misma llave: la segunda
 X518	root	El evento tarjetas.ev_liberar_retenciones corre cada minuto	pasa
 X519	bna_app_user	Liberación y confirmación simultáneas: gana la liberación y la confirmación falla	pasa
 X520	bna_app_user	Confirmación y liberación simultáneas: gana la confirmación y la liberación la salta	pasa
+X710	bna_api_user	Un bloqueo vencido ya no bloquea y la cuenta de fallos empieza de cero	pasa
 X650	bna_api_user	Dos envíos simultáneos con la misma llave mueven el dinero una vez	pasa
 X651	bna_api_user	Dos pagos simultáneos de un QR dinámico con llaves distintas cobran una vez	pasa
 X652	bna_api_user	Dos pagos simultáneos de un QR con la misma llave: el segundo es el mismo pago	pasa

@@ -8,7 +8,9 @@ y se guarda solo como hash bcrypt.
 import logging
 import secrets
 import uuid
+from datetime import datetime, timezone
 
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -83,16 +85,46 @@ def asignar_rol(db: Session, id_usuario: uuid.UUID, *, rol: str, actor: str) -> 
     return usuario
 
 
-def autenticar(db: Session, *, username: str, password: str) -> Usuario:
-    """Lanza CREDENCIALES_INVALIDAS o USUARIO_INACTIVO; ver CORE/AUTENTICACION.md."""
+def _bloqueado_hasta(db: Session, id_usuario: uuid.UUID | None) -> datetime | None:
+    """Hasta cuándo está bloqueado el login (bd-v1.12), o None. Se consulta también sin
+    usuario, para que el tiempo de respuesta no delate si existe."""
+    hasta = db.execute(
+        text("SELECT core.fn_login_bloqueado_hasta(:id)"),
+        {"id": id_usuario.bytes if id_usuario else None},
+    ).scalar_one()
+    return hasta.replace(tzinfo=timezone.utc) if hasta is not None else None
+
+
+def _registrar_fallo(db: Session, id_usuario: uuid.UUID | None, correlation_id: uuid.UUID | None) -> None:
+    """Cuenta el fallo y, al quinto seguido, bloquea el login de una persona (bd-v1.12).
+    Sin usuario la base no hace nada, pero la llamada cuesta lo mismo."""
+    con_reintentos(
+        db,
+        lambda: llamar(db, "core.registrar_login_fallido", id_usuario, correlation_id, salidas=1),
+        nombre="registrar_login_fallido",
+    )
+
+
+def autenticar(
+    db: Session, *, username: str, password: str, correlation_id: uuid.UUID | None = None
+) -> Usuario:
+    """Lanza CREDENCIALES_INVALIDAS, LOGIN_BLOQUEADO o USUARIO_INACTIVO; el login responde a
+    todos con el mismo 401. Cinco fallos seguidos bloquean a una persona 15 minutos
+    (bd-v1.12; los usuarios de servicio no se bloquean). Con el login bloqueado ni
+    siquiera se verifica la contraseña."""
     if not es_utf8_valida(password):
         raise ErrorCoreDb("PASSWORD_NO_ADMITIDA", "La contraseña contiene caracteres inválidos.")
     usuario = db.query(Usuario).filter(Usuario.username == username).first()
-    if usuario is None or usuario.algoritmo_hash != ALGORITMO_BCRYPT:
+    id_usuario = usuario.id_usuario if usuario is not None else None
+    bloqueado = _bloqueado_hasta(db, id_usuario) is not None
+    if usuario is None or bloqueado or usuario.algoritmo_hash != ALGORITMO_BCRYPT:
         simular_verificacion()
-    if usuario is None or not verify_password(
+    if usuario is None or bloqueado or not verify_password(
         password, usuario.hash_password, usuario.algoritmo_hash
     ):
+        _registrar_fallo(db, id_usuario, correlation_id)
+        if bloqueado:
+            raise ErrorCoreDb("LOGIN_BLOQUEADO", "El login del usuario está bloqueado.", 401)
         raise ErrorCoreDb("CREDENCIALES_INVALIDAS", "Usuario o contraseña incorrectos.", 401)
     if not usuario.activo:
         raise ErrorCoreDb("USUARIO_INACTIVO", "El usuario está desactivado.", 401)
@@ -178,3 +210,20 @@ def registrar_login(db: Session, usuario: Usuario, correlation_id: uuid.UUID | N
         lambda: llamar(db, "core.registrar_login", usuario.id_usuario, correlation_id),
         nombre="registrar_login",
     )
+
+
+def desbloquear_login(db: Session, id_usuario: uuid.UUID, *, actor: str) -> Usuario:
+    """Levanta el bloqueo del login (bd-v1.12) y reinicia los fallos."""
+    usuario = obtener(db, id_usuario)
+    con_reintentos(
+        db,
+        lambda: llamar(db, "core.desbloquear_login", id_usuario, actor),
+        nombre="desbloquear_login",
+    )
+    return con_bloqueo(db, usuario)
+
+
+def con_bloqueo(db: Session, usuario: Usuario) -> Usuario:
+    """El usuario con `bloqueado_hasta` (no es una columna: lo calcula la base)."""
+    usuario.bloqueado_hasta = _bloqueado_hasta(db, usuario.id_usuario)
+    return usuario

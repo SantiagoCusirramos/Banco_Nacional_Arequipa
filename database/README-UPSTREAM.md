@@ -1,7 +1,7 @@
 # database/
 
 Esta carpeta es una copia de [bna-core-db](https://github.com/miguelpro324/bna-core-db),
-rama `mysql`, en la etiqueta **`bd-v1.11-mysql`**.
+rama `mysql`, en la etiqueta **`bd-v1.12-mysql`**.
 
 **No se edita aquí.** Un cambio directo se perdería o chocaría con la siguiente
 actualización. Todo cambio de la base va primero a bna-core-db: rama nueva desde
@@ -87,5 +87,8 @@ permisos sobre `billetera.*`; también exige recrear la base.
 `bd-v1.11-mysql` libera las retenciones de tarjeta sin confirmar pasado el plazo (sección 16:
 `tarjetas.liberar_retenciones_vencidas`, evento cada minuto, 15 minutos por omisión) y
 rechaza confirmar una vencida; también exige recrear la base.
+`bd-v1.12-mysql` bloquea el login de una persona 15 minutos tras 5 fallos seguidos (sección 17:
+`core.bloqueo_login`, `core.registrar_login_fallido`, `core.desbloquear_login`); también exige
+recrear la base.
 Con el producto completo:
 `./bna reset`.
