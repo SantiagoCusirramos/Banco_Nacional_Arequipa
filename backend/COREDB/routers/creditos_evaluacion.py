@@ -4,12 +4,14 @@ Ver CONTRATO_CREDITOS.md §3. Los nombres de los campos van en camelCase, como e
 contrato con SOL y los módulos de créditos.
 """
 
+import json
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Response, status
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 from sqlalchemy.orm import Session
@@ -122,6 +124,8 @@ class SolicitudResumen(_Respuesta):
     numero_cuotas: int | None
     total_cuotas: Decimal | None
     primer_vencimiento: date | None
+    codigo: str | None = Field(default=None, description="Código del borrador de SOL (SOL-AAMM-XXXXXXXX).")
+    revision: int | None = Field(default=None, description="Revisión del borrador de SOL.")
 
 
 class CuotaRespuesta(_Respuesta):
@@ -170,10 +174,50 @@ class HistorialRespuesta(_Respuesta):
     motivo: str | None
 
 
+class ExpedienteSolRespuesta(_Respuesta):
+    codigo: str
+    revision: int
+    destino: str
+    fecha_base: date
+    politica: dict[str, Any]
+    creado_por: str
+    actualizado_en: datetime
+
+
+class GarantiaRespuesta(_Respuesta):
+    tipo: str
+    descripcion: str | None
+    valor: Decimal
+    moneda: str
+    estado: str
+
+
+class FiadorRespuesta(_Respuesta):
+    cod_cliente: str
+    id_verificacion: str
+
+
+class RecepcionRespuesta(_Respuesta):
+    version_solicitud: int
+    ronda: int
+    id_evaluacion: uuid.UUID
+    recibida_en: datetime
+
+
 class SolicitudDetalle(SolicitudResumen):
     calendario: CalendarioRespuesta | None
     evaluaciones: list[EvaluacionRespuesta]
     historial: list[HistorialRespuesta]
+    expediente: ExpedienteSolRespuesta | None = Field(
+        description="Lo que guardó el asesor en SOL (null si la solicitud no nació como borrador).")
+    garantias: list[GarantiaRespuesta]
+    fiadores: list[FiadorRespuesta]
+    recepciones: list[RecepcionRespuesta] = Field(description="Versiones del expediente recibidas por Evaluación.")
+
+
+class ConteoSolicitudes(_Respuesta):
+    total: int
+    estados: dict[str, int]
 
 
 @router.get("/solicitudes", response_model=list[SolicitudResumen],
@@ -185,8 +229,19 @@ def bandeja(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(db_session),
 ):
-    """Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente."""
+    """Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente. Sin
+    `estado`, todas menos los borradores de SOL (REGISTRADA); con `estado=REGISTRADA`, solo ellos."""
     return creditos.listar_solicitudes(db, estado=estado, cod_cliente=cod_cliente, limite=limite, offset=offset)
+
+
+@router.get("/solicitudes/conteo", response_model=ConteoSolicitudes,
+            dependencies=[Depends(requiere_permiso("VER_CREDITO"))], responses=ERRORES_COMUNES)
+def conteo(
+    cod_cliente: str | None = Query(default=None, alias="codCliente", min_length=1, max_length=12),
+    db: Session = Depends(db_session),
+):
+    """Cuántas solicitudes hay en cada estado, borradores incluidos."""
+    return creditos.conteo_solicitudes(db, cod_cliente=cod_cliente)
 
 
 @router.get("/solicitudes/{id_solicitud}", response_model=SolicitudDetalle,
@@ -194,7 +249,8 @@ def bandeja(
             responses={**ERRORES_COMUNES, 404: {"description": "SOLICITUD_NO_ENCONTRADA"}})
 def detalle(id_solicitud: uuid.UUID, db: Session = Depends(db_session)):
     """La solicitud con su calendario vigente (el PRELIMINAR de SOL o, ya desembolsada, el
-    OFICIAL), sus evaluaciones por ronda y su historial de estados."""
+    OFICIAL), sus evaluaciones por ronda, su historial de estados y, si nació como borrador de
+    SOL, lo que guardó el asesor, sus garantías, sus fiadores y las versiones recibidas."""
     return creditos.solicitud(db, id_solicitud)
 
 
@@ -348,3 +404,99 @@ def registrar_analista(
     """Registra a un empleado activo como analista de crédito. Para decidir, el usuario del
     analista debe estar ligado a ese empleado (`id_empleado` de `POST /coredb/usuarios`)."""
     return AnalistaRegistrado(id_analista=creditos.registrar_analista(db, datos.id_empleado, actor=actor.usuario))
+
+
+# ── Borrador de SOL (bd-v1.14) ──────────────────────────────────────────────
+
+
+class GarantiaBorrador(_Peticion):
+    tipo: str = Field(pattern=r"^[A-Z_]{1,20}$", description="Del catálogo: HIPOTECARIA, MOBILIARIA o PRENDARIA.")
+    descripcion: str = Field(min_length=5, max_length=200)
+    valor: Decimal = Field(gt=0, max_digits=15, decimal_places=2)
+
+
+class _Borrador(_Peticion):
+    cod_cliente: CodCliente
+    monto_solicitado: Decimal = Field(gt=0, max_digits=15, decimal_places=2)
+    moneda: str = Field(pattern=r"^[A-Z]{3}$")
+    plazo_meses: int = Field(ge=1, le=600)
+    condicion_pago_doble: bool = False
+    destino: str = Field(min_length=5, max_length=120)
+    fecha_base: date
+    politica: dict[str, Any] = Field(description="La política con la que SOL calculó el borrador (hasta 4 KB).")
+    garantias: list[GarantiaBorrador] = Field(default_factory=list, max_length=10)
+    fiadores: list[CodCliente] = Field(default_factory=list, max_length=5,
+                                       description="codCliente de cada fiador: clientes del CORE que pueden operar.")
+
+    @field_validator("politica")
+    @classmethod
+    def _politica_acotada(cls, valor: dict[str, Any]) -> dict[str, Any]:
+        if len(json.dumps(valor, ensure_ascii=False)) > 4096:
+            raise ValueError("La política supera 4 KB.")
+        return valor
+
+
+class BorradorCrear(_Borrador):
+    id_solicitud: uuid.UUID
+
+
+class BorradorEditar(_Borrador):
+    revision: int = Field(ge=1, description="La revisión vigente que se edita.")
+
+
+class BorradorRespuesta(_Respuesta):
+    id_solicitud: uuid.UUID
+    codigo: str
+    revision: int
+    estado: str
+
+
+def _persona(actor: Actor) -> None:
+    """El borrador es del asesor: un usuario de servicio con el mismo permiso no lo guarda."""
+    if actor.es_servicio:
+        raise ErrorCoreDb("PERMISO_DENEGADO", "El borrador lo guarda una persona con su token.", 403)
+
+
+ERRORES_BORRADOR = {
+    **ERRORES_COMUNES,
+    409: {"description": "IDEMPOTENCIA_CONFLICTO o REVISION_DESACTUALIZADA"},
+    422: {"description": "CLIENTE_NO_HABILITADO, GARANTIA_NO_ADMITIDA, FIADOR_NO_ADMITIDO o SOLICITUD_NO_ADMITIDA"},
+}
+
+
+@router.post("/borradores", response_model=BorradorRespuesta, status_code=status.HTTP_201_CREATED,
+             responses={**ERRORES_BORRADOR, 200: {"description": "El mismo borrador ya se había creado"}})
+def crear_borrador(
+    datos: BorradorCrear,
+    respuesta: Response,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("CREAR_SOLICITUD_CREDITO")),
+    correlation_id: uuid.UUID = Depends(correlacion),
+):
+    """Crea el borrador de SOL: una solicitud REGISTRADA con sus garantías y fiadores. Lo hace el
+    asesor con su token, que SOL reenvía. Repetirlo con el mismo contenido responde 200 con lo
+    mismo; con otro, 409."""
+    _persona(actor)
+    borrador, repetido = creditos.guardar_borrador(db, datos.id_solicitud, datos, revision=None,
+                                                   correlation_id=correlation_id, actor=actor.usuario)
+    if repetido:
+        respuesta.status_code = status.HTTP_200_OK
+    return borrador
+
+
+@router.put("/borradores/{id_solicitud}", response_model=BorradorRespuesta,
+            responses={**ERRORES_BORRADOR, 404: {"description": "SOLICITUD_NO_ENCONTRADA"}})
+def editar_borrador(
+    id_solicitud: uuid.UUID,
+    datos: BorradorEditar,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("CREAR_SOLICITUD_CREDITO")),
+    correlation_id: uuid.UUID = Depends(correlacion),
+):
+    """Reemplaza el borrador (condiciones, garantías y fiadores) si `revision` es la vigente; si
+    otra sesión lo cambió, 409 REVISION_DESACTUALIZADA. Repetir la última edición devuelve la
+    revisión guardada. Un borrador enviado a Evaluación ya no se edita (422)."""
+    _persona(actor)
+    borrador, _ = creditos.guardar_borrador(db, id_solicitud, datos, revision=datos.revision,
+                                            correlation_id=correlation_id, actor=actor.usuario)
+    return borrador

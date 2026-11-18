@@ -223,3 +223,27 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 7. Vigencia de la verificación de identidad para desembolsar: el mismo día (fecha de Lima).
 
 Estas siete y los umbrales de RN-EVA-002-P, el dominio de `resultado_verificacion` y `cod_cliente` como identificador común se adoptaron como decisiones del equipo, revisables: [`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md).
+
+## 8. Borrador de SOL y eventos de módulos (implementada, `bd-v1.14-mysql`)
+
+SOL no tiene base propia: el borrador del asesor vive en `creditos.*` y SOL llega a él por el Bus.
+
+| Ruta | Permiso | Respuesta |
+|---|---|---|
+| `POST /coredb/creditos/borradores` | `CREAR_SOLICITUD_CREDITO` (asesor) | 201 `{idSolicitud, codigo, revision, estado}`; 200 si es el mismo borrador |
+| `PUT /coredb/creditos/borradores/{idSolicitud}` | `CREAR_SOLICITUD_CREDITO` (asesor) | 200 con la revisión nueva |
+| `GET /coredb/creditos/solicitudes/conteo?codCliente=` | `VER_CREDITO` | `{total, estados: {ESTADO: n}}` |
+| `POST /coredb/auditoria/eventos` | `REGISTRAR_EVENTO_MODULO` (`svc-sol`) | 201 `{idEvento, idRegistro, acuse, confirmado}`; 200 si se repite |
+
+- **Cuerpo del borrador:** `idSolicitud` (solo al crear), `codCliente`, `montoSolicitado`, `moneda`, `plazoMeses`, `condicionPagoDoble`, `destino` (5 a 120), `fechaBase`, `politica` (la de SOL, objeto de hasta 4 KB), `garantias` (hasta 10: `{tipo, descripcion, valor}`, tipo del catálogo `creditos.tipo_garantia`) y `fiadores` (hasta 5 `codCliente`). Para editar, `revision` en vez de `idSolicitud`.
+- El borrador queda `REGISTRADA`, con historial y evento (`CREAR_BORRADOR`, `EDITAR_BORRADOR`) a nombre del asesor. Editar exige la revisión vigente: si otra sesión lo cambió, 409 `REVISION_DESACTUALIZADA`. Repetir la última creación o edición con el mismo contenido devuelve lo guardado; con otro, 409 `IDEMPOTENCIA_CONFLICTO`.
+- Un fiador es un cliente del CORE que puede operar y no es el solicitante. Su verificación es la de Captación y el modelo la hace única (`uk_fiador_solicitud_1`): un cliente respalda una sola solicitud (pregunta abierta).
+- El expediente del borrador (§3.1, por Evaluación) con su misma versión y condiciones lo pasa a `EN_EVALUACION`; después ya no se edita (422 `SOLICITUD_NO_ADMITIDA`).
+- **Detalle** (`GET /coredb/creditos/solicitudes/{id}`): además, `codigo`, `revision`, `expediente` (`codigo`, `revision`, `destino`, `fechaBase`, `politica`, `creadoPor`, `actualizadoEn`; null si no nació como borrador), `garantias`, `fiadores` (`codCliente`, `idVerificacion`) y `recepciones` (`versionSolicitud`, `ronda`, `idEvaluacion`, `recibidaEn`). La bandeja suma `codigo` y `revision`; **sin `estado` ya no muestra los borradores** (`estado=REGISTRADA` los muestra).
+- **Eventos de módulos:** `{idEvento, accion, entidad, idEntidad, actor, detalle}`. El módulo de la bitácora es el del token (`svc-sol` se crea con `modulo` `SOLICITUD DE CREDITO`, su nombre en `core.modulo`); el detalle guarda también `id_evento_modulo` y `reportado_por`. Sin datos personales en el detalle.
+- El borrador lo guarda una persona con su token: un usuario de servicio recibe 403 aunque tenga el permiso.
+- Errores: 422 `CLIENTE_NO_HABILITADO`, `GARANTIA_NO_ADMITIDA`, `FIADOR_NO_ADMITIDO`, `SOLICITUD_NO_ADMITIDA`; 404 `SOLICITUD_NO_ENCONTRADA` al editar.
+
+| Usuario de servicio | Acciones |
+|---|---|
+| `SERVICIO:SOLICITUD DE CREDITO` (`svc-sol`) | `VER_CREDITO`, `REGISTRAR_EVENTO_MODULO` |

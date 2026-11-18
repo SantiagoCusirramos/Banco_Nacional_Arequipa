@@ -29,6 +29,10 @@ _CUENTA_NO_ELEGIBLE = ("La cuenta debe ser de ahorros, activa, individual, del t
 # Regla de la base → (código del contrato, estado HTTP, mensaje fijo o None para usar el de la base).
 REGLAS: dict[str, tuple[str, int, str | None]] = {
     "BNA-SOLICITUD": ("SOLICITUD_NO_ADMITIDA", 422, None),
+    # Borrador de SOL (bd-v1.14).
+    "BNA-REVISION": ("REVISION_DESACTUALIZADA", 409, None),
+    "BNA-GARANTIA": ("GARANTIA_NO_ADMITIDA", 422, None),
+    "BNA-FIADOR": ("FIADOR_NO_ADMITIDO", 422, None),
     "BNA-CLIENTE": ("CLIENTE_NO_HABILITADO", 422, "El cliente no existe o no puede operar."),
     "BNA-CALENDARIO": ("CALENDARIO_INVALIDO", 422, None),
     "BNA-IDEMPOTENCIA": ("IDEMPOTENCIA_CONFLICTO", 409, None),
@@ -170,7 +174,7 @@ _SOLICITUD = (
     "SELECT BIN_TO_UUID(id_solicitud) AS id_solicitud, version_solicitud, ronda, cod_cliente, monto_solicitado, "
     "moneda, plazo_meses, condicion_pago_doble, estado_solicitud AS estado, fecha_creacion, "
     "BIN_TO_UUID(id_calendario) AS id_calendario, tipo_calendario, metodo_amortizacion, tasa_aplicada, "
-    "numero_cuotas, total_cuotas, primer_vencimiento FROM creditos.v_solicitud_api"
+    "numero_cuotas, total_cuotas, primer_vencimiento, codigo, revision FROM creditos.v_solicitud_api"
 )
 
 
@@ -184,8 +188,9 @@ def _solicitud(fila) -> dict[str, Any]:
 def listar_solicitudes(db: Session, *, estado: str | None, cod_cliente: str | None, limite: int,
                        offset: int) -> list[dict[str, Any]]:
     filtros, parametros = [], {"limite": limite, "offset": offset}
+    # Sin estado, todas menos los borradores de SOL (REGISTRADA), que no son de Evaluación.
+    filtros.append("estado_solicitud = :estado" if estado is not None else "estado_solicitud <> 'REGISTRADA'")
     if estado is not None:
-        filtros.append("estado_solicitud = :estado")
         parametros["estado"] = estado
     if cod_cliente is not None:
         filtros.append("cod_cliente = :cliente")
@@ -244,7 +249,93 @@ def solicitud(db: Session, id_solicitud: uuid.UUID) -> dict[str, Any]:
             "WHERE id_solicitud = :id ORDER BY fecha_hora, id_historial"
         ), {"id": id_solicitud.bytes}).all()
     ]
+    _expediente_sol(db, id_solicitud, datos)
     return datos
+
+
+# ── Borrador de SOL (bd-v1.14) ──────────────────────────────────────────────
+
+
+def _expediente_sol(db: Session, id_solicitud: uuid.UUID, datos: dict[str, Any]) -> None:
+    """Lo que guardó el asesor en SOL y las versiones que recibió Evaluación."""
+    fila = db.execute(text(
+        "SELECT codigo, revision, destino, fecha_base, politica, creado_por, actualizado_en "
+        "FROM creditos.v_expediente_sol_api WHERE id_solicitud = :id"), {"id": id_solicitud.bytes}).first()
+    if fila is None:
+        datos["expediente"] = None
+    else:
+        expediente = dict(fila._mapping)
+        politica = expediente["politica"]
+        expediente["politica"] = json.loads(politica) if isinstance(politica, (str, bytes)) else politica
+        expediente["actualizado_en"] = _utc(expediente["actualizado_en"])
+        datos["expediente"] = expediente
+    datos["garantias"] = [dict(g._mapping) for g in db.execute(text(
+        "SELECT tipo_garantia AS tipo, descripcion, valor_referencial AS valor, moneda, estado_garantia AS estado "
+        "FROM creditos.v_garantia_api WHERE id_solicitud = :id ORDER BY valor_referencial DESC, id_garantia"
+    ), {"id": id_solicitud.bytes}).all()]
+    datos["fiadores"] = [dict(f._mapping) for f in db.execute(text(
+        "SELECT cod_cliente, id_verificacion FROM creditos.v_fiador_solicitud_api WHERE id_solicitud = :id "
+        "ORDER BY cod_cliente"), {"id": id_solicitud.bytes}).all()]
+    datos["recepciones"] = [
+        {**dict(r._mapping), "recibida_en": _utc(r.recibida_en)}
+        for r in db.execute(text(
+            "SELECT version_solicitud, ronda, BIN_TO_UUID(id_evaluacion) AS id_evaluacion, recibida_en "
+            "FROM creditos.v_recepcion_solicitud_api WHERE id_solicitud = :id ORDER BY version_solicitud"
+        ), {"id": id_solicitud.bytes}).all()
+    ]
+
+
+def _garantias_json(garantias) -> str:
+    """JSON con los valores decimales exactos."""
+    return "[" + ", ".join(
+        "{" + f'"tipo": {json.dumps(g.tipo)}, "descripcion": {json.dumps(g.descripcion, ensure_ascii=False)}, '
+        f'"valor": {g.valor:.2f}' + "}" for g in garantias) + "]"
+
+
+def huella_borrador(datos) -> str:
+    """SHA-256 del contenido del borrador, sin depender de cómo vinieron los números."""
+    canonico = {
+        "cod_cliente": datos.cod_cliente, "monto": f"{datos.monto_solicitado:.2f}", "moneda": datos.moneda,
+        "plazo": datos.plazo_meses, "pago_doble": datos.condicion_pago_doble, "destino": datos.destino,
+        "fecha_base": datos.fecha_base.isoformat(), "politica": datos.politica,
+        "garantias": [[g.tipo, g.descripcion, f"{g.valor:.2f}"] for g in datos.garantias],
+        "fiadores": list(datos.fiadores),
+    }
+    return hashlib.sha256(json.dumps(canonico, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def guardar_borrador(db: Session, id_solicitud: uuid.UUID, datos, *, revision: int | None,
+                     correlation_id: uuid.UUID, actor: str) -> tuple[dict[str, Any], bool]:
+    """Crea (revision None) o reemplaza el borrador. Devuelve (borrador, repetido)."""
+    huella = huella_borrador(datos)
+
+    def operacion():
+        if revision is not None and db.execute(text(
+                "SELECT 1 FROM creditos.v_solicitud_api WHERE id_solicitud = :id"),
+                {"id": id_solicitud.bytes}).first() is None:
+            raise solicitud_no_encontrada()
+        return llamar(
+            db, "creditos.guardar_borrador",
+            id_solicitud, revision, datos.cod_cliente, datos.monto_solicitado, datos.moneda, datos.plazo_meses,
+            datos.condicion_pago_doble, datos.destino, datos.fecha_base,
+            json.dumps(datos.politica, sort_keys=True, ensure_ascii=False), _garantias_json(datos.garantias),
+            json.dumps(list(datos.fiadores)), huella, actor, correlation_id, salidas=3,
+        )
+
+    nueva, codigo, repetido = _escribir(db, operacion, "guardar_borrador")
+    (estado,) = db.execute(text("SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = :id"),
+                           {"id": id_solicitud.bytes}).one()
+    return ({"id_solicitud": id_solicitud, "codigo": codigo, "revision": int(nueva), "estado": estado},
+            bool(int(repetido)))
+
+
+def conteo_solicitudes(db: Session, *, cod_cliente: str | None) -> dict[str, Any]:
+    donde, parametros = ("WHERE cod_cliente = :cliente", {"cliente": cod_cliente}) if cod_cliente else ("", {})
+    filas = db.execute(text(
+        f"SELECT estado_solicitud, count(*) AS n FROM creditos.v_solicitud_api {donde} GROUP BY estado_solicitud"
+    ), parametros).all()
+    estados = {f.estado_solicitud: int(f.n) for f in filas}
+    return {"total": sum(estados.values()), "estados": estados}
 
 
 def aprobaciones(db: Session, *, cod_cliente: str | None, id_solicitud: uuid.UUID | None) -> list[dict[str, Any]]:

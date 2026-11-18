@@ -39,8 +39,13 @@ ACCIONES_BILLETERA = frozenset({AFILIAR_BILLETERA, REGISTRAR_COMERCIO, OPERAR_BI
 # registran a ella en la bitácora. GESTIONAR_INCIDENTES abre y avanza incidentes.
 OPERAR_SEGURIDAD = "OPERAR_SEGURIDAD"
 GESTIONAR_INCIDENTES = "GESTIONAR_INCIDENTES"
+# Propia de COREDB (bd-v1.14): un módulo sin base propia reporta sus eventos de auditoría a la
+# bitácora (POST /coredb/auditoria/eventos). El módulo de la bitácora es el del token (el
+# módulo de un usuario de servicio es un nombre de core.modulo).
+REGISTRAR_EVENTO_MODULO = "REGISTRAR_EVENTO_MODULO"
 ACCIONES = (ACCIONES_CORE | {VALIDAR_IDENTIDAD, DESEMBOLSAR_CREDITO, REGISTRAR_MORA, REGISTRAR_EMPLEADO}
-            | ACCIONES_BILLETERA | {OPERAR_SEGURIDAD, GESTIONAR_INCIDENTES})
+            | ACCIONES_BILLETERA | {OPERAR_SEGURIDAD, GESTIONAR_INCIDENTES, REGISTRAR_EVENTO_MODULO})
+
 
 PERMISOS: dict[str, frozenset[str]] = {
     "ADMINISTRADOR": (ACCIONES_CORE | {DESEMBOLSAR_CREDITO, REGISTRAR_MORA, REGISTRAR_EMPLEADO} | ACCIONES_BILLETERA
@@ -76,6 +81,9 @@ PERMISOS: dict[str, frozenset[str]] = {
     "SERVICIO:BILLETERA": frozenset({OPERAR_BILLETERA}),
     # Seguridad sella la bitácora con su clave (por eso la lee) y actúa por personas.
     "SERVICIO:SEGURIDAD": frozenset({OPERAR_SEGURIDAD, "VER_AUDITORIA"}),
+    # SOL (bd-v1.14): el borrador lo guarda el asesor con su token, que SOL reenvía; con el suyo,
+    # SOL lee las solicitudes (para el resultado de Evaluación) y reporta sus eventos.
+    "SERVICIO:SOLICITUD DE CREDITO": frozenset({"VER_CREDITO", REGISTRAR_EVENTO_MODULO}),
 }
 
 
