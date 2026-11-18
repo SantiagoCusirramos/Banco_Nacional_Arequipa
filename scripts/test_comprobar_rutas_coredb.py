@@ -210,3 +210,12 @@ def test_la_direccion_directa_como_valor_por_omision_de_un_modulo(tmp_path):
 
 def test_el_repositorio_no_tiene_la_direccion_directa_de_coredb_en_ningun_modulo():
     assert problemas(REPO) == []
+
+
+def test_la_direccion_directa_en_el_env_example_de_la_billetera(tmp_path):
+    repo = _repo(tmp_path)
+    chaski = repo / "billetera-chaski" / "backend"
+    chaski.mkdir(parents=True)
+    (chaski / ".env.example").write_text("COREDB_URL=http://127.0.0.1:8012\n")
+    hallados = problemas(repo)
+    assert any("billetera-chaski/backend/.env.example" in p for p in hallados), hallados

@@ -368,3 +368,22 @@ def test_la_bitacora_y_los_avisos_no_guardan_el_celular(api, billetera, sesion, 
         assert consulta("SELECT COUNT(*) AS n FROM cuentas.movimiento WHERE glosa LIKE %s",
                         f"%{celular}%")[0]["n"] == 0
         assert celular not in avisos
+
+
+def test_el_pin_se_confirma_antes_de_operar_y_cuenta_los_intentos(api, billetera, sesion, servicio_billetera):
+    datos = billetera()
+    encabezados = sesion(datos)
+    correcto = api.post(f"{B}/pin/verificacion", headers=encabezados, json={"pin": datos["pin"]})
+    assert correcto.status_code == 200, correcto.text
+    assert correcto.json() == {"valido": True}
+    for _ in range(2):
+        equivocado = api.post(f"{B}/pin/verificacion", headers=encabezados, json={"pin": "000000"})
+        assert equivocado.status_code == 401
+        assert equivocado.json()["error"]["code"] == "PIN_INCORRECTO"
+    tercero = api.post(f"{B}/pin/verificacion", headers=encabezados, json={"pin": "000000"})
+    assert tercero.status_code == 401
+    # Al tercer PIN equivocado la billetera queda bloqueada y la sesión se corta.
+    assert api.get(f"{B}/yo", headers=encabezados).status_code == 401
+    acceso = api.post(f"{B}/acceso", headers=servicio_billetera,
+                      json={"celular": datos["celular"], "pin": datos["pin"]})
+    assert acceso.json()["error"]["code"] == "BILLETERA_BLOQUEADA"
