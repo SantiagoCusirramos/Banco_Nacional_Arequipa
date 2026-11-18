@@ -130,11 +130,9 @@ describe("Mensajes de error y cabeceras", () => {
     expect(mensajeError("otra cosa")).toBe("Error inesperado");
   });
 
-  it("ER-02 Cada operación lleva una llave nueva, el canal y la hora", () => {
-    const una = cabecerasDeOperacion();
-    const otra = cabecerasDeOperacion();
-    expect(una["X-Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(una["X-Idempotency-Key"]).not.toBe(otra["X-Idempotency-Key"]);
+  it("ER-02 Cada operación lleva la llave que recibe, el canal y la hora", () => {
+    const una = cabecerasDeOperacion("llave-de-la-operacion");
+    expect(una["X-Idempotency-Key"]).toBe("llave-de-la-operacion");
     expect(una["X-Channel-ID"]).toBe("VEN");
     expect(new Date(una["X-Request-Timestamp"]).getTime()).not.toBeNaN();
   });

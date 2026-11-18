@@ -64,26 +64,20 @@ export const apiCobranza = axios.create({
 });
 apiCobranza.interceptors.request.use(conToken);
 
-const OPERACIONES = ["/deposito", "/retiro", "/transferencia"];
-
-/** Cabeceras que CUENTAS exige en toda operación que mueve dinero. */
-export function cabecerasDeOperacion(): Record<string, string> {
+/**
+ * Cabeceras que CUENTAS exige en toda operación que mueve dinero. La llave la pone quien
+ * llama: la misma para cada reintento de la misma operación (si no, CUENTAS movería el
+ * dinero otra vez) y una nueva cuando cambian los datos o la operación ya se registró.
+ */
+export function cabecerasDeOperacion(llave: string): Record<string, string> {
   return {
-    "X-Idempotency-Key": crypto.randomUUID(),
+    "X-Idempotency-Key": llave,
     "X-Channel-ID": CANAL,
     "X-Request-Timestamp": new Date().toISOString(),
   };
 }
 
-apiCuentas.interceptors.request.use((config) => {
-  conToken(config);
-  if (config.method === "post" && OPERACIONES.includes(config.url || "")) {
-    for (const [nombre, valor] of Object.entries(cabecerasDeOperacion())) {
-      config.headers[nombre] = valor;
-    }
-  }
-  return config;
-});
+apiCuentas.interceptors.request.use(conToken);
 
 export function mensajeError(err: unknown): string {
   if (axios.isAxiosError(err)) {

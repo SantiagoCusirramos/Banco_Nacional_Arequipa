@@ -1,4 +1,4 @@
-import { apiCuentas as api, mensajeError } from "@/lib/api";
+import { apiCuentas as api, cabecerasDeOperacion, mensajeError } from "@/lib/api";
 
 export type EstadoCuenta = "ACTIVA" | "BLOQUEADA" | "BLOQUEADA_PREVENTIVA" | "CANCELADA";
 export type Regimen = "INDIVIDUAL" | "MANCOMUNADA_INDISTINTA" | "MANCOMUNADA_CONJUNTA";
@@ -91,21 +91,24 @@ export async function cuentasDeCliente(codCliente: string): Promise<Cuenta[]> {
   return data.data;
 }
 
-// Los montos van como texto decimal ("150.00"), igual que los devuelve el CORE.
-export async function depositar(numCuenta: string, monto: string): Promise<OperacionRegistrada> {
-  const { data } = await api.post<Sobre<OperacionRegistrada>>("/deposito", { num_cuenta: numCuenta, monto });
+// Los montos van como texto decimal ("150.00"), igual que los devuelve el CORE. `llave` es la
+// llave de idempotencia de la operación: repetirla con los mismos datos no mueve el dinero otra vez.
+export async function depositar(numCuenta: string, monto: string, llave: string): Promise<OperacionRegistrada> {
+  const { data } = await api.post<Sobre<OperacionRegistrada>>("/deposito", { num_cuenta: numCuenta, monto },
+    { headers: cabecerasDeOperacion(llave) });
   return data.data;
 }
 
-export async function retirar(numCuenta: string, monto: string): Promise<OperacionRegistrada> {
-  const { data } = await api.post<Sobre<OperacionRegistrada>>("/retiro", { num_cuenta: numCuenta, monto });
+export async function retirar(numCuenta: string, monto: string, llave: string): Promise<OperacionRegistrada> {
+  const { data } = await api.post<Sobre<OperacionRegistrada>>("/retiro", { num_cuenta: numCuenta, monto },
+    { headers: cabecerasDeOperacion(llave) });
   return data.data;
 }
 
-export async function transferir(origen: string, destino: string, monto: string): Promise<TransferenciaRegistrada> {
+export async function transferir(origen: string, destino: string, monto: string, llave: string): Promise<TransferenciaRegistrada> {
   const { data } = await api.post<Sobre<TransferenciaRegistrada>>("/transferencia", {
     num_cuenta_origen: origen, num_cuenta_destino: destino, monto,
-  });
+  }, { headers: cabecerasDeOperacion(llave) });
   return data.data;
 }
 

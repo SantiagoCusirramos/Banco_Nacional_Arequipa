@@ -318,20 +318,44 @@ def flujo():
     exigir(estado == 200 and respuesta["data"]["saldo_disponible"] == "300.00"
            and respuesta["data"]["titulares"] == [cliente],
            f"CUENTAS no devolvió la cuenta esperada: {estado} {respuesta}")
-    estado, respuesta = pedir(
-        "POST", f"{base}/deposito", {"num_cuenta": origen, "monto": "50.00"}, token,
-        cabeceras={"X-Idempotency-Key": str(uuid.uuid4()), "X-Channel-ID": "VEN",
-                   "X-Request-Timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
-    )
-    exigir(estado == 201 and respuesta["success"] is True, f"Depósito por CUENTAS: {estado} {respuesta}")
     estado, respuesta = pedir("GET", f"{base}/{origen}/movimientos", token=token)
-    exigir(estado == 200 and respuesta["data"][0]["tipo_operacion"] == "DEPOSITO"
-           and respuesta["data"][0]["monto"] == "50.00",
-           f"Movimientos por CUENTAS: {estado} {respuesta}")
+    exigir(estado == 200, f"Movimientos por CUENTAS: {estado} {respuesta}")
+    movimientos_antes = len(respuesta["data"])
+
+    def operar_cuentas(operacion, cuerpo, llave):
+        return pedir("POST", f"{base}/{operacion}", cuerpo, token, cabeceras={
+            "X-Idempotency-Key": llave, "X-Channel-ID": "VEN",
+            "X-Request-Timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+
+    # Cada operación se repite con la misma llave, como un reintento de /cuenta tras un timeout:
+    # debe devolver la misma transacción marcada como repetición, y el saldo cambia una sola vez.
+    operaciones = [
+        ("deposito", {"num_cuenta": origen, "monto": "50.00"}, "uuid_transaccion"),
+        ("retiro", {"num_cuenta": origen, "monto": "20.00"}, "uuid_transaccion"),
+        ("transferencia", {"num_cuenta_origen": destino, "num_cuenta_destino": origen, "monto": "20.00"}, "uuid_debito"),
+    ]
+    for operacion, cuerpo, campo in operaciones:
+        llave = str(uuid.uuid4())
+        estado, primera = operar_cuentas(operacion, cuerpo, llave)
+        exigir(estado == 201 and primera["data"]["replay"] is False, f"{operacion} por CUENTAS: {estado} {primera}")
+        estado, repetida = operar_cuentas(operacion, cuerpo, llave)
+        exigir(estado == 201 and repetida["data"]["replay"] is True
+               and repetida["data"][campo] == primera["data"][campo],
+               f"Repetir {operacion} por CUENTAS con la misma llave debía devolver la original: {estado} {repetida}")
+        estado, otra = operar_cuentas(operacion, {**cuerpo, "monto": "1.00"}, llave)
+        exigir(estado == 409, f"La misma llave con otro monto debía dar 409 en {operacion}: {estado} {otra}")
+    estado, respuesta = pedir("GET", f"{base}/{origen}/movimientos", token=token)
+    exigir(estado == 200 and len(respuesta["data"]) == movimientos_antes + 3,
+           f"Cada operación repetida debía dejar un solo movimiento en {origen}: {estado} {respuesta}")
+    saldos = {numero: coredb("GET", f"/coredb/cuentas/{numero}", 200, token=token)["saldo_disponible"]
+              for numero in cuentas}
+    exigir(saldos == {origen: "350.00", destino: "180.00"},
+           f"Saldos tras las operaciones repetidas por CUENTAS: {saldos}")
     estado, respuesta = pedir("GET", f"{base}/consolidada/{cliente}", token=token)
     exigir(estado == 200 and sorted(c["num_cuenta"] for c in respuesta["data"]) == sorted(cuentas),
            f"Consolidada por CUENTAS: {estado} {respuesta}")
-    paso("CUENTAS: cuenta, depósito de 50.00, movimientos y consolidada del cliente")
+    paso("CUENTAS: cuenta, depósito, retiro y transferencia repetidos con la misma llave (un solo movimiento "
+         "cada uno; otro monto con la misma llave, 409), movimientos y consolidada del cliente")
 
     # ── Por el módulo TARJETAS, que reenvía el token a COREDB ───────────────
     # Solo se emite a un cliente ACTIVO (ERR-TAR-001) y el registrado arriba está OBSERVADO:
