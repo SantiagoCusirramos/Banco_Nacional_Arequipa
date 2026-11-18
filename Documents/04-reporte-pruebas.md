@@ -1,5 +1,7 @@
 # Reporte de pruebas — CORE (Banco Nacional de Arequipa)
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 **Responsable:** Sebastian Alberto Monteagudo Miranda
 **Alcance:** `backend/CORE/tests/`
 **Comando:** `cd backend && python -m pytest`

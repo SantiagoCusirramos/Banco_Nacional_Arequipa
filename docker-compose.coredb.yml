@@ -1,5 +1,5 @@
-# Base integrada del CORE (MySQL 8.4) para la API backend/COREDB. Es aparte de
-# la BD legada `bna`: la API actual no cambia y este servicio usa el puerto 3307.
+# Base integrada del CORE (MySQL 8.4) sola, para desarrollar la API backend/COREDB
+# fuera del producto (compose.yaml). Usa el puerto 3307.
 #   cp backend/COREDB/.env.example backend/COREDB/.env   # y completar las claves
 #   docker compose -f docker-compose.coredb.yml --env-file backend/COREDB/.env up -d
 # Los scripts de inicio solo corren con un volumen vacío (ver database/README-UPSTREAM.md).

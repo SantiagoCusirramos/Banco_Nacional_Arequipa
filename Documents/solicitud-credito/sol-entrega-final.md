@@ -1,5 +1,7 @@
 # E06 — Entrega final SOL
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 Fecha: 2026-11-14, America/Lima. Base `86904edd8dc866c1d4260a996748a1cda3770007`, rama `feature/integracion-sol`, cambios E02–E06 sin commit/push. [Evidencias y reproducción](sol-evidencias-testing.md), [matriz histórica y actual](sol-matriz-rf.md), [changelog](change-log.md).
 
 ## Dictamen

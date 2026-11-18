@@ -1,5 +1,7 @@
 # E04 — Evaluación, entrega versionada y resultados
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 Fecha: 2026-11-14, America/Lima. Rama `feature/integracion-sol`, HEAD base `86904edd8dc866c1d4260a996748a1cda3770007` con cambios locales E02/E03 preservados y E04 sin commit/push.
 
 ## Resultado

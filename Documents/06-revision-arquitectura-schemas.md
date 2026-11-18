@@ -1,5 +1,7 @@
 # Revisión de arquitectura y schemas — CORE
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 **Responsable:** Sebastian Alberto Monteagudo Miranda
 **Actualizado:** 2026-11-01 (Ronda 3)
 **Base de la revisión original:** `main` del 2026-10-23, antes de los fixes del equipo

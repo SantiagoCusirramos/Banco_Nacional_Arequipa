@@ -1,5 +1,7 @@
 """Usuarios, portado de CORE/services/usuariossvc.py sobre los procedimientos.
 
+El CORE legado se eliminó en #125; el original queda en el historial de git.
+
 `autenticar` la usa POST /coredb/auth/login. Los usuarios de servicio (un módulo que
 se autentica en la API) reciben un secreto generado aquí, que se entrega una sola vez
 y se guarda solo como hash bcrypt.

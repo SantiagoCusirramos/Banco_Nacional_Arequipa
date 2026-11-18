@@ -18,11 +18,10 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | EVALUACIÓN | `backend/EVALUACION` | Evaluación crediticia: recibe el expediente de SOL y lo registra en COREDB; el analista evalúa con la regla RN-EVA-002-P y decide los casos observados. La aprobación queda en COREDB para Desembolso, con el calendario de SOL | En uso: sin base propia, llama a COREDB |
 | DESEMBOLSO | `backend/DESEMBOLSO` | Desembolso de créditos: el operador verifica el documento del titular, prepara la orden con una aprobación y una cuenta individual, y confirma; COREDB abona una sola vez, crea el crédito con su calendario oficial y deja la solicitud desembolsada | En uso: sin base propia, llama a COREDB |
 | Seguridad | `backend/seguridad` | Evaluación de una operación contra el tope real del canal, con desafío sobre el 80 % (código simulado); sellos HMAC encadenados de la bitácora de COREDB; incidentes; desbloqueo de tarjetas (el único camino). Sin base propia ni usuarios propios: entra el personal con su usuario de COREDB y Seguridad llega a COREDB por el Bus con `svc-seguridad` | En uso: sin base propia, llama a COREDB; ningún canal lo llama aún antes de debitar |
-| CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene su propia evaluación de créditos; COREDB ya ofrece la evaluación, el desembolso y la cobranza sobre la base integrada | Opcional: ningún servicio lo llama |
 
 Para contribuir, ver [`CONTRIBUTING.md`](CONTRIBUTING.md): rama, PR y CI en verde; nada directo a `main`.
 
-Lo que no está: el módulo Clientes (el PR #25 se cerró sin fusionar el 2026-11-17; los clientes los crea CAPTACION). Lo que sigue abierto está en el issue #116; los valores adoptados donde las fuentes no deciden, en [`Documents/decisiones-del-equipo.md`](Documents/decisiones-del-equipo.md). Todo pasa por el Bus de Servicios, como pide [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md): el frontend llega a los módulos a través de él, y los módulos llegan a COREDB también a través de él.
+Lo que no está: el módulo Clientes (el PR #25 se cerró sin fusionar el 2026-11-17; los clientes los crea CAPTACION). El CORE legado (`backend/CORE`, la API anterior sobre el esquema `bna`, con su base `db-legado` y el perfil `legado`) se eliminó en #125 porque ningún servicio lo usaba; sigue en el historial de git. Lo que sigue abierto está en el issue #116; los valores adoptados donde las fuentes no deciden, en [`Documents/decisiones-del-equipo.md`](Documents/decisiones-del-equipo.md). Todo pasa por el Bus de Servicios, como pide [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md): el frontend llega a los módulos a través de él, y los módulos llegan a COREDB también a través de él.
 
 ## Requisitos
 
@@ -68,7 +67,6 @@ flowchart LR
   sol -->|"/bus/captacion y /bus/evaluacion"| bus
   bus ==>|"/bus/coredb, red core"| coredb["COREDB :8012"]
   coredb --> db[("db: base integrada, MySQL 8.4 :3307")]
-  leg["CORE legado :8000 (perfil legado)"] -.-> aux[("db-legado: bna legada (perfil legado)")]
 ```
 
 Camino de una llamada, por ejemplo un depósito desde el frontend:
@@ -98,7 +96,7 @@ sequenceDiagram
 - En compose hay dos redes cerradas: `canales` (el frontend, el Bus y los dos canales, ATM y BILLETERA: el frontend no ve los demás módulos) y `core` (la base, COREDB, `coredb-init` y el Bus: los módulos no ven COREDB). `scripts/comprobar_rutas_coredb.py`, que corre en `./bna test`, falla si algún módulo de compose, k8s, los `.env.example` o los valores por omisión tiene la dirección directa de COREDB. Solo la tienen el Bus (`BUS_URL_COREDB`; en k8s, el ConfigMap `bna-bus`, que solo lee el Bus), COREDB mismo y su arranque (`coredb-init` y los contenedores de arranque del Deployment `coredb`, que crean los usuarios iniciales conectados a la base). Las suites de integración de los módulos también levantan un Bus (`scripts/bus_de_pruebas.sh`).
 - Ningún módulo tiene base propia. SOL llega también por el Bus a CAPTACION (referencias de clientes) y a Evaluación (expedientes); Evaluación le devuelve el resultado por el Bus.
 - COREDB es la única entrada a la base integrada, y escribe en ella solo por procedimientos almacenados.
-- `db-legado` es otro MySQL, solo con el esquema `bna` del CORE legado y solo con el perfil `legado`. La base integrada no recibe esquemas ni usuarios ajenos.
+- La base integrada es la única base del producto y no recibe esquemas ni usuarios ajenos.
 - Todos los puertos se publican solo en `127.0.0.1`.
 
 ## Servicios y puertos
@@ -121,11 +119,8 @@ sequenceDiagram
 | Desembolso | http://localhost:3000/desembolso (API: http://127.0.0.1:8016/docs) | Un usuario de COREDB con rol OPERADOR; ADMINISTRADOR hace de supervisor y AUDITOR consulta | [`backend/DESEMBOLSO/README.md`](backend/DESEMBOLSO/README.md) |
 | Seguridad | http://127.0.0.1:8013 | Consola técnica; se entra con un usuario de COREDB (`admin`) | [`backend/seguridad/README.md`](backend/seguridad/README.md) |
 | MySQL de la base integrada | `127.0.0.1:3307` | `root` y `CORE_DB_ROOT_PASSWORD` | [`database/README.md`](database/README.md) |
-| CORE legado (opcional) | http://127.0.0.1:8000/docs | Token de `POST /core/auth/login` | [`backend/CORE/README.md`](backend/CORE/README.md) |
 
-Las contraseñas están en `.env`. `db-legado` no publica ningún puerto. Sin un cliente de MySQL en la máquina, la base integrada se abre con `docker compose exec db mysql -uroot -p`.
-
-El CORE legado solo se levanta si se pide: `COMPOSE_PROFILES=legado ./bna up`. Todas sus rutas salvo el login exigen token y permiso. `./bna down` y `./bna reset` lo detienen también; con `docker compose` directo hay que nombrar su perfil: `docker compose --profile legado down`.
+Las contraseñas están en `.env`. Sin un cliente de MySQL en la máquina, la base integrada se abre con `docker compose exec db mysql -uroot -p`.
 
 ## Órdenes
 
@@ -154,7 +149,6 @@ Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo 
 | `CORE_DB_JWT_CLAVE` | Clave que firma los tokens de COREDB |
 | `SOL_COREDB_SECRETO`, `BUS_TOKEN_SOL` | Secreto del usuario de servicio de SOL en COREDB (`svc-sol`) y su credencial ante el Bus |
 | `SEGURIDAD_SECRET_KEY`, `SEGURIDAD_COREDB_SECRETO` | Clave de los HMAC de Seguridad (código del desafío y sellos de la bitácora) y secreto de su usuario de servicio en COREDB |
-| `LEGADO_DB_ROOT_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base y API del CORE legado (perfil `legado`) |
 | `EVALUACION_COREDB_SECRETO`, `EVALUACION_TOKEN_SOL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | Secreto del usuario de servicio de Evaluación en COREDB y los tokens de CR-INT-02 y CR-INT-03 con SOL |
 | `DESEMBOLSO_COREDB_SECRETO` | Secreto del usuario de servicio de Desembolso en COREDB |
 | `COBRANZA_COREDB_SECRETO` | Secreto del usuario de servicio de Cobranza en COREDB (svc-cobranza) |
@@ -175,7 +169,7 @@ Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecu
 ./bna test
 ```
 
-Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, ATM, BILLETERA (Chaski), el Bus de Servicios (y la comprobación de que ningún módulo tiene la dirección directa de COREDB), SOL, Evaluación, Desembolso, COBRANZA CAPTACION y Seguridad (contra COREDB y la base integrada nuevas, a través de un Bus de pruebas; CAPTACION también con el adaptador real de SOL), COREDB (unitarias, contratos de CUENTAS y TARJETAS, y contra un MySQL nuevo), el despliegue de la base integrada, el aviso de push directo, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
+Corre, en contenedores, las suites de CUENTAS, TARJETAS, ATM, BILLETERA (Chaski), el Bus de Servicios (y la comprobación de que ningún módulo tiene la dirección directa de COREDB), SOL, Evaluación, Desembolso, COBRANZA CAPTACION y Seguridad (contra COREDB y la base integrada nuevas, a través de un Bus de pruebas; CAPTACION también con el adaptador real de SOL), COREDB (unitarias, contratos de CUENTAS y TARJETAS, y contra un MySQL nuevo), el despliegue de la base integrada, el aviso de push directo, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
 
 Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
 
@@ -246,9 +240,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 │   ├── EVALUACION/    Evaluación crediticia
 │   ├── DESEMBOLSO/    Desembolso de créditos
 │   ├── COBRANZA/      Cobranza de cuotas
-│   ├── seguridad/     Seguridad, sobre COREDB
-│   ├── CORE/          CORE legado
-│   └── Infraestructura - BD/   Esquema `bna` del CORE legado
+│   └── seguridad/     Seguridad, sobre COREDB
 ├── billetera-chaski/  Billetera Digital Chaski: API (backend/) y app móvil Flutter (app_movil/)
 ├── frontend/          Next.js
 └── Documents/         Stack, registros de validación y documentos de SOL
@@ -261,8 +253,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 - Contrato de COREDB para el módulo Clientes: [`backend/COREDB/CONTRATO_CLIENTES.md`](backend/COREDB/CONTRATO_CLIENTES.md).
 - Contrato de COREDB para la línea de créditos (Evaluación, Desembolso y Cobranza): [`backend/COREDB/CONTRATO_CREDITOS.md`](backend/COREDB/CONTRATO_CREDITOS.md).
 - Cómo se actualiza `database/`: [`database/README-UPSTREAM.md`](database/README-UPSTREAM.md).
-- Autenticación del CORE legado: [`backend/CORE/AUTH_JWT.md`](backend/CORE/AUTH_JWT.md) y [`backend/CORE/AUTENTICACION.md`](backend/CORE/AUTENTICACION.md).
-- Seguimiento de los hallazgos del CORE legado: [`Documents/08-seguimiento-hallazgos.md`](Documents/08-seguimiento-hallazgos.md).
+- Registros de validación del CORE legado (eliminado en #125), como registro histórico: `Documents/04-reporte-pruebas.md` a `Documents/09 pruebas manuales swagger.md` (cada uno con la nota) y las salidas de pytest que citan (`Documents/reporte_*.txt`, sin cambios).
 - Stack previsto y decisiones de arquitectura: [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md). Describe el diseño completo; lo que hay hoy es lo de este README (el frontend y los módulos llegan a los demás servicios a través del Bus).
 
 ## Convenciones

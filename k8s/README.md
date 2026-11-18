@@ -54,8 +54,6 @@ Para cambiar una clave: editarla en `.env`, volver a ejecutar `./bna k8s-up` y r
 - **Sin root:** todos los contenedores corren con un usuario sin privilegios, sin escalamiento y sin capacidades.
 - **Imágenes:** las mismas de `compose.yaml` (`bna/*:local`), construidas en la máquina y cargadas con `kind load`. Ninguna usa la etiqueta `latest`.
 
-El CORE legado no se despliega aquí: ningún servicio lo usa. Sigue disponible con Docker Compose (`COMPOSE_PROFILES=legado ./bna up`).
-
 ## Si algo falla
 
 `./bna k8s-up` espera a cada servicio hasta 10 minutos (`BNA_ESPERA_SEGUNDOS`). Si uno no queda listo, muestra los pods, los últimos eventos y, de cada pod que no está listo, el final de sus registros y el motivo de su último reinicio. `scripts/k8s.sh diagnostico` muestra lo mismo en cualquier momento.

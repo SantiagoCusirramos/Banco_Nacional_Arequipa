@@ -1,4 +1,7 @@
-"""Transacción con reintentos, portada de CORE/services/movimientos.py (Hallazgo #10)."""
+"""Transacción con reintentos, portada de CORE/services/movimientos.py (Hallazgo #10).
+
+El CORE legado se eliminó en #125; el original queda en el historial de git.
+"""
 
 import logging
 import random

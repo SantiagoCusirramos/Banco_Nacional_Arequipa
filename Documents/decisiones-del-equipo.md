@@ -47,7 +47,7 @@ T1 a T7 son las decisiones de la sección 7 de [`backend/COREDB/CONTRATO_CREDITO
 
 | # | Decisión | Valor | Origen | Módulo afectado |
 |---|---|---|---|---|
-| T1 | El analista puede OBSERVAR y devolver a SOL | No: la decisión del analista es `APROBADO` o `RECHAZADO` (diccionario de Evaluación). `OBSERVADO` es un resultado de la regla que pasa la solicitud al analista. En el CORE legado, `OBSERVAR` responde 422 desde #65 | Contrato de créditos | Evaluación |
+| T1 | El analista puede OBSERVAR y devolver a SOL | No: la decisión del analista es `APROBADO` o `RECHAZADO` (diccionario de Evaluación). `OBSERVADO` es un resultado de la regla que pasa la solicitud al analista. En el CORE legado (eliminado en #125), `OBSERVAR` respondía 422 desde #65 | Contrato de créditos | Evaluación |
 | T2 | Vigencia de la aprobación | 30 días, como en #70 | Contrato de créditos | Evaluación, Desembolso |
 | T3 | Revocar una aprobación antes del desembolso | Se permite, con motivo obligatorio | Contrato de créditos | Evaluación, Desembolso |
 | T4 | Pago mayor que la cuota | Se aplica a las cuotas siguientes; se rechaza solo si supera la deuda total | Contrato de créditos | Cobranza |
@@ -56,4 +56,4 @@ T1 a T7 son las decisiones de la sección 7 de [`backend/COREDB/CONTRATO_CREDITO
 | T7 | Vigencia de la verificación de identidad para desembolsar | El mismo día (fecha de Lima), al registrar la orden y al confirmarla | Contrato de créditos | Desembolso |
 | 16 | Umbrales de RN-EVA-002-P | Los de `creditos.regla_evaluacion` (80 % / 100 %), con la fórmula de #70 | Contrato de créditos | Evaluación |
 | 17 | Dominio de `resultado_verificacion` | Texto libre de hasta 20 caracteres, sin lista cerrada | Contrato de créditos | Evaluación |
-| 18 | Decisión `DERIVAR` en el CORE legado | La base la admite (el ENUM de `eva_decision_analista` la incluye) y la solicitud queda `EN_EVALUACION`, pero no se documenta como función del producto: las fuentes solo tienen `APROBADO` y `RECHAZADO` | #34, pregunta 10 | Créditos (CORE legado) |
+| 18 | Decisión `DERIVAR` en el CORE legado (registro: el CORE legado y su esquema `bna` se eliminaron en #125) | La base la admite (el ENUM de `eva_decision_analista` la incluye) y la solicitud queda `EN_EVALUACION`, pero no se documenta como función del producto: las fuentes solo tienen `APROBADO` y `RECHAZADO` | #34, pregunta 10 | Créditos (CORE legado) |

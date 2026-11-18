@@ -1,5 +1,7 @@
 # E04 — Contrato de intercambio SOL ↔ Evaluación
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 Fecha: 2026-11-14, America/Lima. Base HEAD `86904edd8dc866c1d4260a996748a1cda3770007` más cambios locales E02–E04. Estado: contrato técnico existente de laboratorio y propuesta para homologación; **no hay proveedor EVA/Bus institucional confirmado**. Este documento no publica un servicio externo ni aprueba política crediticia.
 
 Fuentes: [CONTRATOS_HTTP_V2.md](CONTRATOS_HTTP_V2.md), `backend/SOL/app.py:361`, `:501`, `integrations.py:105`, `:227`, `operations.py:30`, `schemas.py:53`. Evidencia y limitaciones en [sol-evaluacion.md](sol-evaluacion.md).

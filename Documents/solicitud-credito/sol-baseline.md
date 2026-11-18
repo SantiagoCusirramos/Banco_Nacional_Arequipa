@@ -1,5 +1,7 @@
 # P01 — Línea base segura de SOL
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 Fecha: 2026-11-14 (America/Lima). Rama `feature/integracion-sol`. HEAD `86904edd8dc866c1d4260a996748a1cda3770007`.
 
 ## Resultado

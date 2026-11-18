@@ -3,7 +3,7 @@
 API FastAPI sobre la base integrada de `database/`. Es la API del CORE que usa el producto:
 la llaman el frontend, CUENTAS, TARJETAS, CAPTACION, EVALUACIÓN, DESEMBOLSO, COBRANZA,
 BILLETERA y Seguridad, todos a través del Bus de Servicios (`/bus/coredb`), y ningún otro servicio se conecta
-a esa base. El CORE legado (`backend/CORE`) es otra API, sobre otra base, y sigue aparte.
+a esa base.
 
 > **Exige un JWT propio en toda ruta salvo `/coredb/salud` y el login.** No tiene TLS:
 > no exponer fuera de la máquina sin un proxy con TLS delante.
@@ -57,7 +57,7 @@ integrada y con PyJWT:
   CREDENCIALES_INVALIDAS`, con `WWW-Authenticate: Bearer`; 403 `PERMISO_DENEGADO`.
 
 **Permisos:** `permisos.py` es un mapa versionado de rol a acciones. Los cinco roles de
-personas son los de `CORE/data/rbac.json` en `a9bd70f`, y la API nunca lo escribe. La
+personas son los de `CORE/data/rbac.json` del CORE legado en `a9bd70f` (eliminado en #125), y la API nunca lo escribe. La
 acción propia `VALIDAR_IDENTIDAD` la tienen ASESOR, OPERADOR (verifica el documento antes de
 un desembolso) y el usuario de servicio de Clientes;
 `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR y el servicio de Cobranza) son las
@@ -241,7 +241,6 @@ Las tres áreas: evaluación, desembolso y cobranza.
   `REVISION_DESACTUALIZADA`). La bandeja sin `estado` no muestra borradores. Ver
   `CONTRATO_CREDITOS.md` §8.
 - El usuario de la API no lee tablas de `creditos`: lee las vistas `v_*_api`.
-- Las rutas de crédito del CORE legado (perfil `legado`) siguen aparte.
 
 ## Billetera Digital
 
