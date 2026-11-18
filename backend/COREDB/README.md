@@ -45,7 +45,7 @@ integrada y con PyJWT:
   aleatorio; bloquearlos dejaría a un módulo sin acceso a pedido de cualquiera).
   `GET /coredb/usuarios/{id}` muestra `bloqueado_hasta` y
   `POST /coredb/usuarios/{id}/desbloqueo` (`CREAR_USUARIO`) lo levanta antes. Los números
-  son provisionales: los decide el equipo (pregunta en #34).
+  son una decisión del equipo, revisable ([`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md)).
 - Las demás rutas exigen `Authorization: Bearer <token>`. El token lleva `sub`,
   `username`, `rol`, `modulo`, `type`, `iss` (`bna-coredb`), `aud` (`coredb`), `iat`, `exp`
   y `jti`, todos obligatorios. El algoritmo lo fija el servidor (`CORE_DB_JWT_ALGORITMO`,
@@ -108,7 +108,7 @@ Las rutas que usa el módulo Clientes, y el personal, están descritas en
 
 - El usuario de la API no lee `clientes.*`: el cliente llega como JSON de un
   procedimiento, sin datos biométricos.
-- **Quién registra (punto R-01, por confirmar con el equipo):** solo el usuario de
+- **Quién registra (punto R-01, decisión del equipo revisable, [`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md)):** solo el usuario de
   servicio del módulo Clientes registra un cliente `HABILITADO`; los demás registran
   `OBSERVADO`. La regla está en `permisos.puede_registrar_habilitado`.
 - La baja es final y la fija una persona, no un usuario de servicio.
@@ -162,7 +162,7 @@ Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica 
 | `GET /coredb/autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Una autorización |
 | `POST /coredb/autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Extorna una autorización sin movimiento |
 | `POST /coredb/autorizaciones/{uuid_autorizacion}/confirmacion` | `REGISTRAR_MOVIMIENTO` | Confirma una autorización retenida: registra el movimiento real |
-| `POST /coredb/autorizaciones/liberaciones` | `REGISTRAR_MOVIMIENTO` | Libera las retenciones vencidas (`{"minutos": 1..1440}`, sin él el plazo de la base, 15 por omisión; pregunta #34). La base ya lo hace cada minuto; una retención vencida no se confirma (`BNA-CONFIRMACION`) |
+| `POST /coredb/autorizaciones/liberaciones` | `REGISTRAR_MOVIMIENTO` | Libera las retenciones vencidas (`{"minutos": 1..1440}`, sin él el plazo de la base, 15 por omisión; decisión 11 de `Documents/decisiones-del-equipo.md`). La base ya lo hace cada minuto; una retención vencida no se confirma (`BNA-CONFIRMACION`) |
 | `PUT /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}` | `CREAR_TARJETA` | Asigna o cambia el `PIN_ATM` o la `CLAVE_WEB` |
 | `POST /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion` | `REGISTRAR_MOVIMIENTO` | Valida el PIN o la clave web |
 

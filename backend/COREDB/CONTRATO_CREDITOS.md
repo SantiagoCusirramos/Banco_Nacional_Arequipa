@@ -222,4 +222,4 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 6. Supervisor de Desembolso: ADMINISTRADOR.
 7. Vigencia de la verificación de identidad para desembolsar: el mismo día (fecha de Lima).
 
-Siguen abiertos: los umbrales de RN-EVA-002-P (provisionales), el dominio de `resultado_verificacion` y la ratificación de `cod_cliente` como identificador común.
+Estas siete y los umbrales de RN-EVA-002-P, el dominio de `resultado_verificacion` y `cod_cliente` como identificador común se adoptaron como decisiones del equipo, revisables: [`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md).
