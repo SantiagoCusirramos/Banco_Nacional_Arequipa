@@ -206,9 +206,10 @@ function crearApp({ coredb }) {
     (await cliente(req, 'GET', '/operaciones?limite=60')).map((o) => ({ ...operacion(o), sentido: o.sentido.toLowerCase() }))));
 
   // ================= CONTACTOS =================
-  // El celular viaja a COREDB en el cuerpo, nunca en la ruta.
-  app.get('/api/clientes/buscar', sesion, wrap(async (req) => {
-    const c = celular(req.query.celular);
+  // El celular va en el cuerpo, nunca en la ruta ni en la consulta: el Bus y los servidores
+  // registran las rutas con su consulta.
+  app.post('/api/clientes/buscar', sesion, wrap(async (req) => {
+    const c = celular(req.body && req.body.celular);
     const r = await cliente(req, 'POST', '/contactos', { cuerpo: { celular: c } });
     return { celular: c, nombre: r.nombre };
   }));

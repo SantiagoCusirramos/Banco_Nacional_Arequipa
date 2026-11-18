@@ -810,7 +810,7 @@ def flujo():
     s_alberto = chaski("POST", "/login", 200, {"celular": alberto["celular"], "pin": alberto["pin"]})["token"]
     estado, _ = pedir("GET", f"{COREDB}/coredb/catalogos/monedas", token=s_rosa)
     exigir(estado == 401, f"El token de cliente no debe servir como token del personal: respondió {estado}")
-    contacto = chaski("GET", f"/clientes/buscar?celular={alberto['celular']}", 200, sesion=s_rosa)
+    contacto = chaski("POST", "/clientes/buscar", 200, {"celular": alberto["celular"]}, s_rosa)
     exigir(contacto["nombre"] == "Alberto Q.", f"Contacto inesperado: {contacto}")
     paso("BILLETERA: login con celular y PIN (PIN equivocado 401, registro 403 por R-01), el token de cliente "
          "no sirve como token del personal, y el contacto se ve solo con su nombre corto")

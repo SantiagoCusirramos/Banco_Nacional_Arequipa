@@ -198,13 +198,17 @@ test('un token de servicio vencido se renueva y la operación se repite con la m
   assert.deepEqual(envios.map((p) => p.cabeceras['x-idempotency-key']), [LLAVE, LLAVE]);
 });
 
-test('buscar un contacto manda el celular a COREDB en el cuerpo, no en la ruta', async (t) => {
+test('buscar un contacto lleva el celular en el cuerpo, no en la ruta (que queda en los registros)', async (t) => {
   const { estado, api, ultima } = await preparar(t);
   estado.respuestas['POST /bus/coredb/coredb/billetera/contactos'] = [200, { nombre: 'Luis R.' }];
-  const r = await api('GET', '/clientes/buscar?celular=959000002');
+  const r = await api('POST', '/clientes/buscar', { cuerpo: { celular: '959000002' } });
   assert.deepEqual(r.datos, { celular: '959000002', nombre: 'Luis R.' });
   assert.deepEqual(ultima('POST /bus/coredb/coredb/billetera/contactos').cuerpo, { celular: '959000002' });
   assert.ok(estado.peticiones.every((p) => !p.ruta.includes('959000002')));
+  // Con el celular en la consulta no se busca: obliga a la app a mandarlo en el cuerpo.
+  const n = estado.peticiones.length;
+  assert.equal((await api('GET', '/clientes/buscar?celular=959000002')).status, 404);
+  assert.equal(estado.peticiones.length, n);
 });
 
 test('pagar un QR usa su id, el monto si es estático y la llave', async (t) => {

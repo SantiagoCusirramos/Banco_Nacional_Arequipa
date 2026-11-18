@@ -53,6 +53,7 @@ App Flutter ──REST/JSON──► API Chaski (Express, puerto 8020) ──►
 | RF-BD-001 Transferir P2P por celular | `POST /api/transferencias` → `billetera.transferir` |
 | RF-BD-002 Solicitar cobro | `POST /api/solicitudes`, `GET /api/solicitudes`, `POST /api/solicitudes/:id/responder`; vence a las 48 h |
 | RF-BD-003 Pagar con QR | `POST /api/qr` (fijo o con monto, vence en 15 min y se paga una vez), `GET /api/qr/:id`, `POST /api/qr/:id/pagar`, `GET /api/comercios` |
+| Contactos | `POST /api/clientes/buscar` con el celular en el cuerpo: devuelve el nombre corto |
 | RF-BD-004 Saldo e historial | `GET /api/me`, `GET /api/movimientos`, `GET /api/operaciones` |
 | RF-BD-005 Enrolamiento | Lo hace el banco (afiliación); falta el registro por la app con verificación del celular (OTP) |
 | RF-BD-009 Notificaciones | `GET /api/notificaciones`, `POST /api/notificaciones/leidas` |
@@ -127,7 +128,9 @@ flutter build apk --release --dart-define=SERVIDOR=http://TU-IP:8020
   Para usarla con esta API hay que cambiar en `lib/models.dart` los ids numéricos (`idCliente`,
   `idCuenta`, `idMovimiento`, `id_solicitud`, `idQr`, `idComercio`…) a texto, porque ahora son
   los UUID de la base integrada; quitar o esconder el registro, la tienda, las promociones y los
-  servicios; y no esperar el celular ni el nombre completo en `/api/me` (llega el nombre corto).
+  servicios; no esperar el celular ni el nombre completo en `/api/me` (llega el nombre corto); y buscar
+  un contacto con `POST /api/clientes/buscar` y el celular en el cuerpo (antes era `GET` con el
+  celular en la consulta, que queda en los registros del Bus).
 - Prototipo original (PostgreSQL propio): `npm test` 12/12, `flutter analyze`, `flutter test` 6/6
   y `flutter build apk --debug` (Flutter 3.47.7).
 
