@@ -313,7 +313,7 @@ def test_estado_desconocido_400(client, core):
 
 
 def test_desbloqueo_rechazado_403(client, core):
-    core.respuesta = error_core(403, "BNA-DESBLOQUEO", "pendiente de un cliente de Seguridad")
+    core.respuesta = error_core(403, "BNA-DESBLOQUEO", "El desbloqueo de tarjetas solo se hace por el módulo Seguridad.")
     r = client.post(f"{BASE}/{ID}/estado", json={"estado": "ACTIVA"}, headers=AUTH)
     assert r.status_code == 403
     assert r.json()["error_code"] == "ERR-TAR-DESBLOQUEO-NO-PERMITIDO"

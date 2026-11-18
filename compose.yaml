@@ -92,6 +92,10 @@ services:
       args:
         REQUISITOS: requirements-coredb.txt
     command: uvicorn COREDB.main:app --host 0.0.0.0 --port 8012
+    environment:
+      <<: *coredb-entorno
+      # Solo para desbloquear tarjetas: la base lo permite únicamente a bna_seguridad.
+      CORE_DB_SEGURIDAD_PASSWORD: ${CORE_DB_SEGURIDAD_PASSWORD:?Falta en .env. Ejecute ./bna up}
     networks: [core]
     depends_on:
       db:
@@ -127,6 +131,8 @@ services:
         python -m COREDB.scripts.crear_servicio --modulo COBRANZA --username svc-cobranza --nombre Cobranza
         && CORE_DB_SERVICIO_SECRETO="$$BILLETERA_COREDB_SECRETO"
         python -m COREDB.scripts.crear_servicio --modulo BILLETERA --username svc-billetera --nombre "Billetera Digital"
+        && CORE_DB_SERVICIO_SECRETO="$$SEGURIDAD_COREDB_SECRETO"
+        python -m COREDB.scripts.crear_servicio --modulo SEGURIDAD --username svc-seguridad --nombre Seguridad
     environment:
       <<: *coredb-entorno
       BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
@@ -136,6 +142,7 @@ services:
       CAPTACION_COREDB_SECRETO: ${CAPTACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       COBRANZA_COREDB_SECRETO: ${COBRANZA_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       BILLETERA_COREDB_SECRETO: ${BILLETERA_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+      SEGURIDAD_COREDB_SECRETO: ${SEGURIDAD_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
     networks: [core]
     depends_on:
       db:
@@ -416,7 +423,10 @@ services:
         - -e
         - 'fetch("http://127.0.0.1:3000/api/listo").then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))'
 
-  # ── Seguridad: prototipo sobre SQLite ───────────────────────────────────
+  # ── Seguridad: evaluación de operaciones, bitácora sellada, incidentes y desbloqueo ─
+  # Sin base propia: guarda en la base integrada por /coredb/seguridad/*, a través del Bus, con
+  # su usuario de servicio svc-seguridad y el token de la persona que llama. Sella la bitácora
+  # de COREDB cada minuto. Ver backend/seguridad/README.md.
   seguridad:
     image: bna/seguridad:local
     build:
@@ -425,10 +435,20 @@ services:
         REQUISITOS: requirements-seguridad.txt
     command: uvicorn seguridad.app:app --host 0.0.0.0 --port 8013
     environment:
+      # COREDB, a través del Bus (fase 2), con la credencial de SEGURIDAD.
+      COREDB_URL: http://bus:8018/bus/coredb
+      BUS_TOKEN: ${BUS_TOKEN_SEGURIDAD:?Falta en .env. Ejecute ./bna up}
+      SEGURIDAD_COREDB_USUARIO: svc-seguridad
+      SEGURIDAD_COREDB_SECRETO: ${SEGURIDAD_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       SEGURIDAD_SECRET_KEY: ${SEGURIDAD_SECRET_KEY:?Falta en .env. Ejecute ./bna up}
-      SEGURIDAD_DB: /datos/seguridad.sqlite3
-    volumes:
-      - seguridad-datos:/datos
+    depends_on:
+      bus:
+        condition: service_healthy
+      coredb:
+        condition: service_healthy
+      coredb-init:
+        condition: service_completed_successfully
+    networks: [default]
     ports:
       - "127.0.0.1:${BNA_PUERTO_SEGURIDAD:-8013}:8013"
     healthcheck:
@@ -461,7 +481,7 @@ services:
       BUS_URL_BILLETERA: http://billetera:3000
       # FRONTEND: los puentes del frontend. PRUEBAS: el flujo de extremo a extremo. El resto:
       # cada módulo que llama a COREDB (fase 2).
-      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA
+      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA,SEGURIDAD
       BUS_TOKEN_FRONTEND: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_PRUEBAS: ${BUS_TOKEN_PRUEBAS:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_CUENTAS: ${BUS_TOKEN_CUENTAS:?Falta en .env. Ejecute ./bna up}
@@ -472,6 +492,7 @@ services:
       BUS_TOKEN_COBRANZA: ${BUS_TOKEN_COBRANZA:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_ATM: ${BUS_TOKEN_ATM:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_BILLETERA: ${BUS_TOKEN_BILLETERA:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_SEGURIDAD: ${BUS_TOKEN_SEGURIDAD:?Falta en .env. Ejecute ./bna up}
     networks: [default, canales, core]
     ports:
       - "127.0.0.1:${BNA_PUERTO_BUS:-8018}:8018"
@@ -585,4 +606,3 @@ networks:
 volumes:
   core-db-datos:
   db-aux-datos:
-  seguridad-datos:

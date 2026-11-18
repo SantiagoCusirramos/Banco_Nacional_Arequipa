@@ -1,22 +1,15 @@
-# Seguridad: prototipo sobre SQLite, en su propio volumen.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: seguridad-datos
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 100Mi
----
+# Seguridad: evaluación de operaciones, bitácora sellada, incidentes y desbloqueo de tarjetas.
+# Sin base propia ni volumen: guarda en la base integrada por COREDB, a través del Bus, con su
+# usuario de servicio svc-seguridad (lo crea el arranque de COREDB) y el token de la persona.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: seguridad
   labels: { app.kubernetes.io/name: seguridad }
 spec:
+  # Una réplica: sella la bitácora cada minuto, y dos sellos a la vez del mismo tramo chocan
+  # (COREDB rechaza el segundo; el siguiente intento lo resuelve).
   replicas: 1
-  strategy: { type: Recreate }
   selector:
     matchLabels: { app.kubernetes.io/name: seguridad }
   template:
@@ -27,21 +20,55 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
-        fsGroup: 10001
         seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        # COREDB crea svc-seguridad antes de arrancar: cuando responde, el usuario ya existe.
+        - name: esperar-coredb
+          image: bna/backend:local
+          # A través del Bus, con la credencial del módulo, como todas sus llamadas a COREDB.
+          command:
+            - python
+            - -c
+            - |
+              import os, sys, time, urllib.request as u
+              pedido = u.Request(os.environ["COREDB_URL"] + "/coredb/salud",
+                                 headers={"X-Bus-Token": os.environ["BUS_TOKEN"]})
+              for _ in range(150):
+                  try:
+                      u.urlopen(pedido, timeout=2)
+                      sys.exit(0)
+                  except OSError:
+                      time.sleep(2)
+              sys.exit("COREDB no respondió a tiempo a través del Bus.")
+          env:
+            - name: COREDB_URL
+              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: COREDB_URL } }
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_SEGURIDAD } }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext: &contenedor-seguro
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
       containers:
         - name: seguridad
           image: bna/seguridad:local
           command: [uvicorn, seguridad.app:app, --host, 0.0.0.0, --port, "8013"]
           env:
-            - name: SEGURIDAD_DB
-              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: SEGURIDAD_DB } }
+            # COREDB, a través del Bus, con la credencial de SEGURIDAD.
+            - name: COREDB_URL
+              valueFrom: { configMapKeyRef: { name: bna-configuracion, key: COREDB_URL } }
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_SEGURIDAD } }
+            - name: SEGURIDAD_COREDB_USUARIO
+              value: svc-seguridad
+            - name: SEGURIDAD_COREDB_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: SEGURIDAD_COREDB_SECRETO } }
             - name: SEGURIDAD_SECRET_KEY
               valueFrom: { secretKeyRef: { name: bna-secretos, key: SEGURIDAD_SECRET_KEY } }
           ports:
             - { name: http, containerPort: 8013 }
-          volumeMounts:
-            - { name: datos, mountPath: /datos }
           startupProbe: &sonda-seguridad
             httpGet:
               path: /seguridad/estado
@@ -61,12 +88,7 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 96Mi }
             limits: { cpu: 500m, memory: 256Mi }
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities: { drop: [ALL] }
-      volumes:
-        - name: datos
-          persistentVolumeClaim: { claimName: seguridad-datos }
+          securityContext: *contenedor-seguro
 ---
 apiVersion: v1
 kind: Service

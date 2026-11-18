@@ -17,7 +17,7 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas (modo `SIMULADO`). El frontend llega a SOL por el Bus | Base propia (`bna_sol_mvp` en `db-aux`); no llama a CAPTACION, Evaluación ni COREDB |
 | EVALUACIÓN | `backend/EVALUACION` | Evaluación crediticia: recibe el expediente de SOL y lo registra en COREDB; el analista evalúa con la regla RN-EVA-002-P y decide los casos observados. La aprobación queda en COREDB para Desembolso, con el calendario de SOL | En uso: sin base propia, llama a COREDB |
 | DESEMBOLSO | `backend/DESEMBOLSO` | Desembolso de créditos: el operador verifica el documento del titular, prepara la orden con una aprobación y una cuenta individual, y confirma; COREDB abona una sola vez, crea el crédito con su calendario oficial y deja la solicitud desembolsada | En uso: sin base propia, llama a COREDB |
-| Seguridad | `backend/seguridad` | Prototipo de login, topes, auditoría encadenada e incidentes | Prototipo aparte: base SQLite propia, sin conexión con el CORE; ningún módulo lo llama |
+| Seguridad | `backend/seguridad` | Evaluación de una operación contra el tope real del canal, con desafío sobre el 80 % (código simulado); sellos HMAC encadenados de la bitácora de COREDB; incidentes; desbloqueo de tarjetas (el único camino). Sin base propia ni usuarios propios: entra el personal con su usuario de COREDB y Seguridad llega a COREDB por el Bus con `svc-seguridad` | En uso: sin base propia, llama a COREDB; ningún canal lo llama aún antes de debitar |
 | CORE legado | `backend/CORE` | La API anterior, sobre el esquema `bna`. Tiene su propia evaluación de créditos; COREDB ya ofrece la evaluación, el desembolso y la cobranza sobre la base integrada | Opcional: ningún servicio lo llama |
 
 Para contribuir, ver [`CONTRIBUTING.md`](CONTRIBUTING.md): rama, PR y CI en verde; nada directo a `main`.
@@ -64,11 +64,10 @@ flowchart LR
   bus -->|"/bus/billetera"| bil["BILLETERA (Chaski) :8020"]
   app["App móvil y pantalla del cajero"] -.-> atm & bil
   atm -->|"/bus/tarjetas y /bus/cuentas"| bus
-  cta & tar & cap & eva & des & cob & bil -->|"/bus/coredb, con su X-Bus-Token"| bus
+  cta & tar & cap & eva & des & cob & bil & seg -->|"/bus/coredb, con su X-Bus-Token"| bus
   bus ==>|"/bus/coredb, red core"| coredb["COREDB :8012"]
   coredb --> db[("db: base integrada, MySQL 8.4 :3307")]
   sol --> aux[("db-aux: bna_sol_mvp y bna legada")]
-  seg --> sq[("SQLite en un volumen")]
   leg["CORE legado :8000 (perfil legado)"] -.-> aux
 ```
 
@@ -120,7 +119,7 @@ sequenceDiagram
 | SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
 | Evaluación | http://localhost:3000/evaluacion (API: http://127.0.0.1:8015/docs) | Un usuario de COREDB con rol ANALISTA (decidir exige además un analista registrado: el administrador lo da de alta con `POST /coredb/empleados` y `POST /coredb/creditos/analistas`); AUDITOR solo consulta | [`backend/EVALUACION/README.md`](backend/EVALUACION/README.md) |
 | Desembolso | http://localhost:3000/desembolso (API: http://127.0.0.1:8016/docs) | Un usuario de COREDB con rol OPERADOR; ADMINISTRADOR hace de supervisor y AUDITOR consulta | [`backend/DESEMBOLSO/README.md`](backend/DESEMBOLSO/README.md) |
-| Seguridad | http://127.0.0.1:8013 | No trae usuarios: se crean con una orden | [`backend/seguridad/README.md`](backend/seguridad/README.md) |
+| Seguridad | http://127.0.0.1:8013 | Consola técnica; se entra con un usuario de COREDB (`admin`) | [`backend/seguridad/README.md`](backend/seguridad/README.md) |
 | MySQL de la base integrada | `127.0.0.1:3307` | `root` y `CORE_DB_ROOT_PASSWORD` | [`database/README.md`](database/README.md) |
 | CORE legado (opcional) | http://127.0.0.1:8000/docs | Token de `POST /core/auth/login` | [`backend/CORE/README.md`](backend/CORE/README.md) |
 
@@ -154,7 +153,7 @@ Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo 
 | `CORE_DB_*_PASSWORD` | Usuarios de la base integrada |
 | `CORE_DB_JWT_CLAVE` | Clave que firma los tokens de COREDB |
 | `SOL_INITIAL_PASSWORD` | Clave inicial de las cuatro cuentas de demostración de SOL |
-| `SEGURIDAD_SECRET_KEY` | Clave del módulo de Seguridad |
+| `SEGURIDAD_SECRET_KEY`, `SEGURIDAD_COREDB_SECRETO` | Clave de los HMAC de Seguridad (código del desafío y sellos de la bitácora) y secreto de su usuario de servicio en COREDB |
 | `AUX_DB_ROOT_PASSWORD`, `SOL_DB_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base auxiliar y CORE legado |
 | `EVALUACION_COREDB_SECRETO`, `EVALUACION_TOKEN_SOL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | Secreto del usuario de servicio de Evaluación en COREDB y los tokens de CR-INT-02 y CR-INT-03 con SOL |
 | `DESEMBOLSO_COREDB_SECRETO` | Secreto del usuario de servicio de Desembolso en COREDB |
@@ -176,7 +175,7 @@ Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecu
 ./bna test
 ```
 
-Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, ATM, BILLETERA (Chaski), el Bus de Servicios (y la comprobación de que ningún módulo tiene la dirección directa de COREDB), SOL, Evaluación, Desembolso, COBRANZA y CAPTACION (contra COREDB y la base integrada nuevas, a través de un Bus de pruebas; CAPTACION también con el adaptador real de SOL), Seguridad, COREDB (unitarias, contratos de CUENTAS y TARJETAS, y contra un MySQL nuevo), el despliegue de la base integrada, el aviso de push directo, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
+Corre, en contenedores, las suites del CORE legado (unitarias y contra un MySQL nuevo), CUENTAS, TARJETAS, ATM, BILLETERA (Chaski), el Bus de Servicios (y la comprobación de que ningún módulo tiene la dirección directa de COREDB), SOL, Evaluación, Desembolso, COBRANZA CAPTACION y Seguridad (contra COREDB y la base integrada nuevas, a través de un Bus de pruebas; CAPTACION también con el adaptador real de SOL), COREDB (unitarias, contratos de CUENTAS y TARJETAS, y contra un MySQL nuevo), el despliegue de la base integrada, el aviso de push directo, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
 
 Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
 
@@ -191,8 +190,9 @@ Si el producto no estaba levantado, `./bna test` elimina al terminar los contene
 7. BILLETERA: afiliación de dos clientes de CAPTACION, login con celular y PIN, envío por celular y pago con QR, cada uno repetido con la misma llave.
 8. Los puentes del frontend (COREDB, CUENTAS, TARJETAS, CAPTACION, COBRANZA, Evaluación, Desembolso y SOL) y el Home Banking.
 9. Una retención que el cajero no confirmó se libera; confirmarla tarde da `BNA-CONFIRMACION`.
-10. Las métricas del Bus: el flujo y los ocho puentes del frontend llegaron a los módulos por él; CUENTAS, TARJETAS, CAPTACION, Evaluación, Desembolso, COBRANZA y BILLETERA llegaron a COREDB por él, y el ATM a TARJETAS.
-11. `docker compose logs` no contiene ninguno de los documentos, celulares, PIN, claves ni tokens de la corrida.
+10. Seguridad: un operador evalúa una operación contra el tope real de ATM (desafío sobre el 80 %, código equivocado rechazado, correcto autoriza, repetida igual, sobre el tope rechazada, sin mover saldo), lleva un incidente de ABIERTO a CERRADO, desbloquea la tarjeta que TARJETAS no puede desbloquear; la bitácora queda sellada y se verifica.
+11. Las métricas del Bus: el flujo y los ocho puentes del frontend llegaron a los módulos por él; CUENTAS, TARJETAS, CAPTACION, Evaluación, Desembolso, COBRANZA, BILLETERA y Seguridad llegaron a COREDB por él, y el ATM a TARJETAS.
+12. `docker compose logs` no contiene ninguno de los documentos, celulares, PIN, claves ni tokens de la corrida.
 
 El flujo corre en el contenedor del Bus y solo conoce la dirección del Bus y la del frontend. Cada ejecución crea clientes, cuentas, tarjetas y un crédito nuevos.
 
@@ -246,7 +246,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 │   ├── EVALUACION/    Evaluación crediticia
 │   ├── DESEMBOLSO/    Desembolso de créditos
 │   ├── COBRANZA/      Cobranza de cuotas
-│   ├── seguridad/     Prototipo de Seguridad
+│   ├── seguridad/     Seguridad, sobre COREDB
 │   ├── CORE/          CORE legado
 │   └── Infraestructura - BD/   Esquema `bna` del CORE legado
 ├── billetera-chaski/  Billetera Digital Chaski: API (backend/) y app móvil Flutter (app_movil/)

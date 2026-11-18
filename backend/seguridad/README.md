@@ -1,103 +1,142 @@
-# Módulo 9 · Seguridad · Prototipo local v0.2.0
+# Módulo 9 · Seguridad
 
-Prototipo de laboratorio independiente de MySQL y del CORE. Corre como servicio aparte; no está montado en `main:app` del CORE legado. El Bus de Servicios tiene su ruta (`/bus/seguridad`), pero ningún módulo lo llama. No autentica ni protege automáticamente los endpoints preexistentes `/core`. No sustituye la base de identidades del CORE. No mueve dinero.
+Evaluación de operaciones con desafío, bitácora sellada con HMAC, incidentes y desbloqueo de
+tarjetas. **No tiene base propia:** todo lo que guarda está en la base integrada (bna-core-db
+desde `bd-v1.13-mysql`) y llega a ella solo por COREDB, a través del Bus de Servicios
+(`/bus/coredb`), con su usuario de servicio `svc-seguridad`. Tampoco tiene usuarios propios:
+entra el personal del banco con su usuario de COREDB.
+
+Antes era un prototipo aparte sobre SQLite (usuarios con Argon2, topes y acumulados propios,
+bitácora firmada en su archivo). Esa base y su volumen ya no existen; ver «Qué cambió».
 
 ## Con el producto
 
-`./bna up`, desde la raíz del repositorio, levanta este servicio en http://127.0.0.1:8013 (API en `/docs`). Su clave sale de `SEGURIDAD_SECRET_KEY` en `.env` y su base SQLite queda en el volumen `seguridad-datos`. Ningún otro servicio del producto lo llama.
+`./bna up`, desde la raíz del repositorio, lo levanta en http://127.0.0.1:8013 (consola en `/`,
+API en `/docs`). `coredb-init` crea `svc-seguridad` con `SEGURIDAD_COREDB_SECRETO` de `.env`;
+la clave de los HMAC es `SEGURIDAD_SECRET_KEY`. Los demás consumidores llegan por
+`/bus/seguridad`. Se entra con el usuario `admin` (contraseña `BNA_ADMIN_PASSWORD` de `.env`) u
+otro usuario de COREDB.
 
-No trae usuarios. Para crear uno (pide la contraseña en la terminal):
+## Cómo llama a COREDB
 
-```bash
-docker compose exec seguridad python -m seguridad.manage create-user admin.local --role ADMINISTRADOR
-```
-
-## Instalación reproducible
-
-Solo el módulo, desde la raíz del repositorio (Python 3.11+):
-
-```bash
-python3 -m venv .venv-seguridad
-.venv-seguridad/bin/pip install -r backend/requirements-seguridad.txt
-cd backend
-cp seguridad/.env.example .env.seguridad.local
-# Editar .env.seguridad.local: asignar SEGURIDAD_SECRET_KEY aleatoria.
-# Para generar el valor: openssl rand -hex 32
-set -a
-source .env.seguridad.local
-set +a
-../.venv-seguridad/bin/python -m seguridad.manage create-user admin.local --role ADMINISTRADOR
-../.venv-seguridad/bin/python -m seguridad.manage create-user cliente.local --role CLIENTE
-cd ..
-backend/seguridad/run_local.sh
-```
-
-Consola: http://127.0.0.1:8013 · API: http://127.0.0.1:8013/docs.
-El puerto 8013 evita interferir con el CORE (8000), CUENTAS (8001), SOL (8011) y COREDB (8012). No se necesita frontend Next.js para la consola técnica. El servidor escucha exclusivamente en loopback.
-
-No hay usuarios ni contraseñas preinstalados: cada instalación crea los suyos con `create-user`. No son cuentas del banco.
+Cada llamada que guarda algo lleva **dos tokens**: el de `svc-seguridad` en `Authorization`
+(acción `OPERAR_SEGURIDAD`, que solo tiene ese usuario) y el de la persona en `X-Persona-Token`.
+COREDB comprueba el permiso de la persona y la registra como actor en la bitácora. Así una
+persona no llega a esas rutas sin pasar por Seguridad, y Seguridad no actúa sin una persona.
+Leer la bitácora se hace con el token de la persona; sellarla y verificarla, con el del servicio.
 
 ## Contratos
 
-Todas las rutas `/seguridad/*` requieren `X-Correlation-ID` (1–100 caracteres alfanuméricos, `_ . : -`). Las protegidas requieren `Authorization: Bearer <token>`.
+Todas las rutas `/seguridad/*` exigen `X-Correlation-ID` (1 a 100 caracteres alfanuméricos o
+`_ . : -`). Las protegidas, `Authorization: Bearer <token de COREDB>`. Errores:
+`{"error": {"code", "message"}}`.
 
-| Ruta | Método | Permiso |
-|---|---|---|
-| `/seguridad/estado` | GET | Público, solo estado de laboratorio |
-| `/seguridad/auth/login` | POST | Credenciales locales |
-| `/seguridad/auth/me` | GET | Usuario autenticado |
-| `/seguridad/auth/logout` | POST | Revoca todas las sesiones del usuario |
-| `/seguridad/operaciones/evaluar` | POST | CLIENTE, ADMINISTRADOR |
-| `/seguridad/auditoria` | GET | AUDITOR, ADMINISTRADOR; últimos 100 eventos |
-| `/seguridad/auditoria/verificar` | GET | AUDITOR, ADMINISTRADOR |
-| `/seguridad/incidentes` | GET | AUDITOR, OPERADOR, ADMINISTRADOR |
-| `/seguridad/incidentes` | POST | OPERADOR, ADMINISTRADOR |
-| `/seguridad/incidentes/{id}` | PATCH | OPERADOR, ADMINISTRADOR |
+| Ruta | Método | Permiso (acción de COREDB) | En COREDB |
+|---|---|---|---|
+| `/seguridad/estado` | GET | público | `/coredb/salud` |
+| `/seguridad/auth/login` | POST | credenciales de COREDB | `/coredb/auth/login` |
+| `/seguridad/auth/me` | GET | sesión | `/coredb/auth/me` |
+| `/seguridad/operaciones/evaluar` | POST | `REGISTRAR_MOVIMIENTO` | `/coredb/seguridad/evaluaciones`, `/coredb/seguridad/desafios` |
+| `/seguridad/auditoria` | GET | `VER_AUDITORIA` | `/coredb/auditoria` (últimos 100) |
+| `/seguridad/auditoria/sellos` | POST | `VER_AUDITORIA` | `/coredb/auditoria/sellos` |
+| `/seguridad/auditoria/verificar` | GET | `VER_AUDITORIA` | `/coredb/auditoria`, `/coredb/auditoria/sellos` |
+| `/seguridad/incidentes` | GET | `VER_AUDITORIA` o `GESTIONAR_INCIDENTES` | `/coredb/seguridad/incidentes` |
+| `/seguridad/incidentes` | POST | `GESTIONAR_INCIDENTES` | `/coredb/seguridad/incidentes` |
+| `/seguridad/incidentes/{id}` | PATCH | `GESTIONAR_INCIDENTES` | `/coredb/seguridad/incidentes/{id}/estado` |
+| `/seguridad/tarjetas/{id}/desbloqueo` | POST | `BLOQUEAR_TARJETA` | `/coredb/tarjetas/{id}/desbloqueo` |
 
-Login JSON: `{"username":"cliente.local","password":"<contraseña-local>"}`. No incluir credenciales en URLs.
-JWT HS256, emisor `bna-seguridad`, audiencia `bna-modulos`, expiración 15 minutos. El rol y estado se consultan en servidor. Argon2id: 64 MiB, 3 iteraciones, paralelismo 4. Al tercer fallo se bloquea 15 minutos e invalida sesiones anteriores. Rechazos genéricos con 401. El bloqueo afecta la identidad sintética, **no la tarjeta ni el ATM físico**.
+`GESTIONAR_INCIDENTES` la tienen OPERADOR y ADMINISTRADOR; `VER_AUDITORIA`, AUDITOR y
+ADMINISTRADOR; `REGISTRAR_MOVIMIENTO` y `BLOQUEAR_TARJETA`, OPERADOR y ADMINISTRADOR.
 
-Evaluación JSON:
+### Evaluar una operación
+
 ```json
-{"operation_id":"prueba-00001","amount":"850.00","currency":"PEN","channel":"ATM"}
+{"uuid_operacion": "…uuid…", "num_cuenta": "CTA-…", "canal": "ATM", "monto": "850.00"}
 ```
-Topes locales por usuario/canal/moneda/día de Lima: ATM 1000, HOME_BANKING 5000, BILLETERA 500. Decimal exacto; moneda PEN/USD sin conversión. El servidor calcula el acumulado de decisiones autorizadas; **no es saldo ni consumo bancario confirmado**. La autorización queda contabilizada localmente aunque el canal no ejecute una transacción; no hay confirmación/cancelación con M3.
 
-Más de 80% requiere desafío simulado de 120 s; respuesta incluye `challenge_id` y `demo_otp`. Reenviar ambos como `challenge_id` y `otp`, conservando los demás campos. Tres fallos agotan ese desafío; está ligado a usuario, operación, monto, canal y moneda. **El código se muestra por el mismo canal: no demuestra segundo factor real.**
+Canales: los de `core.canal` (`ATM`, `HB`, `BD`, `VEN`, `AGE`). COREDB compara el monto con el
+**tope real** del canal en la moneda de la cuenta (`core.limite_canal`: ATM S/ 1 500, HB
+S/ 10 000, BD S/ 500…) y el **consumo real** del día de la cuenta en ese canal
+(`core.consumo_diario`). Respuesta: `decision` `AUTORIZADA`, `RECHAZADA` (`motivo` `TOPE`,
+`CANAL` o `CUENTA`), `DESAFIO_REQUERIDO` o `DESAFIO_RECHAZADO`, con `tope`, `consumido`,
+`repetida` y `efecto_financiero: false`. Evaluar no mueve dinero ni suma al consumo: el débito
+real vuelve a pasar por el tope.
 
-La operación usa `operation_id` como clave idempotente global de demostración: repetir datos devuelve el resultado original; cambiar datos devuelve 409. No se usa `X-Idempotency-Key` porque no hay operación que afecte saldo. El Bus debe homologar la correlación de ambas claves antes de operar con M3.
+Sobre el 80 % del tope responde `DESAFIO_REQUERIDO` con `id_desafio`, `vence_en` (120 s) y
+`codigo_demo`. Se reenvía la misma operación con `id_desafio` y `codigo`. Seguridad calcula el
+HMAC del código con su clave y COREDB guarda solo ese HMAC; tres códigos incorrectos agotan el
+desafío. **El código se muestra por el mismo canal: no demuestra un segundo factor.** El
+`uuid_operacion` es la llave idempotente: repetirlo con los mismos datos devuelve la misma
+decisión; con otros, 409 `BNA-IDEMPOTENCIA`.
 
-Auditoría HMAC encadenada: detecta alteraciones intermedias; sin anclaje externo no detecta truncado final, borrado total o reescritura con acceso a la clave. No es SIEM ni almacenamiento inmutable. Solo registra datos permitidos, sin contraseñas ni JWT ni OTP. La clave local firma JWT y usa separación de dominio para la auditoría; separar llaves y custodia HSM antes de producción.
+### Bitácora sellada
 
-Incidente: ABIERTO → EN_PROGRESO → RESUELTO (requiere descripción) → CERRADO. SLA son objetivos propuestos, no resultados medidos ni calendario hábil institucional. Registro y seguimiento manual; no hay avisos ni escalamiento automático.
+La bitácora es la general de COREDB (`core.evento_auditoria`), que escriben los procedimientos
+de todos los módulos. Seguridad la sella cada minuto (`SEGURIDAD_SELLADO_SEG`, 0 lo apaga): un
+HMAC encadenado sobre los eventos del tramo que sigue al último sello, con al menos un minuto de
+antigüedad (`SEGURIDAD_SELLADO_ANTIGUEDAD_SEG`; una transacción lenta podría confirmar después
+un evento con un id menor). COREDB guarda el sello y comprueba que el tramo empieza donde acabó
+el anterior y tiene los eventos declarados. `GET /seguridad/auditoria/verificar` recalcula
+todos los sellos: un evento sellado cambiado, borrado o agregado, la bitácora vaciada (brecha
+G03 de la base) o un sello cambiado rompen la cadena. Lo no sellado no queda protegido y quien
+tenga la clave puede rehacer los sellos. No es un SIEM ni almacenamiento inmutable.
+
+### Incidentes
+
+ABIERTO → EN_PROGRESO → RESUELTO (exige `resolucion`) → CERRADO, sin saltos (409
+`BNA-INCIDENTE-TRANSICION`). La respuesta agrega los SLA propuestos (P1 15/120 min, P2 30/240,
+P3 120/1440, P4 480/4320): objetivos, no resultados medidos; reloj continuo.
+
+### Desbloqueo de tarjetas
+
+TARJETAS y `POST /coredb/tarjetas/{id}/estado` rechazan el desbloqueo (403
+`BNA-DESBLOQUEO`): en la base solo el rol `bna_seguridad` puede ejecutar
+`tarjetas.desbloquear_tarjeta`. Seguridad lo pide a COREDB por una persona con
+`BLOQUEAR_TARJETA`; COREDB lo ejecuta con la cuenta `bna_seguridad_user` y nada más, y la
+tarjeta vuelve a ACTIVA con origen `SEGURIDAD` y la persona como actor. Una tarjeta que no está
+bloqueada responde 409 `TARJETA_NO_BLOQUEADA`.
 
 ## Pruebas
 
-```bash
-cd backend
-../.venv-seguridad/bin/python -m pytest seguridad/tests
-```
-
-19 casos. Incluye tokens inválidos/vencidos, bloqueo, roles, topes, desafío, idempotencia concurrente, manipulación de auditoría, incidentes y backup/restauración. Las pruebas del CORE no acreditan disponibilidad de MySQL ni integración bancaria.
-
-## Copia y restauración
+Desde la raíz del repositorio (todo en contenedores):
 
 ```bash
-cd backend
-set -a; source .env.seguridad.local; set +a
-../.venv-seguridad/bin/python -m seguridad.manage backup
+backend/seguridad/scripts/pruebas_integracion.sh
 ```
 
-Copia consistente mediante SQLite Backup API. Conservar la clave por separado. Para restaurar: detener el servidor, copiar el respaldo a otra ruta, configurar `SEGURIDAD_DB` hacia esa ruta conservando la clave y verificar `/auditoria/verificar`. No sobrescribir datos sin copia previa. No se midieron RTO/RPO institucionales.
+Levanta la base integrada, COREDB y el Bus, crea `admin` y `svc-seguridad` con los scripts de
+arranque de COREDB y corre `seguridad/tests`: las unitarias, con un COREDB en memoria
+(`tests/coredb_simulado.py`: evaluación y desafío, cadena de sellos y alteraciones, tokens,
+COREDB caído, que el módulo no importe ningún almacenamiento), y las de integración contra el
+COREDB real por el Bus. `./bna test` la corre como «Seguridad contra COREDB y MySQL».
 
-## Pendientes para interoperabilidad / producción
+## Fuera del producto
 
-1. Comité de Tecnología: aprobar contrato e identidad del servicio, ubicación de datos y responsabilidad de topes.
-2. CORE: el CORE legado ya expone autenticación (`POST /core/auth/login`), migra SHA256 a bcrypt en el primer login y exige token y permiso del catálogo RBAC en todas sus rutas salvo el login; COREDB tiene su propio login y permisos. Sigue pendiente: las identidades locales de este módulo NO se migraron ni vincularon con ninguna de las dos.
-3. M8: el Bus de Servicios del producto ya existe (`backend/BUS_SERVICIOS`: credencial por consumidor, reenvía `Authorization` y `X-Correlation-ID`, sin reintentos); faltan TLS/mTLS y que este módulo se integre a él.
-4. M3/M4/M5/M6/M7: homologar topes, reservas/confirmación, Token Matriz, bloqueo de tarjeta, extorno y flujos por canal.
-5. Integrar segundo factor por canal independiente, RENIEC/biometría, SMS, HSM y SIEM.
-6. Protección contra tráfico abusivo por IP/usuario, gestión de claves, retención, control de acceso a respaldos, monitoreo, carga y revisión de seguridad.
-7. Infraestructura/Calidad: Testing institucional, despliegue, redundancia, recuperación y pruebas de integración con evidencias.
+Con un COREDB y un Bus ya corriendo, desde `backend/` y Python 3.11:
 
-El almacenamiento SQLite es una decisión temporal de laboratorio, no un cambio aprobado al estándar MySQL. No se afirma cumplimiento SBS/PCI ni disponibilidad bancaria.
+```bash
+python3 -m venv ../.venv-seguridad
+../.venv-seguridad/bin/pip install -r requirements-seguridad.txt
+cp seguridad/.env.example .env.seguridad.local   # completar la clave, el secreto y BUS_TOKEN
+seguridad/run_local.sh
+```
+
+## Qué cambió (antes: prototipo sobre SQLite)
+
+| Antes | Ahora |
+|---|---|
+| Usuarios propios (Argon2, roles CLIENTE/OPERADOR/AUDITOR/ADMINISTRADOR), `manage create-user` | Usuarios de COREDB y sus acciones (`COREDB/permisos.py`); no hay CLIENTE |
+| Bloqueo a los 3 fallos | El de COREDB: 5 fallos, 15 minutos (decisión 15) |
+| JWT propio y `logout` que revocaba sesiones | El token de COREDB; no hay revocación de sesiones en COREDB |
+| Topes propios (ATM 1000, HB 5000, BILLETERA 500) y acumulado de decisiones | Topes reales de `core.limite_canal` y consumo real del día |
+| `operation_id` libre, moneda en la petición | `uuid_operacion` y `num_cuenta`; la moneda es la de la cuenta |
+| Rechazos con 403/401 | Decisión en el cuerpo (200); 401/403 solo para sesión y permisos |
+| Bitácora propia firmada con HMAC por evento | Sellos HMAC encadenados de la bitácora general de COREDB |
+| `manage backup` (SQLite) | Respaldo de la base integrada |
+
+## Pendientes
+
+Segundo factor por un canal independiente (SMS, aplicación), RENIEC/biometría, HSM para la
+clave, SIEM, TLS/mTLS en el Bus, revocación de sesiones en COREDB, que los canales (ATM, Home
+Banking, Billetera) llamen a la evaluación antes de debitar, y anclar los sellos fuera de la
+base. No se afirma cumplimiento SBS/PCI.

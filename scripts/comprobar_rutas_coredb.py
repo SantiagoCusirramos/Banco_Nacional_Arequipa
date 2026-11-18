@@ -32,7 +32,7 @@ COMPOSE_PERMITIDOS = {"db", "coredb", "coredb-init", "bus"}
 RED_COREDB = "core"
 K8S_PERMITIDOS = {"coredb", "bus"}
 CONFIGMAP_BUS = "bna-bus"
-MODULOS = ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA", "ATM")
+MODULOS = ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA", "ATM", "seguridad")
 
 
 def _cadenas(valor):
@@ -139,6 +139,7 @@ def _referencias_configmap(valor):
 def _archivos_de_modulos(raiz):
     hallados = []
     for ruta in (raiz / ".env.example", raiz / "backend" / ".env.example",
+                 raiz / "backend" / "seguridad" / ".env.example",
                  raiz / "billetera-chaski" / "backend" / ".env.example"):
         if not ruta.exists():
             continue
