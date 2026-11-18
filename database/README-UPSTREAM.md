@@ -1,7 +1,7 @@
 # database/
 
 Esta carpeta es una copia de [bna-core-db](https://github.com/miguelpro324/bna-core-db),
-rama `mysql`, en la etiqueta **`bd-v1.13-mysql`**.
+rama `mysql`, en la etiqueta **`bd-v1.14-mysql`**.
 
 **No se edita aquí.** Un cambio directo se perdería o chocaría con la siguiente
 actualización. Todo cambio de la base va primero a bna-core-db: rama nueva desde
@@ -93,5 +93,9 @@ recrear la base.
 `bd-v1.13-mysql` guarda lo que el módulo Seguridad tenía en SQLite (sección 18:
 `core.evaluar_operacion` con su desafío, `core.sellar_auditoria`, incidentes); también exige
 recrear la base.
+`bd-v1.14-mysql` guarda lo que SOL tenía en `bna_sol_mvp` (sección 19: el borrador
+`REGISTRADA` con `creditos.guardar_borrador`, sus garantías y fiadores, el paso a
+`EN_EVALUACION` en `creditos.registrar_solicitud` y `core.recibir_evento_modulo`); también
+exige recrear la base.
 Con el producto completo:
 `./bna reset`.

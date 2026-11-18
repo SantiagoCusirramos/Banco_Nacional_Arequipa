@@ -316,6 +316,37 @@ ok=0; [ "$x761_s" = 1 ] && ! grep -q ERROR "$OUT/X761-a.log" && echo "$b" | grep
 registrar X761 bna_api_user Concurrencia 'Seguridad v1.13' 'Dos sellos simultáneos del mismo tramo: uno pasa, el otro falla con BNA-SELLO' procedimiento \
   'un sello; segundo: BNA-SELLO' "sellos: $x761_s; segundo: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
 
+# X880 (v1.14): dos ediciones simultáneas del mismo borrador con la misma revisión y
+# contenido distinto. La segunda espera a la primera y falla con BNA-REVISION; queda la
+# revisión 2.
+x880_b="CALL creditos.guardar_borrador(UUID_TO_BIN('88000000-0000-4000-8000-000000000001'), %REV%, 'C001', 3000, 'PEN', 3, FALSE, 'Capital de trabajo', CURRENT_DATE, JSON_OBJECT('version', 'x'), JSON_ARRAY(), JSON_ARRAY(), REPEAT('%H%', 64), 'asesor.sol', NULL, @r, @c, @p)"
+api_ -e "$(echo "$x880_b" | sed -e 's/%REV%/NULL/' -e 's/%H%/a/')"
+printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\n' "$(echo "$x880_b" | sed -e 's/%REV%/1/' -e 's/%H%/b/')" | api_ > "$OUT/X880-a.log" 2>&1 &
+a=$!
+sleep 1
+b="$(printf 'START TRANSACTION;\n%s;\nCOMMIT;\n' "$(echo "$x880_b" | sed -e 's/%REV%/1/' -e 's/%H%/c/')" | api_ -N 2>&1 || true)"
+wait "$a" || true
+echo "$b" > "$OUT/X880-b.log"
+x880_r="$(root_ -N -e "SELECT CONCAT(revision, ' ', huella = REPEAT('b', 64)) FROM creditos.expediente_sol WHERE id_solicitud = UUID_TO_BIN('88000000-0000-4000-8000-000000000001')")"
+ok=0; [ "$x880_r" = '2 1' ] && ! grep -q ERROR "$OUT/X880-a.log" && echo "$b" | grep -q 'BNA-REVISION:' && ok=1
+registrar X880 bna_api_user Concurrencia 'Solicitud v1.14' 'Dos ediciones simultáneas con la misma revisión: una pasa, la otra falla con BNA-REVISION' procedimiento \
+  'revisión 2 de la primera; segunda: BNA-REVISION' "revisión y primera: $x880_r; segunda: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+
+# X881 (v1.14): el mismo evento de módulo entregado dos veces a la vez. La segunda entrega
+# espera a la primera en la clave, deshace su propio evento y devuelve el de la primera.
+x881_sql="CALL core.recibir_evento_modulo(UUID_TO_BIN('88100000-0000-4000-8000-000000000001'), 'SOLICITUD DE CREDITO', 'solicitud_credito', 'X881', 'RECIBIR_CR_INT_03', 'svc-sol', NULL, JSON_OBJECT('x', 1), REPEAT('a', 64), @ev, @rep)"
+printf 'START TRANSACTION;\n%s;\nDO SLEEP(2);\nCOMMIT;\nSELECT @rep;\n' "$x881_sql" | api_ -N > "$OUT/X881-a.log" 2>&1 &
+a=$!
+sleep 1
+b="$(printf 'START TRANSACTION;\n%s;\nCOMMIT;\nSELECT @rep;\n' "$x881_sql" | api_ -N 2>&1 || true)"
+wait "$a" || true
+echo "$b" > "$OUT/X881-b.log"
+x881_a="$(tail -1 "$OUT/X881-a.log")"
+x881_n="$(root_ -N -e "SELECT count(*) FROM core.evento_auditoria WHERE id_entidad = 'X881'")"
+ok=0; [ "$x881_a" = 0 ] && [ "$(echo "$b" | tail -1)" = 1 ] && [ "$x881_n" = 1 ] && ok=1
+registrar X881 bna_api_user Concurrencia 'Auditoría v1.14' 'El mismo evento de módulo entregado dos veces a la vez: un evento, la segunda entrega es repetida' procedimiento \
+  'primera: 0; segunda: 1; eventos: 1' "primera: $x881_a; segunda: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'"); eventos: $x881_n" "$ok"
+
 # Billetera Digital (v1.9): dos peticiones simultáneas, como bna_api_user. Las
 # afiliaciones de C001 (CTA-PEN-1) y C002 (CTA-PEN-2) quedan confirmadas para estas
 # pruebas y las de pruebas_sin_transaccion.sh.

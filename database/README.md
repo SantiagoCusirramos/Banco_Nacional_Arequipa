@@ -394,6 +394,30 @@ HMAC fuera de la base, borrar o cambiar un evento sellado, o vaciar la bitácora
 detecta al verificar los sellos; lo no sellado no queda protegido. Pruebas X720 a X761.
 Agrega tablas: una base anterior necesita un volumen nuevo.
 
+### Solicitud de crédito sin base propia (desde `bd-v1.14-mysql`)
+
+El módulo SOL guardaba en su base (`bna_sol_mvp`) el borrador del asesor, sus versiones, las
+referencias de clientes, el historial, los envíos a Evaluación, los resultados y una bandeja de
+eventos de auditoría. La solicitud, su historial, el calendario PRELIMINAR, la evaluación y la
+decisión ya estaban aquí (sección 12); v1.14 agrega lo que faltaba, y el módulo llega a ello
+solo por COREDB:
+
+| Objeto | Qué hace |
+|---|---|
+| `creditos.guardar_borrador(id, revisión, cliente, monto, moneda, plazo, pago doble, destino, fecha base, política, garantías, fiadores, huella, actor, correlación, OUT revisión, código, repetido)` | Crea (revisión nula) o reemplaza el borrador: una solicitud `REGISTRADA` (estado del catálogo que no se usaba) con sus garantías (`creditos.garantia`, `REGISTRADA`, en la moneda de la solicitud, tipos del catálogo, hasta 10) y fiadores (`creditos.fiador` y `fiador_solicitud`, hasta 5). Editar exige la revisión vigente (`BNA-REVISION`); repetir la última operación con la misma huella devuelve lo guardado, con otra falla (`BNA-IDEMPOTENCIA`). Deja historial `REGISTRADA` y el evento `CREAR_BORRADOR` o `EDITAR_BORRADOR` |
+| `creditos.expediente_sol` | Lo del borrador que el modelo no tiene: código `SOL-AAMM-XXXXXXXX`, revisión, destino, fecha base, política y huella |
+| `creditos.registrar_solicitud` | Ahora también recibe el expediente de un borrador: con su misma versión y sus mismas condiciones lo pasa a `EN_EVALUACION` en la ronda 1 |
+| `core.recibir_evento_modulo(id, módulo, entidad, id entidad, acción, actor, correlación, detalle, huella, OUT registro, repetido)` | Registra en `core.evento_auditoria` un evento que reporta un módulo, una sola vez por id (`core.evento_modulo`); otro contenido con el mismo id falla con `BNA-IDEMPOTENCIA` |
+
+Un fiador es un cliente del CORE que puede operar y no es el solicitante; su verificación es la
+de Captación. Como `uk_fiador_solicitud_1` del modelo hace única esa verificación, un cliente
+respalda una sola solicitud (pregunta abierta). El calendario del borrador no se guarda: SOL lo
+calcula con las condiciones y la política guardadas. Sin subsanación: el analista decide
+APROBADO o RECHAZADO (T1). `bna_api` ejecuta los procedimientos y lee
+`creditos.v_expediente_sol_api`, `v_garantia_api`, `v_fiador_solicitud_api` (sin el documento),
+`v_recepcion_solicitud_api` y `v_solicitud_api` (ahora con código, revisión y destino).
+Pruebas X800 a X836, X880 y X881. Agrega tablas: una base anterior necesita un volumen nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.

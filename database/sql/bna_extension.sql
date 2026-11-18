@@ -1905,7 +1905,9 @@ BEGIN
 END //
 
 -- El expediente de SOL (CR-INT-02). Una solicitud nueva queda EN_EVALUACION con su
--- calendario PRELIMINAR; una versión nueva, mientras la ronda vigente no esté evaluada, abre
+-- calendario PRELIMINAR; el expediente de un borrador REGISTRADA (v1.14,
+-- creditos.guardar_borrador) lo pasa a EN_EVALUACION si llega con su misma versión y sus
+-- mismas condiciones; una versión nueva, mientras la ronda vigente no esté evaluada, abre
 -- otra ronda con otro calendario y deja el anterior HISTORICO. La misma versión con la
 -- misma huella devuelve lo mismo (p_repetido); con otra huella se rechaza. p_cuotas:
 -- [{numero_cuota, fecha_vencimiento, saldo_inicial, amortizacion, interes, cuota_total,
@@ -1927,6 +1929,10 @@ BEGIN
     DECLARE v_n, v_malas INT;
     DECLARE v_saldo_final DECIMAL(15,2);
     DECLARE v_cal BINARY(16);
+    DECLARE v_monto DECIMAL(15,2);
+    DECLARE v_moneda CHAR(3);
+    DECLARE v_plazo SMALLINT;
+    DECLARE v_doble BOOLEAN;
     BEGIN
         DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
         SAVEPOINT bna_op;
@@ -1946,7 +1952,8 @@ BEGIN
         IF p_id_solicitud IS NULL OR p_version IS NULL OR p_version < 1 OR p_huella IS NULL THEN
             CALL core.fallar('BNA-SOLICITUD: faltan el id, la versión o la huella del expediente');
         END IF;
-        SELECT estado_solicitud, version_solicitud, cod_cliente INTO v_estado, v_version, v_cliente
+        SELECT estado_solicitud, version_solicitud, cod_cliente, monto_solicitado, moneda, plazo_meses, condicion_pago_doble
+          INTO v_estado, v_version, v_cliente, v_monto, v_moneda, v_plazo, v_doble
           FROM creditos.solicitud_credito WHERE id_solicitud = p_id_solicitud FOR UPDATE;
         IF v_estado IS NOT NULL THEN
             SELECT ronda, huella INTO v_ronda, v_huella FROM creditos.recepcion_solicitud
@@ -2003,6 +2010,20 @@ BEGIN
                                                         condicion_pago_doble, estado_solicitud, cod_cliente)
                 VALUES (p_id_solicitud, p_version, p_monto, p_moneda, p_plazo, coalesce(p_pago_doble, FALSE),
                         'EN_EVALUACION', p_cod_cliente);
+                SET p_ronda = 1;
+            ELSEIF v_estado = 'REGISTRADA' THEN
+                -- v1.14: el borrador de SOL pasa a evaluación con lo que el asesor guardó.
+                IF v_cliente <> p_cod_cliente THEN
+                    CALL core.fallar('BNA-SOLICITUD: el expediente pertenece a otro cliente');
+                END IF;
+                IF p_version <> v_version THEN
+                    CALL core.fallar('BNA-SOLICITUD: la versión no es la del borrador');
+                END IF;
+                IF NOT (v_monto = p_monto AND v_moneda = p_moneda AND v_plazo = p_plazo
+                        AND v_doble = coalesce(p_pago_doble, FALSE)) THEN
+                    CALL core.fallar('BNA-SOLICITUD: el expediente no coincide con el borrador registrado');
+                END IF;
+                UPDATE creditos.solicitud_credito SET estado_solicitud = 'EN_EVALUACION' WHERE id_solicitud = p_id_solicitud;
                 SET p_ronda = 1;
             ELSE
                 IF v_cliente <> p_cod_cliente THEN
@@ -5877,3 +5898,362 @@ GRANT EXECUTE ON PROCEDURE core.evaluar_operacion TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.sellar_auditoria TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.abrir_incidente TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.avanzar_incidente TO bna_api;
+
+-- ---------------------------------------------------------------------
+-- 19. Solicitud de crédito sin base propia (v1.14)
+-- ---------------------------------------------------------------------
+-- El módulo SOL guardaba en su base (bna_sol_mvp) el borrador del asesor con sus versiones,
+-- las referencias de clientes, el historial, los envíos a Evaluación, los resultados y una
+-- bandeja de eventos de auditoría. Sin base propia, el borrador vive en creditos.* y SOL llega
+-- a él solo por COREDB:
+-- - El borrador es una solicitud REGISTRADA (estado del catálogo del modelo que no se usaba):
+--   creditos.guardar_borrador la crea o la reemplaza con sus garantías (creditos.garantia) y
+--   sus fiadores (creditos.fiador, creditos.fiador_solicitud). Lo que el modelo no tiene
+--   (código, revisión, destino, fecha base, política) va en creditos.expediente_sol.
+-- - El expediente del borrador (CR-INT-02, por Evaluación) lo pasa a EN_EVALUACION en
+--   creditos.registrar_solicitud.
+-- - Los eventos que SOL registraba en su bandeja de auditoría los recibe
+--   core.recibir_evento_modulo, idempotente por el id del evento.
+-- DECISIÓN (v1.14): la revisión es la concurrencia optimista de SOL: editar exige la revisión
+--   vigente. Repetir la última operación (crear o editar) con el mismo contenido devuelve lo ya
+--   guardado; con otro contenido falla. El contenido lo resume la huella que calcula COREDB.
+-- DECISIÓN (v1.14): un fiador es un cliente del CORE que puede operar, distinto del
+--   solicitante; su verificación es la de Captación (clientes.cliente.id_verificacion_captacion).
+--   Como uk_fiador_solicitud_1 del modelo hace única esa verificación, un cliente respalda una
+--   sola solicitud (pregunta abierta para el equipo).
+-- DECISIÓN (v1.14): los tipos de garantía son los del catálogo del modelo
+--   (creditos.tipo_garantia); la garantía queda REGISTRADA y en la moneda de la solicitud.
+-- DECISIÓN (v1.14): el calendario del borrador no se guarda: SOL lo calcula con las condiciones
+--   y la política guardadas; el PRELIMINAR se guarda al recibir el expediente, como antes.
+-- DECISIÓN (v1.14): sin subsanación: el analista decide APROBADO o RECHAZADO (T1), así que una
+--   solicitud no vuelve a SOL OBSERVADA.
+
+CREATE TABLE creditos.expediente_sol (
+    id_solicitud   BINARY(16) NOT NULL,
+    codigo         VARCHAR(20) NOT NULL,
+    revision       INT NOT NULL,
+    destino        VARCHAR(120) NOT NULL,
+    fecha_base     DATE NOT NULL,
+    politica       JSON NOT NULL,
+    huella         CHAR(64) NOT NULL,
+    creado_por     VARCHAR(40) NOT NULL,
+    creado_en      DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    actualizado_en DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_expediente_sol PRIMARY KEY (id_solicitud),
+    CONSTRAINT uk_expediente_sol_codigo UNIQUE (codigo),
+    CONSTRAINT fk_expediente_sol FOREIGN KEY (id_solicitud) REFERENCES creditos.solicitud_credito (id_solicitud),
+    CONSTRAINT ck_expediente_sol_revision CHECK (revision > 0),
+    CONSTRAINT ck_expediente_sol_politica CHECK (JSON_TYPE(politica) = 'OBJECT')
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: lo que el borrador de SOL guarda fuera del modelo.';
+
+-- Cada evento de un módulo recibido: su id de origen, la huella del contenido y el evento que
+-- dejó en core.evento_auditoria.
+CREATE TABLE core.evento_modulo (
+    id_evento_modulo BINARY(16) NOT NULL,
+    id_modulo        SMALLINT NOT NULL,
+    huella           CHAR(64) NOT NULL,
+    id_evento        BIGINT NOT NULL,
+    recibido_en      DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_evento_modulo PRIMARY KEY (id_evento_modulo),
+    CONSTRAINT uk_evento_modulo_evento UNIQUE (id_evento),
+    CONSTRAINT fk_evento_modulo_modulo FOREIGN KEY (id_modulo) REFERENCES core.modulo (id_modulo),
+    CONSTRAINT fk_evento_modulo_evento FOREIGN KEY (id_evento) REFERENCES core.evento_auditoria (id_evento)
+) ENGINE = InnoDB COMMENT = 'Extensión de integración: eventos de auditoría recibidos de los módulos.';
+
+DELIMITER //
+
+-- Crea (p_revision nula) o reemplaza el borrador de una solicitud. p_garantias:
+-- [{tipo, descripcion, valor}], hasta 10; p_fiadores: [cod_cliente], hasta 5.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE creditos.guardar_borrador(
+    IN p_id_solicitud BINARY(16), IN p_revision INT, IN p_cod_cliente VARCHAR(12), IN p_monto DECIMAL(15,2),
+    IN p_moneda CHAR(3), IN p_plazo SMALLINT, IN p_pago_doble BOOLEAN, IN p_destino VARCHAR(120), IN p_fecha_base DATE,
+    IN p_politica JSON, IN p_garantias JSON, IN p_fiadores JSON, IN p_huella CHAR(64), IN p_actor VARCHAR(40),
+    IN p_correlation_id BINARY(16), OUT p_revision_nueva INT, OUT p_codigo VARCHAR(20), OUT p_repetido BOOLEAN)
+    COMMENT 'Crea o reemplaza el borrador de una solicitud de crédito de SOL.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(25);
+    DECLARE v_cliente VARCHAR(12);
+    DECLARE v_revision INT;
+    DECLARE v_huella CHAR(64);
+    DECLARE v_codigo VARCHAR(20);
+    DECLARE v_opera BOOLEAN;
+    DECLARE v_destino VARCHAR(120) DEFAULT TRIM(p_destino);
+    DECLARE v_garantias JSON DEFAULT IF(JSON_TYPE(p_garantias) = 'ARRAY', p_garantias, NULL);
+    DECLARE v_fiadores JSON DEFAULT IF(JSON_TYPE(p_fiadores) = 'ARRAY', p_fiadores, NULL);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SET p_repetido = FALSE;
+        IF p_id_solicitud IS NULL OR p_huella IS NULL OR CHAR_LENGTH(p_huella) <> 64 OR p_actor IS NULL THEN
+            CALL core.fallar('BNA-SOLICITUD: faltan el id, la huella o el actor del borrador');
+        END IF;
+        IF p_revision IS NOT NULL AND p_revision < 1 THEN
+            CALL core.fallar('BNA-REVISION: la revisión de una edición es positiva');
+        END IF;
+        SELECT s.estado_solicitud, s.cod_cliente, e.revision, e.huella, e.codigo
+          INTO v_estado, v_cliente, v_revision, v_huella, v_codigo
+          FROM creditos.solicitud_credito s
+          LEFT JOIN creditos.expediente_sol e ON e.id_solicitud = s.id_solicitud
+         WHERE s.id_solicitud = p_id_solicitud FOR UPDATE;
+        IF p_revision IS NULL THEN
+            IF v_estado IS NOT NULL THEN
+                IF NOT (v_estado = 'REGISTRADA' AND v_revision <=> 1 AND v_huella <=> p_huella) THEN
+                    CALL core.fallar('BNA-IDEMPOTENCIA: la solicitud ya existe con otro contenido');
+                END IF;
+                SET p_repetido = TRUE;
+            END IF;
+        ELSE
+            IF v_estado IS NULL THEN
+                CALL core.fallar('BNA-SOLICITUD: la solicitud no existe');
+            END IF;
+            IF v_revision IS NULL THEN
+                CALL core.fallar('BNA-SOLICITUD: la solicitud no es un borrador de SOL');
+            END IF;
+            IF v_estado <> 'REGISTRADA' THEN
+                CALL core.fallar('BNA-SOLICITUD: la solicitud ya se envió a evaluación');
+            END IF;
+            IF v_cliente <> p_cod_cliente THEN
+                CALL core.fallar('BNA-SOLICITUD: el cliente de un borrador no se cambia');
+            END IF;
+            IF v_revision = p_revision + 1 AND v_huella = p_huella THEN
+                SET p_repetido = TRUE;
+            ELSEIF v_revision <> p_revision THEN
+                CALL core.fallar('BNA-REVISION: la solicitud cambió en otra sesión');
+            END IF;
+        END IF;
+        IF p_repetido THEN
+            SET p_revision_nueva = v_revision, p_codigo = v_codigo;
+        ELSE
+            SELECT e.permite_operar INTO v_opera FROM clientes.cliente c
+              JOIN clientes.estado_cliente e ON e.cod_estado = c.estado_cliente
+             WHERE c.cod_cliente = p_cod_cliente;
+            IF NOT (v_opera <=> TRUE) THEN
+                CALL core.fallar('BNA-CLIENTE: el cliente no existe o no puede operar');
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM core.moneda WHERE cod_moneda = p_moneda) THEN
+                CALL core.fallar('BNA-SOLICITUD: moneda desconocida');
+            END IF;
+            IF p_monto IS NULL OR p_monto <= 0 OR p_plazo IS NULL OR p_plazo <= 0 OR p_fecha_base IS NULL THEN
+                CALL core.fallar('BNA-SOLICITUD: el monto y el plazo deben ser positivos y la fecha base es obligatoria');
+            END IF;
+            IF v_destino IS NULL OR CHAR_LENGTH(v_destino) NOT BETWEEN 5 AND 120 THEN
+                CALL core.fallar('BNA-SOLICITUD: el destino del crédito tiene entre 5 y 120 caracteres');
+            END IF;
+            IF NOT (JSON_TYPE(p_politica) <=> 'OBJECT') THEN
+                CALL core.fallar('BNA-SOLICITUD: falta la política con la que se calculó el borrador');
+            END IF;
+            IF v_garantias IS NULL OR JSON_LENGTH(v_garantias) > 10 OR EXISTS (
+                SELECT 1 FROM JSON_TABLE(v_garantias, '$[*]' COLUMNS (
+                         tipo VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$.tipo', descripcion VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$.descripcion',
+                         valor DECIMAL(15,2) PATH '$.valor')) g
+                 WHERE g.valor IS NULL OR g.valor <= 0 OR CHAR_LENGTH(TRIM(coalesce(g.descripcion, ''))) NOT BETWEEN 5 AND 200
+                    OR NOT EXISTS (SELECT 1 FROM creditos.tipo_garantia t WHERE t.cod_tipo_garantia = g.tipo)) THEN
+                CALL core.fallar('BNA-GARANTIA: hasta 10 garantías de un tipo del catálogo, con descripción y valor positivo');
+            END IF;
+            IF v_fiadores IS NULL OR JSON_LENGTH(v_fiadores) > 5 THEN
+                CALL core.fallar('BNA-FIADOR: hasta 5 fiadores');
+            END IF;
+            IF EXISTS (SELECT 1 FROM JSON_TABLE(v_fiadores, '$[*]' COLUMNS (cod VARCHAR(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$')) f
+                        GROUP BY f.cod HAVING COUNT(*) > 1 OR f.cod IS NULL OR f.cod = p_cod_cliente) THEN
+                CALL core.fallar('BNA-FIADOR: un fiador no se repite ni es el solicitante');
+            END IF;
+            IF EXISTS (SELECT 1 FROM JSON_TABLE(v_fiadores, '$[*]' COLUMNS (cod VARCHAR(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$')) f
+                         LEFT JOIN clientes.cliente c ON c.cod_cliente = f.cod
+                         LEFT JOIN clientes.estado_cliente e ON e.cod_estado = c.estado_cliente
+                        WHERE NOT (e.permite_operar <=> TRUE)) THEN
+                CALL core.fallar('BNA-FIADOR: el fiador no existe o no puede operar');
+            END IF;
+            IF EXISTS (SELECT 1 FROM JSON_TABLE(v_fiadores, '$[*]' COLUMNS (cod VARCHAR(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$')) f
+                         JOIN clientes.cliente c ON c.cod_cliente = f.cod
+                         JOIN creditos.fiador_solicitud fs ON fs.id_verificacion = c.id_verificacion_captacion
+                        WHERE fs.id_solicitud <> p_id_solicitud) THEN
+                CALL core.fallar('BNA-FIADOR: el fiador ya respalda otra solicitud con su verificación de Captación');
+            END IF;
+            IF v_estado IS NULL THEN
+                SET v_codigo = CONCAT('SOL-', DATE_FORMAT(UTC_TIMESTAMP(), '%y%m'), '-', LEFT(HEX(p_id_solicitud), 8));
+                INSERT INTO creditos.solicitud_credito (id_solicitud, version_solicitud, monto_solicitado, moneda, plazo_meses,
+                                                        condicion_pago_doble, estado_solicitud, cod_cliente)
+                VALUES (p_id_solicitud, 1, p_monto, p_moneda, p_plazo, coalesce(p_pago_doble, FALSE), 'REGISTRADA',
+                        p_cod_cliente);
+                INSERT INTO creditos.expediente_sol (id_solicitud, codigo, revision, destino, fecha_base, politica, huella,
+                                                     creado_por)
+                VALUES (p_id_solicitud, v_codigo, 1, v_destino, p_fecha_base, p_politica, p_huella, p_actor);
+                SET p_revision_nueva = 1;
+            ELSE
+                SET p_revision_nueva = v_revision + 1;
+                UPDATE creditos.solicitud_credito
+                   SET monto_solicitado = p_monto, moneda = p_moneda, plazo_meses = p_plazo,
+                       condicion_pago_doble = coalesce(p_pago_doble, FALSE)
+                 WHERE id_solicitud = p_id_solicitud;
+                UPDATE creditos.expediente_sol
+                   SET revision = p_revision_nueva, destino = v_destino, fecha_base = p_fecha_base, politica = p_politica,
+                       huella = p_huella, actualizado_en = UTC_TIMESTAMP(6)
+                 WHERE id_solicitud = p_id_solicitud;
+                DELETE FROM creditos.garantia WHERE id_solicitud = p_id_solicitud;
+                DELETE FROM creditos.fiador_solicitud WHERE id_solicitud = p_id_solicitud;
+            END IF;
+            SET p_codigo = v_codigo;
+            INSERT INTO creditos.garantia (id_garantia, tipo_garantia, descripcion, valor_referencial, moneda, estado_garantia,
+                                           id_solicitud)
+            SELECT core.uuid_v4(), g.tipo, TRIM(g.descripcion), g.valor, p_moneda, 'REGISTRADA', p_id_solicitud
+              FROM JSON_TABLE(v_garantias, '$[*]' COLUMNS (
+                       tipo VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$.tipo', descripcion VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$.descripcion',
+                       valor DECIMAL(15,2) PATH '$.valor')) g;
+            INSERT INTO creditos.fiador (id_fiador, id_persona_externa, tipo_documento, numero_documento)
+            SELECT core.uuid_v4(), c.cod_cliente, c.tipo_documento, c.numero_documento
+              FROM JSON_TABLE(v_fiadores, '$[*]' COLUMNS (cod VARCHAR(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$')) f
+              JOIN clientes.cliente c ON c.cod_cliente = f.cod
+             WHERE NOT EXISTS (SELECT 1 FROM creditos.fiador x WHERE x.id_persona_externa = c.cod_cliente);
+            INSERT INTO creditos.fiador_solicitud (id_fiador, id_solicitud, id_verificacion)
+            SELECT x.id_fiador, p_id_solicitud, c.id_verificacion_captacion
+              FROM JSON_TABLE(v_fiadores, '$[*]' COLUMNS (cod VARCHAR(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs PATH '$')) f
+              JOIN clientes.cliente c ON c.cod_cliente = f.cod
+              JOIN creditos.fiador x ON x.id_persona_externa = c.cod_cliente;
+            INSERT INTO creditos.historial_estado_solicitud (estado_nuevo, actor, motivo, id_solicitud)
+            VALUES ('REGISTRADA', p_actor,
+                    IF(v_estado IS NULL, 'Borrador creado', CONCAT('Borrador editado: revisión ', p_revision_nueva)),
+                    p_id_solicitud);
+            CALL core.registrar_evento('SOLICITUD DE CREDITO', 'solicitud_credito', BIN_TO_UUID(p_id_solicitud),
+                                       IF(v_estado IS NULL, 'CREAR_BORRADOR', 'EDITAR_BORRADOR'), p_actor, p_correlation_id,
+                                       JSON_OBJECT('revision', p_revision_nueva, 'cod_cliente', p_cod_cliente,
+                                                   'monto', p_monto, 'moneda', p_moneda, 'plazo_meses', p_plazo,
+                                                   'garantias', JSON_LENGTH(v_garantias),
+                                                   'fiadores', JSON_LENGTH(v_fiadores)));
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+-- Un evento de auditoría que reporta un módulo (p_modulo: su nombre en core.modulo). El mismo
+-- id con la misma huella devuelve el registro ya guardado (p_repetido); con otra, falla.
+-- p_detalle: objeto JSON de hasta 4 KB, sin datos personales (lo controla el módulo).
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.recibir_evento_modulo(
+    IN p_id_evento BINARY(16), IN p_modulo VARCHAR(100), IN p_entidad VARCHAR(40), IN p_id_entidad VARCHAR(40),
+    IN p_accion VARCHAR(60), IN p_actor VARCHAR(40), IN p_correlation_id BINARY(16), IN p_detalle JSON,
+    IN p_huella CHAR(64), OUT p_id_registro BIGINT, OUT p_repetido BOOLEAN)
+    COMMENT 'Registra en la bitácora un evento de auditoría de un módulo, una sola vez.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_modulo SMALLINT;
+    DECLARE v_huella CHAR(64);
+    DECLARE v_duplicado BOOLEAN DEFAULT FALSE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SET p_repetido = FALSE, p_id_registro = NULL;
+        IF p_id_evento IS NULL OR p_huella IS NULL OR CHAR_LENGTH(p_huella) <> 64 THEN
+            CALL core.fallar('BNA-AUDITORIA: faltan el id o la huella del evento');
+        END IF;
+        SELECT id_modulo INTO v_modulo FROM core.modulo WHERE nombre = p_modulo;
+        IF v_modulo IS NULL THEN
+            CALL core.fallar('BNA-AUDITORIA: módulo desconocido');
+        END IF;
+        IF NOT REGEXP_LIKE(coalesce(p_accion, ''), '^[A-Z][A-Z0-9_]{2,59}$', 'c')
+           OR CHAR_LENGTH(TRIM(coalesce(p_actor, ''))) = 0 OR CHAR_LENGTH(TRIM(coalesce(p_entidad, ''))) = 0
+           OR CHAR_LENGTH(TRIM(coalesce(p_id_entidad, ''))) = 0 THEN
+            CALL core.fallar('BNA-AUDITORIA: la acción es un código en mayúsculas y el actor y la entidad son obligatorios');
+        END IF;
+        IF p_detalle IS NOT NULL AND (JSON_TYPE(p_detalle) <> 'OBJECT' OR JSON_STORAGE_SIZE(p_detalle) > 4096) THEN
+            CALL core.fallar('BNA-AUDITORIA: el detalle es un objeto JSON de hasta 4 KB');
+        END IF;
+        SELECT huella, id_evento INTO v_huella, p_id_registro FROM core.evento_modulo WHERE id_evento_modulo = p_id_evento;
+        IF p_id_registro IS NULL THEN
+            -- Dos entregas simultáneas del mismo evento: la segunda espera a la primera en la
+            -- clave primaria, deshace su propio evento y lee el de la primera.
+            SAVEPOINT bna_evento;
+            CALL core.registrar_evento(p_modulo, p_entidad, p_id_entidad, p_accion, p_actor, p_correlation_id,
+                                       JSON_MERGE_PATCH(coalesce(p_detalle, JSON_OBJECT()),
+                                                        JSON_OBJECT('id_evento_modulo', BIN_TO_UUID(p_id_evento))));
+            SET p_id_registro = LAST_INSERT_ID();
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1062 SET v_duplicado = TRUE;
+                INSERT INTO core.evento_modulo (id_evento_modulo, id_modulo, huella, id_evento)
+                VALUES (p_id_evento, v_modulo, p_huella, p_id_registro);
+            END;
+            IF v_duplicado THEN
+                ROLLBACK TO SAVEPOINT bna_evento;
+                SELECT huella, id_evento INTO v_huella, p_id_registro FROM core.evento_modulo
+                 WHERE id_evento_modulo = p_id_evento FOR SHARE;
+            ELSE
+                SET v_huella = p_huella;
+            END IF;
+            RELEASE SAVEPOINT bna_evento;
+            SET p_repetido = v_duplicado;
+        ELSE
+            SET p_repetido = TRUE;
+        END IF;
+        IF v_huella <> p_huella THEN
+            CALL core.fallar('BNA-IDEMPOTENCIA: este evento ya se recibió con otro contenido');
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+DELIMITER ;
+
+-- Lecturas de la API. La bandeja de solicitudes suma el código, la revisión y el destino del
+-- borrador de SOL; los fiadores se leen sin su documento (SOL los identifica por Captación).
+CREATE OR REPLACE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW creditos.v_solicitud_api AS
+SELECT s.id_solicitud, s.version_solicitud,
+       (SELECT max(r.ronda) FROM creditos.recepcion_solicitud r WHERE r.id_solicitud = s.id_solicitud) AS ronda,
+       s.cod_cliente, s.monto_solicitado, s.moneda, s.plazo_meses, s.condicion_pago_doble, s.estado_solicitud,
+       s.fecha_creacion, c.id_calendario, c.tipo_calendario, c.metodo_amortizacion, c.tasa_aplicada,
+       (SELECT count(*) FROM creditos.cuota q WHERE q.id_calendario = c.id_calendario) AS numero_cuotas,
+       (SELECT sum(q.capital + q.interes + q.otros_conceptos) FROM creditos.cuota q
+         WHERE q.id_calendario = c.id_calendario) AS total_cuotas,
+       (SELECT min(q.fecha_vencimiento) FROM creditos.cuota q WHERE q.id_calendario = c.id_calendario) AS primer_vencimiento,
+       x.codigo, x.revision, x.destino, x.actualizado_en
+  FROM creditos.solicitud_credito s
+  LEFT JOIN creditos.calendario_pago c ON c.id_solicitud = s.id_solicitud AND c.estado_calendario = 'VIGENTE'
+  LEFT JOIN creditos.expediente_sol x ON x.id_solicitud = s.id_solicitud;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW creditos.v_expediente_sol_api AS
+SELECT id_solicitud, codigo, revision, destino, fecha_base, politica, creado_por, creado_en, actualizado_en
+  FROM creditos.expediente_sol;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW creditos.v_garantia_api AS
+SELECT id_garantia, id_solicitud, tipo_garantia, descripcion, valor_referencial, moneda, estado_garantia
+  FROM creditos.garantia;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW creditos.v_fiador_solicitud_api AS
+SELECT fs.id_solicitud, f.id_persona_externa AS cod_cliente, fs.id_verificacion
+  FROM creditos.fiador_solicitud fs
+  JOIN creditos.fiador f ON f.id_fiador = fs.id_fiador;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW creditos.v_recepcion_solicitud_api AS
+SELECT id_solicitud, version_solicitud, ronda, creditos.fn_id_evaluacion(id_solicitud, ronda) AS id_evaluacion,
+       recibida_en
+  FROM creditos.recepcion_solicitud;
+
+GRANT SELECT ON creditos.v_solicitud_api TO bna_api;
+GRANT SELECT ON creditos.v_expediente_sol_api TO bna_api;
+GRANT SELECT ON creditos.v_garantia_api TO bna_api;
+GRANT SELECT ON creditos.v_fiador_solicitud_api TO bna_api;
+GRANT SELECT ON creditos.v_recepcion_solicitud_api TO bna_api;
+GRANT EXECUTE ON PROCEDURE creditos.guardar_borrador TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.recibir_evento_modulo TO bna_api;
