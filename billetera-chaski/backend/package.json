@@ -1,0 +1,15 @@
+{
+  "name": "chaski-api",
+  "version": "3.0.0",
+  "description": "API REST de Chaski (Billetera Digital BNA) para la app móvil Flutter, sobre COREDB a través del Bus de Servicios",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --watch --env-file-if-exists=.env server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=22.13" },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

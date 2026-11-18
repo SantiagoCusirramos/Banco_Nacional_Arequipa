@@ -35,10 +35,17 @@ integrada y con PyJWT:
 
 - `POST /coredb/auth/login` con `{"username", "password"}` entrega
   `{access_token, token_type, expires_in, usuario}`. Usuario inexistente, clave incorrecta,
-  usuario inactivo y contraseña no admitida responden el mismo 401
+  usuario inactivo, login bloqueado y contraseña no admitida responden el mismo 401
   `CREDENCIALES_INVALIDAS`, y el tiempo se iguala con una verificación bcrypt simulada.
   Cada login exitoso queda en la bitácora (`LOGIN`), con el `X-Correlation-ID` si es un
-  UUID. Los intentos fallidos no se registran ni bloquean la cuenta, como en CORE.
+  UUID, y cada fallo de un usuario que existe como `LOGIN_FALLIDO`.
+- **Bloqueo (bd-v1.12):** 5 fallos seguidos bloquean el login de una persona 15 minutos
+  (`BLOQUEAR_LOGIN`); con el login bloqueado ni la contraseña correcta entra. Un login
+  exitoso reinicia la cuenta. Los usuarios de servicio no se bloquean (su secreto es
+  aleatorio; bloquearlos dejaría a un módulo sin acceso a pedido de cualquiera).
+  `GET /coredb/usuarios/{id}` muestra `bloqueado_hasta` y
+  `POST /coredb/usuarios/{id}/desbloqueo` (`CREAR_USUARIO`) lo levanta antes. Los números
+  son provisionales: los decide el equipo (pregunta en #34).
 - Las demás rutas exigen `Authorization: Bearer <token>`. El token lleva `sub`,
   `username`, `rol`, `modulo`, `type`, `iss` (`bna-coredb`), `aud` (`coredb`), `iat`, `exp`
   y `jti`, todos obligatorios. El algoritmo lo fija el servidor (`CORE_DB_JWT_ALGORITMO`,
@@ -121,7 +128,7 @@ ligar el cliente que registró y leer las referencias que consulta SOL.
 | Ruta | Permiso |
 |---|---|
 | `POST /coredb/captacion/solicitantes` (201; 200 con `duplicado` si el documento ya estaba) | `CREAR_CLIENTE` |
-| `GET /coredb/captacion/solicitantes` (`documento`, `texto`, `con_cliente`), `GET …/solicitantes/{id}` | `VER_CLIENTE` |
+| `POST /coredb/captacion/solicitantes/busqueda` (cuerpo: `documento`, `texto`, `con_cliente`, `limite`), `GET …/solicitantes/{id}` | `VER_CLIENTE` |
 | `POST /coredb/captacion/casos`, `GET /coredb/captacion/casos` (`estado`, `id_solicitante`, `cod_cliente`) | `CREAR_CLIENTE` / `VER_CLIENTE` |
 | `GET /coredb/captacion/casos/{id_caso}`: el expediente con `faltantes` y `listo_para_habilitar` | `VER_CLIENTE` |
 | `POST …/casos/{id_caso}/consentimientos`, `/validaciones`, `/consultas-riesgo`, `/perfil`, `/estado` | `CREAR_CLIENTE` |
@@ -155,6 +162,7 @@ Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica 
 | `GET /coredb/autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Una autorización |
 | `POST /coredb/autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Extorna una autorización sin movimiento |
 | `POST /coredb/autorizaciones/{uuid_autorizacion}/confirmacion` | `REGISTRAR_MOVIMIENTO` | Confirma una autorización retenida: registra el movimiento real |
+| `POST /coredb/autorizaciones/liberaciones` | `REGISTRAR_MOVIMIENTO` | Libera las retenciones vencidas (`{"minutos": 1..1440}`, sin él el plazo de la base, 15 por omisión; pregunta #34). La base ya lo hace cada minuto; una retención vencida no se confirma (`BNA-CONFIRMACION`) |
 | `PUT /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}` | `CREAR_TARJETA` | Asigna o cambia el `PIN_ATM` o la `CLAVE_WEB` |
 | `POST /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion` | `REGISTRAR_MOVIMIENTO` | Valida el PIN o la clave web |
 
@@ -224,6 +232,46 @@ Las tres áreas: evaluación, desembolso y cobranza.
   corre a las 00:10 de Lima). La mora se registra y se muestra, pero no se cobra.
 - El usuario de la API no lee tablas de `creditos`: lee las vistas `v_*_api`.
 - Las rutas de crédito del CORE legado (perfil `legado`) siguen aparte.
+
+## Billetera Digital
+
+Sobre los procedimientos `billetera.*` de `bd-v1.9-mysql` (`bd-v1.10-mysql` lee con bloqueo la
+operación repetida). La usa el módulo BILLETERA (Chaski, `billetera-chaski/`).
+
+**Acceso de clientes (rol CLIENTE).** El módulo llama con su usuario de servicio (`svc-billetera`,
+módulo BILLETERA, permiso `OPERAR_BILLETERA`) en `Authorization`. `POST /coredb/billetera/acceso`
+(celular y PIN de 6 dígitos) entrega el **token de cliente**: otra audiencia
+(`coredb-billetera`) y otro tipo, con `sub` = código del cliente y `rol` = CLIENTE; no sirve como
+token del personal y viceversa. Las rutas del cliente exigen además ese token en
+`X-Cliente-Token`; el cliente sale del token, nunca del cuerpo, y en cada petición se vuelve a
+leer su afiliación (una billetera bloqueada o reafiliada corta la sesión). Un PIN equivocado y un
+celular sin billetera responden lo mismo (401 `CREDENCIALES_INVALIDAS`); al tercer PIN equivocado
+la billetera queda BLOQUEADA (403 `BILLETERA_BLOQUEADA`) hasta que el banco la afilie otra vez.
+
+| Ruta | Quién | Qué hace |
+|---|---|---|
+| `POST /coredb/billetera/afiliaciones` | `AFILIAR_BILLETERA` (ADMINISTRADOR, ASESOR, OPERADOR) | Afilia a un cliente ACTIVO que ya existe (punto R-01) con su cuenta individual en soles y su PIN; repetirla cambia el PIN o la cuenta y reactiva |
+| `POST /coredb/billetera/comercios` | `REGISTRAR_COMERCIO` (ADMINISTRADOR, OPERADOR) | Comercio con RUC, razón social y cuenta de abono, y su QR estático |
+| `POST /coredb/billetera/acceso` | servicio BILLETERA | Valida celular y PIN; entrega el token de cliente |
+| `POST /coredb/billetera/pin/verificacion` | cliente | Confirma el PIN antes de operar (mismos intentos) |
+| `GET /coredb/billetera/yo` | cliente | Saldo disponible, tope del canal BD, consumo y disponible de hoy, avisos sin leer y solicitudes por pagar |
+| `GET /coredb/billetera/movimientos`, `GET /coredb/billetera/operaciones` | cliente | Movimientos de su cuenta; envíos, pagos y cobros enviados o recibidos |
+| `POST /coredb/billetera/contactos` | cliente | Nombre corto («Ana D.») del dueño de un celular con billetera |
+| `POST /coredb/billetera/transferencias` | cliente | Envío por celular (P2P). Exige `X-Idempotency-Key` |
+| `POST /coredb/billetera/qr`, `GET /coredb/billetera/qr/{id_qr}` | cliente | QR estático (sin monto) o dinámico (monto, vence, un pago); lo que ve el pagador, sin la cuenta del beneficiario |
+| `POST /coredb/billetera/qr/{id_qr}/pagos` | cliente | Paga un QR de otro cliente o de un comercio. Exige `X-Idempotency-Key` |
+| `GET /coredb/billetera/comercios` | cliente | Comercios activos con su QR |
+| `POST /coredb/billetera/solicitudes`, `GET /coredb/billetera/solicitudes` | cliente | Pedir dinero por celular (vence a las 48 h); recibidas y enviadas |
+| `POST /coredb/billetera/solicitudes/{id}/respuesta` | cliente | ACEPTAR (paga; exige `X-Idempotency-Key`) o RECHAZAR, el pagador; CANCELAR, quien la pidió |
+| `GET /coredb/billetera/notificaciones`, `POST /coredb/billetera/notificaciones/leidas` | cliente | Avisos |
+
+Cada operación de dinero es una transferencia del CORE por el canal BD (tope diario de S/ 500).
+La huella de la llave se calcula aquí con el cliente y los parámetros: la misma llave con otros
+datos, o de otro cliente, es 409 `BNA-IDEMPOTENCIA`; repetida con los mismos devuelve la misma
+operación con `repetido: true`. El celular va siempre en el cuerpo (nunca en la ruta ni en la
+consulta, que quedan en los registros de acceso) y ninguna respuesta ni evento lo devuelve.
+Pruebas: `tests/test_billetera_rutas.py` (sin base) y `tests/integracion/test_billetera.py`
+(contra MySQL, con concurrencia).
 
 ## Consultas
 

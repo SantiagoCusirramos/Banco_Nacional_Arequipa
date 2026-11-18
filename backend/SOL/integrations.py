@@ -90,11 +90,14 @@ class Integrations:
             raise IntegrationError("RESPUESTA_BUS_INVALIDA", permanent=True)
         return data
 
-    def read(self, path, correlation, params=None, deadline=None, allow_missing=False, provider="bus"):
+    def read(self, path, correlation, params=None, deadline=None, allow_missing=False, provider="bus",
+             method="GET", payload=None):
+        # Una consulta sin efectos: se reintenta. La búsqueda de clientes es POST solo para que
+        # el texto buscado (un documento) no viaje en la URL, y también es una consulta.
         deadline = deadline or monotonic() + self.settings.request_budget
         for attempt in range(self.settings.max_retries + 1):
             try:
-                return self.request("GET", path, correlation, params=params,
+                return self.request(method, path, correlation, payload=payload, params=params,
                                     deadline=deadline, allow_missing=allow_missing, provider=provider)
             except IntegrationError as exc:
                 if exc.permanent or attempt == self.settings.max_retries:
@@ -113,8 +116,9 @@ class Integrations:
     def clients(self, search, correlation):
         # Una búsqueda acotada; no se descarga todo el maestro de Clientes.
         try:
-            data = self.read(self.settings.cap_search_path, correlation,
-                             params={"search": search, "limit": 50}, provider="cap")
+            # P-1: el texto va en el cuerpo; en la consulta quedaría en los registros de acceso.
+            data = self.read(self.settings.cap_search_path, correlation, method="POST",
+                             payload={"search": search, "limit": 50}, provider="cap")
             if not isinstance(data, list) or len(data) > 50:
                 raise IntegrationError("RESPUESTA_BUS_INVALIDA", True)
             return [normalize_reference(r) for r in data]

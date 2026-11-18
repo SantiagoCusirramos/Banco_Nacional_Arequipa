@@ -61,7 +61,10 @@ describe("Página del módulo Cuentas", () => {
     await userEvent.type(screen.getByLabelText("Número de Cuenta"), "10100000000001");
     await userEvent.type(screen.getByLabelText("Monto"), "150.5");
     await userEvent.click(screen.getByRole("button", { name: /Ejecutar DEPOSITO/ }));
-    await waitFor(() => expect(post).toHaveBeenCalledWith("/deposito", { num_cuenta: "10100000000001", monto: "150.50" }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/deposito", { num_cuenta: "10100000000001", monto: "150.50" }, expect.anything()));
+    const { headers } = post.mock.calls[0][2] as { headers: Record<string, string> };
+    expect(headers["X-Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(headers["X-Channel-ID"]).toBe("VEN");
     expect(await screen.findByRole("status")).toHaveTextContent("11111111-1111-4111-8111-111111111111");
   });
 
@@ -76,7 +79,7 @@ describe("Página del módulo Cuentas", () => {
     await userEvent.click(screen.getByRole("button", { name: /Ejecutar TRANSFERENCIA/ }));
     await waitFor(() => expect(post).toHaveBeenCalledWith("/transferencia", {
       num_cuenta_origen: "111", num_cuenta_destino: "222", monto: "200.00",
-    }));
+    }, expect.anything()));
     expect(await screen.findByRole("status")).toHaveTextContent("Débito d-1, abono a-1");
   });
 
@@ -129,5 +132,76 @@ describe("Página del módulo Cuentas", () => {
     expect(get).toHaveBeenCalledWith("/movimiento/11111111-1111-4111-8111-111111111111");
     expect(screen.getByText("DEPOSITO")).toBeInTheDocument();
     expect(screen.getByText("S/ 500.00")).toBeInTheDocument();
+  });
+
+  // D-1: un reintento de la misma operación debe llevar la misma llave para que CUENTAS no
+  // mueva el dinero dos veces. La llave cambia al editar la operación o cuando se registra.
+  const llave = (i: number) => (post.mock.calls[i][2] as { headers: Record<string, string> }).headers["X-Idempotency-Key"];
+  const enviar = (tipo: RegExp) => userEvent.click(screen.getByRole("button", { name: tipo }));
+
+  it("CT-08 Reintentar el mismo depósito tras un error repite la llave", async () => {
+    post.mockRejectedValueOnce(new AxiosError("timeout of 15000ms exceeded", "ECONNABORTED"));
+    post.mockResolvedValue(sobre({ uuid_transaccion: "11111111-1111-4111-8111-111111111111", replay: true }));
+    render(<CuentaPage />);
+    await pestana(/3\. Depositar/);
+    await userEvent.type(screen.getByLabelText("Número de Cuenta"), "10100000000001");
+    await userEvent.type(screen.getByLabelText("Monto"), "150");
+    await enviar(/Ejecutar DEPOSITO/);
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await enviar(/Ejecutar DEPOSITO/);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(llave(1)).toBe(llave(0));
+  });
+
+  it("CT-09 Editar el monto, la cuenta o el tipo cambia la llave", async () => {
+    post.mockRejectedValue(new AxiosError("Network Error", "ERR_NETWORK"));
+    render(<CuentaPage />);
+    await pestana(/3\. Depositar/);
+    await userEvent.type(screen.getByLabelText("Número de Cuenta"), "111");
+    await userEvent.type(screen.getByLabelText("Monto"), "10");
+    await enviar(/Ejecutar DEPOSITO/);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    await userEvent.type(screen.getByLabelText("Monto"), "0");
+    await enviar(/Ejecutar DEPOSITO/);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    await userEvent.type(screen.getByLabelText("Número de Cuenta"), "2");
+    await enviar(/Ejecutar DEPOSITO/);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+    await userEvent.selectOptions(screen.getByLabelText("Tipo de Operación"), "retiro");
+    await enviar(/Ejecutar RETIRO/);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(4));
+    const llaves = [0, 1, 2, 3].map(llave);
+    expect(new Set(llaves).size).toBe(4);
+  });
+
+  it("CT-10 Tras registrar una operación, la siguiente lleva otra llave", async () => {
+    post.mockResolvedValue(sobre({ uuid_debito: "d-1", uuid_abono: "a-1", replay: false }));
+    render(<CuentaPage />);
+    await pestana(/3\. Depositar/);
+    await userEvent.selectOptions(screen.getByLabelText("Tipo de Operación"), "transferencia");
+    await userEvent.type(screen.getByLabelText("Cuenta de Origen"), "111");
+    await userEvent.type(screen.getByLabelText("Cuenta de Destino"), "222");
+    await userEvent.type(screen.getByLabelText("Monto"), "200");
+    await enviar(/Ejecutar TRANSFERENCIA/);
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    await enviar(/Ejecutar TRANSFERENCIA/);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(llave(1)).not.toBe(llave(0));
+  });
+
+  it("CT-11 La transferencia reintentada repite la llave", async () => {
+    post.mockRejectedValueOnce(new AxiosError("Network Error", "ERR_NETWORK"));
+    post.mockResolvedValue(sobre({ uuid_debito: "d-1", uuid_abono: "a-1", replay: true }));
+    render(<CuentaPage />);
+    await pestana(/3\. Depositar/);
+    await userEvent.selectOptions(screen.getByLabelText("Tipo de Operación"), "transferencia");
+    await userEvent.type(screen.getByLabelText("Cuenta de Origen"), "111");
+    await userEvent.type(screen.getByLabelText("Cuenta de Destino"), "222");
+    await userEvent.type(screen.getByLabelText("Monto"), "200");
+    await enviar(/Ejecutar TRANSFERENCIA/);
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await enviar(/Ejecutar TRANSFERENCIA/);
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    expect(llave(1)).toBe(llave(0));
   });
 });

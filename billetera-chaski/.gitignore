@@ -1,0 +1,19 @@
+# Dependencias y compilados
+node_modules/
+app_movil/build/
+app_movil/.dart_tool/
+app_movil/android/.gradle/
+app_movil/ios/Pods/
+
+# Secretos y configuración local (no subir)
+backend/.env
+backend/.secret
+app_movil/android/local.properties
+app_movil/android/key.properties
+*.jks
+*.keystore
+
+# Instaladores: súbelos como "Release" en GitHub, no al repositorio
+entregables/*.apk
+entregables/*.ipa
+*.zip

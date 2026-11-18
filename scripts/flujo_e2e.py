@@ -7,12 +7,15 @@ Pasos: salud de cada servicio, login del administrador, registro de un cliente,
 apertura de dos cuentas para él, depósito, transferencia, repetición idempotente,
 saldos finales, movimientos de la cuenta, cuentas del cliente y bitácora por
 COREDB; después, las mismas cuentas por el módulo CUENTAS, una tarjeta por el
-módulo TARJETAS (con un retiro autorizado y extornado), una solicitud de crédito
+módulo TARJETAS (con un retiro autorizado y extornado, y una retención que el cajero no
+confirma y que COREDB libera pasado el plazo), una solicitud de crédito
 por EVALUACIÓN (expediente con el formato de SOL → evaluación → decisión, todo en
 COREDB), su desembolso por DESEMBOLSO (identidad → orden → validación → confirmación,
 que abona una sola vez y crea el crédito), un prospecto captado y habilitado por
-CAPTACION (expediente en COREDB, cliente nuevo y referencia CR-INT-01 para SOL) y todo
-por los puentes del frontend, que es el camino que sigue el navegador.
+CAPTACION (expediente en COREDB, cliente nuevo y referencia CR-INT-01 para SOL), la
+billetera Chaski (dos clientes de CAPTACION afiliados por el banco: envío por celular y pago
+con QR, cada uno repetido con su llave, que mueven el dinero una sola vez) y todo por los
+puentes del frontend, que es el camino que sigue el navegador.
 
 Todo pasa por el Bus de Servicios: el flujo solo conoce el Bus (E2E_BUS, con su credencial
 BUS_TOKEN) y el frontend, y al final comprueba con las métricas del Bus que el flujo y cada
@@ -43,6 +46,7 @@ SOL = f"{BUS}/bus/sol"
 EVALUACION = f"{BUS}/bus/evaluacion"
 DESEMBOLSO = f"{BUS}/bus/desembolso"
 CAPTACION = f"{BUS}/bus/captacion"
+BILLETERA = f"{BUS}/bus/billetera/api"
 SEGURIDAD = f"{BUS}/bus/seguridad"
 FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
 TOKEN_SOL = os.environ.get("CAP_SOL_TOKEN", "")
@@ -56,6 +60,7 @@ SERVICIOS = {
     "EVALUACIÓN": (EVALUACION + "/salud", {}),
     "DESEMBOLSO": (DESEMBOLSO + "/salud", {}),
     "CAPTACION": (CAPTACION + "/ready", {}),
+    "BILLETERA (Chaski)": (f"{BUS}/bus/billetera/api/salud", {}),
     "Seguridad": (SEGURIDAD + "/seguridad/estado", {"X-Correlation-ID": "flujo-e2e"}),
     "frontend": (FRONTEND + "/login", {}),
 }
@@ -76,8 +81,30 @@ class Fallo(Exception):
     pass
 
 
+# P-1: documentos, celulares, PIN, claves y tokens que la corrida envía o recibe. Al terminar se
+# escriben en E2E_SENSIBLES y `./bna smoke` comprueba que ninguno quedó en los registros.
+SENSIBLES = set()
+CLAVES_SENSIBLES = {"numero_documento", "documento", "search", "texto", "celular", "celular_destino",
+                    "pin", "password", "clave", "access_token", "token", "token_sesion"}
+
+
+def anotar_sensibles(datos):
+    if isinstance(datos, dict):
+        for clave, valor in datos.items():
+            if clave in CLAVES_SENSIBLES and isinstance(valor, str) and len(valor) >= 6:
+                SENSIBLES.add(valor)
+            else:
+                anotar_sensibles(valor)
+    elif isinstance(datos, list):
+        for valor in datos:
+            anotar_sensibles(valor)
+
+
 def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
     """Devuelve (estado, cuerpo JSON o texto). No lanza por un 4xx o 5xx."""
+    anotar_sensibles(cuerpo)
+    if token:
+        SENSIBLES.add(token)
     datos = json.dumps(cuerpo).encode() if cuerpo is not None else None
     peticion = urllib.request.Request(url, data=datos, method=metodo)
     if datos is not None:
@@ -96,14 +123,17 @@ def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
     except (urllib.error.URLError, OSError) as error:
         raise Fallo(f"{metodo} {url}: sin respuesta ({error})") from error
     try:
-        return estado, json.loads(texto)
+        datos = json.loads(texto)
     except ValueError:
         return estado, texto
+    anotar_sensibles(datos)
+    return estado, datos
 
 
 def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
     """Como el navegador ante el proxy de SOL del frontend: Origin y cookie, sin token.
     Devuelve (estado, cuerpo JSON o texto, Set-Cookie)."""
+    anotar_sensibles(cuerpo)
     peticion = urllib.request.Request(f"{FRONTEND}/api/solicitud-credito/{ruta}", method=metodo,
                                       data=json.dumps(cuerpo).encode() if cuerpo is not None else None)
     peticion.add_header("Content-Type", "application/json")
@@ -119,9 +149,11 @@ def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
     except (urllib.error.URLError, OSError) as error:
         raise Fallo(f"{metodo} {ruta} por el proxy de SOL: sin respuesta ({error})") from error
     try:
-        return estado, json.loads(texto), galleta
+        datos = json.loads(texto)
     except ValueError:
         return estado, texto, galleta
+    anotar_sensibles(datos)
+    return estado, datos, galleta
 
 
 def sano(nombre, url, cabeceras):
@@ -314,20 +346,44 @@ def flujo():
     exigir(estado == 200 and respuesta["data"]["saldo_disponible"] == "300.00"
            and respuesta["data"]["titulares"] == [cliente],
            f"CUENTAS no devolvió la cuenta esperada: {estado} {respuesta}")
-    estado, respuesta = pedir(
-        "POST", f"{base}/deposito", {"num_cuenta": origen, "monto": "50.00"}, token,
-        cabeceras={"X-Idempotency-Key": str(uuid.uuid4()), "X-Channel-ID": "VEN",
-                   "X-Request-Timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
-    )
-    exigir(estado == 201 and respuesta["success"] is True, f"Depósito por CUENTAS: {estado} {respuesta}")
     estado, respuesta = pedir("GET", f"{base}/{origen}/movimientos", token=token)
-    exigir(estado == 200 and respuesta["data"][0]["tipo_operacion"] == "DEPOSITO"
-           and respuesta["data"][0]["monto"] == "50.00",
-           f"Movimientos por CUENTAS: {estado} {respuesta}")
+    exigir(estado == 200, f"Movimientos por CUENTAS: {estado} {respuesta}")
+    movimientos_antes = len(respuesta["data"])
+
+    def operar_cuentas(operacion, cuerpo, llave):
+        return pedir("POST", f"{base}/{operacion}", cuerpo, token, cabeceras={
+            "X-Idempotency-Key": llave, "X-Channel-ID": "VEN",
+            "X-Request-Timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+
+    # Cada operación se repite con la misma llave, como un reintento de /cuenta tras un timeout:
+    # debe devolver la misma transacción marcada como repetición, y el saldo cambia una sola vez.
+    operaciones = [
+        ("deposito", {"num_cuenta": origen, "monto": "50.00"}, "uuid_transaccion"),
+        ("retiro", {"num_cuenta": origen, "monto": "20.00"}, "uuid_transaccion"),
+        ("transferencia", {"num_cuenta_origen": destino, "num_cuenta_destino": origen, "monto": "20.00"}, "uuid_debito"),
+    ]
+    for operacion, cuerpo, campo in operaciones:
+        llave = str(uuid.uuid4())
+        estado, primera = operar_cuentas(operacion, cuerpo, llave)
+        exigir(estado == 201 and primera["data"]["replay"] is False, f"{operacion} por CUENTAS: {estado} {primera}")
+        estado, repetida = operar_cuentas(operacion, cuerpo, llave)
+        exigir(estado == 201 and repetida["data"]["replay"] is True
+               and repetida["data"][campo] == primera["data"][campo],
+               f"Repetir {operacion} por CUENTAS con la misma llave debía devolver la original: {estado} {repetida}")
+        estado, otra = operar_cuentas(operacion, {**cuerpo, "monto": "1.00"}, llave)
+        exigir(estado == 409, f"La misma llave con otro monto debía dar 409 en {operacion}: {estado} {otra}")
+    estado, respuesta = pedir("GET", f"{base}/{origen}/movimientos", token=token)
+    exigir(estado == 200 and len(respuesta["data"]) == movimientos_antes + 3,
+           f"Cada operación repetida debía dejar un solo movimiento en {origen}: {estado} {respuesta}")
+    saldos = {numero: coredb("GET", f"/coredb/cuentas/{numero}", 200, token=token)["saldo_disponible"]
+              for numero in cuentas}
+    exigir(saldos == {origen: "350.00", destino: "180.00"},
+           f"Saldos tras las operaciones repetidas por CUENTAS: {saldos}")
     estado, respuesta = pedir("GET", f"{base}/consolidada/{cliente}", token=token)
     exigir(estado == 200 and sorted(c["num_cuenta"] for c in respuesta["data"]) == sorted(cuentas),
            f"Consolidada por CUENTAS: {estado} {respuesta}")
-    paso("CUENTAS: cuenta, depósito de 50.00, movimientos y consolidada del cliente")
+    paso("CUENTAS: cuenta, depósito, retiro y transferencia repetidos con la misma llave (un solo movimiento "
+         "cada uno; otro monto con la misma llave, 409), movimientos y consolidada del cliente")
 
     # ── Por el módulo TARJETAS, que reenvía el token a COREDB ───────────────
     # Solo se emite a un cliente ACTIVO (ERR-TAR-001) y el registrado arriba está OBSERVADO:
@@ -409,6 +465,22 @@ def flujo():
     # ── ATM: retiro por el cajero (valida PIN → autoriza → confirma) ──────────
     # La tarjeta recién emitida y activada, sobre cuenta_tarjeta (60.00 tras el retiro de TARJETAS).
     atm_base = f"{BUS}/bus/atm/api"
+    # La pantalla se sirve por el Bus y ninguna ruta lee fuera de static/ (K-1, S-1).
+    estado, pantalla = pedir("GET", f"{BUS}/bus/atm/")
+    exigir(estado == 200 and "Inserte su tarjeta" in str(pantalla), f"Pantalla del cajero: {estado}")
+    for ruta in ("..%2Fconfig.py", "api/static/..%2Fconfig.py", "..%2F..%2F..%2F..%2Fproc%2Fself%2Fenviron"):
+        estado, texto = pedir("GET", f"{BUS}/bus/atm/{ruta}")
+        exigir(estado == 404 and "BaseSettings" not in str(texto) and "BUS_TOKEN" not in str(texto),
+               f"El cajero no debe servir {ruta}: {estado}")
+    estado, _ = pedir("GET", f"{atm_base}/registro")
+    exigir(estado == 401, f"El registro del canal del cajero debía exigir al operador: {estado}")
+    # El operador abre el cajero con su usuario de COREDB; con ese token lee el registro.
+    estado, apertura = pedir("POST", f"{atm_base}/apertura", {"username": USUARIO, "password": PASSWORD})
+    exigir(estado == 200 and apertura["data"]["access_token"], f"Apertura del cajero: {estado} {apertura}")
+    token_operador = apertura["data"]["access_token"]
+    estado, registro = pedir("GET", f"{atm_base}/registro", token=token_operador)
+    exigir(estado == 200 and isinstance(registro, list), f"Registro del canal con el operador: {estado} {registro}")
+    paso("ATM: la pantalla se sirve por el Bus, ninguna ruta lee fuera de static/; el operador abre el cajero y solo él lee el registro")
     estado, respuesta = pedir("PUT", f"{base}/{tarjeta}/credenciales/PIN_ATM", {"valor": "4821"}, token)
     exigir(estado == 200, f"Registrar el PIN por TARJETAS: {estado} {respuesta}")
     # Primero validar PIN (el ATM llama a TARJETAS por el Bus)
@@ -417,28 +489,37 @@ def flujo():
                               {"id_tarjeta": tarjeta, "pin": "4821", "id_terminal": "DEV-ATM-01"},
                               token, cabeceras=pin_key)
     exigir(estado == 200 and respuesta["success"] is True
-           and respuesta["data"]["resultado"] == "EXITOSO",
+           and respuesta["data"]["resultado"] == "EXITOSO" and respuesta["data"]["token_sesion"],
            f"ATM validar PIN: {estado} {respuesta}")
-    paso("ATM: PIN validado correctamente por TARJETAS a través del Bus")
+    sesion_atm = {"X-ATM-Sesion": respuesta["data"]["token_sesion"]}
+    paso("ATM: PIN validado por TARJETAS a través del Bus; abre la sesión de la tarjeta")
 
     # Autorizar retención
     retiro_atm = {"id_tarjeta": tarjeta, "num_cuenta": cuenta_tarjeta, "moneda": "PEN",
                   "monto": "30.00", "id_terminal": "DEV-ATM-01",
                   "uuid_transaccion": str(uuid.uuid4())}
     llave_atm = {"X-Idempotency-Key": str(uuid.uuid4())}
+    # K-3: un token del personal sin la sesión del PIN no retira.
     estado, respuesta = pedir("POST", f"{atm_base}/autorizar", retiro_atm, token, cabeceras=llave_atm)
+    exigir(estado == 401 and respuesta["error_code"] == "ERR-ATM-SESION-REQUERIDA",
+           f"ATM autorizar sin la sesión del PIN debía responder 401: {estado} {respuesta}")
+    estado, respuesta = pedir("POST", f"{atm_base}/autorizar", retiro_atm, token, cabeceras={**llave_atm, **sesion_atm})
     exigir(estado == 201 and respuesta["success"] is True
            and respuesta["data"]["aprobada"] is True
            and respuesta["data"]["codigo_respuesta"] == "00",
            f"ATM autorizar retiro: {estado} {respuesta}")
     autorizacion_atm = respuesta["data"]["uuid_autorizacion"]
+    # Repetir la autorización con la misma llave devuelve la misma retención (no retiene dos veces).
+    estado, repetida = pedir("POST", f"{atm_base}/autorizar", retiro_atm, token, cabeceras={**llave_atm, **sesion_atm})
+    exigir(estado in (200, 201) and repetida["data"]["uuid_autorizacion"] == autorizacion_atm,
+           f"ATM repetir autorización con la misma llave: {estado} {repetida}")
     paso(f"ATM: retiro de 30.00 autorizado (00) y retenido, uuid_autorizacion={autorizacion_atm[:8]}…")
 
     # Confirmar dispensación
     confirmar_atm = {"uuid_autorizacion": autorizacion_atm, "id_terminal": "DEV-ATM-01",
                      "resultado": "DISPENSADO"}
     llave_conf = {"X-Idempotency-Key": str(uuid.uuid4())}
-    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras=llave_conf)
+    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras={**llave_conf, **sesion_atm})
     exigir(estado == 200 and respuesta["success"] is True
            and respuesta["data"]["estado_autorizacion"] == "DISPENSADA",
            f"ATM confirmar dispensación: {estado} {respuesta}")
@@ -452,13 +533,24 @@ def flujo():
     paso(f"ATM: retiro de 30.00 en el cajero DEV-ATM-01 confirmado, saldo final {saldo_despues}")
 
     # Repetir confirmación con misma llave → sin segundo débito (idempotencia)
-    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras=llave_conf)
+    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras={**llave_conf, **sesion_atm})
     exigir(estado == 200 and respuesta["success"] is True
            and respuesta["data"]["uuid_transaccion"] == uuid_txn,
            f"ATM repetir confirmación: {estado} {respuesta}")
     saldo_otra = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     exigir(float(saldo_otra) == 30.0, f"Repetir confirmación no debía debitar de nuevo: {saldo_otra}")
     paso("ATM: repetir confirmación con misma llave no debita dos veces (idempotencia)")
+
+    # Un cajero que cae entre autorizar y confirmar: la retención queda sin confirmar y la
+    # base la libera pasado el plazo (bd-v1.11). Se comprueba al final del flujo.
+    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/autorizaciones", {**retiro, "monto": "10.00"}, token,
+                              cabeceras={"X-Idempotency-Key": str(uuid.uuid4())})
+    exigir(estado == 201 and respuesta["data"]["aprobada"] is True,
+           f"Autorización que el cajero no confirmará: {estado} {respuesta}")
+    retencion_huerfana = respuesta["data"]["uuid_autorizacion"]
+    retenida_desde = time.monotonic()
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 20.0, f"La retención sin confirmar debía retener 10.00: disponible {disponible}")
 
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
@@ -692,9 +784,10 @@ def flujo():
         exigir(estado == esperado, f"CAPTACION {metodo} {ruta}: se esperaba {esperado} y respondió {estado}: {respuesta}")
         return respuesta["data"]
 
+    celular_cap = "9" + "".join(random.choices("0123456789", k=8))
     solicitante = captacion("POST", "/solicitantes", 201, {
         "tipo_documento": "DNI", "numero_documento": dni, "nombres": "Rosa", "apellido_paterno": "Huamán",
-        "apellido_materno": "Ccori", "celular": "9" + "".join(random.choices("0123456789", k=8)),
+        "apellido_materno": "Ccori", "celular": celular_cap,
         "correo": f"captacion.{dni}.{uuid.uuid4().hex[:6]}@example.com"})["solicitante"]
     caso = captacion("POST", "/casos", 201, {"id_solicitante": solicitante["id_solicitante"],
                                              "canal": "AGENCIA", "id_agencia": AGENCIA})["id_caso"]
@@ -745,10 +838,115 @@ def flujo():
            "CR-INT-01: la referencia no debe llevar datos de contacto")
     estado, _ = pedir("GET", f"{CAPTACION}/cap/references/{cod_cliente}", token=token)
     exigir(estado == 401, f"CR-INT-01 con un token de persona debía responder 401 y respondió {estado}")
-    estado, lista = pedir("GET", f"{CAPTACION}/cap/references?search={dni}&limit=50", token=TOKEN_SOL)
+    estado, lista = pedir("POST", f"{CAPTACION}/cap/references/search", {"search": dni, "limit": 50}, token=TOKEN_SOL)
     exigir(estado == 200 and [r["id_cliente"] for r in lista] == [cod_cliente],
            f"CR-INT-01: la búsqueda debía encontrar al cliente: {estado} {lista}")
     paso("CR-INT-01: SOL recibe una referencia vigente y HABILITADA, con su búsqueda; un token de persona no entra")
+
+    # ── BILLETERA (Chaski): envío por celular y pago con QR, por el Bus ──────
+    # Punto R-01: Chaski no crea clientes. Los dos son del flujo de Clientes (CAPTACION): el
+    # que se acaba de habilitar y otro que pasa por el mismo expediente. El banco les abre una
+    # cuenta y los afilia; desde ahí todo va por Chaski, que llega a COREDB por el Bus.
+    def captar(nombres, apellido):
+        dni_nuevo = "4" + "".join(random.choices("0123456789", k=6)) + "1"
+        celular_nuevo = "9" + "".join(random.choices("0123456789", k=8))
+        nuevo = captacion("POST", "/solicitantes", 201, {
+            "tipo_documento": "DNI", "numero_documento": dni_nuevo, "nombres": nombres,
+            "apellido_paterno": apellido, "apellido_materno": None, "celular": celular_nuevo,
+            "correo": f"billetera.{dni_nuevo}.{uuid.uuid4().hex[:6]}@example.com"})["solicitante"]
+        id_caso = captacion("POST", "/casos", 201, {"id_solicitante": nuevo["id_solicitante"],
+                                                    "canal": "AGENCIA", "id_agencia": AGENCIA})["id_caso"]
+        captacion("POST", f"/casos/{id_caso}/consentimientos", 201, {"consentimientos": [
+            {"tipo": t, "aceptado": True} for t in ("TRATAMIENTO_DATOS", "CONSULTA_BUROS", "TERMINOS")]})
+        otp = captacion("POST", f"/casos/{id_caso}/otp", 201, {"canal": "SMS"})["codigo_simulado"]
+        captacion("POST", f"/casos/{id_caso}/otp/verificar", 200, {"codigo": otp})
+        captacion("POST", f"/casos/{id_caso}/validaciones", 201, {"tipos": ["RENIEC", "LISTAS_NEGRAS", "PEP"]})
+        captacion("POST", f"/casos/{id_caso}/consultas-riesgo", 201, {"central": "SBS"})
+        captacion("POST", f"/casos/{id_caso}/perfil", 201)
+        return captacion("POST", f"/casos/{id_caso}/habilitar", 200)["cod_cliente"], celular_nuevo
+
+    beto, celular_beto = captar("Alberto", "Quispe")
+    # Números de cuenta nuevos (más adelante que los del inicio del flujo).
+    base_billetera = int(time.time() * 1000) % 10**15 * 10
+    billeteras = {}
+    for indice, (titular, cel, pin) in enumerate(((cod_cliente, celular_cap, "246810"),
+                                                  (beto, celular_beto, "135790"))):
+        numero = base_billetera + indice
+        cuenta = coredb("POST", "/coredb/cuentas", 201, {
+            "num_cuenta": f"CTA-{numero:016d}", "cci": f"{numero:020d}", "moneda": "PEN",
+            "regimen": "INDIVIDUAL", "id_agencia": AGENCIA, "titulares": [titular]}, token)["num_cuenta"]
+        afiliada = coredb("POST", "/coredb/billetera/afiliaciones", 201,
+                          {"cod_cliente": titular, "num_cuenta": cuenta, "pin": pin}, token)
+        exigir(afiliada["estado"] == "ACTIVA" and afiliada["nueva"] is True, f"Afiliación inesperada: {afiliada}")
+        billeteras[titular] = {"cuenta": cuenta, "celular": cel, "pin": pin}
+    rosa, alberto = billeteras[cod_cliente], billeteras[beto]
+    coredb("POST", "/coredb/movimientos", 201, {
+        "num_cuenta": rosa["cuenta"], "tipo": "DEPOSITO", "monto": "100.00", "glosa": "Fondeo de la billetera",
+        "id_canal": "VEN", "idempotency_key": str(uuid.uuid4())}, token)
+    paso(f"BILLETERA: el banco afilió a {cod_cliente} y a {beto} (clientes de CAPTACION) con su cuenta y su PIN; "
+         f"depósito de 100.00 para {cod_cliente}")
+
+    def chaski(metodo, ruta, esperado, cuerpo=None, sesion=None, cabeceras=None):
+        estado, respuesta = pedir(metodo, BILLETERA + ruta, cuerpo, sesion, cabeceras)
+        exigir(estado == esperado, f"Chaski {metodo} {ruta}: se esperaba {esperado} y respondió {estado}: {respuesta}")
+        return respuesta
+
+    chaski("POST", "/login", 401, {"celular": rosa["celular"], "pin": "000000"})
+    estado, _ = pedir("POST", BILLETERA + "/registro", {"celular": "900000001", "pin": "123456"})
+    exigir(estado == 403, f"Chaski no debe registrar clientes (R-01): respondió {estado}")
+    s_rosa = chaski("POST", "/login", 200, {"celular": rosa["celular"], "pin": rosa["pin"]})["token"]
+    s_alberto = chaski("POST", "/login", 200, {"celular": alberto["celular"], "pin": alberto["pin"]})["token"]
+    estado, _ = pedir("GET", f"{COREDB}/coredb/catalogos/monedas", token=s_rosa)
+    exigir(estado == 401, f"El token de cliente no debe servir como token del personal: respondió {estado}")
+    contacto = chaski("POST", "/clientes/buscar", 200, {"celular": alberto["celular"]}, s_rosa)
+    exigir(contacto["nombre"] == "Alberto Q.", f"Contacto inesperado: {contacto}")
+    paso("BILLETERA: login con celular y PIN (PIN equivocado 401, registro 403 por R-01), el token de cliente "
+         "no sirve como token del personal, y el contacto se ve solo con su nombre corto")
+
+    llave_envio = {"Idempotency-Key": str(uuid.uuid4())}
+    envio = {"celular_destino": alberto["celular"], "monto": 25, "referencia": "Pasaje"}
+    primero = chaski("POST", "/transferencias", 200, envio, s_rosa, llave_envio)
+    repetido = chaski("POST", "/transferencias", 200, envio, s_rosa, llave_envio)
+    exigir(primero["repetida"] is False and repetido["repetida"] is True
+           and repetido["id_transferencia"] == primero["id_transferencia"],
+           f"Repetir el envío con la misma llave debía devolver el mismo: {primero} {repetido}")
+    paso("BILLETERA: envío de 25.00 por celular; repetido con la misma llave devuelve el mismo envío")
+
+    qr = chaski("POST", "/qr", 200, {"monto": 10}, s_alberto)
+    visto = chaski("GET", f"/qr/{qr['id_qr']}", 200, sesion=s_rosa)
+    exigir(visto["nombre"] == "Alberto Q." and visto["monto"] == 10 and visto["tipo"] == "dinamico",
+           f"QR inesperado: {visto}")
+    llave_qr = {"Idempotency-Key": str(uuid.uuid4())}
+    pago = chaski("POST", f"/qr/{qr['id_qr']}/pagar", 200, {}, s_rosa, llave_qr)
+    pago_repetido = chaski("POST", f"/qr/{qr['id_qr']}/pagar", 200, {}, s_rosa, llave_qr)
+    exigir(pago_repetido["repetida"] is True and pago_repetido["id_pago"] == pago["id_pago"],
+           f"Repetir el pago con la misma llave debía devolver el mismo: {pago} {pago_repetido}")
+    chaski("POST", f"/qr/{qr['id_qr']}/pagar", 410, {}, s_rosa, {"Idempotency-Key": str(uuid.uuid4())})
+    paso("BILLETERA: QR dinámico de 10.00 pagado; repetido con la misma llave devuelve el mismo pago y con otra "
+         "llave se rechaza (410, ya pagado)")
+
+    saldos = {nombre: coredb("GET", f"/coredb/cuentas/{datos['cuenta']}", 200, token=token)["saldo_disponible"]
+              for nombre, datos in (("rosa", rosa), ("alberto", alberto))}
+    exigir(saldos == {"rosa": "65.00", "alberto": "35.00"}, f"Saldos inesperados de la billetera: {saldos}")
+    movimientos = coredb("GET", f"/coredb/movimientos/cuenta/{rosa['cuenta']}", 200, token=token)
+    debitos = [(m["tipo_operacion"], m["monto"], m["id_canal"]) for m in movimientos if m["naturaleza"] == "D"]
+    exigir(sorted(debitos) == [("TRANSFERENCIA_ENVIADA", "10.00", "BD"), ("TRANSFERENCIA_ENVIADA", "25.00", "BD")],
+           f"Débitos inesperados en la cuenta de la billetera: {debitos}")
+    yo = chaski("GET", "/me", 200, sesion=s_rosa)
+    exigir(yo["cuenta"]["saldo_actual"] == 65 and yo["disponible_hoy"] == 465,
+           f"La billetera debía mostrar 65.00 y 465.00 disponibles hoy: {yo}")
+    paso(f"BILLETERA: el dinero se movió una sola vez por el canal BD: {cod_cliente} = {saldos['rosa']}, "
+         f"{beto} = {saldos['alberto']}; dos débitos y el tope diario descontado")
+
+    eventos = coredb("GET", "/coredb/auditoria?modulo=BILLETERA&limite=200", 200, token=token)
+    acciones = {e["accion"] for e in eventos if e["id_entidad"] in (cod_cliente, beto) or e["actor"] in
+                (f"cliente:{cod_cliente}", f"cliente:{beto}")}
+    exigir({"AFILIAR", "VALIDAR_ACCESO", "OPERACION_P2P", "OPERACION_QR"} <= acciones,
+           f"Faltan eventos de la billetera en la bitácora: {acciones}")
+    texto = json.dumps([eventos, movimientos])
+    exigir(rosa["celular"] not in texto and alberto["celular"] not in texto,
+           "La bitácora o la glosa de los movimientos guardan un celular en claro")
+    paso("BILLETERA: la bitácora tiene la afiliación, el acceso y las dos operaciones, sin ningún celular")
 
     # ── Por los puentes del frontend, como lo hace el navegador ─────────────
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
@@ -767,7 +965,11 @@ def flujo():
            f"Puente a COBRANZA: {estado} {respuesta}")
     estado, _ = pedir("GET", f"{FRONTEND}/api/core/otra/ruta", token=token)
     exigir(estado == 404, f"El puente a COREDB solo debe reenviar /coredb: respondió {estado}")
-    paso("frontend: sus puentes llegan a COREDB, a CUENTAS, a TARJETAS, a CAPTACION y a COBRANZA con el token del usuario")
+    # K-5: el Home Banking se sirve desde public/.
+    estado, pagina = pedir("GET", f"{FRONTEND}/homebanking/index.html")
+    exigir(estado == 200 and "formLogin" in str(pagina), f"Home Banking en /homebanking/index.html: {estado}")
+    paso("frontend: sus puentes llegan a COREDB, a CUENTAS, a TARJETAS, a CAPTACION y a COBRANZA con el token del "
+         "usuario, y sirve el Home Banking en /homebanking/index.html")
 
     # ── SOL por el proxy del frontend: escribir exige el Origin del propio frontend ──
     exigir(SOL_PASSWORD, "Falta SOL_INITIAL_PASSWORD para entrar a SOL por el frontend")
@@ -780,15 +982,40 @@ def flujo():
     exigir(galleta.startswith("bna_sol_session=") and "httponly" in galleta.lower(),
            "El login de SOL debía dejar la sesión en una cookie HttpOnly")
     sesion = galleta.split(";", 1)[0]
+    SENSIBLES.add(sesion.split("=", 1)[1])
     estado, respuesta, _ = pedir_navegador("GET", "policy", cookie=sesion)
     exigir(estado == 200 and respuesta.get("integracion") == "SIMULADO",
            f"Política de SOL con la cookie de sesión: {estado} {respuesta}")
+    # P-1: la búsqueda por documento va en el cuerpo de un POST, no en la URL.
+    estado, respuesta, _ = pedir_navegador("POST", "clients/search", {"search": "70000001"}, cookie=sesion)
+    exigir(estado == 200 and [c["numero_documento"] for c in respuesta] == ["70000001"],
+           f"Búsqueda de clientes de SOL por documento: {estado} {respuesta}")
     estado, respuesta, _ = pedir_navegador("POST", "auth/logout", {}, cookie=sesion)
     exigir(estado == 200, f"Cierre de sesión de SOL por el proxy: {estado} {respuesta}")
     estado, _, _ = pedir_navegador("GET", "policy", cookie=sesion)
     exigir(estado == 401, f"La sesión de SOL debía quedar revocada tras cerrar: respondió {estado}")
     paso("frontend: SOL por su proxy, con login desde el origen del frontend (otro origen, 403), "
-         "sesión en cookie HttpOnly, consulta y cierre de sesión")
+         "sesión en cookie HttpOnly, consulta, búsqueda por documento en el cuerpo y cierre de sesión")
+
+    # ── Retención vencida: la del cajero que cayó se libera y ya no se confirma ──
+    # El plazo de la base es de 15 minutos; el operador libera con 1 para no esperarlo.
+    time.sleep(max(0.0, 61 - (time.monotonic() - retenida_desde)))
+    liberacion = coredb("POST", "/coredb/autorizaciones/liberaciones", 200, {"minutos": 1}, token)
+    exigir(liberacion["liberadas"] >= 1, f"La liberación debía extornar la retención vencida: {liberacion}")
+    huerfana = coredb("GET", f"/coredb/autorizaciones/{retencion_huerfana}", 200, token=token)
+    exigir(huerfana["estado_autorizacion"] == "EXTORNADA" and huerfana["codigo_respuesta"] == "EXT",
+           f"La retención vencida debía quedar EXTORNADA: {huerfana}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 30.0, f"La liberación debía devolver los 10.00 retenidos: disponible {disponible}")
+    coredb("POST", "/coredb/autorizaciones/liberaciones", 200, {"minutos": 1}, token)
+    estado, respuesta = pedir("POST", f"{COREDB}/coredb/autorizaciones/{retencion_huerfana}/confirmacion",
+                              {"id_terminal": "DEV-ATM-01"}, token, cabeceras={"X-Idempotency-Key": str(uuid.uuid4())})
+    exigir(estado == 422 and respuesta["error"]["code"] == "BNA-CONFIRMACION",
+           f"Confirmar una retención liberada debía fallar: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 30.0, f"Liberar dos veces o confirmar tarde no debía mover el saldo: {disponible}")
+    paso("COREDB: la retención de 10.00 que el cajero no confirmó se liberó (EXTORNADA) y devolvió el saldo una "
+         "vez; liberar de nuevo no cambia nada y confirmarla tarde da 422 BNA-CONFIRMACION")
 
     # ── Todo pasó por el Bus: el flujo y cada puente del frontend ────────────
     despues = metricas_bus()
@@ -801,16 +1028,16 @@ def flujo():
               if not crecio("FRONTEND", m)]
     exigir(not faltan, f"Estos puentes del frontend no pasaron por el Bus: {faltan}")
     faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "ATM", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION",
-                          "SEGURIDAD") if not crecio("PRUEBAS", m)]
+                          "SEGURIDAD", "BILLETERA") if not crecio("PRUEBAS", m)]
     exigir(not faltan, f"El flujo no llegó por el Bus a: {faltan}")
     # Fase 2: cada módulo llegó a COREDB a través del Bus, con su propia credencial.
     # ATM no llama a COREDB directo; llama a TARJETAS por el Bus con su propia credencial.
     exigir(crecio("ATM", "TARJETAS"), "El ATM no llegó a TARJETAS por el Bus con su credencial")
-    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA")
+    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA", "BILLETERA")
               if not crecio(m, "COREDB")]
     exigir(not faltan, f"Estos módulos no llegaron a COREDB por el Bus: {faltan}")
     paso("Bus de Servicios: el flujo y los ocho puentes del frontend llegaron a los módulos por el Bus, "
-         "CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO y COBRANZA llegaron a COREDB por él "
+         "CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO, COBRANZA y BILLETERA llegaron a COREDB por él "
          "y el ATM llegó a TARJETAS por él")
 
 
@@ -822,3 +1049,8 @@ if __name__ == "__main__":
         print(f"  FALLA  {fallo}", file=sys.stderr)
         sys.exit(1)
     print("Flujo completo.")
+    destino = os.environ.get("E2E_SENSIBLES")
+    if destino:
+        SENSIBLES.update(v for v in (TOKEN_BUS, TOKEN_SOL, PASSWORD, SOL_PASSWORD, TOKEN_SOL_EVALUACION) if v)
+        with open(destino, "w", encoding="utf-8") as archivo:
+            archivo.write("\n".join(sorted(SENSIBLES)) + "\n")

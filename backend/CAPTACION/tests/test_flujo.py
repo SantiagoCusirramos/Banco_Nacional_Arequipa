@@ -44,8 +44,11 @@ def test_flujo_completo_registra_al_cliente_en_coredb_y_deja_la_referencia(clien
     assert ref["simulado"] is True and ref["version_contrato"] == "CR-INT-01-PROPUESTA-v2"
     assert "celular" not in ref and "correo" not in ref  # SOL no recibe datos de contacto
 
-    r = client.get("/cap/references", headers=SOL, params={"search": numero, "limit": 50})
+    r = client.post("/cap/references/search", headers=SOL, json={"search": numero, "limit": 50})
+    assert r.status_code == 200, r.text
     assert [x["id_cliente"] for x in r.json()] == [cod]
+    # P-1: el documento nunca va en la consulta (quedaría en los registros de acceso).
+    assert client.get("/cap/references", headers=SOL, params={"search": numero}).status_code in (404, 405)
 
     # El asesor ve la misma referencia desde el expediente.
     r = client.get(f"{BASE}/casos/{id_caso}/referencia", headers=asesor[0])
@@ -227,7 +230,10 @@ def test_solicitante_duplicado_y_un_solo_caso_abierto(client, flujo, asesor):
     r = client.post(f"{BASE}/casos", headers=asesor[0], json={"id_solicitante": a["id_solicitante"], "canal": "WEB"})
     assert r.status_code == 409 and r.json()["error_code"] == "ERR-CAP-CASO-ABIERTO"
     assert r.json()["details"] == {"id_caso": id_caso, "estado": "INICIADO"}
-    encontrados = client.get(f"{BASE}/solicitantes", headers=asesor[0], params={"documento": numero}).json()["data"]
+    r = client.post(f"{BASE}/solicitantes/busqueda", headers=asesor[0], json={"documento": numero})
+    assert r.status_code == 200, r.text
+    encontrados = r.json()["data"]
+    assert client.get(f"{BASE}/solicitantes", headers=asesor[0], params={"documento": numero}).status_code == 405
     assert [s["id_solicitante"] for s in encontrados] == [a["id_solicitante"]]
     visto = client.get(f"{BASE}/solicitantes/{a['id_solicitante']}", headers=asesor[0]).json()["data"]
     assert visto == a
@@ -287,15 +293,16 @@ def test_un_caso_inexistente_es_404(client, asesor):
 
 
 def test_rutas_de_sol_exigen_su_token(client, asesor):
-    assert client.get("/cap/references").status_code == 401
-    assert client.get("/cap/references", headers=asesor[0]).status_code == 401
+    assert client.post("/cap/references/search", json={}).status_code == 401
+    assert client.post("/cap/references/search", headers=asesor[0], json={}).status_code == 401
     assert client.get("/cap/references/CLI999999999", headers=SOL).status_code == 404
-    assert client.get("/cap/references", headers=SOL, params={"limit": 51}).status_code == 400
+    assert client.post("/cap/references/search", headers=SOL, json={"limit": 51}).status_code == 400
+    assert client.post("/cap/references/search", headers=SOL, json={"search": "x" * 101}).status_code == 400
 
 
 def test_referencia_con_coredb_caido_es_503(client, flujo, coredb_caido):
     assert client.get("/cap/references/CLI000000001", headers=SOL).status_code == 503
-    assert client.get("/cap/references", headers=SOL, params={"search": "x"}).status_code == 503
+    assert client.post("/cap/references/search", headers=SOL, json={"search": "x"}).status_code == 503
 
 
 def test_bandeja_de_casos(client, flujo, asesor):

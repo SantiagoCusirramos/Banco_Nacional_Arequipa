@@ -1278,3 +1278,327 @@ CALL prueba.rechaza('X442', 'Extensión', 'bna_api', 'bna_api no puede: leer cli
 CALL prueba.rechaza('X443', 'Extensión', 'bna_api', 'bna_api no puede: UPDATE en clientes.caso_captacion',
   JSON_ARRAY("UPDATE clientes.caso_captacion SET estado = 'APROBADO'"),
   'denied', 'privilegio');
+
+-- ---------------------------------------------------------------------
+-- Billetera Digital (v1.9). prueba.bd_afiliar afilia a C001 (CTA-PEN-1, PIN 123456)
+-- y a C002 (CTA-PEN-2, PIN 654321); los celulares son los de clientes.cliente.
+-- ---------------------------------------------------------------------
+CALL prueba.verifica('X600', 'Extensión', 'Billetera', 'Un cliente ACTIVO se afilia con su cuenta en soles y queda auditado sin el PIN',
+  JSON_ARRAY("CALL prueba.bd_afiliar()"),
+  "SELECT (SELECT estado = 'ACTIVA' AND num_cuenta = 'CTA-PEN-1' AND intentos_fallidos = 0 AND nombre_corto = 'Juan P.' AND tope_diario = 500 FROM billetera.v_afiliacion_api WHERE cod_cliente = 'C001') AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE modulo = 'BILLETERA' AND accion = 'AFILIAR' AND id_entidad = 'C001' AND actor = 'asesor.bd' AND detalle NOT LIKE '%123456%') = 1",
+  'C001 ACTIVA con CTA-PEN-1 y un evento AFILIAR', "SELECT CONCAT_WS(' ', estado, num_cuenta, nombre_corto) FROM billetera.v_afiliacion_api WHERE cod_cliente = 'C001'", 'procedimiento');
+
+CALL prueba.rechaza('X601', 'Extensión', 'Billetera', 'El PIN de la billetera tiene 6 dígitos',
+  JSON_ARRAY("CALL billetera.afiliar('C001', 'CTA-PEN-1', '12345', 'asesor.bd', NULL, @n)"),
+  '^BNA-BILLETERA-PIN: el PIN debe tener 6 dígitos$', 'procedimiento');
+
+CALL prueba.rechaza('X602', 'Extensión', 'Billetera', 'Un cliente que no está ACTIVO no se afilia',
+  JSON_ARRAY("CALL billetera.afiliar('C004', 'CTA-PEN-1', '123456', 'asesor.bd', NULL, @n)"),
+  '^BNA-CLIENTE-NO-ACTIVO: el cliente no está ACTIVO$', 'procedimiento');
+
+CALL prueba.rechaza('X603', 'Extensión', 'Billetera', 'La cuenta de la billetera es del cliente',
+  JSON_ARRAY("CALL billetera.afiliar('C001', 'CTA-PEN-2', '123456', 'asesor.bd', NULL, @n)"),
+  '^BNA-BILLETERA-TITULAR: el cliente no es titular de la cuenta$', 'procedimiento');
+
+CALL prueba.rechaza('X604', 'Extensión', 'Billetera', 'La billetera opera solo en soles',
+  JSON_ARRAY("CALL billetera.afiliar('C001', 'CTA-USD-1', '123456', 'asesor.bd', NULL, @n)"),
+  '^BNA-BILLETERA-MONEDA: la billetera opera solo en soles', 'procedimiento');
+
+CALL prueba.rechaza('X605', 'Extensión', 'Billetera', 'Una cuenta de firma conjunta no es de billetera',
+  JSON_ARRAY("CALL billetera.afiliar('C001', 'CTA-CONJ', '123456', 'asesor.bd', NULL, @n)"),
+  '^BNA-BILLETERA-CUENTA: la cuenta debe estar ACTIVA y no exigir firma conjunta$', 'procedimiento');
+
+CALL prueba.verifica('X606', 'Extensión', 'Billetera', 'Celular y PIN correctos devuelven el cliente',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.validar_acceso('959000001', '123456', NULL, @c, @r, @i)"),
+  "SELECT @r = 'EXITOSO' AND @c = 'C001' AND @i = 3",
+  'EXITOSO C001 3', "SELECT CONCAT_WS(' ', @r, @c, @i)", 'procedimiento');
+
+CALL prueba.verifica('X607', 'Extensión', 'Billetera', 'Un PIN equivocado no es un error: cuenta el intento y no devuelve el cliente',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.validar_acceso('959000001', '000000', NULL, @c, @r, @i)"),
+  "SELECT @r = 'FALLIDO' AND @c IS NULL AND @i = 2 AND (SELECT intentos_fallidos FROM billetera.v_afiliacion_api WHERE cod_cliente = 'C001') = 1",
+  'FALLIDO sin cliente, 2 restantes', "SELECT CONCAT_WS(' ', @r, coalesce(@c, '-'), @i)", 'procedimiento');
+
+CALL prueba.verifica('X608', 'Extensión', 'Billetera', 'Al tercer PIN equivocado la billetera se bloquea, y luego ni el PIN correcto entra',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.validar_acceso('959000001', '000000', NULL, @c, @r, @i)",
+             "CALL billetera.validar_acceso('959000001', '000001', NULL, @c, @r, @i)",
+             "CALL billetera.validar_acceso('959000001', '000002', NULL, @c, @r3, @i3)",
+             "CALL billetera.validar_acceso('959000001', '123456', NULL, @c, @r, @i)"),
+  "SELECT @r3 = 'FALLIDO' AND @i3 = 0 AND @r = 'BLOQUEADA' AND @c IS NULL AND (SELECT estado FROM billetera.v_afiliacion_api WHERE cod_cliente = 'C001') = 'BLOQUEADA'",
+  'tercero FALLIDO, luego BLOQUEADA', "SELECT CONCAT_WS(' ', @r3, @i3, @r)", 'procedimiento');
+
+CALL prueba.verifica('X609', 'Extensión', 'Billetera', 'Un celular sin billetera o desconocido es NO_AFILIADO',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.validar_acceso('959000003', '123456', NULL, @c1, @r1, @i1)",
+             "CALL billetera.validar_acceso('900000000', '123456', NULL, @c2, @r2, @i2)"),
+  "SELECT @r1 = 'NO_AFILIADO' AND @r2 = 'NO_AFILIADO' AND @c1 IS NULL AND @c2 IS NULL",
+  'NO_AFILIADO NO_AFILIADO', "SELECT CONCAT_WS(' ', @r1, @r2)", 'procedimiento');
+
+CALL prueba.verifica('X610', 'Extensión', 'Billetera', 'Afiliar otra vez cambia el PIN, desbloquea y reinicia los intentos',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.validar_acceso('959000001', '000000', NULL, @c, @r, @i)",
+             "CALL billetera.validar_acceso('959000001', '000001', NULL, @c, @r, @i)",
+             "CALL billetera.validar_acceso('959000001', '000002', NULL, @c, @r, @i)",
+             "CALL billetera.afiliar('C001', 'CTA-PEN-1', '111222', 'asesor.bd', NULL, @nueva)",
+             "CALL billetera.validar_acceso('959000001', '123456', NULL, @c1, @r1, @i1)",
+             "CALL billetera.validar_acceso('959000001', '111222', NULL, @c2, @r2, @i2)"),
+  "SELECT @nueva = 0 AND @r1 = 'FALLIDO' AND @r2 = 'EXITOSO' AND @c2 = 'C001' AND (SELECT estado = 'ACTIVA' AND intentos_fallidos = 0 FROM billetera.v_afiliacion_api WHERE cod_cliente = 'C001') AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'CAMBIAR_PIN' AND id_entidad = 'C001') = 1",
+  'PIN viejo FALLIDO, nuevo EXITOSO', "SELECT CONCAT_WS(' ', @nueva, @r1, @r2)", 'procedimiento');
+
+CALL prueba.verifica('X611', 'Extensión', 'Billetera', 'La bitácora del acceso no guarda el celular ni el PIN',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.validar_acceso('959000001', '123456', NULL, @c, @r, @i)",
+             "CALL billetera.validar_acceso('959000001', '987654', NULL, @c, @r, @i)"),
+  "SELECT (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE modulo = 'BILLETERA' AND accion = 'VALIDAR_ACCESO' AND id_entidad = 'C001' AND actor = 'cliente:C001') = 2 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE modulo = 'BILLETERA' AND (detalle LIKE '%959000001%' OR detalle LIKE '%123456%' OR detalle LIKE '%987654%' OR id_entidad LIKE '%959%')) = 0",
+  'dos eventos sin celular ni PIN', "SELECT GROUP_CONCAT(detalle) FROM core.v_evento_auditoria_api WHERE accion = 'VALIDAR_ACCESO'", 'procedimiento');
+
+CALL prueba.verifica('X612', 'Extensión', 'Billetera', 'Un envío por celular mueve el dinero por el canal BD, registra la operación y avisa a los dos',
+  JSON_ARRAY("CALL prueba.bd_afiliar()", "CALL prueba.bd_saldos()",
+             "CALL billetera.transferir('C001', '959000002', 100, 'Almuerzo', 'k612', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  "SELECT @r = 0 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @bd_s1 - 100 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2') = @bd_s2 + 100 AND (SELECT tipo = 'P2P' AND monto = 100 AND nombre_destino = 'Ana D.' AND referencia = 'Almuerzo' AND uuid_debito = BIN_TO_UUID(@d) FROM billetera.v_operacion_api WHERE id_operacion = BIN_TO_UUID(@o)) AND (SELECT COUNT(*) FROM cuentas.v_movimiento_api WHERE id_canal = 'BD' AND (uuid_transaccion = @d OR uuid_transaccion = (SELECT uuid_abono FROM cuentas.idempotencia_movimiento WHERE llave = 'k612'))) = 2 AND (SELECT COUNT(*) FROM billetera.v_notificacion_api WHERE id_operacion = BIN_TO_UUID(@o)) = 2",
+  '−100 y +100 por BD, operación P2P y dos avisos', "SELECT CONCAT_WS(' ', @r, (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') - @bd_s1)", 'procedimiento');
+
+CALL prueba.verifica('X613', 'Extensión', 'Billetera', 'Repetir un envío con la misma llave devuelve la misma operación y no cobra dos veces',
+  JSON_ARRAY("CALL prueba.bd_afiliar()", "CALL prueba.bd_saldos()",
+             "CALL billetera.transferir('C001', '959000002', 100, NULL, 'k613', REPEAT('a', 64), 'cliente:C001', NULL, @o1, @d1, @r1)",
+             "CALL billetera.transferir('C001', '959000002', 100, NULL, 'k613', REPEAT('a', 64), 'cliente:C001', NULL, @o2, @d2, @r2)"),
+  "SELECT @r1 = 0 AND @r2 = 1 AND @o1 = @o2 AND @d1 = @d2 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @bd_s1 - 100 AND (SELECT COUNT(*) FROM billetera.v_operacion_api WHERE cod_cliente_origen = 'C001') = 1",
+  'repetida, misma operación, un solo débito', "SELECT CONCAT_WS(' ', @r1, @r2, @o1 = @o2)", 'procedimiento');
+
+CALL prueba.rechaza('X614', 'Extensión', 'Billetera', 'La misma llave con otros parámetros se rechaza',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.transferir('C001', '959000002', 100, NULL, 'k614', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)",
+             "CALL billetera.transferir('C001', '959000002', 200, NULL, 'k614', REPEAT('b', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  '^BNA-IDEMPOTENCIA: la llave k614 se usó con otros parámetros$', 'procedimiento');
+
+CALL prueba.rechaza('X615', 'Extensión', 'Billetera', 'Un celular sin billetera no recibe, y el error no repite el celular',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.transferir('C001', '959000003', 10, NULL, 'k615', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  '^BNA-BILLETERA-DESTINO: el celular no tiene una billetera que pueda recibir$', 'procedimiento');
+
+CALL prueba.rechaza('X616', 'Extensión', 'Billetera', 'Nadie se envía dinero a sí mismo',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.transferir('C001', '959000001', 10, NULL, 'k616', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  '^BNA-BILLETERA-PROPIA: el origen y el destino son la misma billetera$', 'procedimiento');
+
+CALL prueba.rechaza('X617', 'Extensión', 'Billetera', 'Un envío respeta el tope diario del canal BD (500 PEN)',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.transferir('C001', '959000002', 600, NULL, 'k617', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  '^RN-TOP-001: tope diario de BD excedido', 'trigger');
+
+CALL prueba.rechaza('X618', 'Extensión', 'Billetera', 'Una operación de dinero sin llave de idempotencia se rechaza',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.transferir('C001', '959000002', 10, NULL, NULL, NULL, 'cliente:C001', NULL, @o, @d, @r)"),
+  '^BNA-IDEMPOTENCIA: la llave de idempotencia es obligatoria$', 'procedimiento');
+
+CALL prueba.verifica('X619', 'Extensión', 'Billetera', 'El QR estático de un cliente es siempre el mismo',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.crear_qr('C001', NULL, NULL, 'cliente:C001', NULL, @q1, @n1)",
+             "CALL billetera.crear_qr('C001', NULL, NULL, 'cliente:C001', NULL, @q2, @n2)"),
+  "SELECT @q1 = @q2 AND @n1 = 1 AND @n2 = 0 AND (SELECT tipo = 'ESTATICO' AND monto IS NULL AND estado = 'ACTIVO' AND beneficiario = 'Juan P.' AND num_cuenta = 'CTA-PEN-1' FROM billetera.v_qr_api WHERE id_qr = BIN_TO_UUID(@q1))",
+  'un solo QR estático', "SELECT CONCAT_WS(' ', @n1, @n2, @q1 = @q2)", 'procedimiento');
+
+CALL prueba.verifica('X620', 'Extensión', 'Billetera', 'Un QR dinámico lleva su monto y vence a los 15 minutos',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.crear_qr('C002', 25.50, NULL, 'cliente:C002', NULL, @q, @n)"),
+  "SELECT (SELECT tipo = 'DINAMICO' AND monto = 25.50 AND estado = 'ACTIVO' AND TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(6), fecha_expiracion) BETWEEN 800 AND 900 FROM billetera.v_qr_api WHERE id_qr = BIN_TO_UUID(@q))",
+  'DINAMICO 25.50 ACTIVO', "SELECT CONCAT_WS(' ', tipo, monto, estado) FROM billetera.v_qr_api WHERE id_qr = BIN_TO_UUID(@q)", 'procedimiento');
+
+CALL prueba.verifica('X621', 'Extensión', 'Billetera', 'Pagar un QR dinámico cobra su monto y lo deja PAGADO',
+  JSON_ARRAY("CALL prueba.bd_afiliar()", "CALL prueba.bd_saldos()",
+             "CALL billetera.crear_qr('C002', 30, NULL, 'cliente:C002', NULL, @q, @n)",
+             "CALL billetera.pagar_qr('C001', @q, NULL, 'k621', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  "SELECT @r = 0 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @bd_s1 - 30 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2') = @bd_s2 + 30 AND (SELECT estado FROM billetera.v_qr_api WHERE id_qr = BIN_TO_UUID(@q)) = 'PAGADO' AND (SELECT tipo = 'QR' AND id_qr = BIN_TO_UUID(@q) AND cod_cliente_destino = 'C002' FROM billetera.v_operacion_api WHERE id_operacion = BIN_TO_UUID(@o))",
+  '−30 y +30, QR PAGADO', "SELECT CONCAT_WS(' ', @r, (SELECT estado FROM billetera.v_qr_api WHERE id_qr = BIN_TO_UUID(@q)))", 'procedimiento');
+
+CALL prueba.rechaza('X622', 'Extensión', 'Billetera', 'Un QR dinámico ya pagado no se paga otra vez con otra llave',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.crear_qr('C002', 30, NULL, 'cliente:C002', NULL, @q, @n)",
+             "CALL billetera.pagar_qr('C001', @q, NULL, 'k622a', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)",
+             "CALL billetera.pagar_qr('C001', @q, NULL, 'k622b', REPEAT('b', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  '^BNA-QR-NO-VIGENTE: el código QR ya no está vigente$', 'procedimiento');
+
+CALL prueba.verifica('X623', 'Extensión', 'Billetera', 'Repetir el pago de un QR dinámico con la misma llave devuelve el mismo pago',
+  JSON_ARRAY("CALL prueba.bd_afiliar()", "CALL prueba.bd_saldos()",
+             "CALL billetera.crear_qr('C002', 30, NULL, 'cliente:C002', NULL, @q, @n)",
+             "CALL billetera.pagar_qr('C001', @q, NULL, 'k623', REPEAT('a', 64), 'cliente:C001', NULL, @o1, @d1, @r1)",
+             "CALL billetera.pagar_qr('C001', @q, NULL, 'k623', REPEAT('a', 64), 'cliente:C001', NULL, @o2, @d2, @r2)"),
+  "SELECT @r1 = 0 AND @r2 = 1 AND @o1 = @o2 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @bd_s1 - 30",
+  'repetido, un solo débito', "SELECT CONCAT_WS(' ', @r1, @r2, @o1 = @o2)", 'procedimiento');
+
+CALL prueba.rechaza('X624', 'Extensión', 'Billetera', 'Nadie paga su propio QR',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.crear_qr('C001', NULL, NULL, 'cliente:C001', NULL, @q, @n)",
+             "CALL billetera.pagar_qr('C001', @q, 10, 'k624', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  '^BNA-QR-PROPIO: no se puede pagar un código QR propio$', 'procedimiento');
+
+CALL prueba.rechaza('X625', 'Extensión', 'Billetera', 'Un QR estático exige el monto',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.crear_qr('C002', NULL, NULL, 'cliente:C002', NULL, @q, @n)",
+             "CALL billetera.pagar_qr('C001', @q, NULL, 'k625', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  '^BNA-BILLETERA-MONTO: el monto debe ser mayor que cero$', 'procedimiento');
+
+CALL prueba.rechaza('X626', 'Extensión', 'Billetera', 'Un QR dinámico no acepta otro monto',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.crear_qr('C002', 30, NULL, 'cliente:C002', NULL, @q, @n)",
+             "CALL billetera.pagar_qr('C001', @q, 20, 'k626', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  '^BNA-QR-MONTO: el monto no es el del código QR$', 'procedimiento');
+
+CALL prueba.verifica('X627', 'Extensión', 'Billetera', 'Un comercio afiliado cobra en su cuenta con su QR estático',
+  JSON_ARRAY("CALL prueba.bd_afiliar()", "CALL prueba.bd_saldos()",
+             "CALL billetera.registrar_comercio('20100000001', 'Bodega Ficticia', 'CTA-PEN-2', 'operador.bd', NULL, @m, @q)",
+             "CALL billetera.pagar_qr('C001', @q, 12.50, 'k627', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)"),
+  "SELECT (SELECT id_qr = BIN_TO_UUID(@q) AND estado = 'ACTIVO' FROM billetera.v_comercio_api WHERE id_comercio = BIN_TO_UUID(@m)) AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2') = @bd_s2 + 12.50 AND (SELECT id_comercio = BIN_TO_UUID(@m) AND cod_cliente_destino IS NULL AND nombre_destino = 'Bodega Ficticia' FROM billetera.v_operacion_api WHERE id_operacion = BIN_TO_UUID(@o)) AND (SELECT COUNT(*) FROM billetera.v_notificacion_api WHERE id_operacion = BIN_TO_UUID(@o)) = 1",
+  '+12.50 al comercio, un aviso', "SELECT CONCAT_WS(' ', (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2') - @bd_s2, (SELECT nombre_destino FROM billetera.v_operacion_api WHERE id_operacion = BIN_TO_UUID(@o)))", 'procedimiento');
+
+CALL prueba.rechaza('X628', 'Extensión', 'Billetera', 'Un RUC se afilia una sola vez',
+  JSON_ARRAY("CALL billetera.registrar_comercio('20100000001', 'Bodega Ficticia', 'CTA-PEN-2', 'operador.bd', NULL, @m, @q)",
+             "CALL billetera.registrar_comercio('20100000001', 'Otra', 'CTA-PEN-2', 'operador.bd', NULL, @m, @q)"),
+  '^BNA-COMERCIO-DUPLICADO: el RUC ya está afiliado$', 'procedimiento');
+
+CALL prueba.verifica('X629', 'Extensión', 'Billetera', 'Una solicitud de cobro aceptada paga a quien la pidió',
+  JSON_ARRAY("CALL prueba.bd_afiliar()", "CALL prueba.bd_saldos()",
+             "CALL billetera.crear_solicitud('C002', '959000001', 40, 'Entradas', 'cliente:C002', NULL, @s)",
+             "CALL billetera.responder_solicitud('C001', @s, 'ACEPTAR', 'k629', REPEAT('a', 64), 'cliente:C001', NULL, @e, @o, @d, @r)"),
+  "SELECT @e = 'PAGADA' AND @r = 0 AND (SELECT estado FROM billetera.v_solicitud_api WHERE id_solicitud = BIN_TO_UUID(@s)) = 'PAGADA' AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @bd_s1 - 40 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-2') = @bd_s2 + 40 AND (SELECT tipo = 'SOLICITUD' AND referencia = 'Entradas' AND cod_cliente_destino = 'C002' FROM billetera.v_operacion_api WHERE id_operacion = BIN_TO_UUID(@o)) AND (SELECT COUNT(*) FROM billetera.v_notificacion_api WHERE id_solicitud = BIN_TO_UUID(@s)) = 3",
+  'PAGADA, −40 y +40, tres avisos', "SELECT CONCAT_WS(' ', @e, @r)", 'procedimiento');
+
+CALL prueba.verifica('X630', 'Extensión', 'Billetera', 'Aceptar otra vez con la misma llave devuelve el mismo pago',
+  JSON_ARRAY("CALL prueba.bd_afiliar()", "CALL prueba.bd_saldos()",
+             "CALL billetera.crear_solicitud('C002', '959000001', 40, NULL, 'cliente:C002', NULL, @s)",
+             "CALL billetera.responder_solicitud('C001', @s, 'ACEPTAR', 'k630', REPEAT('a', 64), 'cliente:C001', NULL, @e1, @o1, @d1, @r1)",
+             "CALL billetera.responder_solicitud('C001', @s, 'ACEPTAR', 'k630', REPEAT('a', 64), 'cliente:C001', NULL, @e2, @o2, @d2, @r2)"),
+  "SELECT @r1 = 0 AND @r2 = 1 AND @e2 = 'PAGADA' AND @o1 = @o2 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @bd_s1 - 40",
+  'repetida, un solo débito', "SELECT CONCAT_WS(' ', @r1, @r2, @e2)", 'procedimiento');
+
+CALL prueba.rechaza('X631', 'Extensión', 'Billetera', 'Solo el pagador acepta una solicitud',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.crear_solicitud('C002', '959000001', 40, NULL, 'cliente:C002', NULL, @s)",
+             "CALL billetera.responder_solicitud('C002', @s, 'ACEPTAR', 'k631', REPEAT('a', 64), 'cliente:C002', NULL, @e, @o, @d, @r)"),
+  '^BNA-SOLICITUD-PERMISO: el cliente no puede responder esta solicitud$', 'procedimiento');
+
+CALL prueba.rechaza('X632', 'Extensión', 'Billetera', 'Una solicitud rechazada ya no se acepta',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.crear_solicitud('C002', '959000001', 40, NULL, 'cliente:C002', NULL, @s)",
+             "CALL billetera.responder_solicitud('C001', @s, 'RECHAZAR', NULL, NULL, 'cliente:C001', NULL, @e, @o, @d, @r)",
+             "CALL billetera.responder_solicitud('C001', @s, 'ACEPTAR', 'k632', REPEAT('a', 64), 'cliente:C001', NULL, @e, @o, @d, @r)"),
+  '^BNA-SOLICITUD-NO-PENDIENTE: la solicitud ya no está pendiente$', 'procedimiento');
+
+CALL prueba.verifica('X633', 'Extensión', 'Billetera', 'Quien pidió el cobro lo cancela sin mover dinero',
+  JSON_ARRAY("CALL prueba.bd_afiliar()", "CALL prueba.bd_saldos()",
+             "CALL billetera.crear_solicitud('C002', '959000001', 40, NULL, 'cliente:C002', NULL, @s)",
+             "CALL billetera.responder_solicitud('C002', @s, 'CANCELAR', NULL, NULL, 'cliente:C002', NULL, @e, @o, @d, @r)"),
+  "SELECT @e = 'CANCELADA' AND @o IS NULL AND (SELECT estado FROM billetera.v_solicitud_api WHERE id_solicitud = BIN_TO_UUID(@s)) = 'CANCELADA' AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @bd_s1",
+  'CANCELADA sin operación', "SELECT CONCAT_WS(' ', @e, coalesce(@o, '-'))", 'procedimiento');
+
+CALL prueba.verifica('X634', 'Extensión', 'Billetera', 'Buscar un contacto devuelve solo el nombre corto de quien tiene billetera',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.buscar_contacto('C001', '959000002', @n1)",
+             "CALL billetera.buscar_contacto('C001', '959000001', @n2)",
+             "CALL billetera.buscar_contacto('C001', '959000003', @n3)"),
+  "SELECT @n1 = 'Ana D.' AND @n2 IS NULL AND @n3 IS NULL",
+  'Ana D., nada, nada', "SELECT CONCAT_WS(' ', @n1, coalesce(@n2, '-'), coalesce(@n3, '-'))", 'procedimiento');
+
+CALL prueba.verifica('X635', 'Extensión', 'Billetera', 'Marcar los avisos como leídos solo toca los del cliente',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.transferir('C001', '959000002', 10, NULL, 'k635', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)",
+             "CALL billetera.marcar_notificaciones_leidas('C002', @f)"),
+  "SELECT @f = 1 AND (SELECT COUNT(*) FROM billetera.v_notificacion_api WHERE cod_cliente = 'C002' AND leida = 0) = 0 AND (SELECT COUNT(*) FROM billetera.v_notificacion_api WHERE cod_cliente = 'C001' AND leida = 0) = 1",
+  'una leída de C002, C001 sin tocar', "SELECT @f", 'procedimiento');
+
+CALL prueba.verifica('X636', 'Extensión', 'Billetera', 'Las vistas de la billetera no exponen el hash, la sal, el PIN ni el celular',
+  JSON_ARRAY("DO 0"),
+  "SELECT (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'billetera' AND table_name LIKE 'v\\_%\\_api') > 0 AND (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'billetera' AND table_name LIKE 'v\\_%\\_api' AND column_name IN ('hash_pin', 'sal', 'pin', 'celular', 'numero_documento')) = 0",
+  'sin columnas sensibles', "SELECT GROUP_CONCAT(DISTINCT column_name) FROM information_schema.columns WHERE table_schema = 'billetera'", 'declarativo');
+
+CALL prueba.rechaza('X637', 'Extensión', 'bna_api', 'bna_api no puede: leer billetera.afiliacion (el hash del PIN)',
+  JSON_ARRAY("SELECT COUNT(*) INTO @n FROM billetera.afiliacion"),
+  'denied', 'privilegio');
+
+CALL prueba.rechaza('X638', 'Extensión', 'bna_api', 'bna_api no puede: INSERT en billetera.operacion',
+  JSON_ARRAY("INSERT INTO billetera.operacion (id_operacion) VALUES (UUID_TO_BIN(UUID()))"),
+  'denied', 'privilegio');
+
+CALL prueba.verifica('X639', 'Extensión', 'Billetera', 'Ni la glosa, ni los avisos, ni la bitácora guardan el celular',
+  JSON_ARRAY("CALL prueba.bd_afiliar()",
+             "CALL billetera.transferir('C001', '959000002', 10, NULL, 'k639', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)",
+             "CALL billetera.crear_solicitud('C002', '959000001', 5, NULL, 'cliente:C002', NULL, @s)"),
+  "SELECT (SELECT COUNT(*) FROM cuentas.v_movimiento_api WHERE id_canal = 'BD') = 2 AND (SELECT COUNT(*) FROM cuentas.v_movimiento_api WHERE glosa LIKE '%9590000%') = 0 AND (SELECT COUNT(*) FROM billetera.v_notificacion_api WHERE mensaje LIKE '%9590000%') = 0 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE detalle LIKE '%9590000%' AND modulo IN ('BILLETERA', 'CUENTAS')) = 0",
+  'sin celulares', "SELECT GROUP_CONCAT(glosa) FROM cuentas.v_movimiento_api WHERE id_canal = 'BD'", 'procedimiento');
+
+-- Bloqueo del login del personal (v1.12): 5 fallos seguidos (core.fn_intentos_login)
+-- bloquean el login 15 minutos (core.fn_minutos_bloqueo_login). Los usuarios de
+-- servicio no se bloquean. @usr_bl crea a la persona; @f5 suma cinco fallos.
+SET @usr_bl = "CALL core.crear_usuario(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), 'ana.x700', 'Ana', 'ASESOR', 'h', 'BCRYPT', 'v2', NULL, TRUE, 'pruebas')";
+SET @fallo_bl = "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), NULL, @b)";
+SET @bl_hasta = "core.fn_login_bloqueado_hasta(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'))";
+
+CALL prueba.verifica('X700', 'Extensión', 'Login', 'Cuatro fallos seguidos no bloquean el login',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl),
+  CONCAT("@b IS NULL AND ", @bl_hasta, " IS NULL AND core.fn_intentos_login() = 5"),
+  'sin bloqueo; intentos 5', CONCAT("CONCAT('bloqueado hasta ', coalesce(", @bl_hasta, ", 'nunca'))"), 'procedimiento');
+
+CALL prueba.verifica('X701', 'Extensión', 'Login', 'El quinto fallo bloquea el login 15 minutos y lo audita',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl),
+  CONCAT("@b BETWEEN UTC_TIMESTAMP(6) + INTERVAL 14 MINUTE AND UTC_TIMESTAMP(6) + INTERVAL 15 MINUTE AND ", @bl_hasta, " = @b",
+         " AND core.fn_minutos_bloqueo_login() = 15",
+         " AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000001' AND accion = 'LOGIN_FALLIDO' AND actor = 'ana.x700') = 5",
+         " AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000001' AND accion = 'BLOQUEAR_LOGIN') = 1"),
+  'bloqueado 15 minutos; 5 LOGIN_FALLIDO y 1 BLOQUEAR_LOGIN',
+  "CONCAT('hasta ', coalesce(@b, 'nunca'), ', fallidos ', (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000001' AND accion = 'LOGIN_FALLIDO'))", 'procedimiento');
+
+CALL prueba.rechaza('X702', 'Extensión', 'Login', 'Con el login bloqueado no se registra un login exitoso',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl,
+             "CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), NULL)"),
+  '^BNA-LOGIN-BLOQUEADO:', 'procedimiento');
+
+CALL prueba.verifica('X703', 'Extensión', 'Login', 'Un login exitoso reinicia la cuenta de fallos',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl,
+             "CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), NULL)",
+             @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl),
+  CONCAT("@b IS NULL AND ", @bl_hasta, " IS NULL"), 'sin bloqueo tras 4 + login + 4',
+  CONCAT("CONCAT('bloqueado hasta ', coalesce(", @bl_hasta, ", 'nunca'))"), 'procedimiento');
+
+CALL prueba.verifica('X704', 'Extensión', 'Login', 'Un usuario de servicio no se bloquea, pero sus fallos se auditan',
+  JSON_ARRAY("CALL core.crear_usuario_servicio(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), 'svc-x704', 'S', 'CLIENTES', 'h', 'BCRYPT', 'v2', 'pruebas')",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b1)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b2)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b3)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b4)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b5)",
+             "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL, @b6)",
+             "CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000004'), NULL)"),
+  "@b6 IS NULL AND core.fn_login_bloqueado_hasta(UUID_TO_BIN('70000000-0000-4000-8000-000000000004')) IS NULL AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000004' AND accion = 'LOGIN_FALLIDO') = 6",
+  'sin bloqueo; 6 LOGIN_FALLIDO; login registrado',
+  "CONCAT('fallidos ', (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000004' AND accion = 'LOGIN_FALLIDO'))", 'procedimiento');
+
+CALL prueba.verifica('X705', 'Extensión', 'Login', 'El administrador desbloquea el login y queda auditado',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl,
+             "CALL core.desbloquear_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), 'admin.x705')",
+             "CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000001'), NULL)",
+             @fallo_bl),
+  CONCAT(@bl_hasta, " IS NULL AND @b IS NULL AND EXISTS (SELECT 1 FROM core.v_evento_auditoria_api WHERE id_entidad = '70000000-0000-4000-8000-000000000001' AND accion = 'DESBLOQUEAR_LOGIN' AND actor = 'admin.x705')"),
+  'desbloqueado, login registrado, la cuenta empieza de cero',
+  CONCAT("CONCAT('bloqueado hasta ', coalesce(", @bl_hasta, ", 'nunca'))"), 'procedimiento');
+
+CALL prueba.verifica('X706', 'Extensión', 'Login', 'Un fallo de un usuario que no existe no deja rastro (no se guarda lo que se escribió)',
+  JSON_ARRAY("SET @n0 = (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'LOGIN_FALLIDO')",
+             "CALL core.registrar_login_fallido(NULL, NULL, @b)"),
+  "@b IS NULL AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'LOGIN_FALLIDO') = @n0",
+  'sin error ni evento', "CONCAT('eventos nuevos ', (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'LOGIN_FALLIDO') - @n0)", 'procedimiento');
+
+CALL prueba.verifica('X707', 'Extensión', 'Login', 'Los fallos durante el bloqueo no lo alargan',
+  JSON_ARRAY(@usr_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl,
+             "SET @hasta = @b", "DO SLEEP(0.01)", @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl, @fallo_bl),
+  CONCAT(@bl_hasta, " = @hasta AND @b = @hasta"), 'el mismo fin de bloqueo',
+  CONCAT("CONCAT(@hasta, ' / ', coalesce(", @bl_hasta, ", 'nunca'))"), 'procedimiento');
+
+CALL prueba.rechaza('X708', 'Extensión', 'Login', 'No se desbloquea un usuario que no existe',
+  JSON_ARRAY("CALL core.desbloquear_login(UUID_TO_BIN(UUID()), 'pruebas')"),
+  '^BNA-USUARIO:', 'procedimiento');
+
+CALL prueba.rechaza('X709', 'Extensión', 'bna_api', 'bna_api no lee core.bloqueo_login',
+  JSON_ARRAY("SELECT COUNT(*) INTO @n FROM core.bloqueo_login"),
+  'denied', 'privilegio');

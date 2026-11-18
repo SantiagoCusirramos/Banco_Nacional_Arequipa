@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BNA · Home Banking · Auditoría centralizada</title>
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="marca">
+    <div class="marca-logo">BNA</div>
+    <div class="marca-txt">
+      <strong>Banco Nacional de Arequipa</strong>
+      <span>Home Banking · Auditoría centralizada INT-13</span>
+    </div>
+  </div>
+  <div class="sesion">
+    <div class="quien">
+      <b id="sesionNombre">—</b>
+      <span id="sesionCliente">—</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="btnSalir">Cerrar sesión</button>
+  </div>
+</header>
+
+<nav class="nav-canal">
+  <a href="cuentas.html">Cuentas</a>
+  <a href="transferencias.html">Transferencias</a>
+  <a href="creditos.html">Créditos</a>
+  <a href="auditoria.html" class="activo">Auditoría</a>
+</nav>
+
+<main class="envoltura">
+  <section class="panel">
+    <div class="fila-flex" style="justify-content:space-between; align-items:flex-start;">
+      <div>
+        <h1>Auditoría centralizada</h1>
+        <p class="sub">
+          Eventos registrados por el Bus de Servicios (INT-13): autenticación, Token Matriz, riesgo,
+          topes, transferencias, pagos y timeouts. Esta vista es la evidencia de trazabilidad para COBIT 2019.
+        </p>
+      </div>
+      <button type="button" class="btn btn-sec" id="btnCsv">Descargar CSV</button>
+    </div>
+
+    <div class="msg" id="msgAuditoria"></div>
+
+    <div class="auditoria-filtros">
+      <div class="campo">
+        <label for="filtroModulo">Módulo</label>
+        <select id="filtroModulo"><option value="">Todos</option></select>
+      </div>
+      <div class="campo">
+        <label for="filtroTipo">Tipo de evento</label>
+        <select id="filtroTipo"><option value="">Todos</option></select>
+      </div>
+      <div class="campo">
+        <label for="filtroResultado">Resultado</label>
+        <select id="filtroResultado">
+          <option value="">Todos</option>
+          <option value="OK">OK</option>
+          <option value="ERROR">ERROR</option>
+          <option value="PENDIENTE">PENDIENTE</option>
+        </select>
+      </div>
+      <div class="campo" style="flex:0 0 auto;">
+        <label>&nbsp;</label>
+        <button type="button" class="btn" id="btnActualizar">Actualizar</button>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><span>Eventos</span><b id="kpiTotal">0</b></div>
+      <div class="kpi"><span>OK</span><b id="kpiOk">0</b></div>
+      <div class="kpi"><span>Errores</span><b id="kpiError">0</b></div>
+      <div class="kpi"><span>Pendientes</span><b id="kpiPendiente">0</b></div>
+      <div class="kpi"><span>Transferencias</span><b id="kpiTrans">0</b></div>
+      <div class="kpi"><span>Pagos</span><b id="kpiPagos">0</b></div>
+    </div>
+
+    <div class="tabla-env">
+      <table class="tabla-auditoria">
+        <thead>
+          <tr>
+            <th>Fecha y hora</th>
+            <th>Evento</th>
+            <th>Módulo</th>
+            <th>Tipo</th>
+            <th>Usuario</th>
+            <th>Canal</th>
+            <th>IP</th>
+            <th>UUID</th>
+            <th>Resultado</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody id="tablaAuditoria">
+          <tr><td colspan="10" class="vacio">Sin eventos registrados.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="nota">
+      <b>INT-13</b> · Registro centralizado de trazabilidad. Cada evento conserva fecha/hora, usuario,
+      canal, IP, UUID de transacción, resultado y detalle. <b>RNF-HB-005</b> · Trazabilidad de operaciones.
+    </div>
+  </section>
+</main>
+
+<script src="js/bus.js"></script>
+<script src="js/comun.js"></script>
+<script src="js/auditoria.js"></script>
+</body>
+</html>

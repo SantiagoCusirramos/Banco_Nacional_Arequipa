@@ -168,6 +168,23 @@ def test_respeta_el_prefijo_de_la_direccion_del_modulo():
     assert str(modulo.recibidas[0].url) == "http://cuentas:8001/base/api/v1/cuentas/123"
 
 
+def test_el_cajero_tiene_ruta_y_credencial_propias():
+    token_atm = "a" * 48
+    modulo = Modulo()
+    with cliente(modulo, BUS_URL_ATM="http://atm:8019", BUS_CONSUMIDORES="FRONTEND,PRUEBAS,ATM",
+                 BUS_TOKEN_ATM=token_atm) as c:
+        pantalla = c.get("/bus/atm/health", headers=AUT)
+        retiro = c.post("/bus/tarjetas/api/v1/tarjetas/autorizaciones",
+                        headers={"X-Bus-Token": token_atm}, content=b"{}")
+        metricas = c.get("/metricas", headers=AUT).json()
+    assert pantalla.status_code == 200 and retiro.status_code == 200
+    assert str(modulo.recibidas[0].url) == "http://atm:8019/health"
+    assert str(modulo.recibidas[1].url) == "http://tarjetas.interno:9000/api/v1/tarjetas/autorizaciones"
+    assert "X-Bus-Token" not in modulo.recibidas[1].headers
+    assert metricas["reenvios"]["PRUEBAS"] == {"ATM": 1}
+    assert metricas["reenvios"]["ATM"] == {"TARJETAS": 1}
+
+
 # ── Reenvía sin tocar ────────────────────────────────────────────────────
 
 CABECERAS = {
@@ -440,182 +457,50 @@ def test_por_la_red_real_llega_y_vuelve_igual():
     assert "x-bus-token" not in eco["cabeceras"]
 
 
-# ── Módulos de bna-bus-servicios: CLIENTES, CORE y BILLETERA ──────────────────
-
-CRED_CLIENTES = "c" * 40
-CRED_CORE = "k" * 40
-
-
-def test_modulos_opcionales_solo_si_tienen_url():
-    assert "CLIENTES" not in cargar(entorno()).modulos
-    config = cargar(entorno(BUS_URL_CLIENTES="http://clientes:8000", BUS_URL_CORE="http://core:8000"))
-    assert config.modulos["CLIENTES"] == "http://clientes:8000"
-    assert config.modulos["CORE"] == "http://core:8000"
-    assert "BILLETERA" not in config.modulos
-
-
-def test_modulo_opcional_sin_url_es_desconocido():
+def test_la_billetera_tiene_ruta_y_credencial_propias_y_el_bus_reenvia_el_token_del_cliente():
+    token_billetera = "w" * 48
     modulo = Modulo()
-    with cliente(modulo) as c:
-        respuesta = c.post("/bus/clientes/clientes/registrar", headers=AUT)
-    assert respuesta.status_code == 404
-    assert respuesta.json()["codigo"] == "MODULO_DESCONOCIDO"
-    assert modulo.recibidas == []
+    with cliente(modulo, BUS_URL_BILLETERA="http://billetera:3000",
+                 BUS_CONSUMIDORES="FRONTEND,PRUEBAS,BILLETERA", BUS_TOKEN_BILLETERA=token_billetera) as c:
+        salud = c.get("/bus/billetera/api/salud", headers=AUT)
+        envio = c.post("/bus/coredb/coredb/billetera/transferencias", content=b"{}",
+                       headers={"X-Bus-Token": token_billetera, "X-Cliente-Token": "del-cliente",
+                                "X-Idempotency-Key": "k"})
+        metricas = c.get("/metricas", headers=AUT).json()
+    assert salud.status_code == 200 and envio.status_code == 200
+    assert str(modulo.recibidas[0].url) == "http://billetera:3000/api/salud"
+    assert modulo.recibidas[1].headers["X-Cliente-Token"] == "del-cliente"
+    assert modulo.recibidas[1].headers["X-Idempotency-Key"] == "k"
+    assert "X-Bus-Token" not in modulo.recibidas[1].headers
+    assert metricas["reenvios"]["PRUEBAS"] == {"BILLETERA": 1}
+    assert metricas["reenvios"]["BILLETERA"] == {"COREDB": 1}
 
 
-def test_presenta_credencial_de_servicio_y_descarta_la_del_consumidor():
-    modulo = Modulo(R(201, json={"correcto": True}))
-    with cliente(modulo, BUS_URL_CLIENTES="http://clientes:8000", BUS_CREDENCIAL_CLIENTES=CRED_CLIENTES) as c:
-        respuesta = c.post("/bus/clientes/clientes/registrar",
-                           headers={**AUT, "X-Service-Token": "falsificada", "X-Correlation-ID": "c-1"},
-                           json={"dni": "12345678"})
-    assert respuesta.status_code == 201
-    peticion = modulo.recibidas[0]
-    assert str(peticion.url) == "http://clientes:8000/clientes/registrar"
-    assert peticion.headers.get_list("x-service-token") == [CRED_CLIENTES]
-    assert peticion.headers["x-correlation-id"] == "c-1"
-    assert "x-bus-token" not in peticion.headers
+# ── Privacidad de los registros (P-1) ──────────────────────────────────────
 
-
-def test_sin_credencial_de_servicio_reenvia_la_cabecera_tal_cual():
+def test_los_registros_no_guardan_consulta_cuerpo_ni_credenciales(caplog):
+    import logging
     modulo = Modulo()
-    with cliente(modulo) as c:
-        c.get("/bus/cuentas/x", headers={**AUT, "X-Service-Token": "del-consumidor"})
-    assert modulo.recibidas[0].headers["x-service-token"] == "del-consumidor"
-
-
-def test_modulo_restringido_a_ciertos_consumidores():
-    modulo = Modulo()
-    with cliente(modulo, BUS_CONSUMIDORES="FRONTEND,PRUEBAS,CLIENTES", BUS_TOKEN_CLIENTES="q" * 48,
-                 BUS_URL_CORE="http://core:8000", BUS_CREDENCIAL_CORE=CRED_CORE,
-                 BUS_PERMITIDOS_CORE="CLIENTES") as c:
-        negado = c.get("/bus/core/interno/solicitudes-registro", headers=AUT)
-        aceptado = c.get("/bus/core/interno/solicitudes-registro", headers={"X-Bus-Token": "q" * 48})
-    assert negado.status_code == 403
-    assert negado.json() == {"detail": "El consumidor no puede usar el módulo CORE.",
-                             "codigo": "BUS_CONSUMIDOR_NO_AUTORIZADO", "modulo": "CORE"}
-    assert len(modulo.recibidas) == 1  # solo la aceptada
-
-    assert aceptado.status_code == 200
-    assert str(modulo.recibidas[0].url) == "http://core:8000/interno/solicitudes-registro"
-    assert modulo.recibidas[0].headers["x-service-token"] == CRED_CORE
-
-
-@pytest.mark.parametrize("cambios, mensaje", [
-    ({"BUS_CREDENCIAL_CORE": CRED_CORE}, "BUS_CREDENCIAL_CORE: el módulo CORE no tiene BUS_URL_CORE"),
-    ({"BUS_URL_CORE": "http://core:8000", "BUS_CREDENCIAL_CORE": "corta"}, "BUS_CREDENCIAL_CORE: al menos"),
-    ({"BUS_URL_CORE": "http://core:8000", "BUS_CREDENCIAL_CORE": TOKEN_PRUEBAS},
-     "BUS_CREDENCIAL_CORE: repite el token"),
-    ({"BUS_PERMITIDOS_CUENTAS": "FRONTEND,NADIE"}, "BUS_PERMITIDOS_CUENTAS: no están en BUS_CONSUMIDORES: NADIE"),
-    ({"BUS_URL_BILLETERA": "ftp://billetera"}, "BUS_URL_BILLETERA: URL http(s)"),
-])
-def test_configuracion_de_modulos_extra_invalida(cambios, mensaje):
-    with pytest.raises(ConfiguracionInvalida, match=mensaje.replace("(", r"\(").replace(")", r"\)")):
-        cargar(entorno(**cambios))
-
-
-# ── Swagger combinado y estado de los módulos ─────────────────────────────────
-
-def openapi_modulo(titulo, rutas):
-    return {"openapi": "3.1.0", "info": {"title": titulo, "version": "1.0"},
-            "paths": rutas,
-            "components": {"schemas": {"Cuenta": {"type": "object"}},
-                           "securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}}
-
-
-def test_docs_publica_las_rutas_de_cada_modulo():
-    def modulo(peticion):
-        if peticion.url.host == "cuentas.interno" and peticion.url.path == "/openapi.json":
-            return httpx.Response(200, json=openapi_modulo("CUENTAS", {
-                "/api/v1/cuentas/{num}": {"get": {
-                    "operationId": "leer", "tags": ["cuentas"], "security": [{"bearer": []}],
-                    "responses": {"200": {"content": {"application/json": {
-                        "schema": {"$ref": "#/components/schemas/Cuenta"}}}}}}}}))
-        return httpx.Response(404)
-
-    app = crear_app(cargar(entorno()), transport=httpx.MockTransport(modulo))
-    with TestClient(app) as c:
-        spec = c.get("/openapi.json").json()
-        assert c.get("/docs").status_code == 200
-
-    operacion = spec["paths"]["/bus/cuentas/api/v1/cuentas/{num}"]["get"]
-    assert operacion["tags"] == ["CUENTAS"]
-    assert operacion["operationId"] == "CUENTAS__leer"
-    assert operacion["security"] == [{"BusToken": [], "CUENTAS__bearer": []}]
-    esquema = operacion["responses"]["200"]["content"]["application/json"]["schema"]
-    assert esquema == {"$ref": "#/components/schemas/CUENTAS__Cuenta"}
-    assert "CUENTAS__Cuenta" in spec["components"]["schemas"]
-    assert spec["components"]["securitySchemes"]["BusToken"] == {
-        "type": "apiKey", "in": "header", "name": "X-Bus-Token"}
-    etiquetas = {e["name"]: e["description"] for e in spec["tags"]}
-    assert etiquetas["CUENTAS"] == "CUENTAS 1.0"
-    assert etiquetas["SOL"].startswith("NO DISPONIBLE")
-    assert spec["paths"]["/metricas"]["get"]["security"] == [{"BusToken": []}]
-
-
-def test_modulos_dice_cual_contesta_y_cual_no():
-    def modulo(peticion):
-        if peticion.url.host == "tarjetas.interno":
-            raise httpx.ConnectError("caído", request=peticion)
-        return httpx.Response(404)
-
-    app = crear_app(cargar(entorno()), transport=httpx.MockTransport(modulo))
-    with TestClient(app) as c:
-        assert c.get("/modulos").status_code == 401
-        cuerpo = c.get("/modulos", headers=AUT).json()
-
-    assert cuerpo["total"] == len(MODULOS)
-    assert cuerpo["disponibles"] == len(MODULOS) - 1
-    assert cuerpo["modulos"]["TARJETAS"] == {"estado": "NO_DISPONIBLE", "motivo": "ConnectError"}
-    assert cuerpo["modulos"]["CUENTAS"]["estado"] == "DISPONIBLE"
-
-
-# ── Canal público (app móvil): solo a los módulos de BUS_MODULOS_PUBLICOS ─────
-
-def test_modulo_publico_sin_credencial_llega_como_publico():
-    modulo = Modulo(R(200, json={"token": "t"}))
-    with cliente(modulo, BUS_URL_BILLETERA="http://billetera:3000", BUS_MODULOS_PUBLICOS="BILLETERA") as c:
-        respuesta = c.post("/bus/billetera/api/login", json={"celular": "900000001"},
-                           headers={"Authorization": "Bearer usuario", "Idempotency-Key": "k-1"})
-        assert respuesta.status_code == 200
-        peticion = modulo.recibidas[0]
-        assert str(peticion.url) == "http://billetera:3000/api/login"
-        assert peticion.headers["authorization"] == "Bearer usuario"
-        assert peticion.headers["idempotency-key"] == "k-1"
-        # Los demás módulos siguen exigiendo credencial, y una credencial falsa no se tolera.
-        assert c.get("/bus/cuentas/x").status_code == 401
-        assert c.get("/bus/billetera/api/me", headers={"X-Bus-Token": "falsa"}).status_code == 401
-        assert c.get("/bus/BILLETERA/api/me").status_code == 401
-        assert c.get("/metricas", headers=AUT).json()["reenvios"]["PUBLICO"] == {"BILLETERA": 1}
-
-
-def test_sin_modulos_publicos_todo_exige_credencial():
-    with cliente(Modulo(), BUS_URL_BILLETERA="http://billetera:3000") as c:
-        assert c.get("/bus/billetera/api/salud").status_code == 401
-
-
-@pytest.mark.parametrize("cambios, mensaje", [
-    ({"BUS_MODULOS_PUBLICOS": "BILLETERA"}, "BUS_MODULOS_PUBLICOS: el módulo BILLETERA no está en el Bus"),
-    ({"BUS_MODULOS_PUBLICOS": "CUENTAS", "BUS_PERMITIDOS_CUENTAS": "FRONTEND"},
-     "BUS_MODULOS_PUBLICOS: CUENTAS tiene BUS_PERMITIDOS_CUENTAS"),
-    ({"BUS_CONSUMIDORES": "FRONTEND,PUBLICO", "BUS_TOKEN_PUBLICO": "u" * 40}, "PUBLICO está reservado"),
-])
-def test_configuracion_publica_invalida(cambios, mensaje):
-    with pytest.raises(ConfiguracionInvalida, match=mensaje):
-        cargar(entorno(**cambios))
-
-
-def test_consumidores_extra_se_suman_a_la_lista():
-    config = cargar(entorno(BUS_CONSUMIDORES_EXTRA="CLIENTES,PRUEBAS", BUS_TOKEN_CLIENTES="q" * 48))
-    assert sorted(config.consumidores.values()) == ["CLIENTES", "FRONTEND", "PRUEBAS"]
-    with pytest.raises(ConfiguracionInvalida, match="faltan BUS_TOKEN_CLIENTES"):
-        cargar(entorno(BUS_CONSUMIDORES_EXTRA="CLIENTES"))
-
-
-def test_varios_modulos_publicos():
-    with cliente(Modulo(), BUS_URL_BILLETERA="http://billetera:3000",
-                 BUS_MODULOS_PUBLICOS="BILLETERA, seguridad") as c:
-        assert c.get("/bus/billetera/api/salud").status_code == 200
-        assert c.get("/bus/seguridad/").status_code == 200
-        assert c.get("/bus/cuentas/health").status_code == 401
-        assert c.get("/metricas", headers=AUT).json()["reenvios"]["PUBLICO"] == {"BILLETERA": 1, "SEGURIDAD": 1}
+    sensibles = ["12345678", "87654321", "987654321", "token-de-una-persona", TOKEN_PRUEBAS]
+    # uvicorn (si otra prueba ya lo arrancó) deja uvicorn.access sin propagar y en WARNING:
+    # se escucha directo y en INFO, como en el producto.
+    acceso = logging.getLogger("uvicorn.access")
+    nivel_previo = acceso.level
+    acceso.setLevel(logging.INFO)
+    acceso.addHandler(caplog.handler)
+    with caplog.at_level(logging.DEBUG):
+        with cliente(modulo) as c:
+            r = c.post("/bus/captacion/cap/references/search?documento=12345678",
+                       json={"search": "87654321", "celular": "987654321"},
+                       headers={**AUT, "Authorization": "Bearer token-de-una-persona"})
+            # La línea de acceso de uvicorn, con el formato de uvicorn (no corre en TestClient).
+            logging.getLogger("uvicorn.access").info(
+                '%s - "%s %s HTTP/%s" %d', "127.0.0.1:1234", "POST",
+                "/bus/captacion/cap/references/search?documento=12345678", "1.1", 200)
+    acceso.removeHandler(caplog.handler)
+    acceso.setLevel(nivel_previo)
+    assert r.status_code == 200
+    # El módulo sí recibe todo; los registros, no.
+    assert modulo.recibidas[0].url.query == b"documento=12345678"
+    assert "CAPTACION" in caplog.text and "/bus/captacion/cap/references/search" in caplog.text
+    assert [s for s in sensibles if s in caplog.text] == []

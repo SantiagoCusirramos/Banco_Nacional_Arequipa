@@ -1,0 +1,95 @@
+# BILLETERA: API de Chaski (Billetera Digital, canal BD), sobre COREDB a través del Bus. Sin
+# base propia: opera con el usuario de servicio svc-billetera, que crea el arranque de COREDB,
+# y el token de cliente que COREDB emite al validar celular y PIN.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billetera
+  labels: { app.kubernetes.io/name: billetera }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: billetera }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: billetera }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        # COREDB crea svc-billetera antes de arrancar: cuando responde, el usuario ya existe.
+        - name: esperar-coredb
+          image: bna/billetera:local
+          # A través del Bus, con la credencial del módulo, como todas sus llamadas a COREDB.
+          command:
+            - node
+            - -e
+            - |
+              const pedir = () => fetch(process.env.COREDB_URL + "/coredb/salud",
+                { headers: { "X-Bus-Token": process.env.BUS_TOKEN }, signal: AbortSignal.timeout(2000) });
+              (async () => {
+                for (let i = 0; i < 150; i++) {
+                  try { if ((await pedir()).ok) process.exit(0); } catch {}
+                  await new Promise((r) => setTimeout(r, 2000));
+                }
+                console.error("COREDB no respondió a tiempo a través del Bus.");
+                process.exit(1);
+              })();
+          env:
+            - name: COREDB_URL
+              value: http://bus:8018/bus/coredb
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_BILLETERA } }
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+      containers:
+        - name: billetera
+          image: bna/billetera:local
+          env:
+            # COREDB, a través del Bus, con la credencial de BILLETERA.
+            - name: COREDB_URL
+              value: http://bus:8018/bus/coredb
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_BILLETERA } }
+            - name: CHASKI_COREDB_USUARIO
+              value: svc-billetera
+            - name: CHASKI_COREDB_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BILLETERA_COREDB_SECRETO } }
+            - name: PORT
+              value: "3000"
+          ports:
+            - { name: http, containerPort: 3000 }
+          startupProbe:
+            httpGet: { path: /api/listo, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /api/listo, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /api/salud, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 192Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: billetera
+spec:
+  selector: { app.kubernetes.io/name: billetera }
+  ports:
+    - { name: http, port: 3000, targetPort: http }

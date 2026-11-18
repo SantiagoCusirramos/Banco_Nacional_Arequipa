@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BNA · Home Banking · Movimientos</title>
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="marca">
+    <div class="marca-logo">BNA</div>
+    <div class="marca-txt">
+      <strong>Banco Nacional de Arequipa</strong>
+      <span>Home Banking · Movimientos históricos</span>
+    </div>
+  </div>
+  <div class="sesion">
+    <div class="quien">
+      <b id="sesionNombre">—</b>
+      <span id="sesionCliente">—</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="btnSalir">Cerrar sesión</button>
+  </div>
+</header>
+
+
+<nav class="nav-canal">
+  <a href="cuentas.html" class="activo">Cuentas</a>
+  <a href="transferencias.html">Transferencias</a>
+  <a href="creditos.html">Créditos</a>
+  <a href="auditoria.html">Auditoría</a>
+</nav>
+<main class="envoltura">
+
+  <nav class="pasos">
+    <span class="paso listo"><b>1</b> Credenciales</span>
+    <span class="paso-sep">›</span>
+    <span class="paso listo"><b>2</b> Tarjeta</span>
+    <span class="paso-sep">›</span>
+    <span class="paso listo"><b>3</b> Cuentas</span>
+    <span class="paso-sep">›</span>
+    <span class="paso activo"><b>4</b> Movimientos</span>
+  </nav>
+
+  <section class="panel">
+    <div class="fila-flex" style="justify-content:space-between; align-items:flex-start;">
+      <div>
+        <h1 id="ctaTitulo">Movimientos de la cuenta</h1>
+        <p class="sub" id="ctaSub">—</p>
+      </div>
+      <a class="btn btn-sec" href="cuentas.html">‹ Volver a mis cuentas</a>
+    </div>
+
+    <form id="formMov" autocomplete="off">
+      <div class="fila-flex">
+        <div class="campo">
+          <label for="filtroMes">Filtrar por mes (opcional)</label>
+          <input type="month" id="filtroMes" value="">
+          <div class="pista">Sin filtro se muestra el historial completo disponible.</div>
+        </div>
+        <div class="campo" style="flex:0 0 auto;">
+          <label>&nbsp;</label>
+          <button type="submit" class="btn" id="btnConsultar">Consultar movimientos</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="msg" id="msgMov"></div>
+
+    <div class="resumen" id="resumenMov" hidden>
+      <div class="dato"><span>Movimientos</span><b id="mvTotal">0</b><small>registros encontrados</small></div>
+      <div class="dato"><span>Abonos del periodo</span><b class="pos" id="mvAbonos">S/ 0.00</b><small>ingresos</small></div>
+      <div class="dato"><span>Cargos del periodo</span><b id="mvCargos" style="color:var(--error)">S/ 0.00</b><small>egresos</small></div>
+      <div class="dato"><span>Saldo actual disponible</span><b id="mvSaldo">S/ 0.00</b><small id="mvSaldoDet">—</small></div>
+    </div>
+
+    <div class="tabla-env" id="envMov" hidden>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Operación</th>
+            <th>Glosa</th>
+            <th class="der">Monto</th>
+            <th class="der">Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="tablaMov"></tbody>
+      </table>
+    </div>
+
+    <div class="nota">
+      <b>INT-08</b> · Entrada: <code>codCliente, filtroMes</code> · Salida:
+      <code>numCuenta, tipoCuenta, moneda, movimientos</code>.
+      RF-HB-003. Las consultas son trazables para auditoría (INT-13).
+    </div>
+  </section>
+</main>
+
+<script src="js/bus.js"></script>
+<script src="js/comun.js"></script>
+<script src="js/movimientos.js"></script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 """Dependencias de FastAPI para el módulo ATM."""
 
+import hashlib
+import time
 import uuid
 from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request
@@ -27,6 +29,11 @@ async def get_core_client() -> CoreClient:
         timeout=settings.core_timeout_seconds,
         bus_token=settings.bus_token,
     )
+
+
+def sesion_tarjeta(x_atm_sesion: Annotated[str | None, Header()] = None) -> str | None:
+    """Token de la sesión de tarjeta abierta por /api/validar-pin (ver ATM/sesiones.py)."""
+    return x_atm_sesion
 
 
 def correlation_id(request: Request) -> str:
@@ -77,3 +84,29 @@ def contexto_operacion(
         correlation_id=cid,
         authorization=token,
     )
+
+
+# Perfiles de operador ya comprobados en COREDB: huella del token -> (vence, perfil).
+_operadores: dict[str, tuple[float, dict]] = {}
+_OPERADOR_CACHE_S = 60
+
+
+def operador(token: str | None = Depends(autorizacion),
+             core: CoreClient = Depends(get_core_client)) -> dict:
+    """Credencial del operador del cajero (P-3): un token de COREDB vigente, comprobado en
+    /coredb/auth/me por el Bus. El resultado se recuerda 60 s por huella del token."""
+    if not token:
+        raise AtmError("ERR-ATM-TOKEN-REQUERIDO", "Se requiere la credencial del operador del cajero.", 401)
+    huella = hashlib.sha256(token.encode()).hexdigest()
+    ahora = time.monotonic()
+    guardado = _operadores.get(huella)
+    if guardado and guardado[0] > ahora:
+        return guardado[1]
+    try:
+        perfil = core.perfil(token)
+    except AtmError as exc:
+        if exc.status_code in (401, 403):
+            raise AtmError("ERR-ATM-TOKEN-INVALIDO", "La credencial del operador no es válida o venció.", 401)
+        raise
+    _operadores[huella] = (ahora + _OPERADOR_CACHE_S, perfil)
+    return perfil

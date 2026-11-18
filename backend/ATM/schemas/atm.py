@@ -20,6 +20,14 @@ class ValidarPinIn(_Entrada):
 class ValidarPinOut(BaseModel):
     resultado: Literal["EXITOSO", "FALLIDO"]
     intentos_restantes: int
+    # Sesión de la tarjeta (X-ATM-Sesion) si el PIN fue correcto; sin ella no hay saldo ni retiro.
+    token_sesion: str | None = None
+
+
+class AperturaIn(_Entrada):
+    """Credenciales del operador que abre el cajero (usuario de COREDB)."""
+    username: str = Field(min_length=1, max_length=60)
+    password: str = Field(min_length=1, max_length=200)
 
 
 # ── Autorizar Retiro ─────────────────────────────────────────────────────

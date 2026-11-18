@@ -138,7 +138,8 @@ def _referencias_configmap(valor):
 
 def _archivos_de_modulos(raiz):
     hallados = []
-    for ruta in (raiz / ".env.example", raiz / "backend" / ".env.example"):
+    for ruta in (raiz / ".env.example", raiz / "backend" / ".env.example",
+                 raiz / "billetera-chaski" / "backend" / ".env.example"):
         if not ruta.exists():
             continue
         for numero, linea in enumerate(ruta.read_text().splitlines(), 1):

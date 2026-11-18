@@ -192,9 +192,10 @@ def test_dependencia_reemplazable():
         app.dependency_overrides.clear()
 
 
-@pytest.mark.parametrize("codigo", ["CREDENCIALES_INVALIDAS", "USUARIO_INACTIVO", "PASSWORD_NO_ADMITIDA"])
+@pytest.mark.parametrize("codigo", ["CREDENCIALES_INVALIDAS", "USUARIO_INACTIVO", "PASSWORD_NO_ADMITIDA",
+                                    "LOGIN_BLOQUEADO", "BNA-LOGIN-BLOQUEADO"])
 def test_todo_fallo_de_login_responde_lo_mismo(monkeypatch, codigo):
-    def autenticar(db, *, username, password):
+    def autenticar(db, *, username, password, correlation_id=None):
         raise ErrorCoreDb(codigo, "detalle interno", 422 if codigo == "PASSWORD_NO_ADMITIDA" else 401)
 
     monkeypatch.setattr(rutas_auth.usuarios, "autenticar", autenticar)
@@ -224,9 +225,15 @@ def test_usuario_inexistente_gasta_una_verificacion(monkeypatch):
     llamadas = []
     monkeypatch.setattr(usuarios, "simular_verificacion", lambda: llamadas.append(1))
     monkeypatch.setattr(hashing, "simular_verificacion", lambda: llamadas.append(1))
+    fallos = []
+    monkeypatch.setattr(usuarios, "_bloqueado_hasta", lambda db, id_usuario: None)
+    monkeypatch.setattr(usuarios, "_registrar_fallo", lambda db, id_usuario, corr: fallos.append(id_usuario))
     with pytest.raises(ErrorCoreDb):
         usuarios.autenticar(_ConsultaVacia(), username="nadie", password="clave-segura")
     assert llamadas
+    # El fallo de un usuario que no existe también va a la base (sin id), para que el
+    # tiempo de respuesta no delate si el usuario existe.
+    assert fallos == [None]
 
 
 def test_login_sin_campos_extra():

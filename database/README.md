@@ -290,6 +290,87 @@ real al dispensar el efectivo.
 `bna_api` ejecuta este procedimiento y lee la autorización en `tarjetas.v_autorizacion_api`.
 Solo agrega un procedimiento: una base anterior necesita un volumen nuevo para tenerlo.
 
+### Billetera Digital (desde `bd-v1.9-mysql`)
+
+La billetera «Chaski» (canal BD) en el esquema nuevo `billetera`, sobre las cuentas del
+núcleo y sin saldo propio: su cuenta es una cuenta de ahorro individual en soles del
+cliente, y cada envío, pago con QR o cobro aceptado es una
+`cuentas.registrar_transferencia` por el canal BD, con su asiento y el tope diario del
+canal (500 PEN, `core.limite_canal`). Tablas: `afiliacion` (PIN de 6 dígitos con sal,
+intentos y cuenta), `comercio`, `codigo_qr`, `solicitud_cobro`, `operacion` y
+`notificacion`. Agrega el módulo `BILLETERA` (id 10) a `core.modulo`.
+
+| Procedimiento | Qué hace |
+|---|---|
+| `billetera.afiliar` | Afilia a un cliente ACTIVO que ya existe (punto R-01: la billetera no crea clientes) con una cuenta suya, ACTIVA, en soles y sin firma conjunta; repetirlo cambia el PIN o la cuenta, reinicia los intentos y anula los QR de la cuenta anterior |
+| `billetera.validar_acceso` | Celular (el de `clientes.cliente`) y PIN: EXITOSO devuelve el cliente; FALLIDO cuenta el intento y al tercero deja la afiliación BLOQUEADA; también BLOQUEADA, NO_AFILIADO y CLIENTE_NO_OPERA. No es un error, así que el intento queda confirmado |
+| `billetera.buscar_contacto` | El nombre corto («Ana D.») del dueño de un celular con billetera, o nulo |
+| `billetera.registrar_comercio` | Comercio con RUC, razón social y cuenta de abono en soles, y su QR estático |
+| `billetera.crear_qr` | Sin monto, el QR estático del cliente (siempre el mismo); con monto, uno dinámico que vence en 1 a 60 minutos (15 por omisión) |
+| `billetera.transferir` | Envío a otra billetera por su celular (P2P) |
+| `billetera.pagar_qr` | Pago de un QR de cliente o de comercio; un dinámico cobra su monto y queda PAGADO |
+| `billetera.crear_solicitud` / `responder_solicitud` | Pedir dinero por celular (vence a las 48 horas); el pagador acepta (paga) o rechaza, quien la pidió la cancela |
+| `billetera.marcar_notificaciones_leidas` | Los avisos del cliente |
+
+Las operaciones de dinero exigen una llave de idempotencia y la reservan antes de
+bloquear el QR o la solicitud, en su misma transacción: la petición repetida espera a la
+primera y devuelve su operación (`p_repetido`), y la misma llave con otros parámetros se
+rechaza. Después llaman a `registrar_transferencia` sin llave. Usan el savepoint
+`bna_billetera`: con el `bna_op` de `registrar_transferencia`, el savepoint anidado
+reemplazaría al suyo dentro de la transacción de quien llama. Ni la bitácora, ni los
+avisos, ni la glosa de los movimientos, ni los errores guardan el celular o el PIN.
+`bna_api` ejecuta los procedimientos y lee `billetera.v_*_api` (sin hash, sal, PIN ni
+celular; los QR y las solicitudes vencidos se muestran VENCIDO); no lee ni escribe las
+tablas. Tienda, promociones, cupones, recargas y pago de servicios quedan fuera. Solo
+agrega objetos: una base anterior necesita un volumen nuevo para tenerlos.
+
+### Billetera: lecturas con bloqueo (desde `bd-v1.10-mysql`)
+
+Una operación de dinero repetida a la vez (misma llave) busca la operación de la primera
+con una lectura con bloqueo (`FOR SHARE`): si quien llama ya había leído en su transacción,
+como la API al validar al cliente, una lectura sin bloqueo vería esa instantánea y
+respondería `BNA-IDEMPOTENCIA` en vez de la misma operación (pruebas X654 y X655).
+`bna_admin` recibe sobre `billetera.*` lo mismo que sobre los demás esquemas (X670).
+Solo cambia procedimientos y permisos: una base anterior necesita un volumen nuevo.
+
+### Retenciones de tarjeta con caducidad (desde `bd-v1.11-mysql`)
+
+Una autorización AUTORIZADA retiene el saldo disponible y el tope del día hasta que el
+cajero la confirma o la extorna. Si el cajero cae en medio, la retención ya no queda
+sin plazo:
+
+| Objeto | Qué hace |
+|---|---|
+| `tarjetas.fn_minutos_retencion()` | El plazo por omisión: **15 minutos**. Es provisional; el plazo lo decide el equipo (pregunta en el issue #34) |
+| `tarjetas.liberar_retenciones_vencidas(minutos, actor, OUT liberadas)` | Extorna las AUTORIZADA sin movimiento más antiguas que el plazo (`NULL` = el de omisión; de 1 a 1440, si no `BNA-PLAZO`). Los triggers devuelven el disponible y el tope del día en que se comprometieron. Deja `codigo_respuesta` `EXT`, el motivo `BNA-RETENCION` y un evento `LIBERAR_RETENCION` por autorización. Las DISPENSADA no se tocan |
+| evento `tarjetas.ev_liberar_retenciones` | Llama al procedimiento cada minuto con el plazo por omisión (actor `SISTEMA`) |
+
+`confirmar_autorizacion` rechaza una retención vencida con `BNA-CONFIRMACION: la
+retención venció`, aunque el evento aún no la haya liberado. La liberación lee con
+`FOR UPDATE SKIP LOCKED`: si una confirmación tiene la autorización bloqueada, la salta
+y gana la confirmación; si la liberación llega primero, la confirmación espera y falla
+(pruebas X510 a X520). El cajero debe confirmar dentro del plazo. Agrega un índice,
+una función, un procedimiento y un evento, y cambia `confirmar_autorizacion`: una base
+anterior necesita un volumen nuevo.
+
+### Bloqueo del login del personal (desde `bd-v1.12-mysql`)
+
+COREDB verifica la contraseña de una persona del banco; la base cuenta sus fallos
+seguidos en `core.bloqueo_login` (que `bna_api` no lee):
+
+| Objeto | Qué hace |
+|---|---|
+| `core.fn_intentos_login()` / `core.fn_minutos_bloqueo_login()` | **5** fallos seguidos bloquean el login **15 minutos**. Son provisionales: el número lo decide el equipo (pregunta en el issue #34) |
+| `core.registrar_login_fallido(id, correlación, OUT bloqueado_hasta)` | Cuenta el fallo; al quinto bloquea y deja `BLOQUEAR_LOGIN`. Cada fallo deja `LOGIN_FALLIDO`. Con id nulo (usuario que no existe) no hace nada ni guarda lo escrito. Los fallos durante el bloqueo no suman ni lo alargan |
+| `core.fn_login_bloqueado_hasta(id)` | Hasta cuándo está bloqueado, o `NULL` |
+| `core.desbloquear_login(id, actor)` | El administrador levanta el bloqueo (`DESBLOQUEAR_LOGIN`) |
+
+`core.registrar_login` rechaza con `BNA-LOGIN-BLOQUEADO` el login de un usuario bloqueado
+y reinicia los fallos tras uno exitoso. El bloqueo vence solo. Un usuario de servicio
+(rol `SERVICIO`) no se bloquea: su secreto es aleatorio, y bloquearlo dejaría a un módulo
+sin acceso a pedido de cualquiera; sus fallos se auditan igual (pruebas X700 a X710).
+Agrega una tabla: una base anterior necesita un volumen nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.
