@@ -84,7 +84,7 @@ class Fallo(Exception):
 # escriben en E2E_SENSIBLES y `./bna smoke` comprueba que ninguno quedó en los registros.
 SENSIBLES = set()
 CLAVES_SENSIBLES = {"numero_documento", "documento", "search", "texto", "celular", "celular_destino",
-                    "pin", "password", "clave", "access_token", "token"}
+                    "pin", "password", "clave", "access_token", "token", "token_sesion"}
 
 
 def anotar_sensibles(datos):
