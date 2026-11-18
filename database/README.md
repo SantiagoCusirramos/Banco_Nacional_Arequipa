@@ -324,6 +324,15 @@ celular; los QR y las solicitudes vencidos se muestran VENCIDO); no lee ni escri
 tablas. Tienda, promociones, cupones, recargas y pago de servicios quedan fuera. Solo
 agrega objetos: una base anterior necesita un volumen nuevo para tenerlos.
 
+### Billetera: lecturas con bloqueo (desde `bd-v1.10-mysql`)
+
+Una operación de dinero repetida a la vez (misma llave) busca la operación de la primera
+con una lectura con bloqueo (`FOR SHARE`): si quien llama ya había leído en su transacción,
+como la API al validar al cliente, una lectura sin bloqueo vería esa instantánea y
+respondería `BNA-IDEMPOTENCIA` en vez de la misma operación (pruebas X654 y X655).
+`bna_admin` recibe sobre `billetera.*` lo mismo que sobre los demás esquemas (X670).
+Solo cambia procedimientos y permisos: una base anterior necesita un volumen nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.

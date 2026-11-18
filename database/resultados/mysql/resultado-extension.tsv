@@ -377,12 +377,15 @@ X205	bna_admin_user	Un usuario SERVICIO sin módulo se rechaza aun con privilegi
 X206	bna_admin_user	Una persona con módulo se rechaza aun con privilegios	pasa
 X207	bna_admin_user	bna_admin ejecuta los procedimientos de clientes por su privilegio sobre la base	pasa
 X342	bna_admin_user	bna_admin ejecuta los procedimientos de créditos	pasa
+X670	bna_admin_user	bna_admin lee las tablas de la billetera y ejecuta sus procedimientos	pasa
 X508	bna_app_user	Dos confirmaciones simultáneas con llaves distintas: la segunda falla con BNA-CONFIRMACION	pasa
 X509	bna_app_user	Dos confirmaciones simultáneas con la misma llave: la segunda es idempotente	pasa
 X650	bna_api_user	Dos envíos simultáneos con la misma llave mueven el dinero una vez	pasa
 X651	bna_api_user	Dos pagos simultáneos de un QR dinámico con llaves distintas cobran una vez	pasa
 X652	bna_api_user	Dos pagos simultáneos de un QR con la misma llave: el segundo es el mismo pago	pasa
 X653	bna_api_user	Dos aceptaciones simultáneas de una solicitud con llaves distintas pagan una vez	pasa
+X654	bna_api_user	Un envío repetido a la vez devuelve la misma operación aunque la sesión ya hubiera leído	pasa
+X655	bna_api_user	Un pago de QR repetido a la vez devuelve el mismo pago aunque la sesión ya hubiera leído	pasa
 X234	bna_app_user	Dos registros simultáneos con el mismo correo dejan un solo cliente	pasa
 X70	bna_api_user	Una transferencia a una cuenta bloqueada no deja nada (C1)	pasa
 X71	bna_api_user	Repetir la llave tras un fallo no informa éxito (C1)	pasa
