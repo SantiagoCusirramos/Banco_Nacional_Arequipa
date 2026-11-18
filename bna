@@ -140,7 +140,9 @@ levantar() {
 humo() {
   [ -f .env ] || { echo "No hay .env: ejecute primero ./bna up" >&2; exit 1; }
   # Corre en el contenedor del Bus: llega a los módulos por el Bus y al frontend por la red `canales`.
-  compose exec -T \
+  # MSYS_NO_PATHCONV: en Git Bash (Windows) evita que /tmp/... se convierta en una ruta de Windows;
+  # esas rutas son del contenedor. Fuera de Git Bash no tiene efecto.
+  MSYS_NO_PATHCONV=1 compose exec -T \
     -e E2E_BUS=http://127.0.0.1:8018 \
     -e BUS_TOKEN="$(valor BUS_TOKEN_PRUEBAS)" \
     -e BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
@@ -157,7 +159,7 @@ humo() {
 revisar_registros() {
   local valores hallados
   valores="$(mktemp)"
-  compose exec -T bus sh -c 'cat /tmp/bna-e2e-sensibles && rm -f /tmp/bna-e2e-sensibles' > "$valores"
+  MSYS_NO_PATHCONV=1 compose exec -T bus sh -c 'cat /tmp/bna-e2e-sensibles && rm -f /tmp/bna-e2e-sensibles' > "$valores"
   if [ ! -s "$valores" ]; then
     rm -f "$valores"
     echo "  FALLA  El flujo no dejó la lista de datos sensibles de la corrida." >&2
