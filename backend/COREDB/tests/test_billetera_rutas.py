@@ -1,7 +1,5 @@
 """Acceso de clientes y rutas de la Billetera Digital, sin base (bd-v1.9)."""
 
-import inspect
-
 import jwt
 import pytest
 from fastapi.routing import APIRoute
@@ -12,9 +10,15 @@ from COREDB.auth import cliente_actual
 from COREDB.errores import ErrorAutenticacion
 from COREDB.main import app
 
-from .test_autenticacion import _dependencias
 
 PREFIJO = "/coredb/billetera"
+
+
+def _dependencias(dependant):
+    for dependencia in dependant.dependencies:
+        yield dependencia.call
+        yield from _dependencias(dependencia)
+
 # Las que no actúan por un cliente: el acceso (que lo autentica) y las del personal del banco.
 RUTAS_SIN_CLIENTE = {
     ("POST", f"{PREFIJO}/acceso"),
@@ -87,20 +91,17 @@ def test_el_celular_nunca_va_en_la_ruta_ni_en_la_consulta():
 
 
 def test_las_operaciones_de_dinero_exigen_la_llave_de_idempotencia():
-    cliente = TestClient(app)
-    for ruta in ("transferencias", "qr/00000000-0000-4000-8000-000000000000/pagos"):
-        respuesta = cliente.post(f"{PREFIJO}/{ruta}", json={})
-        # Sin token responde 401 antes de validar; con la ruta existente nunca es 404.
-        assert respuesta.status_code in (401, 422), ruta
-    firmas = {
-        nombre: inspect.signature(funcion)
-        for nombre, funcion in inspect.getmembers(__import__("COREDB.routers.billetera", fromlist=["x"]))
-        if nombre in {"transferir", "pagar_qr"}
+    exigida = {}
+    for metodo, ruta in _rutas_billetera():
+        for parametro in ruta.dependant.header_params:
+            if parametro.alias == "X-Idempotency-Key":
+                exigida[(metodo, ruta.path)] = parametro.required
+    assert exigida == {
+        ("POST", f"{PREFIJO}/transferencias"): True,
+        ("POST", f"{PREFIJO}/qr/{{id_qr}}/pagos"): True,
+        # Solo ACEPTAR mueve dinero: la ruta la exige para esa acción (422 LLAVE_REQUERIDA).
+        ("POST", f"{PREFIJO}/solicitudes/{{id_solicitud}}/respuesta"): False,
     }
-    assert set(firmas) == {"transferir", "pagar_qr"}
-    for firma in firmas.values():
-        llave = firma.parameters["llave_idempotencia"].default
-        assert llave.alias == "X-Idempotency-Key"
 
 
 def test_sin_token_de_cliente_no_entra():

@@ -41,12 +41,14 @@ def billetera(api, autorizacion, admin, abrir_cuenta, datos_base):
         cod = "W" + uuid.uuid4().hex[:11].upper()
         celular = "9" + "".join(random.choice("0123456789") for _ in range(8))
         with admin.cursor() as cursor:
+            cursor.execute("INSERT INTO clientes.verificacion_captacion (id_verificacion_captacion, "
+                           "estado_habilitante) VALUES (%s, 'HABILITADO')", (f"VC-{cod}",))
             cursor.execute(
                 "INSERT INTO clientes.cliente (cod_cliente, tipo_documento, numero_documento, nombres, "
                 "apellido_paterno, correo, celular, estado_cliente, id_verificacion_captacion, "
-                "version_contrato) VALUES (%s, 'DNI', %s, %s, %s, %s, %s, 'ACTIVO', 'VC-1', 'v1')",
+                "version_contrato) VALUES (%s, 'DNI', %s, %s, %s, %s, %s, 'ACTIVO', %s, 'v1')",
                 (cod, f"{random.randrange(10**7, 10**8)}", nombres, apellido, f"{cod.lower()}@example.com",
-                 celular),
+                 celular, f"VC-{cod}"),
             )
         num_cuenta = abrir_cuenta(titular=cod)
         deposito = api.post("/coredb/movimientos", headers=autorizacion, json={
