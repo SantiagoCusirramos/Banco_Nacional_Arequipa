@@ -15,6 +15,7 @@ Uso: ./bna <orden>
   up              Crea .env si falta, construye las imágenes, levanta todo y
                   espera a que cada servicio esté sano
   down            Detiene y elimina los contenedores; conserva los datos
+  down -v         Detiene, elimina los contenedores y elimina también los volúmenes
   reset           Elimina también los volúmenes y vuelve a levantar todo desde cero
   ps              Estado de los servicios
   logs [servicio] Registros, en vivo
@@ -113,6 +114,8 @@ resumen() {
   SOL               http://127.0.0.1:$(valor BNA_PUERTO_SOL)/docs
   CAPTACION         http://127.0.0.1:$(valor BNA_PUERTO_CAPTACION)/docs
   Captación (asesor) http://localhost:$(valor BNA_PUERTO_FRONTEND)/captacion
+  Cobranza          http://127.0.0.1:$(valor BNA_PUERTO_COBRANZA)/docs
+                    Pantalla: http://localhost:$(valor BNA_PUERTO_FRONTEND)/pagar-cuota
   Seguridad         http://127.0.0.1:$(valor BNA_PUERTO_SEGURIDAD)
   Evaluación        http://localhost:$(valor BNA_PUERTO_FRONTEND)/evaluacion
                     API: http://127.0.0.1:$(valor BNA_PUERTO_EVALUACION)/docs
@@ -177,7 +180,7 @@ orden="${1:-help}"
 [ $# -gt 0 ] && shift
 case "$orden" in
   up) levantar ;;
-  down) bajar ;;
+  down) bajar "$@" ;;
   reset)
     revisar_docker
     bajar -v
