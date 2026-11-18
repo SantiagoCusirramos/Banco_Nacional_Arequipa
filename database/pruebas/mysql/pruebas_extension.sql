@@ -421,3 +421,67 @@ CALL prueba.rechaza('X507', 'Extensión', 'Confirmación', 'No se confirma una a
   JSON_ARRAY("INSERT INTO tarjetas.autorizacion (uuid_autorizacion, tipo_operacion, monto, estado_autorizacion, codigo_respuesta, id_terminal, ip_origen, id_tarjeta, num_cuenta, id_canal) VALUES (UUID_TO_BIN('a3000000-0000-4000-8000-000000000008'), 'RETIRO', 10, 'INICIADA', NULL, 'ATM-AQP-001', NULL, @t1, 'CTA-PEN-1', NULL)",
              "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000008'), 'llave-confirmar-008', REPEAT('e', 64), 'pruebas', 'ATM', NULL, @trx, @estado)"),
   'BNA-CONFIRMACION: la autorización no está en estado vigente', 'procedimiento');
+
+-- Retenciones con caducidad (v1.11): una autorización AUTORIZADA sin movimiento se libera
+-- sola pasado el plazo (tarjetas.fn_minutos_retencion, 15 por omisión). @ins_ret inserta
+-- una autorización de hace %N minutos con su hora, para no esperar.
+SET @ins_ret = "INSERT INTO tarjetas.autorizacion (uuid_autorizacion, tipo_operacion, monto, estado_autorizacion, codigo_respuesta, id_terminal, id_tarjeta, num_cuenta, fecha_hora) VALUES (UUID_TO_BIN('%U'), 'RETIRO', %M, 'AUTORIZADA', '00', 'ATM-AQP-001', UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'CTA-PEN-1', UTC_TIMESTAMP(6) - INTERVAL %N MINUTE)";
+
+CALL prueba.verifica('X510', 'Extensión', 'Retenciones', 'Una retención vencida se libera: EXTORNADA, disponible y tope restituidos',
+  JSON_ARRAY("SET @d0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @s0 = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "SET @fn = core.fn_fecha_negocio(UTC_TIMESTAMP(6) - INTERVAL 20 MINUTE)",
+             "SET @k0 = (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM' AND fecha_corte = @fn)",
+             REPLACE(REPLACE(REPLACE(@ins_ret, '%U', 'a3000000-0000-4000-8000-000000000110'), '%M', '50'), '%N', '20'),
+             "SET @d1 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             "CALL tarjetas.liberar_retenciones_vencidas(NULL, 'pruebas', @n)"),
+  "SELECT @d1 = @d0 - 50 AND @n >= 1 AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @d0 AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 AND (SELECT coalesce(max(monto_acumulado), 0) FROM core.consumo_diario WHERE num_cuenta = 'CTA-PEN-1' AND id_canal = 'ATM' AND fecha_corte = @fn) = @k0 AND (SELECT CONCAT(estado_autorizacion, codigo_respuesta) FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000110')) = 'EXTORNADAEXT' AND EXISTS (SELECT 1 FROM core.evento_auditoria WHERE id_entidad = 'a3000000-0000-4000-8000-000000000110' AND accion = 'LIBERAR_RETENCION' AND actor = 'pruebas')",
+  'EXTORNADA, disponible y tope como antes, evento LIBERAR_RETENCION',
+  "SELECT CONCAT((SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000110')), ', liberadas ', @n, ', disponible ', (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') - @d0)", 'procedimiento');
+
+CALL prueba.verifica('X511', 'Extensión', 'Retenciones', 'Liberar dos veces restituye el disponible una sola vez',
+  JSON_ARRAY("SET @d0 = (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             REPLACE(REPLACE(REPLACE(@ins_ret, '%U', 'a3000000-0000-4000-8000-000000000111'), '%M', '45'), '%N', '20'),
+             "CALL tarjetas.liberar_retenciones_vencidas(NULL, 'pruebas', @n1)",
+             "CALL tarjetas.liberar_retenciones_vencidas(NULL, 'pruebas', @n2)"),
+  "SELECT @n1 >= 1 AND @n2 = 0 AND (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @d0",
+  'segunda pasada: 0 liberadas, disponible como antes',
+  "SELECT CONCAT(@n1, ', ', @n2, ', ', (SELECT saldo_disponible FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') - @d0)", 'procedimiento');
+
+CALL prueba.verifica('X512', 'Extensión', 'Retenciones', 'Una retención dentro del plazo por omisión (15 minutos) no se libera',
+  JSON_ARRAY(REPLACE(REPLACE(REPLACE(@ins_ret, '%U', 'a3000000-0000-4000-8000-000000000112'), '%M', '35'), '%N', '5'),
+             "CALL tarjetas.liberar_retenciones_vencidas(NULL, 'pruebas', @n)"),
+  "SELECT tarjetas.fn_minutos_retencion() = 15 AND (SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000112')) = 'AUTORIZADA'",
+  'plazo 15, sigue AUTORIZADA',
+  "SELECT CONCAT('plazo ', tarjetas.fn_minutos_retencion(), ', ', (SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000112')))", 'procedimiento');
+
+CALL prueba.verifica('X513', 'Extensión', 'Retenciones', 'Con un plazo explícito de 1 minuto se libera una retención de hace 5',
+  JSON_ARRAY(REPLACE(REPLACE(REPLACE(@ins_ret, '%U', 'a3000000-0000-4000-8000-000000000113'), '%M', '35'), '%N', '5'),
+             "CALL tarjetas.liberar_retenciones_vencidas(1, 'pruebas', @n)"),
+  "SELECT @n >= 1 AND (SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000113')) = 'EXTORNADA'",
+  'EXTORNADA',
+  "SELECT (SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000113'))", 'procedimiento');
+
+CALL prueba.rechaza('X514', 'Extensión', 'Retenciones', 'No se confirma una retención vencida aunque aún no se haya liberado',
+  JSON_ARRAY(REPLACE(REPLACE(REPLACE(@ins_ret, '%U', 'a3000000-0000-4000-8000-000000000114'), '%M', '25'), '%N', '20'),
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000114'), 'llave-x514', REPEAT('f', 64), 'pruebas', 'ATM', NULL, @trx, @estado)"),
+  'BNA-CONFIRMACION: la retención venció', 'procedimiento');
+
+CALL prueba.rechaza('X515', 'Extensión', 'Retenciones', 'No se confirma una retención ya liberada',
+  JSON_ARRAY(REPLACE(REPLACE(REPLACE(@ins_ret, '%U', 'a3000000-0000-4000-8000-000000000115'), '%M', '25'), '%N', '5'),
+             "CALL tarjetas.liberar_retenciones_vencidas(1, 'pruebas', @n)",
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000115'), 'llave-x515', REPEAT('g', 64), 'pruebas', 'ATM', NULL, @trx, @estado)"),
+  'BNA-CONFIRMACION: la autorización no está en estado vigente', 'procedimiento');
+
+CALL prueba.rechaza('X516', 'Extensión', 'Retenciones', 'El plazo explícito es de al menos 1 minuto',
+  JSON_ARRAY("CALL tarjetas.liberar_retenciones_vencidas(0, 'pruebas', @n)"),
+  'BNA-PLAZO: el plazo de una retención es de 1 a 1440 minutos', 'procedimiento');
+
+CALL prueba.verifica('X517', 'Extensión', 'Retenciones', 'Una retención confirmada no se libera: un solo débito',
+  JSON_ARRAY("SET @s0 = (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1')",
+             REPLACE(REPLACE(REPLACE(@ins_ret, '%U', 'a3000000-0000-4000-8000-000000000117'), '%M', '15'), '%N', '5'),
+             "CALL tarjetas.confirmar_autorizacion(UUID_TO_BIN('a3000000-0000-4000-8000-000000000117'), 'llave-x517', REPEAT('h', 64), 'pruebas', 'ATM', NULL, @trx, @estado)",
+             "CALL tarjetas.liberar_retenciones_vencidas(1, 'pruebas', @n)"),
+  "SELECT (SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000117')) = 'DISPENSADA' AND (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') = @s0 - 15",
+  'DISPENSADA, contable -15',
+  "SELECT CONCAT((SELECT estado_autorizacion FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000117')), ', ', (SELECT saldo_contable FROM cuentas.cuenta_ahorro WHERE num_cuenta = 'CTA-PEN-1') - @s0)", 'procedimiento');

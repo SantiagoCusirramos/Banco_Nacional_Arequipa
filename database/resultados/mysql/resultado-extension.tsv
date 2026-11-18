@@ -78,6 +78,14 @@ X504	bna_app_user	Repetir con la misma llave sobre autorización ya confirmada e
 X505	bna_app_user	No se confirma una autorización rechazada	pasa
 X506	bna_app_user	Extorno tras confirmar falla (el extorno es solo sin movimiento)	pasa
 X507	bna_app_user	No se confirma una autorización INICIADA (sin haber pasado a AUTORIZADA)	pasa
+X510	bna_app_user	Una retención vencida se libera: EXTORNADA, disponible y tope restituidos	pasa
+X511	bna_app_user	Liberar dos veces restituye el disponible una sola vez	pasa
+X512	bna_app_user	Una retención dentro del plazo por omisión (15 minutos) no se libera	pasa
+X513	bna_app_user	Con un plazo explícito de 1 minuto se libera una retención de hace 5	pasa
+X514	bna_app_user	No se confirma una retención vencida aunque aún no se haya liberado	pasa
+X515	bna_app_user	No se confirma una retención ya liberada	pasa
+X516	bna_app_user	El plazo explícito es de al menos 1 minuto	pasa
+X517	bna_app_user	Una retención confirmada no se libera: un solo débito	pasa
 X110	bna_api_user	bna_api no puede: SELECT tarjetas.credencial	pasa
 X111	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_token	pasa
 X112	bna_api_user	bna_api no puede: SELECT tarjetas.matriz_coordenada	pasa
@@ -380,6 +388,9 @@ X342	bna_admin_user	bna_admin ejecuta los procedimientos de créditos	pasa
 X670	bna_admin_user	bna_admin lee las tablas de la billetera y ejecuta sus procedimientos	pasa
 X508	bna_app_user	Dos confirmaciones simultáneas con llaves distintas: la segunda falla con BNA-CONFIRMACION	pasa
 X509	bna_app_user	Dos confirmaciones simultáneas con la misma llave: la segunda es idempotente	pasa
+X518	root	El evento tarjetas.ev_liberar_retenciones corre cada minuto	pasa
+X519	bna_app_user	Liberación y confirmación simultáneas: gana la liberación y la confirmación falla	pasa
+X520	bna_app_user	Confirmación y liberación simultáneas: gana la confirmación y la liberación la salta	pasa
 X650	bna_api_user	Dos envíos simultáneos con la misma llave mueven el dinero una vez	pasa
 X651	bna_api_user	Dos pagos simultáneos de un QR dinámico con llaves distintas cobran una vez	pasa
 X652	bna_api_user	Dos pagos simultáneos de un QR con la misma llave: el segundo es el mismo pago	pasa

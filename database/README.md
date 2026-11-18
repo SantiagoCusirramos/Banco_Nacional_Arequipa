@@ -333,6 +333,26 @@ respondería `BNA-IDEMPOTENCIA` en vez de la misma operación (pruebas X654 y X6
 `bna_admin` recibe sobre `billetera.*` lo mismo que sobre los demás esquemas (X670).
 Solo cambia procedimientos y permisos: una base anterior necesita un volumen nuevo.
 
+### Retenciones de tarjeta con caducidad (desde `bd-v1.11-mysql`)
+
+Una autorización AUTORIZADA retiene el saldo disponible y el tope del día hasta que el
+cajero la confirma o la extorna. Si el cajero cae en medio, la retención ya no queda
+sin plazo:
+
+| Objeto | Qué hace |
+|---|---|
+| `tarjetas.fn_minutos_retencion()` | El plazo por omisión: **15 minutos**. Es provisional; el plazo lo decide el equipo (pregunta en el issue #34) |
+| `tarjetas.liberar_retenciones_vencidas(minutos, actor, OUT liberadas)` | Extorna las AUTORIZADA sin movimiento más antiguas que el plazo (`NULL` = el de omisión; de 1 a 1440, si no `BNA-PLAZO`). Los triggers devuelven el disponible y el tope del día en que se comprometieron. Deja `codigo_respuesta` `EXT`, el motivo `BNA-RETENCION` y un evento `LIBERAR_RETENCION` por autorización. Las DISPENSADA no se tocan |
+| evento `tarjetas.ev_liberar_retenciones` | Llama al procedimiento cada minuto con el plazo por omisión (actor `SISTEMA`) |
+
+`confirmar_autorizacion` rechaza una retención vencida con `BNA-CONFIRMACION: la
+retención venció`, aunque el evento aún no la haya liberado. La liberación lee con
+`FOR UPDATE SKIP LOCKED`: si una confirmación tiene la autorización bloqueada, la salta
+y gana la confirmación; si la liberación llega primero, la confirmación espera y falla
+(pruebas X510 a X520). El cajero debe confirmar dentro del plazo. Agrega un índice,
+una función, un procedimiento y un evento, y cambia `confirmar_autorizacion`: una base
+anterior necesita un volumen nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.
