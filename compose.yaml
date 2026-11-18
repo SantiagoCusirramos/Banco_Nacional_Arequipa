@@ -567,7 +567,7 @@ services:
       LEGADO_DB_PASSWORD: ${LEGADO_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
       SOL_DB_PASSWORD: ${SOL_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
     volumes:
-      - "./backend/Infraestructura - BD/Trabajo_hecho/BD/99_bna_unificado.sql:/docker-entrypoint-initdb.d/01_bna_legada.sql:ro"
+      - "./backend/Infraestructura - BD/Trabajo_hecho/BD/99_bna_unificado.sql:/legado/bna_legada.sql:ro"
       - db-aux-datos:/var/lib/mysql
     healthcheck:
       <<: *sonda
