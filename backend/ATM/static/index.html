@@ -80,6 +80,9 @@ header p{margin:0;font:12px var(--mono);color:var(--suave);text-align:right}
 .base>span{font:11px var(--mono);letter-spacing:.06em;color:var(--suave);width:100%}
 .ranura{height:10px;border-radius:6px;background:#CFE0EC;width:100%;box-shadow:inset 0 2px 3px rgba(60,110,150,.35);margin-bottom:-6px}
 .insertar{display:flex;gap:10px;width:100%;margin-top:8px}
+.apertura{display:flex;flex-direction:column;gap:8px;width:min(320px,100%);margin-top:12px}
+.apertura input{background:#fff;border:1px solid var(--borde);border-radius:12px;padding:10px 12px;font:500 15px var(--sans);color:var(--tinta)}
+.apertura button{border:0;border-radius:12px;background:var(--acento);color:#fff;font:550 14px var(--sans);padding:10px 18px;cursor:pointer}
 .insertar input{flex:1;min-width:0;background:#fff;border:1px solid var(--borde);border-radius:12px;padding:10px 12px;font:500 15px var(--mono);letter-spacing:.12em;color:var(--tinta)}
 .insertar button,.vista{border:0;border-radius:12px;background:var(--acento);color:#fff;font:550 14px var(--sans);padding:10px 18px;cursor:pointer}
 .insertar button:hover,.vista:hover{filter:brightness(1.08)}
@@ -184,15 +187,11 @@ details pre{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;color:#3A
         <span>RANURA DE TARJETA</span>
         <div class="ranura" id="ranura"></div>
         <form class="insertar" id="formTj" autocomplete="off">
-          <input id="numTj" inputmode="numeric" maxlength="4" pattern="\d{4}" placeholder="N.º de tarjeta (4 dígitos)" aria-label="Número de tarjeta">
+          <input id="numTj" maxlength="36" placeholder="Id de la tarjeta (UUID que da TARJETAS al emitirla)" aria-label="Id de la tarjeta">
           <button type="submit" id="btnIns">Insertar tarjeta</button>
         </form>
         <details class="ayuda"><summary>Ayuda de la demo</summary>
-          <div class="chips">
-            <button type="button" data-tj="4821">4821</button><button type="button" data-tj="7730">7730</button>
-            <button type="button" data-tj="0000">0000</button><button type="button" data-tj="5555">5555</button>
-          </div>
-          <p>Clave = los mismos 4 dígitos, salvo 4821 → 1234 y 7730 → 5678. 0000: sin cuentas habilitadas. 5555: saldo bajo (S/ 80) y tope diario.</p>
+          <p>La tarjeta se identifica con el id (UUID) que devuelve TARJETAS al emitirla; el chip lo leería en un cajero real. La clave es el PIN_ATM registrado en TARJETAS. Antes de atender, un operador del banco abre el cajero con su usuario de COREDB.</p>
         </details>
       </div>
       <div class="teclado" id="teclado" aria-label="Teclado numérico"></div>
@@ -219,11 +218,16 @@ fetch('/api/config').then(r => r.json()).then(j => {
   }
 }).catch(() => {});
 let ocupado = false;
-let sesion = null;          // {token, id_tarjeta}
+let sesion = null;          // {token, id_tarjeta}: sesión de tarjeta abierta con el PIN (X-ATM-Sesion)
+// Token del operador que abrió el cajero (COREDB). Solo en la memoria de esta pestaña.
+const OPERADOR = 'bna_atm_operador';
+const tokenOperador = () => { try { return sessionStorage.getItem(OPERADOR); } catch(e){ return null; } };
 let entrada = null;         // captura de digitos: {max, valor, cambio, enter}
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
-let tarjeta = null;         // numero (4 digitos) de la tarjeta insertada
+let tarjeta = null;         // id (UUID) de la tarjeta insertada
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ultimos = id => (id || '----').slice(-4);
 const TOPE = {PEN:1500, USD:500};
 
 /* ---- inactividad: aviso a los 45 s, expulsa tarjeta 10 s despues ---- */
@@ -252,22 +256,48 @@ function avisoInactividad(){
 function cerrarAviso(){ clearInterval(tCuenta); enAviso = false; armarInactividad(); }
 
 /* ---- tarjeta: insertar y retirar ---- */
+function pantallaApertura(aviso){
+  sesion = null; tarjeta = null;
+  const c = nueva();
+  c.append(el('div','peque','Banco Nacional de Arequipa'), el('h2',null,'Cajero cerrado'),
+    el('p','detalle','Un operador del banco debe abrirlo con su usuario de COREDB.'));
+  const f = el('form','apertura'); f.autocomplete = 'off';
+  const u = el('input'); u.placeholder = 'Usuario'; u.required = true; u.setAttribute('aria-label','Usuario del operador');
+  const k = el('input'); k.type = 'password'; k.placeholder = 'Clave'; k.required = true; k.setAttribute('aria-label','Clave del operador');
+  const b = el('button', null, 'Abrir cajero'); b.type = 'submit';
+  f.append(u, k, b); c.append(f);
+  if(aviso) c.append(el('p','aviso',aviso));
+  f.addEventListener('submit', async e => {
+    e.preventDefault();
+    try{
+      const r = await fetch('/api/apertura', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({username: u.value.trim(), password: k.value}), cache:'no-store'});
+      const datos = await r.json(); k.value = '';
+      if(!r.ok || !datos.success) return pantallaApertura('Usuario o clave incorrectos.');
+      try { sessionStorage.setItem(OPERADOR, datos.data.access_token); } catch(e){}
+      linea('cajero abierto por el operador', 'ok'); pantallaInsertar();
+    }catch(err){ pantallaApertura('Sin conexión con el servidor.'); }
+  });
+  u.focus({preventScroll:true});
+}
 function pantallaInsertar(){
+  if(!tokenOperador()) return pantallaApertura();
   const c = nueva();
   c.append(el('div','peque','Banco Nacional de Arequipa'), el('h2',null,'Inserte su tarjeta'),
-    el('p','detalle','Escribe el número de tu tarjeta abajo y pulsa «Insertar tarjeta».'));
+    el('p','detalle','Escribe el id de tu tarjeta abajo y pulsa «Insertar tarjeta».'));
   $('numTj').focus({preventScroll:true});
 }
 function insertar(num){
-  if(!/^\d{4}$/.test(num)){ $('numTj').setCustomValidity('Ingresa 4 dígitos'); $('numTj').reportValidity(); $('numTj').setCustomValidity(''); return; }
-  tarjeta = num; sesion = null; guardarRecibo();
+  if(!UUID_RE.test(num)){ $('numTj').setCustomValidity('Ingresa el id de la tarjeta (UUID)'); $('numTj').reportValidity(); $('numTj').setCustomValidity(''); return; }
+  tarjeta = num.toLowerCase(); sesion = null; guardarRecibo();
   $('numTj').value = ''; $('numTj').blur();
   $('ranura').classList.remove('dentro'); void $('ranura').offsetWidth; $('ranura').classList.add('dentro');
-  linea('tarjeta •••• ' + num + ' insertada');
+  linea('tarjeta •••• ' + ultimos(tarjeta) + ' insertada');
   pantallaClave(); armarInactividad();
 }
 function expulsar(){
   clearTimeout(tInact); if(enAviso){ clearInterval(tCuenta); enAviso = false; }
+  if(sesion) fetch('/api/cerrar-sesion', {method:'POST', headers: cabeceras({})}).catch(() => {});
   sesion = null; tarjeta = null; guardarRecibo();
   const c = nueva();
   c.append(el('div','peque','Gracias por usar BNA'), el('h2',null,'Retira tu tarjeta'), el('div','tarj-icono'));
@@ -403,12 +433,26 @@ function recibo(titulo, filas, pie){
 function guardarRecibo(){ $('rollo').classList.remove('sale'); $('vacioRecibo').hidden = false; }
 
 /* ---- llamadas a la API del ATM (relativas) ---- */
-async function apiPost(ruta, cuerpo, ms = 30000){
+// Cada llamada lleva el token del operador (Authorization) y, si hay, la sesión de la tarjeta.
+function cabeceras(extra){
+  const h = Object.assign({}, extra);
+  const t = tokenOperador(); if(t) h['Authorization'] = 'Bearer ' + t;
+  if(sesion && sesion.token) h['X-ATM-Sesion'] = sesion.token;
+  return h;
+}
+// El token del operador venció o no es válido: se vuelve a abrir el cajero.
+function operadorVencido(datos){
+  if(!datos || !/^ERR-(ATM|COR|TAR)-TOKEN/.test(datos.error_code || '')) return false;
+  try { sessionStorage.removeItem(OPERADOR); } catch(e){}
+  pantallaApertura('La sesión del operador venció. Vuelva a abrir el cajero.');
+  return true;
+}
+async function apiPost(ruta, cuerpo, ms = 30000, extra){
   const corr = uuid();
   const control = new AbortController();
   const limite = setTimeout(() => control.abort(), ms);
   try{
-    const r = await fetch(ruta, {method:'POST', headers:{'Content-Type':'application/json','X-Correlation-ID':corr},
+    const r = await fetch(ruta, {method:'POST', headers:cabeceras(Object.assign({'Content-Type':'application/json','X-Correlation-ID':corr}, extra||{})),
       body:JSON.stringify(cuerpo), signal:control.signal, cache:'no-store'});
     return {r, datos: await r.json(), corr};
   } finally { clearTimeout(limite); }
@@ -420,20 +464,20 @@ async function apiGet(ruta, params, ms = 10000){
   const control = new AbortController();
   const limite = setTimeout(() => control.abort(), ms);
   try{
-    const r = await fetch(url, {method:'GET', headers:{'X-Correlation-ID':corr}, signal:control.signal, cache:'no-store'});
+    const r = await fetch(url, {method:'GET', headers:cabeceras({'X-Correlation-ID':corr}), signal:control.signal, cache:'no-store'});
     return {r, datos: await r.json(), corr};
   } finally { clearTimeout(limite); }
 }
 function evento(tipo, estado, corr, extra){
-  fetch('/api/registrar', {method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(Object.assign({tipo, estado, correlationId:corr, tarjeta:tarjeta || '----'}, extra||{}))}).catch(() => {});
+  fetch('/api/registrar', {method:'POST', headers:cabeceras({'Content-Type':'application/json'}),
+    body:JSON.stringify(Object.assign({tipo, estado, correlationId:corr, tarjeta:ultimos(tarjeta)}, extra||{}))}).catch(() => {});
 }
 
 /* ---- clave ---- */
-function inicio(){ !tarjeta ? pantallaInsertar() : sesion ? menu() : pantallaClave(); }
+function inicio(){ !tokenOperador() ? pantallaApertura() : !tarjeta ? pantallaInsertar() : sesion ? menu() : pantallaClave(); }
 function pantallaClave(aviso){
   const c = nueva();
-  c.append(el('div','peque','Tarjeta •••• ' + (tarjeta || '----')), el('h2',null,'Ingresa tu clave'));
+  c.append(el('div','peque','Tarjeta •••• ' + ultimos(tarjeta)), el('h2',null,'Ingresa tu clave'));
   const pts = el('div','clave'); for(let i=0;i<4;i++) pts.append(el('i')); c.append(pts);
   if(aviso) c.append(el('p','aviso',aviso));
   const confirmar = () => { if(entrada && entrada.valor.length === 4) autenticar(entrada.valor); };
@@ -449,7 +493,7 @@ async function autenticar(pin){
   if(ocupado) return; ocupado = true;
   pantallaCarga('Validando');
   const corr = uuid();
-  const id_tarjeta = 'tok_' + tarjeta;  // tokenizado: el backend lo mapea
+  const id_tarjeta = tarjeta;  // el id real de la tarjeta (UUID de TARJETAS)
   const solicitud = {id_tarjeta: id_tarjeta, pin, id_terminal: ID_CAJERO};
   mensajes('SOLICITUD /api/validar-pin', Object.assign({}, solicitud, {pin:'****'}));
   linea('corr ' + corr.slice(0,8)); linea('ATM -> API      /validar-pin');
@@ -457,9 +501,10 @@ async function autenticar(pin){
   try{
     const {r, datos, corr: corr2} = await apiPost('/api/validar-pin', solicitud);
     const ms = Math.round(performance.now() - t0);
-    anexar('RESPUESTA ' + r.status, Object.assign({}, datos, datos.data?.tokenSesion ? {tokenSesion:'SES-********'} : {}));
-    if(r.ok && datos.success){
-      sesion = {token: datos.data?.tokenSesion || 'sesion-atm', id_tarjeta: id_tarjeta};
+    anexar('RESPUESTA ' + r.status, Object.assign({}, datos, datos.data ? {data: Object.assign({}, datos.data, {token_sesion: datos.data.token_sesion ? 'SES-********' : null})} : {}));
+    if(operadorVencido(datos)) return;
+    if(r.ok && datos.success && datos.data?.token_sesion){
+      sesion = {token: datos.data.token_sesion, id_tarjeta: id_tarjeta};
       linea('API -> ATM      200  ' + ms + ' ms', 'ok');
       evento('AUTENTICACION', 'AUTENTICADA', corr2, {ms}); return menu();
     }
@@ -510,7 +555,8 @@ async function consultar(){
     if(!r.ok || !datos.success){
       linea('API -> ATM      ' + r.status + '  ' + (datos.error_code || ''), 'no');
       evento('CONSULTA', datos.error_code || 'ERROR', corr, {codigo:datos.error_code});
-      if(datos.error_code === 'ERR-ATM-TOKEN-EXPIRADO' || datos.error_code === 'ERR-COR-TOKEN-EXPIRADO') return sesionVencida();
+      if(datos.error_code === 'ERR-ATM-SESION-REQUERIDA') return sesionVencida();
+      if(operadorVencido(datos)) return;
       return pantallaError(datos.error_code === 'ERR-ATM-SIN-CUENTAS' ? 'Sin cuentas habilitadas' : 'Servicio no disponible',
         datos.error_code === 'ERR-ATM-SIN-CUENTAS' ? 'Esta tarjeta no tiene cuentas habilitadas para operar en cajero.' : 'Intenta nuevamente en unos minutos.');
     }
@@ -551,7 +597,8 @@ async function iniciarRetiro(){
     const {r, datos, corr} = await apiGet('/api/saldo', {id_tarjeta: sesion.id_tarjeta});
     if(!r.ok || !datos.success){
       linea('API -> ATM      ' + r.status + '  ' + (datos.error_code || ''), 'no');
-      if(datos.error_code === 'ERR-ATM-TOKEN-EXPIRADO') return sesionVencida();
+      if(datos.error_code === 'ERR-ATM-SESION-REQUERIDA') return sesionVencida();
+      if(operadorVencido(datos)) return;
       return pantallaError('Servicio no disponible', 'Intenta nuevamente en unos minutos.');
     }
     linea('API -> ATM      200  OK', 'ok');
@@ -618,7 +665,7 @@ async function ejecutarRetiro(cuenta, monto){
     id_terminal: ID_CAJERO,
     uuid_transaccion: uuidT,
   };
-  mensajes('SOLICITUD /api/autorizar', Object.assign({}, solicitud, {tokenSesion:'SES-********'}));
+  mensajes('SOLICITUD /api/autorizar', Object.assign({}, solicitud, {'X-ATM-Sesion':'SES-********'}));
   linea('corr ' + corr.slice(0,8)); linea('ATM -> API      /autorizar  ' + dinero(monto, cuenta.moneda).join(' '));
   const t0 = performance.now();
   try{
@@ -627,7 +674,8 @@ async function ejecutarRetiro(cuenta, monto){
     anexar('RESPUESTA ' + r.status, datos);
     if(!r.ok || !datos.success){
       linea('API -> ATM      ' + r.status + '  ' + (datos.error_code || ''), 'no');
-      if(datos.error_code === 'ERR-ATM-TOKEN-EXPIRADO') return sesionVencida();
+      if(datos.error_code === 'ERR-ATM-SESION-REQUERIDA') return sesionVencida();
+      if(operadorVencido(datos)) return;
       const textos = {
         'ERR-ATM-CUENTA-INVALIDA':['Cuenta no habilitada', 'La cuenta no está habilitada para operar en cajero.'],
         'ERR-ATM-IDEMPOTENCIA':['Operación duplicada', 'Esta operación ya fue procesada.'],
@@ -735,12 +783,11 @@ async function extornar(uuid_aut, motivo, cuenta, monto, corr){
 }
 
 $('formTj').addEventListener('submit', e => { e.preventDefault(); insertar($('numTj').value.trim()); });
-$('numTj').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
-document.querySelectorAll('[data-tj]').forEach(b => b.addEventListener('click', () => insertar(b.dataset.tj)));
+$('numTj').addEventListener('input', e => { e.target.value = e.target.value.replace(/[^0-9a-fA-F-]/g, ''); });
 
 $('vista').onclick = () => window.open('tecnico.html', 'bnaTecnico', 'width=560,height=920,left=40,top=40');
 
-pantallaInsertar();
+inicio();
 </script>
 </body>
 </html>

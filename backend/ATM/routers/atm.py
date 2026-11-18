@@ -4,27 +4,23 @@ import json
 import threading
 from datetime import datetime
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import FileResponse, HTMLResponse
-from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ATM.config import settings
 from ATM.core_client import CoreClient
+from ATM import sesiones
 from ATM.dependencies import (
-    autorizacion, contexto_operacion, correlation_id, get_core_client,
+    autorizacion, contexto_operacion, correlation_id, get_core_client, operador, sesion_tarjeta,
 )
 from ATM.errores import traducir
 from ATM.respuestas import error, exito
 from ATM.services import atm as svc
 from ATM.schemas.atm import (
-    AutorizacionOut, AutorizarIn, ConfirmarIn, ConfigOut, EstadoOut,
+    AperturaIn, AutorizacionOut, AutorizarIn, ConfirmarIn, ConfigOut, EstadoOut,
     ExtornarIn, SaldoOut, ValidarPinIn, ValidarPinOut,
 )
 
 router = APIRouter(prefix="/api", tags=["ATM"])
-
-# Directorio de archivos estáticos
-STATIC_DIR = Path(__file__).resolve().parents[2] / "static"
 
 # Registro de operaciones en memoria (para el panel técnico)
 _registro_lock = threading.Lock()
@@ -34,7 +30,7 @@ class RegistroEventoIn(BaseModel):
     tipo: str
     estado: str
     correlationId: str
-    tarjeta: str
+    tarjeta: str = Field(max_length=4)  # solo los 4 últimos caracteres, nunca el id completo
     codigo: str | None = None
     ms: int | None = None
     uuidTransaccion: str | None = None
@@ -96,6 +92,8 @@ async def validar_pin_endpoint(
 ):
     try:
         resultado = await svc.validar_pin(core, datos, cid, token)
+        if resultado.resultado == "EXITOSO":
+            resultado.token_sesion = sesiones.abrir(datos.id_tarjeta)
         return exito(request, resultado)
     except Exception as e:
         status, code = traducir(getattr(e, "code", "DESCONOCIDO"), getattr(e, "status_code", 500))
@@ -110,11 +108,14 @@ async def autorizar_endpoint(
     datos: AutorizarIn,
     core: CoreClient = Depends(get_core_client),
     ctx = Depends(contexto_operacion),
+    token_sesion: str | None = Depends(sesion_tarjeta),
 ):
     try:
+        sesion = sesiones.exigir(token_sesion, datos.id_tarjeta)
         resultado = await svc.autorizar_retiro(
             core, datos, ctx.idempotency_key, ctx.correlation_id, ctx.authorization
         )
+        sesion.autorizaciones.add(resultado.uuid_autorizacion)
         return exito(request, resultado.model_dump(mode="json"), 201, "Operación autorizada")
     except Exception as e:
         status, code = traducir(getattr(e, "code", "DESCONOCIDO"), getattr(e, "status_code", 500))
@@ -129,8 +130,10 @@ async def confirmar_endpoint(
     datos: ConfirmarIn,
     core: CoreClient = Depends(get_core_client),
     ctx = Depends(contexto_operacion),
+    token_sesion: str | None = Depends(sesion_tarjeta),
 ):
     try:
+        sesiones.exigir_autorizacion(token_sesion, datos.uuid_autorizacion)
         resultado = await svc.confirmar_dispensacion(
             core, datos, ctx.idempotency_key, ctx.correlation_id, ctx.authorization
         )
@@ -149,8 +152,10 @@ async def extornar_endpoint(
     core: CoreClient = Depends(get_core_client),
     cid: str = Depends(correlation_id),
     token: str | None = Depends(autorizacion),
+    token_sesion: str | None = Depends(sesion_tarjeta),
 ):
     try:
+        sesiones.exigir_autorizacion(token_sesion, datos.uuid_autorizacion)
         resultado = await svc.extornar_autorizacion(core, datos, cid, token)
         return exito(request, resultado.model_dump(mode="json"), message="Operación extornada")
     except Exception as e:
@@ -167,9 +172,12 @@ async def saldo_endpoint(
     core: CoreClient = Depends(get_core_client),
     cid: str = Depends(correlation_id),
     token: str | None = Depends(autorizacion),
+    token_sesion: str | None = Depends(sesion_tarjeta),
 ):
     try:
+        sesion = sesiones.exigir(token_sesion, id_tarjeta)
         resultado = await svc.consultar_saldo(core, id_tarjeta, cid, token)
+        sesion.cuentas.update(c.id_cuenta for c in resultado.lista_cuentas)
         return exito(request, resultado.model_dump(mode="json"))
     except Exception as e:
         status, code = traducir(getattr(e, "code", "DESCONOCIDO"), getattr(e, "status_code", 500))
@@ -185,8 +193,12 @@ async def movimientos_endpoint(
     core: CoreClient = Depends(get_core_client),
     cid: str = Depends(correlation_id),
     token: str | None = Depends(autorizacion),
+    token_sesion: str | None = Depends(sesion_tarjeta),
 ):
     try:
+        sesion = sesiones.exigir(token_sesion)
+        if num_cuenta not in sesion.cuentas:
+            return error(request, 403, "ERR-ATM-CUENTA-AJENA", "La cuenta no es de la tarjeta de esta sesión.")
         resultado = await svc.consultar_movimientos(core, num_cuenta, cid, token)
         return exito(request, resultado)
     except Exception as e:
@@ -194,30 +206,34 @@ async def movimientos_endpoint(
         return error(request, status, code, getattr(e, "message", str(e)), getattr(e, "details", {}))
 
 
-# ── Archivos Estáticos (HTML, CSS, JS, Fuentes, Logo) ────────────────────
+# ── Sesión de la tarjeta y apertura del cajero ──────────────────────────
+# La pantalla se sirve en / con StaticFiles (ver ATM/api.py: montar_pantalla), que nunca lee
+# fuera de static/.
 
-@router.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def index():
-    return FileResponse(STATIC_DIR / "index.html")
-
-
-@router.get("/tecnico.html", response_class=HTMLResponse, include_in_schema=False)
-async def tecnico():
-    return FileResponse(STATIC_DIR / "tecnico.html")
+@router.post("/cerrar-sesion")
+def cerrar_sesion(request: Request, token_sesion: str | None = Depends(sesion_tarjeta)):
+    sesiones.cerrar(token_sesion)
+    return exito(request, {"cerrada": True}, message="Sesión de tarjeta cerrada")
 
 
-@router.get("/static/{path:path}", include_in_schema=False)
-async def static_files(path: str):
-    file_path = STATIC_DIR / path
-    if not file_path.exists() or not file_path.is_file():
-        return error(Request(scope={"type": "http"}), 404, "ERR-ATM-NO-ENCONTRADO", "Archivo no encontrado")
-    return FileResponse(file_path)
+@router.post("/apertura")
+async def apertura(request: Request, datos: AperturaIn, core: CoreClient = Depends(get_core_client),
+                   cid: str = Depends(correlation_id)):
+    """El operador abre el cajero con su usuario de COREDB (por el Bus). La pantalla guarda el
+    token en la memoria de la pestaña y lo envía en Authorization en cada operación."""
+    try:
+        sesion = core.login(datos.username, datos.password, cid)
+        return exito(request, {"access_token": sesion["access_token"],
+                               "token_type": sesion.get("token_type", "bearer")}, message="Cajero abierto")
+    except Exception as e:
+        status, code = traducir(getattr(e, "code", "DESCONOCIDO"), getattr(e, "status_code", 500))
+        return error(request, status, code, getattr(e, "message", str(e)), getattr(e, "details", {}))
 
 
 # ── Registro de eventos del canal (para panel técnico) ────────────────────
 
 @router.post("/registrar", include_in_schema=False)
-async def registrar_evento(request: Request, datos: RegistroEventoIn):
+async def registrar_evento(request: Request, datos: RegistroEventoIn, _operador: dict = Depends(operador)):
     """Recibe eventos del frontend (clave, consulta, retiro) para el log del canal.
     No guarda datos sensibles (clave, token, PAN completo)."""
     evento = {
@@ -239,7 +255,7 @@ async def registrar_evento(request: Request, datos: RegistroEventoIn):
 
 
 @router.get("/registro", include_in_schema=False)
-async def leer_registro(n: int = 30):
+async def leer_registro(n: int = 30, _operador: dict = Depends(operador)):
     """Devuelve las últimas N líneas del registro de operaciones."""
     n = max(1, min(500, n))
     with _registro_lock:
