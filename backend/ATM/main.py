@@ -3,7 +3,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from ATM.api import montar_en
+from ATM.api import montar_en, montar_pantalla
 from ATM.config import settings
 from ATM.core_client import CoreClient
 from ATM.dependencies import get_core_client
@@ -35,3 +35,6 @@ def ready(core: CoreClient = Depends(get_core_client)):
     except AtmError:
         return JSONResponse(status_code=503, content={"status": "not_ready", "tarjetas_o_cuentas": "no disponible"})
     return {"status": "ready", "tarjetas": "disponible", "cuentas": "disponible"}
+
+
+montar_pantalla(app)  # al final: / sirve la pantalla sin tapar /health ni /api

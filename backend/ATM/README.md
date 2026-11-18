@@ -14,9 +14,10 @@ con su credencial `BUS_TOKEN_ATM`.
 | GET | `/health` | Salud del servicio |
 | GET | `/ready` | Listo si TARJETAS y CUENTAS responden por el Bus |
 | GET | `/` | Pantalla principal del cajero (HTML) |
-| GET | `/tecnico.html` | Panel técnico (HTML) |
-| GET | `/static/...` | Archivos estáticos (fuentes, logo) |
-| POST | `/api/validar-pin` | Validar PIN (llama a TARJETAS) |
+| GET | `/tecnico.html`, `/logo.png`, `/fuentes/...` | Panel técnico y archivos de `static/` (con `StaticFiles`: nada fuera de esa carpeta) |
+| POST | `/api/apertura` | El operador abre el cajero con su usuario de COREDB (por el Bus); devuelve su token |
+| POST | `/api/validar-pin` | Validar PIN (llama a TARJETAS); si es correcto abre la sesión de la tarjeta (`token_sesion`) |
+| POST | `/api/cerrar-sesion` | Cierra la sesión de la tarjeta (`X-ATM-Sesion`) |
 | POST | `/api/autorizar` | Autorizar retención (llama a TARJETAS, exige `X-Idempotency-Key`) |
 | POST | `/api/confirmar` | Confirmar dispensación (llama a TARJETAS, exige `X-Idempotency-Key`) |
 | POST | `/api/extornar` | Extornar autorización (llama a TARJETAS) |
@@ -24,13 +25,24 @@ con su credencial `BUS_TOKEN_ATM`.
 | GET | `/api/movimientos` | Consultar movimientos de una cuenta (llama a CUENTAS) |
 | GET | `/api/estado` | Estado local del cajero (bandejas, pendientes) |
 | GET | `/api/config` | Configuración (id_cajero, modo pruebas) |
-| POST | `/api/registrar` | Recibe eventos del frontend para el log del canal |
-| GET | `/api/registro` | Devuelve últimas N líneas del registro de operaciones |
+| POST | `/api/registrar` | Recibe eventos de la pantalla para el log del canal (exige el token del operador) |
+| GET | `/api/registro` | Devuelve últimas N líneas del registro de operaciones (exige el token del operador) |
+
+`/api/autorizar`, `/api/confirmar`, `/api/extornar`, `/api/saldo` y `/api/movimientos` exigen además la
+cabecera `X-ATM-Sesion`: la sesión que abrió `/api/validar-pin` con el PIN correcto de **esa** tarjeta.
+Vence a los 3 minutos; confirma o extorna solo las autorizaciones que ella pidió, y los movimientos son
+solo de las cuentas que mostró su consulta de saldo. Un token del personal sin esa sesión no retira
+(401 `ERR-ATM-SESION-REQUERIDA`).
 
 ## Flujo de Retiro
 
-1. **Validar PIN**: `POST /api/validar-pin` con `{id_tarjeta, pin, id_terminal}`
+0. **Apertura**: el operador del banco abre el cajero (`POST /api/apertura`); la pantalla guarda su token
+   solo en la pestaña (`sessionStorage`) y lo envía en `Authorization` en cada llamada.
+
+1. **Validar PIN**: `POST /api/validar-pin` con `{id_tarjeta, pin, id_terminal}` (`id_tarjeta` es el UUID que
+   da TARJETAS al emitir la tarjeta)
    → llama a `TARJETAS: POST /api/v1/tarjetas/{id}/credenciales/PIN_ATM/validacion`
+   → si es correcto, devuelve `token_sesion` (cabecera `X-ATM-Sesion` de los pasos siguientes)
 
 2. **Autorizar (retención)**: `POST /api/autorizar` con `{id_tarjeta, num_cuenta, moneda, monto, id_terminal, uuid_transaccion}` + `X-Idempotency-Key`
    → llama a `TARJETAS: POST /api/v1/tarjetas/{id}/autorizaciones` (retiene saldo y tope diario)
@@ -60,7 +72,9 @@ Los topes de retiro por canal los aplica la **autorización de Tarjetas** (RN-AT
 
 - Todas las llamadas a TARJETAS/CUENTAS van por el Bus: `http://bus:8018/bus/tarjetas/...`, `http://bus:8018/bus/cuentas/...`
 - El ATM presenta su credencial `X-Bus-Token: ${BUS_TOKEN_ATM}` en cada llamada.
-- El token de autorización del usuario (`Authorization: Bearer ...`) se reenvía a TARJETAS/CUENTAS.
+- El token del operador que abrió el cajero (`Authorization: Bearer ...`) se reenvía a TARJETAS/CUENTAS,
+  que comprueban sus permisos. Pregunta de equipo abierta (#34): si el cajero debe tener credencial propia
+  de terminal o usuario de servicio en lugar del operador; por ahora, el operador.
 
 ## Configuración
 
@@ -70,7 +84,7 @@ Variables de entorno (`.env`):
 |---|---|---|
 | `BUS_BASE_URL` | Raíz del Bus de Servicios (sin `/bus`) | `http://bus:8018` |
 | `BUS_TOKEN` | Credencial ante el Bus | (generado por `./bna up`) |
-| `ATM_ID` | Identificador del cajero | `ATM-AQP-001` |
+| `ATM_ID` | Identificador del cajero (una terminal registrada en la base) | `DEV-ATM-01` |
 | `PRUEBAS` | Modo pruebas (simular fallos) | `false` |
 
 ## Puertos
@@ -99,8 +113,8 @@ uvicorn ATM.main:app --port 8019
 ## Pruebas
 
 ```bash
-# Unitarias (con transporte simulado)
-cd backend/ATM
+# Unitarias (con transporte simulado), desde backend/
+cd backend
 python -m pytest ATM/tests -v
 
 # Desde la raíz del repo (en contenedor)

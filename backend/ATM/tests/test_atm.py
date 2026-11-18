@@ -171,7 +171,7 @@ def test_validar_pin_con_llave_tambien_ok(client, core):
 
 # ── Autorizar Retiro ──────────────────────────────────────────────────────
 
-def test_autorizar_retiro_ok(client, core):
+def test_autorizar_retiro_ok(client, core, sesion):
     core.respuesta = httpx.Response(201, json=autorizacion_ok())
     r = client.post(f"{BASE}/autorizar", json={
         "id_tarjeta": ID_TARJETA,
@@ -180,7 +180,7 @@ def test_autorizar_retiro_ok(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r.status_code == 201
     data = r.json()["data"]
     assert data["aprobada"] is True
@@ -194,7 +194,7 @@ def test_autorizar_retiro_ok(client, core):
     assert core.llamadas[0]["headers"]["x-idempotency-key"] == KEY
 
 
-def test_autorizar_retiro_rechazado_sin_fondos(client, core):
+def test_autorizar_retiro_rechazado_sin_fondos(client, core, sesion):
     core.respuesta = httpx.Response(201, json=autorizacion_ok(estado="RECHAZADA", codigo="51"))
     r = client.post(f"{BASE}/autorizar", json={
         "id_tarjeta": ID_TARJETA,
@@ -203,14 +203,14 @@ def test_autorizar_retiro_rechazado_sin_fondos(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r.status_code == 201
     data = r.json()["data"]
     assert data["aprobada"] is False
     assert data["codigo_respuesta"] == "51"
 
 
-def test_autorizar_retiro_tope_excedido(client, core):
+def test_autorizar_retiro_tope_excedido(client, core, sesion):
     core.respuesta = httpx.Response(201, json=autorizacion_ok(estado="RECHAZADA", codigo="61"))
     r = client.post(f"{BASE}/autorizar", json={
         "id_tarjeta": ID_TARJETA,
@@ -219,14 +219,14 @@ def test_autorizar_retiro_tope_excedido(client, core):
         "monto": "2000.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r.status_code == 201
     data = r.json()["data"]
     assert data["aprobada"] is False
     assert data["codigo_respuesta"] == "61"
 
 
-def test_autorizar_idempotencia_misma_llave(client, core):
+def test_autorizar_idempotencia_misma_llave(client, core, sesion):
     """La misma llave de idempotencia devuelve la autorización ya registrada."""
     core.respuesta = httpx.Response(201, json=autorizacion_ok())
     # Primera llamada
@@ -237,7 +237,7 @@ def test_autorizar_idempotencia_misma_llave(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r1.status_code == 201
     # Segunda llamada con misma llave
     core.respuesta = httpx.Response(201, json=autorizacion_ok())
@@ -248,12 +248,12 @@ def test_autorizar_idempotencia_misma_llave(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r2.status_code == 201
     assert r2.json()["data"]["uuid_autorizacion"] == r1.json()["data"]["uuid_autorizacion"]
 
 
-def test_autorizar_misma_llave_otros_datos_409(client, core):
+def test_autorizar_misma_llave_otros_datos_409(client, core, sesion):
     core.respuesta = error_core(409, "ERR-TAR-IDEMPOTENCIA")
     r = client.post(f"{BASE}/autorizar", json={
         "id_tarjeta": ID_TARJETA,
@@ -262,13 +262,13 @@ def test_autorizar_misma_llave_otros_datos_409(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r.status_code == 409
     # El ATM traduce el código de TARJETAS
     assert r.json()["error_code"] == "ERR-ATM-IDEMPOTENCIA"
 
 
-def test_autorizar_sin_llave_400(client, core):
+def test_autorizar_sin_llave_400(client, core, sesion):
     r = client.post(f"{BASE}/autorizar", json={
         "id_tarjeta": ID_TARJETA,
         "num_cuenta": "10100000000001",
@@ -276,13 +276,13 @@ def test_autorizar_sin_llave_400(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**AUTH, **CORR})
+    }, headers={**AUTH, **CORR, **sesion})
     assert r.status_code == 400
     assert r.json()["error_code"] == "ERR-ATM-HEADER-REQUERIDO"
     assert core.llamadas == []
 
 
-def test_autorizar_cuenta_invalida_400(client, core):
+def test_autorizar_cuenta_invalida_400(client, core, sesion):
     core.respuesta = error_core(400, "ERR-TAR-CUENTA-INVALIDA")
     r = client.post(f"{BASE}/autorizar", json={
         "id_tarjeta": ID_TARJETA,
@@ -291,7 +291,7 @@ def test_autorizar_cuenta_invalida_400(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r.status_code == 400
     # El ATM traduce el código de TARJETAS
     assert r.json()["error_code"] == "ERR-ATM-CUENTA-INVALIDA"
@@ -299,14 +299,14 @@ def test_autorizar_cuenta_invalida_400(client, core):
 
 # ── Confirmar Dispensación ────────────────────────────────────────────────
 
-def test_confirmar_dispensacion_ok(client, core):
+def test_confirmar_dispensacion_ok(client, core, autorizada):
     uuid_aut = "5a1f0c3e-0000-4000-8000-000000000001"
     core.respuesta = httpx.Response(200, json=autorizacion_dispensada(uuid_aut))
     r = client.post(f"{BASE}/confirmar", json={
         "uuid_autorizacion": uuid_aut,
         "id_terminal": "ATM-AQP-001",
         "resultado": "DISPENSADO",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **autorizada})
     assert r.status_code == 200
     data = r.json()["data"]
     assert data["estado_autorizacion"] == "DISPENSADA"
@@ -318,7 +318,7 @@ def test_confirmar_dispensacion_ok(client, core):
     assert core.llamadas[0]["headers"]["x-idempotency-key"] == KEY
 
 
-def test_no_dispensado_extorna_en_vez_de_confirmar(client, core):
+def test_no_dispensado_extorna_en_vez_de_confirmar(client, core, autorizada):
     """Si el dispensador no entregó el dinero, se libera la retención: nunca se confirma."""
     uuid_aut = "5a1f0c3e-0000-4000-8000-000000000001"
     core.respuesta = httpx.Response(200, json=extorno_ok(uuid_aut))
@@ -326,7 +326,7 @@ def test_no_dispensado_extorna_en_vez_de_confirmar(client, core):
         "uuid_autorizacion": uuid_aut,
         "id_terminal": "ATM-AQP-001",
         "resultado": "NO_DISPENSADO",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **autorizada})
     assert r.status_code == 200
     assert r.json()["data"]["estado_autorizacion"] == "EXTORNADA"
     assert [c["ruta"] for c in core.llamadas] == [
@@ -334,7 +334,7 @@ def test_no_dispensado_extorna_en_vez_de_confirmar(client, core):
     assert core.llamadas[0]["json"] == {"motivo": "NO_DISPENSADO"}
 
 
-def test_confirmar_idempotencia_misma_llave_sin_segundo_debito(client, core):
+def test_confirmar_idempotencia_misma_llave_sin_segundo_debito(client, core, autorizada):
     """Repetir la confirmación con la misma llave no debita dos veces."""
     uuid_aut = "5a1f0c3e-0000-4000-8000-000000000001"
     core.respuesta = httpx.Response(200, json=autorizacion_dispensada(uuid_aut))
@@ -342,7 +342,7 @@ def test_confirmar_idempotencia_misma_llave_sin_segundo_debito(client, core):
         "uuid_autorizacion": uuid_aut,
         "id_terminal": "ATM-AQP-001",
         "resultado": "DISPENSADO",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **autorizada})
     assert r1.status_code == 200
     uuid_txn_1 = r1.json()["data"]["uuid_transaccion"]
 
@@ -352,20 +352,20 @@ def test_confirmar_idempotencia_misma_llave_sin_segundo_debito(client, core):
         "uuid_autorizacion": uuid_aut,
         "id_terminal": "ATM-AQP-001",
         "resultado": "DISPENSADO",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **autorizada})
     assert r2.status_code == 200
     assert r2.json()["data"]["uuid_transaccion"] == uuid_txn_1
 
 
 # ── Extorno ───────────────────────────────────────────────────────────────
 
-def test_extornar_ok(client, core):
+def test_extornar_ok(client, core, autorizada):
     uuid_aut = "5a1f0c3e-0000-4000-8000-000000000001"
     core.respuesta = httpx.Response(200, json=extorno_ok(uuid_aut))
     r = client.post(f"{BASE}/extornar", json={
         "uuid_autorizacion": uuid_aut,
         "motivo": "FALLA_DISPENSADOR",
-    }, headers={**AUTH, **CORR})  # extorno no exige X-Idempotency-Key
+    }, headers={**AUTH, **CORR, **autorizada})  # extorno no exige X-Idempotency-Key
     assert r.status_code == 200
     data = r.json()["data"]
     assert data["estado_autorizacion"] == "EXTORNADA"
@@ -375,25 +375,25 @@ def test_extornar_ok(client, core):
     assert core.llamadas[0]["json"] == {"motivo": "FALLA_DISPENSADOR"}
 
 
-def test_extornar_ya_contabilizada_409(client, core):
+def test_extornar_ya_contabilizada_409(client, core, autorizada):
     uuid_aut = "5a1f0c3e-0000-4000-8000-000000000001"
     core.respuesta = error_core(409, "ERR-TAR-EXTORNO-NO-PERMITIDO")
     r = client.post(f"{BASE}/extornar", json={
         "uuid_autorizacion": uuid_aut,
         "motivo": "FALLA_DISPENSADOR",
-    }, headers={**AUTH, **CORR})
+    }, headers={**AUTH, **CORR, **autorizada})
     assert r.status_code == 409
     # El ATM traduce el código de TARJETAS
     assert r.json()["error_code"] == "ERR-ATM-EXTORNO-NO-PERMITIDO"
 
 
-def test_extornar_no_existe_404(client, core):
+def test_extornar_no_existe_404(client, core, autorizada):
     uuid_aut = "5a1f0c3e-0000-4000-8000-000000000001"
     core.respuesta = error_core(404, "ERR-TAR-AUTORIZACION-NO-ENCONTRADA")
     r = client.post(f"{BASE}/extornar", json={
         "uuid_autorizacion": uuid_aut,
         "motivo": "FALLA_DISPENSADOR",
-    }, headers={**AUTH, **CORR})
+    }, headers={**AUTH, **CORR, **autorizada})
     assert r.status_code == 404
     # El ATM traduce el código de TARJETAS
     assert r.json()["error_code"] == "ERR-ATM-AUTORIZACION-NO-ENCONTRADA"
@@ -401,13 +401,13 @@ def test_extornar_no_existe_404(client, core):
 
 # ── Consultar Saldo ───────────────────────────────────────────────────────
 
-def test_consultar_saldo_ok(client, core):
+def test_consultar_saldo_ok(client, core, sesion):
     # El servicio hace dos llamadas: 1) TARJETAS para obtener tarjeta (cod_cliente), 2) CUENTAS para saldo consolidado
     core.respuesta = [
         httpx.Response(200, json={"id_tarjeta": ID_TARJETA, "cod_cliente": "CLI001", "estado_tarjeta": "ACTIVA"}),
         httpx.Response(200, json=saldo_cuentas()),
     ]
-    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR})
+    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR, **sesion})
     assert r.status_code == 200
     data = r.json()["data"]
     assert len(data["lista_cuentas"]) == 2
@@ -419,28 +419,37 @@ def test_consultar_saldo_ok(client, core):
     assert "cuentas" in core.llamadas[1]["ruta"]
 
 
-def test_consultar_saldo_sin_cuentas(client, core):
+def test_consultar_saldo_sin_cuentas(client, core, sesion):
     core.respuesta = [
         httpx.Response(200, json={"id_tarjeta": ID_TARJETA, "cod_cliente": "CLI001", "estado_tarjeta": "ACTIVA"}),
         httpx.Response(200, json={"lista_cuentas": [], "uuid_consulta": "corr-test", "simulado": False}),
     ]
-    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR})
+    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR, **sesion})
     assert r.status_code == 200
     data = r.json()["data"]
     assert data["lista_cuentas"] == []
 
 
-def test_consultar_saldo_sesion_invalida_401(client, core):
+def test_consultar_saldo_sesion_invalida_401(client, core, sesion):
     core.respuesta = error_core(401, "ERR-COR-TOKEN-EXPIRADO")
-    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR})
+    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR, **sesion})
     assert r.status_code == 401
 
 
 # ── Consultar Movimientos ─────────────────────────────────────────────────
 
-def test_consultar_movimientos_ok(client, core):
+def test_consultar_movimientos_ok(client, core, sesion):
+    # Solo de una cuenta de la tarjeta de la sesión: primero el saldo, que las lista.
+    core.respuesta = [
+        httpx.Response(200, json={"id_tarjeta": ID_TARJETA, "cod_cliente": "CLI001", "estado_tarjeta": "ACTIVA"}),
+        httpx.Response(200, json=saldo_cuentas()),
+    ]
+    assert client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **sesion}).status_code == 200
+    ajena = client.get(f"{BASE}/movimientos", params={"num_cuenta": "99999999999999"}, headers={**AUTH, **sesion})
+    assert ajena.status_code == 403 and ajena.json()["error_code"] == "ERR-ATM-CUENTA-AJENA"
     core.respuesta = httpx.Response(200, json=movimientos_cuenta())
-    r = client.get(f"{BASE}/movimientos", params={"num_cuenta": "10100000000001"}, headers={**AUTH, **CORR})
+    r = client.get(f"{BASE}/movimientos", params={"num_cuenta": saldo_cuentas()["lista_cuentas"][0]["id_cuenta"]},
+                   headers={**AUTH, **CORR, **sesion})
     assert r.status_code == 200
     data = r.json()["data"]
     assert len(data) == 2
@@ -477,6 +486,7 @@ def test_flujo_retiro_completo_feliz(client, core):
     r = client.post(f"{BASE}/validar-pin", json={"id_tarjeta": ID_TARJETA, "pin": "4821", "id_terminal": "ATM-AQP-001"}, headers={**HEADERS, **CORR})
     assert r.status_code == 200
     assert r.json()["data"]["resultado"] == "EXITOSO"
+    SES = {"X-ATM-Sesion": r.json()["data"]["token_sesion"]}
 
     # 2. Autorizar retención
     core.respuesta = httpx.Response(201, json=autorizacion_ok())
@@ -487,7 +497,7 @@ def test_flujo_retiro_completo_feliz(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **SES})
     assert r.status_code == 201
     uuid_aut = r.json()["data"]["uuid_autorizacion"]
     assert r.json()["data"]["aprobada"] is True
@@ -498,7 +508,7 @@ def test_flujo_retiro_completo_feliz(client, core):
         "uuid_autorizacion": uuid_aut,
         "id_terminal": "ATM-AQP-001",
         "resultado": "DISPENSADO",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **SES})
     assert r.status_code == 200
     assert r.json()["data"]["estado_autorizacion"] == "DISPENSADA"
 
@@ -509,6 +519,7 @@ def test_flujo_retiro_falla_dispensador_extorno(client, core):
     core.respuesta = httpx.Response(200, json=pin_ok())
     r = client.post(f"{BASE}/validar-pin", json={"id_tarjeta": ID_TARJETA, "pin": "4821", "id_terminal": "ATM-AQP-001"}, headers={**HEADERS, **CORR})
     assert r.status_code == 200
+    SES = {"X-ATM-Sesion": r.json()["data"]["token_sesion"]}
 
     # 2. Autorizar retención
     core.respuesta = httpx.Response(201, json=autorizacion_ok())
@@ -519,7 +530,7 @@ def test_flujo_retiro_falla_dispensador_extorno(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **SES})
     assert r.status_code == 201
     uuid_aut = r.json()["data"]["uuid_autorizacion"]
 
@@ -528,7 +539,7 @@ def test_flujo_retiro_falla_dispensador_extorno(client, core):
     r = client.post(f"{BASE}/extornar", json={
         "uuid_autorizacion": uuid_aut,
         "motivo": "FALLA_DISPENSADOR",
-    }, headers={**AUTH, **CORR})
+    }, headers={**AUTH, **CORR, **SES})
     assert r.status_code == 200
     assert r.json()["data"]["estado_autorizacion"] == "EXTORNADA"
     assert r.json()["data"]["codigo_respuesta"] == "EXT"
@@ -537,7 +548,7 @@ def test_flujo_retiro_falla_dispensador_extorno(client, core):
 
 # ── Validaciones de Entrada ───────────────────────────────────────────────
 
-def test_autorizar_monto_invalido_400(client, core):
+def test_autorizar_monto_invalido_400(client, core, sesion):
     r = client.post(f"{BASE}/autorizar", json={
         "id_tarjeta": ID_TARJETA,
         "num_cuenta": "10100000000001",
@@ -545,14 +556,14 @@ def test_autorizar_monto_invalido_400(client, core):
         "monto": "15.50",  # no múltiplo de 10
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r.status_code == 400
     # La validación de Pydantic devuelve ERR-ATM-VALIDACION-ESQUEMA
     assert r.json()["error_code"] == "ERR-ATM-VALIDACION-ESQUEMA"
     assert core.llamadas == []
 
 
-def test_autorizar_moneda_invalida_400(client, core):
+def test_autorizar_moneda_invalida_400(client, core, sesion):
     r = client.post(f"{BASE}/autorizar", json={
         "id_tarjeta": ID_TARJETA,
         "num_cuenta": "10100000000001",
@@ -560,7 +571,7 @@ def test_autorizar_moneda_invalida_400(client, core):
         "monto": "150.00",
         "id_terminal": "ATM-AQP-001",
         "uuid_transaccion": "5a1f0c3e-0000-4000-8000-000000000001",
-    }, headers={**HEADERS, **CORR})
+    }, headers={**HEADERS, **CORR, **sesion})
     assert r.status_code == 400
     # La validación de Pydantic devuelve ERR-ATM-VALIDACION-ESQUEMA
     assert r.json()["error_code"] == "ERR-ATM-VALIDACION-ESQUEMA"

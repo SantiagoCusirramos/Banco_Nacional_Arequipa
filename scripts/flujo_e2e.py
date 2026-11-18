@@ -84,7 +84,7 @@ class Fallo(Exception):
 # escriben en E2E_SENSIBLES y `./bna smoke` comprueba que ninguno quedó en los registros.
 SENSIBLES = set()
 CLAVES_SENSIBLES = {"numero_documento", "documento", "search", "texto", "celular", "celular_destino",
-                    "pin", "password", "clave", "access_token", "token"}
+                    "pin", "password", "clave", "access_token", "token", "token_sesion"}
 
 
 def anotar_sensibles(datos):
@@ -464,6 +464,22 @@ def flujo():
     # ── ATM: retiro por el cajero (valida PIN → autoriza → confirma) ──────────
     # La tarjeta recién emitida y activada, sobre cuenta_tarjeta (60.00 tras el retiro de TARJETAS).
     atm_base = f"{BUS}/bus/atm/api"
+    # La pantalla se sirve por el Bus y ninguna ruta lee fuera de static/ (K-1, S-1).
+    estado, pantalla = pedir("GET", f"{BUS}/bus/atm/")
+    exigir(estado == 200 and "Inserte su tarjeta" in str(pantalla), f"Pantalla del cajero: {estado}")
+    for ruta in ("..%2Fconfig.py", "api/static/..%2Fconfig.py", "..%2F..%2F..%2F..%2Fproc%2Fself%2Fenviron"):
+        estado, texto = pedir("GET", f"{BUS}/bus/atm/{ruta}")
+        exigir(estado == 404 and "BaseSettings" not in str(texto) and "BUS_TOKEN" not in str(texto),
+               f"El cajero no debe servir {ruta}: {estado}")
+    estado, _ = pedir("GET", f"{atm_base}/registro")
+    exigir(estado == 401, f"El registro del canal del cajero debía exigir al operador: {estado}")
+    # El operador abre el cajero con su usuario de COREDB; con ese token lee el registro.
+    estado, apertura = pedir("POST", f"{atm_base}/apertura", {"username": USUARIO, "password": PASSWORD})
+    exigir(estado == 200 and apertura["data"]["access_token"], f"Apertura del cajero: {estado} {apertura}")
+    token_operador = apertura["data"]["access_token"]
+    estado, registro = pedir("GET", f"{atm_base}/registro", token=token_operador)
+    exigir(estado == 200 and isinstance(registro, list), f"Registro del canal con el operador: {estado} {registro}")
+    paso("ATM: la pantalla se sirve por el Bus, ninguna ruta lee fuera de static/; el operador abre el cajero y solo él lee el registro")
     estado, respuesta = pedir("PUT", f"{base}/{tarjeta}/credenciales/PIN_ATM", {"valor": "4821"}, token)
     exigir(estado == 200, f"Registrar el PIN por TARJETAS: {estado} {respuesta}")
     # Primero validar PIN (el ATM llama a TARJETAS por el Bus)
@@ -472,28 +488,37 @@ def flujo():
                               {"id_tarjeta": tarjeta, "pin": "4821", "id_terminal": "DEV-ATM-01"},
                               token, cabeceras=pin_key)
     exigir(estado == 200 and respuesta["success"] is True
-           and respuesta["data"]["resultado"] == "EXITOSO",
+           and respuesta["data"]["resultado"] == "EXITOSO" and respuesta["data"]["token_sesion"],
            f"ATM validar PIN: {estado} {respuesta}")
-    paso("ATM: PIN validado correctamente por TARJETAS a través del Bus")
+    sesion_atm = {"X-ATM-Sesion": respuesta["data"]["token_sesion"]}
+    paso("ATM: PIN validado por TARJETAS a través del Bus; abre la sesión de la tarjeta")
 
     # Autorizar retención
     retiro_atm = {"id_tarjeta": tarjeta, "num_cuenta": cuenta_tarjeta, "moneda": "PEN",
                   "monto": "30.00", "id_terminal": "DEV-ATM-01",
                   "uuid_transaccion": str(uuid.uuid4())}
     llave_atm = {"X-Idempotency-Key": str(uuid.uuid4())}
+    # K-3: un token del personal sin la sesión del PIN no retira.
     estado, respuesta = pedir("POST", f"{atm_base}/autorizar", retiro_atm, token, cabeceras=llave_atm)
+    exigir(estado == 401 and respuesta["error_code"] == "ERR-ATM-SESION-REQUERIDA",
+           f"ATM autorizar sin la sesión del PIN debía responder 401: {estado} {respuesta}")
+    estado, respuesta = pedir("POST", f"{atm_base}/autorizar", retiro_atm, token, cabeceras={**llave_atm, **sesion_atm})
     exigir(estado == 201 and respuesta["success"] is True
            and respuesta["data"]["aprobada"] is True
            and respuesta["data"]["codigo_respuesta"] == "00",
            f"ATM autorizar retiro: {estado} {respuesta}")
     autorizacion_atm = respuesta["data"]["uuid_autorizacion"]
+    # Repetir la autorización con la misma llave devuelve la misma retención (no retiene dos veces).
+    estado, repetida = pedir("POST", f"{atm_base}/autorizar", retiro_atm, token, cabeceras={**llave_atm, **sesion_atm})
+    exigir(estado in (200, 201) and repetida["data"]["uuid_autorizacion"] == autorizacion_atm,
+           f"ATM repetir autorización con la misma llave: {estado} {repetida}")
     paso(f"ATM: retiro de 30.00 autorizado (00) y retenido, uuid_autorizacion={autorizacion_atm[:8]}…")
 
     # Confirmar dispensación
     confirmar_atm = {"uuid_autorizacion": autorizacion_atm, "id_terminal": "DEV-ATM-01",
                      "resultado": "DISPENSADO"}
     llave_conf = {"X-Idempotency-Key": str(uuid.uuid4())}
-    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras=llave_conf)
+    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras={**llave_conf, **sesion_atm})
     exigir(estado == 200 and respuesta["success"] is True
            and respuesta["data"]["estado_autorizacion"] == "DISPENSADA",
            f"ATM confirmar dispensación: {estado} {respuesta}")
@@ -507,7 +532,7 @@ def flujo():
     paso(f"ATM: retiro de 30.00 en el cajero DEV-ATM-01 confirmado, saldo final {saldo_despues}")
 
     # Repetir confirmación con misma llave → sin segundo débito (idempotencia)
-    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras=llave_conf)
+    estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras={**llave_conf, **sesion_atm})
     exigir(estado == 200 and respuesta["success"] is True
            and respuesta["data"]["uuid_transaccion"] == uuid_txn,
            f"ATM repetir confirmación: {estado} {respuesta}")

@@ -100,10 +100,17 @@ async function refrescar(){
       caja.append(f);
     });
     $('pend').textContent = 'pendientes: ' + (data.pendientes?.length ?? 0);
-    const regResp = await fetch('/api/registro?n=8', {cache:'no-store'});
-    const reg = await regResp.json();
-    const regData = reg.data || reg;
-    $('regop').textContent = regData.length ? regData.map(x => [x.ts.slice(11), x.tipo, x.estado, x.correlationId.slice(0,8)].join('  ')).join('\n') : '—';
+    // El registro del canal exige la credencial del operador que abrió el cajero (P-3). La
+    // ventana se abre desde la pantalla, que le pasa su sessionStorage.
+    let token = null; try { token = sessionStorage.getItem('bna_atm_operador'); } catch(e){}
+    if(!token){ $('regop').textContent = 'abra el cajero desde la pantalla para ver el registro'; }
+    else {
+      const regResp = await fetch('/api/registro?n=8', {cache:'no-store', headers:{'Authorization':'Bearer ' + token}});
+      const reg = await regResp.json();
+      const regData = Array.isArray(reg) ? reg : [];
+      $('regop').textContent = regResp.status === 401 ? 'la credencial del operador venció: vuelva a abrir el cajero'
+        : regData.length ? regData.map(x => [x.ts.slice(11), x.tipo, x.estado, x.correlationId.slice(0,8)].join('  ')).join('\n') : '—';
+    }
   }catch(err){
     $('bandejas').textContent = 'sin conexión con el servidor del cajero';
     $('bandejas').className = 'sin-conexion';

@@ -153,3 +153,12 @@ class CoreClient:
         """GET /bus/tarjetas/api/v1/tarjetas/{id_tarjeta} para obtener el cod_cliente"""
         path = f"/bus/tarjetas/api/v1/tarjetas/{id_tarjeta}"
         return self._request("GET", path, params={}, correlation_id=correlation_id, authorization=authorization)
+
+    # ── COREDB: apertura del cajero por el operador ─────────────────────
+
+    def login(self, username: str, password: str, correlation_id: str | None = None) -> dict:
+        return self._request("POST", "/bus/coredb/coredb/auth/login",
+                             json={"username": username, "password": password}, correlation_id=correlation_id)
+
+    def perfil(self, authorization: str) -> dict:
+        return self._request("GET", "/bus/coredb/coredb/auth/me", authorization=authorization)

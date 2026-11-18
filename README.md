@@ -107,7 +107,7 @@ sequenceDiagram
 | COREDB | http://127.0.0.1:8012/docs | Token de `POST /coredb/auth/login` con `admin` | [`backend/COREDB/README.md`](backend/COREDB/README.md) |
 | CUENTAS | http://127.0.0.1:8001/docs | El mismo token de COREDB | [`backend/CUENTAS/README.md`](backend/CUENTAS/README.md) |
 | TARJETAS | http://127.0.0.1:8002/docs | El mismo token de COREDB | [`backend/TARJETAS/README.md`](backend/TARJETAS/README.md) |
-| ATM | http://127.0.0.1:8019 (pantalla) / http://127.0.0.1:8019/docs (API) | El mismo token de COREDB | [`backend/ATM/README.md`](backend/ATM/README.md) |
+| ATM | http://127.0.0.1:8019 (pantalla; panel técnico en `/tecnico.html`) / http://127.0.0.1:8019/docs (API) | Un operador abre el cajero con su usuario de COREDB; el cliente opera con el id de su tarjeta y su PIN | [`backend/ATM/README.md`](backend/ATM/README.md) |
 | BILLETERA (Chaski) | http://127.0.0.1:8020/api/salud | El cliente entra con su celular y su PIN (`POST /api/login`), después de que un usuario del banco lo afilie con `POST /coredb/billetera/afiliaciones` | [`billetera-chaski/README.md`](billetera-chaski/README.md) |
 | CAPTACION | http://127.0.0.1:8017/docs | El mismo token de COREDB | [`backend/CAPTACION/README.md`](backend/CAPTACION/README.md) |
 | SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
