@@ -4,8 +4,8 @@ Manifiestos del producto integrado, con [kustomize](https://kustomize.io/).
 
 | Carpeta | Qué contiene |
 |---|---|
-| `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `db-aux`, `coredb`, `cuentas`, `tarjetas`, `sol`, `evaluacion`, `desembolso`, `captacion`, `seguridad`, `bus` (Bus de Servicios) y `frontend`. Un ConfigMap con las direcciones internas |
-| `overlays/local/` | Ajustes para un clúster local de [kind](https://kind.sigs.k8s.io/): cada servicio como NodePort y las imágenes cargadas en el clúster |
+| `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `db-aux`, `coredb`, `cuentas`, `tarjetas`, `sol`, `evaluacion`, `desembolso`, `cobranza`, `captacion`, `seguridad`, `atm`, `billetera`, `bus` (Bus de Servicios) y `frontend`. Dos ConfigMap: `bna-configuracion` (las direcciones que usan los módulos, todas hacia el Bus) y `bna-bus` (las direcciones directas de los módulos, que solo lee el Bus) |
+| `overlays/local/` | Ajustes para un clúster local de [kind](https://kind.sigs.k8s.io/): las imágenes cargadas en el clúster y, como NodePort, el frontend, el Bus, COREDB, CUENTAS, TARJETAS, SOL, Evaluación, Desembolso, CAPTACION y Seguridad. Las bases, COBRANZA, ATM y BILLETERA quedan solo dentro del clúster |
 | `kind-config.yaml` | El clúster local, que publica esos NodePort en `127.0.0.1` |
 
 ## Desplegar en un clúster local
@@ -33,6 +33,8 @@ Al terminar, `./bna k8s-up` muestra las direcciones. Usan puertos distintos de l
 | Desembolso | http://localhost:13000/desembolso (API: http://127.0.0.1:18016/docs) |
 | CAPTACION | http://127.0.0.1:18017/docs |
 | Seguridad | http://127.0.0.1:18013 |
+| COBRANZA | http://localhost:13000/pagar-cuota (la API, solo por el Bus: `/bus/cobranza`) |
+| ATM, BILLETERA | Sin NodePort: por el Bus, `/bus/atm` y `/bus/billetera` |
 
 `scripts/k8s.sh` solo usa el contexto `kind-bna`: no toca ningún otro clúster configurado en la máquina.
 
@@ -45,8 +47,8 @@ Para cambiar una clave: editarla en `.env`, volver a ejecutar `./bna k8s-up` y r
 ## Cómo está armado
 
 - **Bases de datos:** Deployment con un PVC y estrategia `Recreate`. No es un StatefulSet para que la base sirva también en clústeres donde la cuenta no puede crearlos.
-- **Arranque en orden:** COREDB y SOL esperan a su base con un contenedor de inicio. Otros contenedores de inicio crean el primer administrador de COREDB si no existe y los usuarios de servicio de Evaluación (`svc-evaluacion`, con `EVALUACION_COREDB_SECRETO` del Secret) y Desembolso (`svc-desembolso`, con `DESEMBOLSO_COREDB_SECRETO`), y preparan la base de SOL. CAPTACION, Evaluación y Desembolso esperan a que COREDB responda a través del Bus.
-- **Sondas:** cada servicio tiene sonda de arranque, de disponibilidad y de vida. Las de vida de Evaluación y Desembolso solo miran el puerto: su `/salud` depende de COREDB y no debe reiniciarlas si COREDB cae. Las de las bases leen la contraseña del entorno del contenedor, no de la línea de órdenes.
+- **Arranque en orden:** COREDB y SOL esperan a su base con un contenedor de inicio. Otros contenedores de inicio crean el primer administrador de COREDB si no existe y los usuarios de servicio `svc-evaluacion`, `svc-desembolso`, `svc-captacion` (módulo CLIENTES), `svc-cobranza` y `svc-billetera`, cada uno con su secreto del Secret (`EVALUACION_COREDB_SECRETO`, `DESEMBOLSO_COREDB_SECRETO`, `CAPTACION_COREDB_SECRETO`, `COBRANZA_COREDB_SECRETO`, `BILLETERA_COREDB_SECRETO`), y preparan la base de SOL. CAPTACION, Evaluación, Desembolso, COBRANZA y BILLETERA esperan a que COREDB responda a través del Bus.
+- **Sondas:** cada servicio tiene sonda de arranque, de disponibilidad y de vida. Las de vida de Evaluación, Desembolso y COBRANZA solo miran el puerto: su `/salud` depende de COREDB y no debe reiniciarlas si COREDB cae. Las de las bases leen la contraseña del entorno del contenedor, no de la línea de órdenes.
 - **Bus de Servicios:** el frontend llega a los módulos y los módulos llegan a COREDB por el Service `bus`. En el ConfigMap `bna-configuracion`, `CORE_BASE_URL`, `COREDB_URL` y los `*_GATEWAY_URL` apuntan al Bus; cada Deployment presenta su credencial del Secret (`BUS_TOKEN_FRONTEND`, `BUS_TOKEN_CUENTAS`…), también los contenedores de arranque que esperan a COREDB. Las direcciones directas de los módulos están en otro ConfigMap, `bna-bus`, que solo lee el Bus. `./bna k8s-smoke` corre el flujo en el pod del Bus, que solo llama al Bus y al frontend y comprueba con las métricas del Bus que cada módulo llegó a COREDB por él. A diferencia de compose (redes `canales` y `core`), aquí no hay NetworkPolicy que impida una llamada directa: lo comprueban `scripts/comprobar_rutas_coredb.py` (ningún Deployment tiene la dirección directa de COREDB) y las métricas del Bus.
 - **Límites:** cada contenedor declara CPU y memoria pedidas y máximas.
 - **Sin root:** todos los contenedores corren con un usuario sin privilegios, sin escalamiento y sin capacidades.

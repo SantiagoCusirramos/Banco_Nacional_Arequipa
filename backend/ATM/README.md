@@ -23,7 +23,7 @@ con su credencial `BUS_TOKEN_ATM`.
 | POST | `/api/extornar` | Extornar autorización (llama a TARJETAS) |
 | GET | `/api/saldo` | Consultar saldo consolidado (llama a CUENTAS) |
 | GET | `/api/movimientos` | Consultar movimientos de una cuenta (llama a CUENTAS) |
-| GET | `/api/estado` | Estado local del cajero (bandejas, pendientes) |
+| GET | `/api/estado` | Estado local del cajero: bandejas simuladas; `pendientes` siempre vacío (no lista las retenciones sin confirmar) |
 | GET | `/api/config` | Configuración (id_cajero, modo pruebas) |
 | POST | `/api/registrar` | Recibe eventos de la pantalla para el log del canal (exige el token del operador) |
 | GET | `/api/registro` | Devuelve últimas N líneas del registro de operaciones (exige el token del operador) |
@@ -66,7 +66,8 @@ solo de las cuentas que mostró su consulta de saldo. Un token del personal sin 
 
 Los topes de retiro por canal los aplica la **autorización de Tarjetas** (RN-ATM-005); el cajero no los duplica.
 
-> **Pregunta de equipo abierta**: topes ATM (S/ 1 500 / US$ 500 en el prototipo) → valor por omisión de la base: **S/ 1 500 / US$ 500**.
+Los topes diarios del cajero son los de la base, **S/ 1 500 y US$ 500**, que coinciden con el prototipo
+(decisión 12 de [`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md), revisable).
 
 ## Autenticación y Bus
 
@@ -106,7 +107,7 @@ Con Docker Compose (parte del producto):
 Solo el módulo (requiere Bus, TARJETAS, CUENTAS):
 
 ```bash
-cd backend/ATM
+cd backend
 uvicorn ATM.main:app --port 8019
 ```
 
@@ -132,7 +133,8 @@ python -m pytest ATM/tests -v
 
 ## Kubernetes
 
-Deployment + Service en `k8s/base/atm.yaml`. Se despliega con `./bna k8s-up`.
+Deployment + Service en `k8s/base/atm.yaml`. Se despliega con `./bna k8s-up`. En kind no tiene NodePort:
+se llega a él por el Bus (`http://127.0.0.1:18018/bus/atm/...`).
 
 ## Contrato
 

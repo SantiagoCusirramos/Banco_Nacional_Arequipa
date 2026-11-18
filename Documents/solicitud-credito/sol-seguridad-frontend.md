@@ -1,6 +1,6 @@
 # E05 — Seguridad, auditoría, OpenAPI y frontend SOL
 
-Fecha: 2026-11-14, America/Lima. Rama `feature/integracion-sol`. HEAD base `86904edd8dc866c1d4260a996748a1cda3770007` más cambios locales E02–E05, sin commits/push. Se preservaron aportes y modificaciones previas. Referencias: [plan](plan-integracion-sol.md), [matriz RF](sol-matriz-rf.md), [contratos E01](sol-contratos-finalizacion.md), [evaluación E04](sol-evaluacion.md), [changelog](change-log.md).
+Fecha: 2026-11-14, America/Lima. Rama `feature/integracion-sol`. HEAD base `86904edd8dc866c1d4260a996748a1cda3770007` más cambios locales E02–E05, sin commits/push. Se preservaron aportes y modificaciones previas. Referencias: plan (`plan-integracion-sol.md`, retirado del repositorio; ver `change-log.md`), [matriz RF](sol-matriz-rf.md), [contratos E01](sol-contratos-finalizacion.md), [evaluación E04](sol-evaluacion.md), [changelog](change-log.md).
 
 ## Resultado y alcance verificado
 
@@ -46,7 +46,7 @@ El prototipo `backend/seguridad` tiene su API `/seguridad/...`, pero no el POST 
 
 ## Brechas OpenAPI E01 cerradas localmente
 
-Artefactos actuales: [SIMULADO](sol-openapi-e05-simulado.json) y [REAL con configuración fake](sol-openapi-e05-real.json). Los JSON E01 quedan como evidencia histórica sin sobrescribirlos.
+Artefactos actuales: SIMULADO (`sol-openapi-e05-simulado.json`, retirado del repositorio; ver `change-log.md`) y REAL con configuración fake (`sol-openapi-e05-real.json`, retirado del repositorio; ver `change-log.md`). Los JSON E01 quedan como evidencia histórica sin sobrescribirlos.
 
 - Respuestas nombradas/anidadas para usuario/login, referencias, política, condiciones/garantías/fiadores, calendario, resumen/detalle/versiones/eventos/resultados/envíos, paginación, recepción, baja, pendientes, métricas y salud. Dinero permanece string decimal; float solo se usa para duración de métricas, no cálculo financiero. Modelos en `backend/SOL/schemas.py:72`–`:280`.
 - `response_model_exclude_unset` preserva opcionales ausentes; nulos explícitos como evaluación/ronda pendientes y estado anterior en creación se conservan. La regresión de snapshots/acuse/lecturas pasó con los modelos de salida.

@@ -99,7 +99,7 @@ En la pantalla de ingreso, el engranaje ⚙ permite cambiar el servidor:
 
 ## La app móvil frente a la API integrada (estado al 2026-11-18)
 
-**La app Flutter de `app_movil/` no funciona todavía con esta API.** La API (`backend/server.js`) sí: el
+**La app Flutter de `app_movil/` no funciona todavía con esta API** (pendiente en el issue #116). La API (`backend/server.js`) sí: el
 flujo de extremo a extremo del producto entra, consulta, envía por celular, cobra con QR y responde
 solicitudes por ella. La app no se pudo compilar ni probar en la integración (no hay Flutter en el
 equipo que la hizo); lo que sigue sale de leer su código contra la API. Nada de esto está probado en un
@@ -119,7 +119,7 @@ emulador.
 | Registro | `state/app_state.dart:107` | `POST /api/registro` responde 403: la billetera se activa en una agencia (R-01). |
 | Promociones, ofertas, tienda, órdenes, cupones, recargas, servicios | `screens/tienda_screens.dart`, `screens/servicios_screen.dart`, `state/app_state.dart:142` | Promos y ofertas devuelven listas vacías; tienda, órdenes, cupones, recargas y servicios responden 501 "No disponible en esta versión". Las pantallas siguen visibles. |
 | Nombre y celular en el perfil | `models.dart:9-37` | `/api/me` trae el nombre corto (`apellidos` vacío) y no trae el celular. |
-| Celular real | `compose.yaml` (`127.0.0.1:${BNA_PUERTO_BILLETERA}`) | La API solo escucha en `127.0.0.1`: hoy solo llega el emulador de Android en la misma máquina (`http://10.0.2.2:8020`). La app no puede ir por el Bus: exige `X-Bus-Token`, que una app no puede guardar en secreto (ver #105, `BUS_MODULOS_PUBLICOS`). |
+| Celular real | `compose.yaml` (`127.0.0.1:${BNA_PUERTO_BILLETERA}`) | La API solo escucha en `127.0.0.1`: hoy solo llega el emulador de Android en la misma máquina (`http://10.0.2.2:8020`). Por el Bus exige `X-Bus-Token`, que una app no puede guardar en secreto. El Bus ya admite módulos públicos (`BUS_MODULOS_PUBLICOS=BILLETERA`, integrado en #115), pero en el producto la variable está vacía. |
 
 ### Cómo adaptarla
 
@@ -149,11 +149,11 @@ GitHub de esta subcarpeta no corre (GitHub solo lee `.github/` en la raíz del r
 
 **El producto tiene que estar levantado y accesible** (`./bna up`): la app no funciona sola, necesita la API de Chaski y COREDB.
 - Misma red Wi-Fi: con el producto levantado (`./bna up`), expón el puerto 8020 y permítelo en el Firewall.
-  El APK de `entregables/` es del prototipo original (ids numéricos, puerto 3000): no sirve con esta API hasta adaptar la app.
+  Un APK del prototipo original (ids numéricos, puerto 3000) no sirve con esta API hasta adaptar la app.
 - Desde cualquier lugar: `npx cloudflared tunnel --url http://localhost:8020` y que cada uno ponga en ⚙ la URL `https://….trycloudflare.com`.
 
-**Android** — envía `entregables/Chaski.apk` (WhatsApp, Drive…). Al abrirlo, Android pide permitir
-"instalar apps de origen desconocido". Para volver a generarlo:
+**Android** — el APK no está en el repositorio (`entregables/` solo tiene su README: los instaladores van a GitHub → Releases). Genéralo y envíalo (WhatsApp, Drive…). Al abrirlo, Android pide permitir
+"instalar apps de origen desconocido". Para generarlo:
 
 ```bash
 cd app_movil

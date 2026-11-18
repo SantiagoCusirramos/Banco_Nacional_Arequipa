@@ -10,7 +10,7 @@ SOL conserva el expediente y sus versiones; no calcula riesgo ni desembolsa. Es 
 
 ## OpenAPI generado e inspeccionado
 
-Artefactos sin editar manualmente: [SIMULADO](sol-openapi-e01-simulado.json), [REAL configurado con destinos fake](sol-openapi-e01-real.json). Ambos son OpenAPI de FastAPI, versión de aplicación **2.0.0**; esa versión no equivale a aprobación de contrato.
+Artefactos sin editar manualmente: SIMULADO (`sol-openapi-e01-simulado.json`, retirado del repositorio; ver `change-log.md`), REAL configurado con destinos fake (`sol-openapi-e01-real.json`, retirado del repositorio; ver `change-log.md`). Ambos son OpenAPI de FastAPI, versión de aplicación **2.0.0**; esa versión no equivale a aprobación de contrato.
 
 | Comprobación E01 | Resultado real |
 | --- | --- |

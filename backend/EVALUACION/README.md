@@ -2,7 +2,7 @@
 
 Módulo del equipo de Evaluación (Rodrigoss06, #70), integrado sobre COREDB. Recibe el expediente de
 Solicitud (CR-INT-02) y lo registra en COREDB, ofrece al analista la bandeja, la evaluación con la regla
-provisional RN-EVA-002-P y la decisión, y devuelve el resultado a Solicitud (CR-INT-03). Puerto 8015.
+RN-EVA-002-P (umbrales: decisión 16 de `Documents/decisiones-del-equipo.md`) y la decisión, y devuelve el resultado a Solicitud (CR-INT-03). Puerto 8015.
 
 **No tiene base propia.** Los datos viven en las tablas `creditos.*` de la base integrada y solo COREDB
 los escribe, por sus procedimientos (`backend/COREDB/CONTRATO_CREDITOS.md` §3). Desembolso lee las
@@ -19,8 +19,8 @@ por aquí.
 2. El analista registra la situación financiera (ingreso, deuda, riesgo, verificada) con su token de
    COREDB. COREDB corre la regla: hasta 80 % del límite aprueba, por encima de 100 % rechaza y en medio
    queda **OBSERVADO** para el analista.
-3. Un caso OBSERVADO lo decide un analista registrado: **APROBADO o RECHAZADO**. Por omisión del equipo
-   (pregunta T1 del contrato), el analista no devuelve la solicitud a SOL para que la corrija.
+3. Un caso OBSERVADO lo decide un analista registrado: **APROBADO o RECHAZADO**. Por decisión del equipo
+   (T1, revisable), el analista no devuelve la solicitud a SOL para que la corrija.
 4. Aprobada, la solicitud queda disponible para Desembolso por 30 días con el calendario de SOL sin
    cambios (RN-SOL-006). Se puede revocar antes del desembolso, con motivo.
 5. El resultado final (APROBADO o RECHAZADO) vuelve a SOL (CR-INT-03). Evaluación no guarda nada: cada
@@ -78,8 +78,12 @@ Las pruebas usan la base integrada y COREDB reales (no dobles) y validan el acus
 código de SOL (`validate_receipt`, `EvaluationResult` y su cliente `Integrations.deliver` en modo REAL).
 Al terminar no quedan contenedores ni volúmenes.
 
-## Pendiente
+## Decisiones adoptadas y pendiente
 
-Que SOL permita configurar la URL de Evaluación aparte del Bus; ratificar en el Comité que SOL arma el
-calendario y el `cod_cliente` de COREDB como identificador común; la pregunta T1 (si el analista puede
-observar y devolver a SOL) sigue abierta con el valor por omisión "no".
+Adoptadas, revisables ([`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md)):
+el analista no observa ni devuelve a SOL (T1), los umbrales 80 % / 100 % (16), el dominio libre de
+`resultado_verificacion` (17) y el `cod_cliente` de COREDB como identificador común (8).
+
+Pendiente: que SOL pase a modo REAL (hoy SIMULADO, con `EVALUACION_SOL_URL` vacía), que ya admite la
+URL de Evaluación aparte del Bus (`SOL_EVA_BASE_URL`, `SOL_EVA_TOKEN`); y ratificar en el Comité que
+SOL arma el calendario.

@@ -1,6 +1,6 @@
 # Contrato de COREDB para la línea de créditos
 
-**Estado:** las secciones 3 (Evaluación), 4 (Desembolso) y 5 (Cobranza) están implementadas en `backend/COREDB`. EVALUACIÓN (#70) ya usa la sección 3 (`backend/EVALUACION`, sin base propia, con el usuario de servicio `svc-evaluacion`); DESEMBOLSO (#71) y COBRANZA (#69) se integran después sobre estas rutas, con la co-autoría de sus autores.
+**Estado:** las secciones 3 (Evaluación), 4 (Desembolso) y 5 (Cobranza) están implementadas en `backend/COREDB`. Las usan los tres módulos, integrados sin base propia: EVALUACIÓN (#70, sección 3, `backend/EVALUACION`, usuario de servicio `svc-evaluacion`), DESEMBOLSO (#71, sección 4, `backend/DESEMBOLSO`, `svc-desembolso`) y COBRANZA (#69, sección 5, `backend/COBRANZA`, `svc-cobranza`), todos a través del Bus de Servicios.
 **Qué es:** las operaciones que el CORE ofrece a Evaluación, Desembolso y Cobranza en `backend/COREDB`, sobre las tablas `creditos.*` de la base integrada (`database/`, desde `bd-v1.4-mysql`). La especificación exacta está en `openapi.json` y en `/docs`.
 **De dónde sale:** la propuesta publicada en #70, #71 y #69 el 2026-11-16 (Con autorización de Santiago Cusirramos), para @Rodrigoss06 y @Rocio00006.
 
@@ -212,7 +212,7 @@ Acciones propias de COREDB: `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `R
 | CR-INT-06 Desembolso → Cobranza | La confirmación crea el crédito (AL_DIA) y su calendario OFICIAL, copia del PRELIMINAR; Cobranza lo lee | `confirmar_orden`, `v_credito_api`, `v_cuota_api` | `GET /coredb/creditos`, `GET /coredb/creditos/{codCredito}` |
 | CR-INT-07 Cobranza → CUENTAS | El débito es un movimiento `DEBITO_CUOTA` dentro del pago; sin fondos o con la cuenta no operativa, pago RECHAZADO sin movimiento; la `referencia` evita cobrar dos veces | `registrar_pago_cuota`, `v_pago_api` | `POST /coredb/creditos/{codCredito}/pagos`, `GET /coredb/creditos/pagos/{referencia}` |
 
-## 7. Decisiones del equipo (valor por omisión; ninguna bloquea)
+## 7. Decisiones del equipo (adoptadas, revisables)
 
 1. El analista no puede OBSERVAR: la decisión es APROBADO o RECHAZADO (diccionario de Evaluación). La base admitiría OBSERVADO si el equipo lo decide.
 2. Vigencia de la aprobación: 30 días.

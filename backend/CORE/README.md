@@ -3,10 +3,11 @@
 API anterior del CORE del Banco Nacional de Arequipa, sobre la base `bna`
 (esquema unificado en `backend/Infraestructura - BD/Trabajo_hecho/BD/`).
 
-> **Estado:** ningún servicio del producto la llama. CUENTAS, TARJETAS y el frontend
+> **Estado:** ningún servicio del producto la llama. El frontend y los módulos
 > usan [COREDB](../COREDB/README.md), la API sobre la base integrada de
-> `database/`. Este módulo se conserva porque tiene los créditos, que COREDB
-> todavía no ofrece, y solo se levanta si se pide (ver "Ejecución").
+> `database/`, que ya ofrece también los créditos (evaluación, desembolso y
+> cobranza). Este módulo se conserva como referencia y solo se levanta si se
+> pide (ver "Ejecución").
 
 Fuente de requisitos: `Acciones CORE.md`, documento del equipo que no está en
 este repositorio (21 acciones; la billetera se omitió por no existir tablas
@@ -147,8 +148,9 @@ ejecuta como suite "CORE legado contra MySQL".
    diccionario de datos las incorpore.
 2. **Desembolso de crédito**: `aprobar_credito` marca la solicitud como
    APROBADA pero no genera automáticamente `cob_credito` + asiento de
-   desembolso (RGN-12 completo) — requiere decisión de dónde vive el
-   canal de desembolso (CORE vs módulo Desembolso).
+   desembolso (RGN-12 completo). En el producto el desembolso ya no vive
+   aquí: lo hacen el módulo DESEMBOLSO y COREDB (`backend/DESEMBOLSO`), así
+   que este hueco solo afecta al CORE legado.
 3. Tests end-to-end con MySQL (Docker) sobre el esquema unificado, fuera
    de autenticación y créditos: `CORE/tests/integracion/` solo cubre esos
    dos flujos.

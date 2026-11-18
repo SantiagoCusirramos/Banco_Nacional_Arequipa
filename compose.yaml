@@ -442,7 +442,7 @@ services:
   # ── Bus de Servicios: los canales y los módulos llegan a otros módulos solo por él ─
   # /bus/<módulo>/<ruta> → el módulo, sin tocar cabeceras, cuerpo ni códigos. Cada
   # consumidor presenta su credencial (X-Bus-Token). El frontend está en la red
-  # `canales` con el Bus y nada más: no puede llamar a un módulo directo. COREDB está
+  # `canales` con el Bus, ATM y BILLETERA: no ve los demás módulos. COREDB está
   # en la red `core` con el Bus y nada más: los módulos llegan a COREDB por el Bus (fase 2).
   bus:
     <<: *backend
@@ -577,7 +577,7 @@ services:
 
 networks:
   default:
-  # Solo el frontend y el Bus: el frontend no ve los módulos.
+  # El frontend, el Bus y los dos canales (ATM y BILLETERA): el frontend no ve los demás módulos.
   canales:
   # Solo la base, COREDB, su arranque y el Bus: los módulos no ven COREDB.
   core:

@@ -78,7 +78,7 @@ No hay RF integrado_real. No se cambian estados ni tablas; los JSON E01 continú
 
 ## Actualización E05 — Seguridad, API y frontend
 
-[Informe E05](sol-seguridad-frontend.md), [OpenAPI SIMULADO](sol-openapi-e05-simulado.json) y [OpenAPI REAL](sol-openapi-e05-real.json). HEAD base igual con cambios locales E02–E05. Backend **163 passed, 2 warnings, 38.50s** (149 anteriores +14 E05). Frontend **109 passed, 2 expected fail (111)** (83 aprobadas anteriores +26 SOL), lint/TypeScript/build aprobados en copia temporal. No navegador/TCP/MySQL ni proveedor institucional.
+[Informe E05](sol-seguridad-frontend.md), OpenAPI SIMULADO (`sol-openapi-e05-simulado.json`, retirado del repositorio; ver `change-log.md`) y OpenAPI REAL (`sol-openapi-e05-real.json`, retirado del repositorio; ver `change-log.md`). HEAD base igual con cambios locales E02–E05. Backend **163 passed, 2 warnings, 38.50s** (149 anteriores +14 E05). Frontend **109 passed, 2 expected fail (111)** (83 aprobadas anteriores +26 SOL), lint/TypeScript/build aprobados en copia temporal. No navegador/TCP/MySQL ni proveedor institucional.
 
 | Alcance | Estado tras E05 | Evidencia y pendiente |
 | --- | --- | --- |
@@ -93,7 +93,7 @@ Ningún RF integrado_real. Siguiente etapa E06, preparada para validación/entre
 
 ## Actualización E06 — validación final y entrega
 
-[Entrega final con diez RF/CR-INT](sol-entrega-final.md), [evidencias y comandos](sol-evidencias-testing.md), [OpenAPI SIMULADO](openapi.json) y [REAL generado](sol-openapi-e06-real.json). HEAD base preservado, workspace E02–E06 sin commit/push. Backend final **169 passed/2 warnings** en SQLite (40,34s) y con fixtures MySQL (49,36s); frontend **114 passed/2 expected fail**, lint/TypeScript/build salida 0. **142 comprobaciones TCP** Next→SOL→MySQL, **7** de migración/rollback/locks y **4** de logs/reinicio, todas salida 0. Proveedores CAP/EVA/Auditoría SIMULADO; REAL de suite es MockTransport, nunca institucional. Algunos tests independientes siguen SQLite aun con fixtures MySQL.
+[Entrega final con diez RF/CR-INT](sol-entrega-final.md), [evidencias y comandos](sol-evidencias-testing.md), [OpenAPI SIMULADO](openapi.json) y REAL generado (`sol-openapi-e06-real.json`, retirado del repositorio; ver `change-log.md`). HEAD base preservado, workspace E02–E06 sin commit/push. Backend final **169 passed/2 warnings** en SQLite (40,34s) y con fixtures MySQL (49,36s); frontend **114 passed/2 expected fail**, lint/TypeScript/build salida 0. **142 comprobaciones TCP** Next→SOL→MySQL, **7** de migración/rollback/locks y **4** de logs/reinicio, todas salida 0. Proveedores CAP/EVA/Auditoría SIMULADO; REAL de suite es MockTransport, nunca institucional. Algunos tests independientes siguen SQLite aun con fixtures MySQL.
 
 | RF | Estado final | Cobertura / pendiente |
 | --- | --- | --- |

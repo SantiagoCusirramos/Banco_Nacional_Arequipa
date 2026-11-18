@@ -54,11 +54,11 @@ Las rutas siguientes incluyen sus prefijos efectivos. Se omiten operaciones ajen
 | Simulador HTTP / sintético | `GET /eva/operations/{operation}` | 200 mismo acuse o 404 «no recibido» | Bearer; no es un endpoint del CORE. |
 | Simulador HTTP / sintético | `POST /security/events` | Evento; 200 `idEvento`, `confirmado:true`, `acuse` | Dependencia adicional de REAL; no acredita auditoría central. |
 
-Fuentes: [router Clientes CORE](../backend/CORE/routers/clientes.py), [router Clientes COREDB](../backend/COREDB/routers/clientes.py), [router Créditos CORE](../backend/CORE/routers/creditos.py), [montaje CORE](../backend/CORE/api.py), [montaje COREDB](../backend/COREDB/main.py), [SOL](../backend/SOL/app.py), [simulador](../backend/SOL/simulator.py).
+Fuentes: [router Clientes CORE](../../backend/CORE/routers/clientes.py), [router Clientes COREDB](../../backend/COREDB/routers/clientes.py), [router Créditos CORE](../../backend/CORE/routers/creditos.py), [montaje CORE](../../backend/CORE/api.py), [montaje COREDB](../../backend/COREDB/main.py), [SOL](../../backend/SOL/app.py), [simulador](../../backend/SOL/simulator.py).
 
 ## Comparación con CONTRATOS_HTTP_V2.md
 
-El [documento v2](../Documents/solicitud-credito/CONTRATOS_HTTP_V2.md) se declara propuesta para homologación y señala expresamente que sus rutas de ejemplo son del simulador.
+El [documento v2](../../Documents/solicitud-credito/CONTRATOS_HTTP_V2.md) se declara propuesta para homologación y señala expresamente que sus rutas de ejemplo son del simulador.
 
 ### CR-INT-01: referencia habilitada de Captación
 
@@ -99,7 +99,7 @@ No se encontró emisor de este callback en CORE/COREDB. El endpoint real `/decis
 
 ## Adaptadores HTTP de SOL y configuración necesaria
 
-Implementación: [integrations.py](../backend/SOL/integrations.py), [settings.py](../backend/SOL/settings.py), [operations.py](../backend/SOL/operations.py), [ejemplo de entorno](../backend/.env.sol.example).
+Implementación: [integrations.py](../../backend/SOL/integrations.py), [settings.py](../../backend/SOL/settings.py), [operations.py](../../backend/SOL/operations.py), [ejemplo de entorno](../../backend/.env.sol.example).
 
 | Adaptador | Función | Configuración |
 | --- | --- | --- |

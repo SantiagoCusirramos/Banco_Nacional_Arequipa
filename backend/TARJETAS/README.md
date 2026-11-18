@@ -1,10 +1,12 @@
 # TARJETAS
 
-Modulo de Tarjetas de debito. No tiene base de datos propia: valida y llama a COREDB (`/coredb/tarjetas`,
-puerto 8012), que guarda las tarjetas en el esquema `tarjetas` de la base integrada. Sigue el mismo
-estandar de respuestas que CUENTAS (DOC-ITIL-02).
+Modulo de Tarjetas de debito. No tiene base de datos propia: valida y llama a COREDB (`/coredb/tarjetas`)
+a traves del Bus de Servicios (`http://bus:8018/bus/coredb`, con su credencial `BUS_TOKEN_TARJETAS`).
+COREDB guarda las tarjetas en el esquema `tarjetas` de la base integrada. Sigue el mismo estandar de
+respuestas que CUENTAS (DOC-ITIL-02).
 
-Los modulos que lo usan (Cajero ATM, Home Banking, Billetera Digital) tienen su contrato en
+Lo usan el cajero (ATM, por el Bus), la pantalla `/tarjetas` y el Home Banking del frontend. La
+Billetera Digital no pasa por aqui: opera sobre COREDB. Su contrato esta en
 [`CONTRATO.md`](CONTRATO.md): credenciales, permisos, rutas, errores y lo pendiente.
 
 ## Endpoints
@@ -54,9 +56,10 @@ la llave sale siempre el mismo id de tarjeta (UUIDv5), que se envia a COREDB:
   `numero_enmascarado`.
 - El bloqueo exige un motivo, que queda en el historial de la tarjeta.
 - **BIN:** un BIN por tipo de tarjeta (`tarjetas.bin_tarjeta` guarda el tipo). Es una decision de
-  integracion, no de la fuente del modulo (issue #34, pregunta 7). `004499` es `FISICA` y existe solo en
-  los datos de desarrollo; la base de produccion no trae ningun BIN. Los BIN reales son un pendiente del
-  emisor. Mientras no haya un BIN `VIRTUAL`, el modulo emite solo tarjetas fisicas.
+  integracion, no de la fuente del modulo (decision 10 de `Documents/decisiones-del-equipo.md`). `004499`
+  es `FISICA` y existe solo en los datos de desarrollo; la base de produccion no trae ningun BIN. Los BIN
+  reales los dara el emisor (issue #116). Mientras no haya un BIN `VIRTUAL`, el modulo emite solo
+  tarjetas fisicas.
 - El desbloqueo (de BLOQUEADA a ACTIVA) lo rechaza COREDB: es de Seguridad.
 
 ## Respuestas (ITIL-02)

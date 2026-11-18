@@ -6,7 +6,7 @@
 
 ## 1. Convenciones
 
-- **URL base:** configurable, por ejemplo `TARJETAS_BASE_URL=http://127.0.0.1:8002`. Dentro del producto (`./bna up`) es `http://tarjetas:8002`. Cuando exista el Bus de Servicios apuntará al Bus. Todas las rutas empiezan con `/api/v1/tarjetas`.
+- **URL base:** configurable, por ejemplo `TARJETAS_BASE_URL=http://127.0.0.1:8002`. Dentro del producto (`./bna up`) los demás módulos llegan por el Bus de Servicios: `http://bus:8018/bus/tarjetas`, con su credencial en `X-Bus-Token` (así lo hace el ATM). Todas las rutas empiezan con `/api/v1/tarjetas`.
 - **Autenticación:** `Authorization: Bearer <token>` de COREDB en todas las rutas salvo `/health` y `/ready` (sección 2). `/ready` responde 200 si COREDB contesta y 503 si no; sirve para saber si TARJETAS puede atender, sin token. TARJETAS no valida el token: lo reenvía y COREDB decide.
 - **Correlación:** `X-Correlation-ID` es opcional. Si es un UUID, llega igual a COREDB y a su bitácora; si no lo es, TARJETAS genera uno para COREDB. El identificador de la respuesta va en `metadata.uuid_transaccion` y en la cabecera `X-Idempotency-Key`.
 - **Idempotencia:** la emisión exige `X-Idempotency-Key` (UUIDv4). Las consultas y los cambios de estado no la necesitan: repetir un bloqueo deja la tarjeta bloqueada.
@@ -56,7 +56,7 @@ TARJETAS no tiene usuarios propios: usa el token de COREDB de quien llama.
 - **Personal del banco:** inicia sesión en COREDB (`POST /coredb/auth/login`) y envía ese token. Es lo que hace la pantalla `/tarjetas` del frontend.
 - **Otro módulo:** debe autenticarse con su **usuario de servicio** de COREDB (rol `SERVICIO` y su módulo), como Clientes. El procedimiento de alta, rotación y revocación está en `backend/COREDB/CONTRATO_CLIENTES.md`, sección 2.
 
-> Hoy solo `SERVICIO:CLIENTES` tiene permisos en COREDB. Para que Cajero ATM, Home Banking o Billetera Digital consulten tarjetas con su propio usuario de servicio, hay que darle `VER_TARJETA` en `backend/COREDB/permisos.py` (sección 6).
+> En el producto ningún módulo llama a TARJETAS con un usuario de servicio propio. El cajero (ATM) reenvía el token del operador que lo abrió (decisión 13 de `Documents/decisiones-del-equipo.md`) y el Home Banking el del usuario del banco que atiende al cliente (decisión 14). La Billetera Digital no usa TARJETAS. Un módulo que necesite su propio usuario de servicio requiere `VER_TARJETA` para su rol en `backend/COREDB/permisos.py`.
 
 ## 3. Permisos
 
@@ -115,7 +115,7 @@ Cabecera obligatoria: `X-Idempotency-Key: <UUIDv4>`.
 ```
 
 - Obligatorios: `cod_cliente` y `num_cuenta`, una cuenta en la que el cliente es titular.
-- `bin`: `004499` si no se envía. Es un BIN de desarrollo, de tarjeta física; hay un BIN por tipo de tarjeta y los reales son un pendiente del emisor (issue #34, pregunta 7).
+- `bin`: `004499` si no se envía. Es un BIN de desarrollo, de tarjeta física; hay un BIN por tipo de tarjeta (decisión 10 de `Documents/decisiones-del-equipo.md`) y los reales los dará el emisor (issue #116).
 - Sin fechas, la tarjeta se emite hoy y vence en cuatro años. El vencimiento debe ser posterior a la emisión (RN-TAR-003).
 - `ultimos4`: los últimos cuatro dígitos del PAN, si ya se conocen. **El PAN nunca se envía**: un campo `pan` se rechaza.
 - La tarjeta nace `PENDIENTE_ACTIVACION` y vinculada a la cuenta; se activa con 4.5.
@@ -270,7 +270,6 @@ La clave nunca se devuelve, no se registra en la bitácora y no aparece en los m
 ## 6. Pendiente
 
 - **Tarjeta matriz.** Validar una coordenada (RN-TAR-002) necesita un procedimiento que emita la matriz; la base aún no lo tiene.
-- **Usuarios de servicio de los módulos consumidores.** Dar `VER_TARJETA` a `SERVICIO:CAJERO_ATM`, `SERVICIO:HOME_BANKING` y `SERVICIO:BILLETERA_DIGITAL` en COREDB, cuando esos módulos se integren.
-- **Tarjetas virtuales.** Necesitan un BIN propio de tipo `VIRTUAL` en el catálogo (issue #34, pregunta 7).
+- **Tarjetas virtuales.** Necesitan un BIN propio de tipo `VIRTUAL` en el catálogo, que dará el emisor junto con los BIN reales (issue #116).
 
 Dudas o cambios: comentarios sobre este documento o al módulo Tarjetas.

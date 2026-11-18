@@ -1,6 +1,6 @@
 # Cierre documental de feature/integracion-sol
 
-Fecha: 2026-11-14, America/Lima. Rama verificada `feature/integracion-sol`, HEAD `86904edd8dc866c1d4260a996748a1cda3770007`. E01–E06 cerradas; sin desarrollo funcional nuevo, staging, commit, push o PR publicado. [Descripción de PR](sol-pr-descripcion.md), [nota para equipos](sol-coordinacion-proveedores.md), [selección exacta](sol-archivos-commit.txt), [changelog](change-log.md).
+Fecha: 2026-11-14, America/Lima. Rama verificada `feature/integracion-sol`, HEAD `86904edd8dc866c1d4260a996748a1cda3770007`. E01–E06 cerradas; sin desarrollo funcional nuevo, staging, commit, push o PR publicado. [Descripción de PR](sol-pr-descripcion.md), [nota para equipos](sol-coordinacion-proveedores.md), selección exacta (`sol-archivos-commit.txt`, retirado del repositorio; ver `change-log.md`), [changelog](change-log.md).
 
 ## Dictamen de selección
 

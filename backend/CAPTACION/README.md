@@ -28,7 +28,7 @@ flowchart LR
   cap -->|"usuario de servicio: alta del cliente, vínculo, referencias"| bus
   bus --> coredb["COREDB :8012"]
   coredb --> db[("base integrada: clientes.*_captacion")]
-  sol["SOL :8011"] -.->|"CR-INT-01: POST /cap/references/search (cuando haya Bus)"| cap
+  sol["SOL :8011"] -.->|"CR-INT-01: POST /cap/references/search (cuando SOL pase a modo REAL)"| cap
 ```
 
 | Con | Cómo | Qué |
@@ -145,7 +145,6 @@ lógica (`test_logica.py`).
 | Qué | De quién depende |
 |---|---|
 | Proveedores reales (RENIEC, centrales, SMS) en lugar del simulador | Contratos con terceros; se reemplaza `proveedores.py` |
-| Confirmar que CAPTACION registre clientes HABILITADOS como usuario de servicio de CLIENTES (R-01) | Equipos de Clientes y CORE |
-| SOL en modo REAL contra CAPTACION | Bus de Servicios, Evaluación y Seguridad (SOL exige los tres) |
+| SOL en modo REAL contra CAPTACION (hoy SOL corre en SIMULADO) | SOL: en REAL exige también un receptor de auditoría (`SOL_AUDIT_*`), que ningún módulo ofrece (Seguridad no recibe eventos) |
 | `apellido_materno`: COREDB lo admite vacío, SOL lo exige | Homologar CR-INT-01 con SOL |
 | Corregir celular o correo de un solicitante antes de habilitarlo | CAPTACION (siguiente versión) |

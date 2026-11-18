@@ -11,7 +11,8 @@ Desde la raíz del repositorio, `./bna up` levanta SOL junto con los demás serv
 - La interfaz queda en http://localhost:3000/solicitud-credito y el servicio en http://127.0.0.1:8011/docs.
 - Las cuatro cuentas de la sección 3 se crean solas. Su clave inicial es la de `SOL_INITIAL_PASSWORD` en `.env` (`grep SOL_INITIAL_PASSWORD .env`).
 - La base `bna_sol_mvp` vive en el servicio `db-aux`, aparte de la base del CORE. `./bna down` la conserva; `./bna reset` la borra.
-- Sigue en modo `SIMULADO`: Captación y Evaluación no se conectan con otros módulos.
+- Sigue en modo `SIMULADO`: SOL no llama a CAPTACION ni a Evaluación, aunque los dos ya están en el producto y ofrecen su lado de CR-INT-01 (`/cap/references/...`) y de CR-INT-02/03 (`/eva/applications`). El frontend llega a SOL a través del Bus de Servicios (`/bus/sol`).
+- Para pasar a `REAL` falta, además de configurar las rutas y los tokens de cada proveedor, un receptor de auditoría (`SOL_AUDIT_*`): ningún módulo del producto lo ofrece.
 
 El resto de esta guía es la instalación manual del módulo, en Windows y con un MySQL propio.
 
@@ -185,6 +186,6 @@ Desde `frontend`, `npm run lint` y `npm run build` verifican la interfaz. La con
 
 ## Límites que deben declararse en la sustentación
 
-Persistencia local en MySQL y lógica de SOL funcionales. Captación y Evaluación se simulan; el Bus corporativo y Seguridad central no están conectados. La auditoría tiene historial local y cola persistente. Incluye adaptador HTTP con acuse central, pendiente de validación contra Seguridad institucional. No es un repositorio certificado como inmutable. Pago doble, documentos adjuntos, cambios de condiciones propuestos por EVA, traspaso final de calendario, desembolso y cobranza no se implementan en esta entrega. La identidad visual y las políticas siguen siendo propuestas para revisión.
+Persistencia local en MySQL y lógica de SOL funcionales. Captación y Evaluación se simulan dentro de SOL; en el producto integrado el frontend llega a SOL por el Bus de Servicios, pero SOL no llama por él a otros módulos, y Seguridad central no está conectada. La auditoría tiene historial local y cola persistente. Incluye adaptador HTTP con acuse central, pendiente de validación contra Seguridad institucional. No es un repositorio certificado como inmutable. Pago doble, documentos adjuntos, cambios de condiciones propuestos por EVA, traspaso final de calendario, desembolso y cobranza no se implementan en esta entrega. La identidad visual y las políticas siguen siendo propuestas para revisión.
 
 Consulta `Documents/solicitud-credito/LECTURA_DEL_CODIGO.md`, `CONTRATOS_DEMO.md`, `PROPUESTAS_Y_DECISIONES.md` y `VALIDACION.md` para explicar y coordinar la siguiente integración.

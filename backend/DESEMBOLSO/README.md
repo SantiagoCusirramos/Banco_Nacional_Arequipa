@@ -87,4 +87,5 @@ quedan contenedores ni volúmenes.
 - Reversión: CUENTAS no tiene extorno y el modelo deja `solicitud_reversion` sin uso en esta fase.
 - Antifraude y eventos a Seguridad (CR-INT-10): Seguridad todavía no los ofrece; la orden admite las
   validaciones AUTORIZACION y ANTIFRAUDE para cuando existan.
-- Decisiones del equipo con valor por omisión: supervisor = ADMINISTRADOR (T6), identidad del mismo día (T7).
+- Decisiones del equipo adoptadas, revisables: supervisor = ADMINISTRADOR (T6), identidad del mismo día (T7)
+  ([`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md)).
