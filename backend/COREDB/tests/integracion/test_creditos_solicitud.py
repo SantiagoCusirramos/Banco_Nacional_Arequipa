@@ -164,6 +164,9 @@ def test_la_bandeja_separa_los_borradores_y_cuenta_por_estado(api, asesor, clien
     borradores = api.get(f"{BASE}/solicitudes", params={"codCliente": titular, "estado": "REGISTRADA"},
                          headers=asesor[0]).json()
     assert [(s["idSolicitud"], s["revision"]) for s in borradores] == [(cuerpo["idSolicitud"], 1)]
+    todas = api.get(f"{BASE}/solicitudes", params={"codCliente": titular, "borradores": "true"},
+                    headers=asesor[0]).json()
+    assert [s["estado"] for s in todas] == ["REGISTRADA"]
     conteo = api.get(f"{BASE}/solicitudes/conteo", params={"codCliente": titular}, headers=asesor[0])
     assert conteo.status_code == 200, conteo.text
     assert conteo.json() == {"total": 1, "estados": {"REGISTRADA": 1}}

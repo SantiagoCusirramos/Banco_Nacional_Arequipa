@@ -186,12 +186,14 @@ def _solicitud(fila) -> dict[str, Any]:
 
 
 def listar_solicitudes(db: Session, *, estado: str | None, cod_cliente: str | None, limite: int,
-                       offset: int) -> list[dict[str, Any]]:
+                       offset: int, borradores: bool = False) -> list[dict[str, Any]]:
     filtros, parametros = [], {"limite": limite, "offset": offset}
-    # Sin estado, todas menos los borradores de SOL (REGISTRADA), que no son de Evaluación.
-    filtros.append("estado_solicitud = :estado" if estado is not None else "estado_solicitud <> 'REGISTRADA'")
     if estado is not None:
+        filtros.append("estado_solicitud = :estado")
         parametros["estado"] = estado
+    elif not borradores:
+        # Sin estado, todas menos los borradores de SOL (REGISTRADA), que no son de Evaluación.
+        filtros.append("estado_solicitud <> 'REGISTRADA'")
     if cod_cliente is not None:
         filtros.append("cod_cliente = :cliente")
         parametros["cliente"] = cod_cliente

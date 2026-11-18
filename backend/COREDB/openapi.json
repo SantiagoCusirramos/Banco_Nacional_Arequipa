@@ -13290,7 +13290,7 @@
     },
     "/coredb/creditos/solicitudes": {
       "get": {
-        "description": "Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente. Sin\n`estado`, todas menos los borradores de SOL (REGISTRADA); con `estado=REGISTRADA`, solo ellos.",
+        "description": "Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente. Sin\n`estado`, todas menos los borradores de SOL (REGISTRADA), salvo con `borradores=true`; con\n`estado=REGISTRADA`, solo ellos.",
         "operationId": "bandeja_coredb_creditos_solicitudes_get",
         "parameters": [
           {
@@ -13332,6 +13332,18 @@
                 }
               ],
               "title": "Codcliente"
+            }
+          },
+          {
+            "description": "Sin estado: incluir también los borradores de SOL.",
+            "in": "query",
+            "name": "borradores",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Sin estado: incluir también los borradores de SOL.",
+              "title": "Borradores",
+              "type": "boolean"
             }
           },
           {

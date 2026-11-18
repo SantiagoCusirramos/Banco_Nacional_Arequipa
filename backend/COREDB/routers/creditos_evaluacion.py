@@ -225,13 +225,16 @@ class ConteoSolicitudes(_Respuesta):
 def bandeja(
     estado: EstadoSolicitud | None = None,
     cod_cliente: str | None = Query(default=None, alias="codCliente", min_length=1, max_length=12),
+    borradores: bool = Query(default=False, description="Sin estado: incluir también los borradores de SOL."),
     limite: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(db_session),
 ):
     """Solicitudes, de la más reciente a la más antigua, sin datos personales del cliente. Sin
-    `estado`, todas menos los borradores de SOL (REGISTRADA); con `estado=REGISTRADA`, solo ellos."""
-    return creditos.listar_solicitudes(db, estado=estado, cod_cliente=cod_cliente, limite=limite, offset=offset)
+    `estado`, todas menos los borradores de SOL (REGISTRADA), salvo con `borradores=true`; con
+    `estado=REGISTRADA`, solo ellos."""
+    return creditos.listar_solicitudes(db, estado=estado, cod_cliente=cod_cliente, limite=limite, offset=offset,
+                                       borradores=borradores)
 
 
 @router.get("/solicitudes/conteo", response_model=ConteoSolicitudes,
