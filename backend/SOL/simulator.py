@@ -7,7 +7,7 @@ SOL.simulator:app --host 127.0.0.1 --port 8020. No publicar en Internet.
 import os
 import secrets
 from datetime import timedelta
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Response
 from .clock import business_today
 
 
@@ -31,8 +31,9 @@ def create_simulator(token):
                 "estado_habilitante": "OBSERVADO" if index == 2 else "HABILITADO",
                 "version_contrato": "CR-INT-01-PROPUESTA-v2", "simulado": True}
 
-    @app.get("/cap/references")
-    def search(search: str = "", limit: int = Query(50, ge=1, le=50)):
+    @app.post("/cap/references/search")
+    def search(body: dict = Body(default={})):
+        search, limit = str(body.get("search", "")), max(1, min(int(body.get("limit", 50)), 50))
         return [r for r in [reference(i) for i in range(1, 4)] if search.lower() in (r["numero_documento"] + " " + r["nombres"]).lower()][:limit]
 
     @app.get("/cap/references/{identifier}")

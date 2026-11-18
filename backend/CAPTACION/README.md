@@ -28,14 +28,14 @@ flowchart LR
   cap -->|"usuario de servicio: alta del cliente, vínculo, referencias"| bus
   bus --> coredb["COREDB :8012"]
   coredb --> db[("base integrada: clientes.*_captacion")]
-  sol["SOL :8011"] -.->|"CR-INT-01: GET /cap/references (cuando haya Bus)"| cap
+  sol["SOL :8011"] -.->|"CR-INT-01: POST /cap/references/search (cuando haya Bus)"| cap
 ```
 
 | Con | Cómo | Qué |
 |---|---|---|
 | **COREDB / expediente** | Token JWT del asesor | `GET /coredb/auth/me` (quién es y sus permisos) y `/coredb/captacion/...`: solicitante, caso, consentimientos, OTP, validaciones, centrales, perfil, estado y habilitación. Leer exige `VER_CLIENTE`; trabajar un caso, `CREAR_CLIENTE` (ASESOR y ADMINISTRADOR). Cada paso queda a nombre del asesor en la bitácora de la base |
 | **COREDB / Clientes** | Usuario de servicio `svc-captacion` (rol SERVICIO, módulo CLIENTES) | `POST /coredb/clientes/validaciones/documento` (¿ya es cliente?), `POST /coredb/clientes` (alta HABILITADA), `POST /coredb/captacion/casos/{id}/cliente` (lo liga al caso), `GET /coredb/clientes/{cod}` y las lecturas de las referencias |
-| **Solicitud de Crédito** | Token de servicio `CAP_SOL_TOKEN` | `GET /cap/references?search=&limit=50` y `GET /cap/references/{idCliente}`, con la forma exacta que espera `backend/SOL/integrations.py` |
+| **Solicitud de Crédito** | Token de servicio `CAP_SOL_TOKEN` | `POST /cap/references/search` (cuerpo `{"search", "limit"}`, límite 50) y `GET /cap/references/{idCliente}`, con la forma exacta que espera `backend/SOL/integrations.py` |
 
 - **Por qué un usuario de servicio del módulo CLIENTES.** COREDB solo acepta un cliente
   `HABILITADO` de ese usuario (punto R-01 de [`CONTRATO_CLIENTES.md`](../COREDB/CONTRATO_CLIENTES.md)), y
@@ -55,7 +55,7 @@ flowchart LR
   cambios**, contra CAPTACION: SOL acepta la referencia de un cliente habilitado y rechaza una
   revocada o inexistente. Cuando exista el Bus, SOL se configura con:
   ```dotenv
-  SOL_CAP_SEARCH_PATH=/cap/references
+  SOL_CAP_SEARCH_PATH=/cap/references/search
   SOL_CAP_REFERENCE_PATH=/cap/references/{idCliente}
   # SOL_BUS_TOKEN = CAP_SOL_TOKEN de CAPTACION
   ```
@@ -85,7 +85,7 @@ Base `/api/v1/captacion`, con respuestas ITIL-02 (`success`, `data`, `metadata`;
 | Método | Ruta | Qué hace |
 |---|---|---|
 | POST | `/solicitantes` | Registra al solicitante. Documento repetido: 200 con `duplicado: true` |
-| GET | `/solicitantes?documento=` · `/solicitantes/{id}` | Búsqueda y consulta |
+| POST · GET | `/solicitantes/busqueda` (cuerpo `{"documento", "limite"}`) · `/solicitantes/{id}` | Búsqueda y consulta |
 | POST | `/casos` | Abre el caso (un solo caso abierto por solicitante: 409 `ERR-CAP-CASO-ABIERTO`) |
 | GET | `/casos?estado=` · `/casos/{id}` | Bandeja y expediente completo, con `faltantes` |
 | POST | `/casos/{id}/consentimientos` | Consentimientos |
@@ -95,7 +95,7 @@ Base `/api/v1/captacion`, con respuestas ITIL-02 (`success`, `data`, `metadata`;
 | POST | `/casos/{id}/estado` | `OBSERVAR`, `LEVANTAR_OBSERVACION`, `RECHAZAR`, `REVOCAR`, con motivo |
 | POST | `/casos/{id}/habilitar` | Cliente en COREDB y referencia vigente. Se puede repetir sin duplicar |
 | GET | `/casos/{id}/referencia` | La referencia que verá SOL |
-| GET | `/cap/references` · `/cap/references/{idCliente}` | CR-INT-01, solo con `CAP_SOL_TOKEN` |
+| POST · GET | `/cap/references/search` · `/cap/references/{idCliente}` | CR-INT-01, solo con `CAP_SOL_TOKEN` |
 | GET | `/health` · `/ready` | `/ready` comprueba COREDB y la credencial de servicio |
 
 ## Proveedores simulados

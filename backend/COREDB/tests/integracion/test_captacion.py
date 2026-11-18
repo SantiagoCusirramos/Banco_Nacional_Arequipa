@@ -124,13 +124,15 @@ def test_busca_solicitantes_por_texto_y_con_cliente(api, asesor, autorizacion):
     documento = dni()
     nombre = "Zoila" + uuid.uuid4().hex[:6]
     creado = solicitante(api, encabezados, documento, nombres=nombre).json()["solicitante"]
-    por_texto = api.get(f"{RUTA}/solicitantes", params={"texto": nombre.lower()}, headers=encabezados).json()
+    por_texto = api.post(f"{RUTA}/solicitantes/busqueda", json={"texto": nombre.lower()}, headers=encabezados).json()
     assert [s["id_solicitante"] for s in por_texto] == [creado["id_solicitante"]]
-    por_documento = api.get(f"{RUTA}/solicitantes", params={"documento": documento[2:]}, headers=encabezados).json()
+    por_documento = api.post(f"{RUTA}/solicitantes/busqueda", json={"documento": documento[2:]}, headers=encabezados).json()
     assert creado["id_solicitante"] in [s["id_solicitante"] for s in por_documento]
-    con_cliente = api.get(f"{RUTA}/solicitantes", params={"texto": nombre, "con_cliente": True},
+    con_cliente = api.post(f"{RUTA}/solicitantes/busqueda", json={"texto": nombre, "con_cliente": True},
                           headers=encabezados).json()
     assert con_cliente == []
+    # P-1: el documento nunca va en la consulta (quedaría en los registros de acceso).
+    assert api.get(f"{RUTA}/solicitantes", params={"documento": documento}, headers=encabezados).status_code == 405
     visto = api.get(f"{RUTA}/solicitantes/{creado['id_solicitante']}", headers=encabezados)
     assert visto.status_code == 200 and visto.json() == creado
     error(api.get(f"{RUTA}/solicitantes/{uuid.uuid4()}", headers=encabezados), 404, "SOLICITANTE_NO_ENCONTRADO")
@@ -285,7 +287,7 @@ def test_habilita_con_un_cliente_nuevo_que_registra_el_modulo_clientes(api, ases
                                                             ("HABILITAR", usuario)]
     por_cliente = api.get(f"{RUTA}/casos", params={"cod_cliente": cod_cliente}, headers=servicio).json()
     assert [c["id_caso"] for c in por_cliente] == [id_caso] and por_cliente[0]["solicitante"]["numero_documento"] == documento
-    con_cliente = api.get(f"{RUTA}/solicitantes", params={"texto": documento, "con_cliente": True}, headers=servicio).json()
+    con_cliente = api.post(f"{RUTA}/solicitantes/busqueda", json={"texto": documento, "con_cliente": True}, headers=servicio).json()
     assert [s["cod_cliente"] for s in con_cliente] == [cod_cliente]
     revocado = escribir(api, encabezados, id_caso, "estado", {"accion": "REVOCAR", "motivo": "Documento adulterado"}, 200)
     assert revocado["estado"] == "REVOCADO" and revocado["cod_cliente"] == cod_cliente

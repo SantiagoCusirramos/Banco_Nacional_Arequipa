@@ -80,8 +80,30 @@ class Fallo(Exception):
     pass
 
 
+# P-1: documentos, celulares, PIN, claves y tokens que la corrida envía o recibe. Al terminar se
+# escriben en E2E_SENSIBLES y `./bna smoke` comprueba que ninguno quedó en los registros.
+SENSIBLES = set()
+CLAVES_SENSIBLES = {"numero_documento", "documento", "search", "texto", "celular", "celular_destino",
+                    "pin", "password", "clave", "access_token", "token"}
+
+
+def anotar_sensibles(datos):
+    if isinstance(datos, dict):
+        for clave, valor in datos.items():
+            if clave in CLAVES_SENSIBLES and isinstance(valor, str) and len(valor) >= 6:
+                SENSIBLES.add(valor)
+            else:
+                anotar_sensibles(valor)
+    elif isinstance(datos, list):
+        for valor in datos:
+            anotar_sensibles(valor)
+
+
 def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
     """Devuelve (estado, cuerpo JSON o texto). No lanza por un 4xx o 5xx."""
+    anotar_sensibles(cuerpo)
+    if token:
+        SENSIBLES.add(token)
     datos = json.dumps(cuerpo).encode() if cuerpo is not None else None
     peticion = urllib.request.Request(url, data=datos, method=metodo)
     if datos is not None:
@@ -100,14 +122,17 @@ def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
     except (urllib.error.URLError, OSError) as error:
         raise Fallo(f"{metodo} {url}: sin respuesta ({error})") from error
     try:
-        return estado, json.loads(texto)
+        datos = json.loads(texto)
     except ValueError:
         return estado, texto
+    anotar_sensibles(datos)
+    return estado, datos
 
 
 def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
     """Como el navegador ante el proxy de SOL del frontend: Origin y cookie, sin token.
     Devuelve (estado, cuerpo JSON o texto, Set-Cookie)."""
+    anotar_sensibles(cuerpo)
     peticion = urllib.request.Request(f"{FRONTEND}/api/solicitud-credito/{ruta}", method=metodo,
                                       data=json.dumps(cuerpo).encode() if cuerpo is not None else None)
     peticion.add_header("Content-Type", "application/json")
@@ -123,9 +148,11 @@ def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
     except (urllib.error.URLError, OSError) as error:
         raise Fallo(f"{metodo} {ruta} por el proxy de SOL: sin respuesta ({error})") from error
     try:
-        return estado, json.loads(texto), galleta
+        datos = json.loads(texto)
     except ValueError:
         return estado, texto, galleta
+    anotar_sensibles(datos)
+    return estado, datos, galleta
 
 
 def sano(nombre, url, cabeceras):
@@ -774,7 +801,7 @@ def flujo():
            "CR-INT-01: la referencia no debe llevar datos de contacto")
     estado, _ = pedir("GET", f"{CAPTACION}/cap/references/{cod_cliente}", token=token)
     exigir(estado == 401, f"CR-INT-01 con un token de persona debía responder 401 y respondió {estado}")
-    estado, lista = pedir("GET", f"{CAPTACION}/cap/references?search={dni}&limit=50", token=TOKEN_SOL)
+    estado, lista = pedir("POST", f"{CAPTACION}/cap/references/search", {"search": dni, "limit": 50}, token=TOKEN_SOL)
     exigir(estado == 200 and [r["id_cliente"] for r in lista] == [cod_cliente],
            f"CR-INT-01: la búsqueda debía encontrar al cliente: {estado} {lista}")
     paso("CR-INT-01: SOL recibe una referencia vigente y HABILITADA, con su búsqueda; un token de persona no entra")
@@ -914,15 +941,20 @@ def flujo():
     exigir(galleta.startswith("bna_sol_session=") and "httponly" in galleta.lower(),
            "El login de SOL debía dejar la sesión en una cookie HttpOnly")
     sesion = galleta.split(";", 1)[0]
+    SENSIBLES.add(sesion.split("=", 1)[1])
     estado, respuesta, _ = pedir_navegador("GET", "policy", cookie=sesion)
     exigir(estado == 200 and respuesta.get("integracion") == "SIMULADO",
            f"Política de SOL con la cookie de sesión: {estado} {respuesta}")
+    # P-1: la búsqueda por documento va en el cuerpo de un POST, no en la URL.
+    estado, respuesta, _ = pedir_navegador("POST", "clients/search", {"search": "70000001"}, cookie=sesion)
+    exigir(estado == 200 and [c["numero_documento"] for c in respuesta] == ["70000001"],
+           f"Búsqueda de clientes de SOL por documento: {estado} {respuesta}")
     estado, respuesta, _ = pedir_navegador("POST", "auth/logout", {}, cookie=sesion)
     exigir(estado == 200, f"Cierre de sesión de SOL por el proxy: {estado} {respuesta}")
     estado, _, _ = pedir_navegador("GET", "policy", cookie=sesion)
     exigir(estado == 401, f"La sesión de SOL debía quedar revocada tras cerrar: respondió {estado}")
     paso("frontend: SOL por su proxy, con login desde el origen del frontend (otro origen, 403), "
-         "sesión en cookie HttpOnly, consulta y cierre de sesión")
+         "sesión en cookie HttpOnly, consulta, búsqueda por documento en el cuerpo y cierre de sesión")
 
     # ── Todo pasó por el Bus: el flujo y cada puente del frontend ────────────
     despues = metricas_bus()
@@ -956,3 +988,8 @@ if __name__ == "__main__":
         print(f"  FALLA  {fallo}", file=sys.stderr)
         sys.exit(1)
     print("Flujo completo.")
+    destino = os.environ.get("E2E_SENSIBLES")
+    if destino:
+        SENSIBLES.update(v for v in (TOKEN_BUS, TOKEN_SOL, PASSWORD, SOL_PASSWORD, TOKEN_SOL_EVALUACION) if v)
+        with open(destino, "w", encoding="utf-8") as archivo:
+            archivo.write("\n".join(sorted(SENSIBLES)) + "\n")
