@@ -1,5 +1,8 @@
 # CORE — Guía de rutas y fuentes de información
 
+> CORE legado: solo se levanta con el perfil `legado` y ningún servicio del
+> producto lo llama. La API del producto es COREDB (`backend/COREDB/README.md`).
+
 Documento de referencia de la API unificada del módulo **CORE**
 (`backend/CORE/`). Describe cada ruta expuesta, qué recibe, qué
 devuelve y **de qué tabla(s) de la base `bna` se extrae la

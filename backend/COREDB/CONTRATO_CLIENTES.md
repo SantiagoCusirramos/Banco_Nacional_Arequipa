@@ -1,12 +1,12 @@
 # Contrato de COREDB para el módulo Clientes
 
-**Estado:** implementado en `backend/COREDB`. Pendiente de la revisión del equipo de Clientes (Eddu Valeriano): los cambios que pidan se hacen sobre estas rutas.
+**Estado:** implementado en `backend/COREDB`. El módulo Clientes no está en el producto (su PR #25 se cerró sin fusionar el 2026-11-17): estas rutas las usa CAPTACION, con el usuario de servicio `svc-captacion` del módulo CLIENTES, y el personal del banco con su token. Si Clientes vuelve, los cambios que pida se hacen sobre estas rutas.
 **Qué es:** las operaciones que el CORE ofrece a Clientes en `backend/COREDB`, la API sobre la base integrada (`database/`). La especificación exacta está en `openapi.json` y en `/docs`.
 **Qué no es:** el contrato público de Clientes hacia los canales (`/api/v1/kyc/...`). Ese es del módulo Clientes. Este documento cubre solo el tramo Clientes → CORE.
 
 ## 1. Convenciones
 
-- **URL base:** configurable, por ejemplo `CORE_BASE_URL=http://127.0.0.1:8012`. Cuando exista el Bus de Servicios apuntará al Bus. Todas las rutas empiezan con `/coredb`.
+- **URL base:** configurable. En el producto, COREDB se alcanza solo a través del Bus de Servicios: `CORE_BASE_URL=http://bus:8018/bus/coredb`, con la credencial del módulo en `X-Bus-Token` (ver `backend/BUS_SERVICIOS/README.md`). Todas las rutas empiezan con `/coredb`.
 - **Autenticación:** `Authorization: Bearer <token>` en todas las rutas salvo `/coredb/auth/login` y `/coredb/salud` (sección 2).
 - **Correlación:** cabecera `X-Correlation-ID` con un UUID. Es opcional: si falta, o no es un UUID, COREDB genera uno. Siempre vuelve en la respuesta, también en las de error, y queda en la bitácora y en `clientes.validacion_identidad`. Conviene enviar el mismo identificador que recibió Clientes del canal.
 - **Cuerpos JSON estrictos:** un campo desconocido se rechaza con 422, y los textos deben ser cadenas JSON (`"70000001"`, no `70000001`).
@@ -58,7 +58,7 @@ El token de COREDB no sirve en la API `CORE` ni al revés: tienen claves y emiso
 | `POST /coredb/clientes/{cod_cliente}/estado` | `MODIFICAR_CLIENTE` | Sí, **salvo BAJA** | Sí | Sí | No |
 | `GET /coredb/catalogos/clientes` | autenticado | Sí | Sí | Sí | Sí |
 
-- **Registro HABILITADO (punto R-01, por confirmar con Eddu y Santiago):** solo el usuario de servicio de Clientes puede registrar un cliente `HABILITADO`, porque es quien verificó la identidad contra RENIEC. El personal del banco registra solo `OBSERVADO`. Si se decide otra cosa, cambia en un solo lugar de COREDB.
+- **Registro HABILITADO (punto R-01, decisión 1 de [`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md), revisable):** solo el usuario de servicio de Clientes puede registrar un cliente `HABILITADO`, porque es quien verificó la identidad contra RENIEC. El personal del banco registra solo `OBSERVADO`. Si se decide otra cosa, cambia en un solo lugar de COREDB.
 - **BAJA:** es final y cancela todas las tarjetas del cliente, por eso solo la fija una persona con `MODIFICAR_CLIENTE`. El servicio puede fijar ACTIVO, OBSERVADO, BLOQUEADO y SUSPENDIDO.
 
 ## 4. Rutas
@@ -209,8 +209,8 @@ Conviene que Clientes lea las reglas de documento de aquí en lugar de fijarlas 
 ## 6. Pendiente (fuera de esta versión)
 
 - **Límite de intentos:** no hay límite de intentos ni de frecuencia en la verificación por documento. El CORE confía en `identidad_verificada` del llamador autenticado y deja cada consulta con quien la hizo (en el espíritu de RF-CLI-005).
-- **Login:** los intentos fallidos no se registran ni bloquean la cuenta, como en CORE (punto M2).
-- **Más adelante:** códigos OTP (`codigo_verificacion`), cambio de correo o celular y enrolamiento biométrico en el CORE (decisiones D2 y D4).
-- **Por confirmar:** quién puede registrar HABILITADO (R-01).
+- **Login:** desde `bd-v1.12-mysql`, cada fallo de una persona queda en la bitácora y 5 seguidos bloquean su login 15 minutos (decisión 15 de `Documents/decisiones-del-equipo.md`); los usuarios de servicio no se bloquean. Ver `backend/COREDB/README.md`.
+- **Códigos OTP:** los verifica el expediente de captación (`/coredb/captacion/casos/{id}/otps`, desde `bd-v1.7-mysql`); al habilitar el caso, el cliente recibe las verificaciones de celular y correo.
+- **Más adelante:** cambio de correo o celular y enrolamiento biométrico en el CORE (decisiones D2 y D4).
 
 Dudas o cambios: comentarios sobre este documento o al equipo del CORE.

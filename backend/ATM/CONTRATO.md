@@ -1,13 +1,13 @@
 # Contrato del módulo ATM para los módulos que lo usan
 
 **Estado:** implementado en `backend/ATM` (puerto 8019), sobre TARJETAS y CUENTAS por Bus de Servicios.
-**Para quién:** Frontend (pantalla del cajero), panel técnico, pruebas de integración.
+**Para quién:** la pantalla del cajero y el panel técnico, que sirve el propio módulo desde `static/`, y las pruebas de integración.
 **Qué no es:** el tramo ATM → Bus → TARJETAS/CUENTAS. Ese está en este README y en el código.
 
 ## 1. Convenciones
 
-- **URL base:** configurable, por ejemplo `ATM_BASE_URL=http://127.0.0.1:8019`. Dentro del producto (`./bna up`) es `http://atm:8019`. Cuando exista el Bus de Servicios apuntará al Bus. Todas las rutas empiezan con `/api`.
-- **Autenticación:** `Authorization: Bearer <token>` de COREDB en todas las rutas salvo `/health`, `/ready`, `/`, `/tecnico.html`, `/static/...` (sección 2). `/ready` responde 200 si TARJETAS y CUENTAS contestan por el Bus y 503 si no; sirve para saber si ATM puede atender, sin token. ATM no valida el token: lo reenvía y TARJETAS/CUENTAS deciden.
+- **URL base:** configurable, por ejemplo `ATM_BASE_URL=http://127.0.0.1:8019`. Dentro del producto (`./bna up`) otro módulo llega por el Bus de Servicios: `http://bus:8018/bus/atm`, con su credencial en `X-Bus-Token`. Todas las rutas de la API empiezan con `/api`.
+- **Autenticación:** `Authorization: Bearer <token>` de COREDB en todas las rutas salvo `/health`, `/ready`, `/`, `/tecnico.html` y los archivos de `static/` (`/logo.png`, `/fuentes/...`) (sección 2). `/ready` responde 200 si TARJETAS y CUENTAS contestan por el Bus y 503 si no; sirve para saber si ATM puede atender, sin token. ATM no valida el token: lo reenvía y TARJETAS/CUENTAS deciden.
 - **Correlación:** `X-Correlation-ID` es opcional. Si es un UUID, llega igual a TARJETAS/CUENTAS y a su bitácora; si no lo es, ATM genera uno para el Bus. El identificador de la respuesta va en `metadata.uuid_transaccion`.
 - **Idempotencia:** la autorización y la confirmación exigen `X-Idempotency-Key` (UUIDv4). La validación de PIN y las consultas no la necesitan. Repetir una confirmación con la misma llave devuelve el mismo resultado sin segundo débito.
 - **Cuerpos JSON estrictos:** un campo desconocido se rechaza con 400 `ERR-ATM-VALIDACION-ESQUEMA`, sin devolver su valor.
@@ -31,7 +31,7 @@
 | `GET /ready` | `{"status": "ready"}` o 503 `{"status": "not_ready", "tarjetas_o_cuentas": "no disponible"}` |
 | `GET /` | Pantalla HTML del cajero |
 | `GET /tecnico.html` | Panel técnico HTML |
-| `GET /static/...` | Archivos estáticos (fuentes, logo) |
+| `GET /logo.png`, `GET /fuentes/...` | Archivos estáticos de `static/` (fuentes, logo); nada fuera de esa carpeta |
 
 ## 3. Rutas de la API (exigen token COREDB)
 
@@ -249,10 +249,11 @@ Sin permiso, la respuesta es 403 `ERR-TAR-PERMISO-DENEGADO` o `ERR-CUE-PERMISO-D
 
 ## 6. Pendiente
 
-- **Confirmación de autorización en TARJETAS:** el endpoint `POST /api/v1/tarjetas/autorizaciones/{uuid}/confirmacion` está en desarrollo en otra rama (`integracion/confirmar-autorizacion`). El ATM programa contra ese contrato con transporte simulado.
 - **Bandejas reales:** hoy son simuladas en memoria; en producción deben persistirse y sincronizarse con el core.
 - **Conciliación automática:** reintentar extornos/confirmaciones pendientes (hoy manual por panel técnico).
-- **Usuarios de servicio:** dar permisos a `SERVICIO:ATM` en COREDB cuando se integre el frontend real.
+- **Retenciones pendientes en la pantalla:** `/api/estado` no lista las retenciones del cajero que siguen sin confirmar; la base las libera a los 15 minutos (decisión 11 de `Documents/decisiones-del-equipo.md`).
+
+El cajero no tiene usuario de servicio propio: lo abre un operador del banco y su token se reenvía (decisión 13).
 
 ---
 

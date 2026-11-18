@@ -1,6 +1,6 @@
 # CUENTAS
 
-Modulo de Cuentas (linea Ahorros). No tiene base de datos propia: valida y llama a COREDB (`/coredb/*`, puerto 8012).
+Modulo de Cuentas (linea Ahorros). No tiene base de datos propia: valida y llama a COREDB (`/coredb/*`) a traves del Bus de Servicios (`http://bus:8018/bus/coredb`, con su credencial `BUS_TOKEN_CUENTAS`).
 Sigue el estandar del Comite de Ahorros (DOC-ITIL-01 y DOC-ITIL-02).
 
 ## Endpoints
@@ -100,7 +100,7 @@ Sin Python 3.11 en la maquina, `./bna test` desde la raiz corre esta suite en un
 - 409 por llave duplicada: CORE devuelve el resultado original con `replay: true` si la peticion es la misma, y 409 (`ERR-COR-IDEMPOTENCY-KEY-REUTILIZADA`) si la llave se reutiliza con otros datos
 - Cuentas no usa MySQL directo: las tablas las escribe CORE
 - Extorno ATM (INT05), cierre mensual e intereses, eliminar cuenta: requieren cambios en CORE (RFC)
-- Validacion de token (Seguridad) y paso por el Bus: no existen aun
+- Validacion de token: la hace COREDB (el modulo de Seguridad no la ofrece). El paso por el Bus de Servicios ya existe: CUENTAS llega a COREDB por `/bus/coredb`
 - Tope diario: lo valida CORE con `limite_canal`, sus valores no coinciden con el Diccionario
 - Mancomunada indistinta/conjunta: CORE no lo guarda
 

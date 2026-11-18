@@ -17,7 +17,7 @@ Banca personal del BNA en [Next.js](https://nextjs.org) 16 (App Router) con Reac
 | `/pagar-cuota` | Pago de cuotas de crédito (CR-INT-08): créditos de un cliente, monto a pagar hoy, pago desde una cuenta de ahorros y su resultado | COBRANZA, con las cuentas del cliente desde CUENTAS |
 | `/homebanking/index.html` | Home Banking estático (prototipo HTML+JS) | Servido por Next.js desde `public/`. Usa puentes `/api/*`. |
 
-El cambio de estado de una cuenta se muestra deshabilitado: COREDB todavía no ofrece esa operación (issue #41).
+El cambio de estado de una cuenta se muestra deshabilitado: falta decidir los estados y quién los cambia, y COREDB no ofrece esa operación (`MODIFICAR_CUENTA`, issue #116).
 
 ## Cómo llega a los servicios
 
@@ -28,8 +28,13 @@ El navegador solo llama a rutas de este mismo servidor, que las reenvía desde e
 | `/api/core/coredb/*` | COREDB, `/coredb/*` | `COREDB_URL` |
 | `/api/cuenta/*` | CUENTAS, `/api/v1/cuentas/*` | `CUENTAS_GATEWAY_URL` |
 | `/api/tarjeta/*` | TARJETAS, `/api/v1/tarjetas/*` | `TARJETAS_GATEWAY_URL` |
+| `/api/captacion/*` | CAPTACION, `/api/v1/captacion/*` | `CAPTACION_GATEWAY_URL` |
 | `/api/solicitud-credito/*` | SOL, `/gateway/sol/*` | `SOL_GATEWAY_URL` |
-| `/api/cobranza/*` | COBRANZA por el Bus | `COBRANZA_GATEWAY_URL` |
+| `/api/evaluacion/*` | EVALUACIÓN, `/eva/v1/*` | `EVALUACION_GATEWAY_URL` |
+| `/api/desembolso/*` | DESEMBOLSO, `/api/v1/*` | `DESEMBOLSO_GATEWAY_URL` |
+| `/api/cobranza/*` | COBRANZA | `COBRANZA_GATEWAY_URL` |
+
+En el producto, todas las variables apuntan al Bus de Servicios (`http://bus:8018/bus/<módulo>/...`, ver `compose.yaml`) y el servidor agrega `X-Bus-Token` con `BUS_TOKEN`.
 
 Las variables se leen al ejecutar, no al construir. De cada petición se reenvían `Authorization`, `X-Idempotency-Key`, `X-Channel-ID` y `X-Request-Timestamp`; si falta `X-Correlation-ID`, se genera uno. La sesión de COREDB (el token) se guarda en `localStorage` con clave `bna_access_token`; la de SOL, en una cookie que maneja su propio puente.
 
@@ -39,7 +44,7 @@ Cobranza funciona igual que los demás: el puente `/api/cobranza` reenvía el be
 
 El prototipo de Home Banking de Tamara-Martinez (commit c73fa20, issue #100) estaba en `app/homebanking/`, donde Next no lo servía, y llamaba a 14 rutas `/bus/v1/...` que no existen, con datos simulados en `js/datos.js`. Ahora está en `public/homebanking/` y se abre en `/homebanking/index.html`.
 
-- **Acceso:** el Home Banking todavía no tiene autenticación de clientes (CR-INT-08 sigue sin canal propio). Entra un usuario del banco con su clave de COREDB e indica el código del cliente que atiende. El token queda en `localStorage` (`bna_access_token`), como en el resto del frontend.
+- **Acceso:** no hay login de clientes. Entra un usuario del banco con su clave de COREDB e indica el código del cliente que atiende (decisión 14 de [`Documents/decisiones-del-equipo.md`](../Documents/decisiones-del-equipo.md), revisable). El token queda en `localStorage` (`bna_access_token`), como en el resto del frontend.
 - **Rutas que usa** (`js/bus.js`, solo puentes de `app/api/`):
   - `POST /api/core/coredb/auth/login`, `GET /api/core/coredb/auth/me`; auditoría: `GET /api/core/coredb/auditoria` (administrador).
   - Cuentas: `GET /api/cuenta/consolidada/{codCliente}`, `GET /api/cuenta/{numCuenta}`, `GET /api/cuenta/{numCuenta}/movimientos`, `POST /api/cuenta/transferencia`.
@@ -56,14 +61,14 @@ Con todo el producto, desde la raíz del repositorio: `./bna up`. El frontend qu
 Para desarrollar con recarga en vivo hace falta Node.js 20.9 o superior (la imagen usa Node 22) y los servicios levantados:
 
 ```bash
-./bna up                          # en la raíz: deja COREDB, CUENTAS, TARJETAS y SOL en sus puertos
+./bna up                          # en la raíz: deja cada servicio en su puerto de 127.0.0.1
 cd frontend
 cat .env.example .env.sol.example > .env.local
 npm ci
 npm run dev -- --port 3001        # el 3000 lo ocupa el frontend del producto
 ```
 
-`.env.local` no se versiona. Sus valores por omisión ya apuntan a los puertos de `./bna up`.
+`.env.local` no se versiona. Sus valores apuntan directo a los puertos de `./bna up`, sin pasar por el Bus (sin `BUS_TOKEN` el servidor no envía `X-Bus-Token`).
 
 ## Pruebas
 

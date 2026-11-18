@@ -27,7 +27,7 @@ Persistencia complementaria E06: fecha de respuesta usa valor canónico MySQL; r
 
 ## Integraciones y guía de consumo
 
-URLs del laboratorio: backend `http://127.0.0.1:18016`, frontend `http://127.0.0.1:13016/solicitud-credito`. Rutas canónicas `/sol`; `/gateway/sol` es alias en el mismo proceso únicamente SIMULADO. OpenAPI [SIMULADO servido](openapi.json) / [REAL generado sin proveedor](sol-openapi-e06-real.json). Swagger local `/docs`. Dinero JSON como string decimal, fechas `YYYY-MM-DD`, eventos UTC con Z. Los JSON contienen esquemas completos; no secretos ni aprobación de negocio.
+URLs del laboratorio: backend `http://127.0.0.1:18016`, frontend `http://127.0.0.1:13016/solicitud-credito`. Rutas canónicas `/sol`; `/gateway/sol` es alias en el mismo proceso únicamente SIMULADO. OpenAPI [SIMULADO servido](openapi.json) / REAL generado sin proveedor (`sol-openapi-e06-real.json`, retirado del repositorio; ver `change-log.md`). Swagger local `/docs`. Dinero JSON como string decimal, fechas `YYYY-MM-DD`, eventos UTC con Z. Los JSON contienen esquemas completos; no secretos ni aprobación de negocio.
 
 | Consumidor / propietario | Endpoints confirmados de SOL | JSON / autenticación / respuesta |
 | --- | --- | --- |

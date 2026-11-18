@@ -5,6 +5,8 @@
 **Código revisado:** `backend/CORE/services/creditossvc.py`
 **Pruebas:** `CORE/tests/test_calendario_correcciones.py` y `CORE/tests/test_creditos_motor_flujo.py`
 
+> Este documento describe solo el CORE legado (perfil `legado`). En el producto, la evaluación, el desembolso y la cobranza están en COREDB y en los módulos EVALUACION, DESEMBOLSO y COBRANZA ([`backend/COREDB/CONTRATO_CREDITOS.md`](../COREDB/CONTRATO_CREDITOS.md)); sus decisiones adoptadas están en [`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md). Las preguntas de la sección 5 quedan como registro del CORE legado.
+
 ---
 
 ## 0. Actividad 1 — correcciones aplicadas

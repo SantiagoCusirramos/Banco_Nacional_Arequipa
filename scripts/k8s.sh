@@ -108,9 +108,10 @@ Producto desplegado en el clúster $CLUSTER (kind).
   SOL           http://127.0.0.1:18011/docs
   Evaluación    http://localhost:13000/evaluacion (API: http://127.0.0.1:18015/docs)
   Desembolso    http://localhost:13000/desembolso (API: http://127.0.0.1:18016/docs)
-  Cobranza      http://localhost:13000/cobranza (API: http://127.0.0.1:18014/docs)
+  Cobranza      http://localhost:13000/pagar-cuota (API solo por el Bus: /bus/cobranza)
   CAPTACION     http://127.0.0.1:18017/docs
   Seguridad     http://127.0.0.1:18013
+  ATM y BILLETERA no se publican fuera del clúster: por el Bus, /bus/atm y /bus/billetera.
 
   Administrador de COREDB: usuario $(valor BNA_ADMIN_USUARIO); su contraseña está en .env.
   Para comprobarlo: ./bna k8s-smoke

@@ -10,7 +10,7 @@ Swagger: http://127.0.0.1:8014/docs (botón **Authorize** con un token de COREDB
 |---|---|---|---|
 | CR-INT-06 | Desembolso → COREDB | `POST /coredb/creditos/ordenes/{idOrden}/confirmacion` | El crédito nace en COREDB al confirmar el desembolso; Cobranza solo lo lee |
 | CR-INT-07 | Cobranza → COREDB | `POST /coredb/creditos/{codCredito}/pagos` | **Real**: COREDB debita la cuenta y aplica el pago en la misma transacción |
-| CR-INT-08 | Home Banking → Cobranza | `POST /cr-int-08/pagos` | **Mantenida por compatibilidad** con la pantalla "Pagar cuota" del frontend; reenvía a COREDB |
+| CR-INT-08 | Home Banking → Cobranza | `POST /cr-int-08/pagos` | La usan la pantalla "Pagar cuota" (`/pagar-cuota`) y el Home Banking (`/homebanking/index.html`) del frontend, por `/api/cobranza`; reenvía a COREDB |
 
 El personal del banco entra con su **token de COREDB** (Bearer), que Cobranza reenvía; la tarea diaria usa el usuario de servicio `svc-cobranza` (rol `SERVICIO`, módulo `COBRANZA`), creado por `coredb-init`.
 
@@ -29,7 +29,7 @@ No hay base propia, no hay llamada a CUENTAS, no hay pagos `PENDIENTE` ni proces
 
 ## Mora
 
-La mora se **registra y muestra**, pero **no se cobra** (decisión 5 del contrato). Cobranza recibe el cálculo del núcleo y lo guarda en COREDB:
+La mora se **registra y muestra**, pero **no se cobra** (decisión T5 de [`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md)). Cobranza recibe el cálculo del núcleo y lo guarda en COREDB:
 
 - `POST /api/v1/creditos/{codCredito}/cuotas/{n}/mora` (rol `REGISTRAR_MORA`, también `svc-cobranza`).
 - `POST /api/v1/vencimientos` marca las cuotas vencidas y recalcula los créditos; es la tarea diaria de `svc-cobranza`.
@@ -95,9 +95,12 @@ docker compose exec -T -e BNA_ADMIN_PASSWORD="$(grep '^BNA_ADMIN_PASSWORD=' .env
 
 ## Manifiestos de Kubernetes
 
-`k8s/base/cobranza.yaml`: Deployment + Service. El `initContainer` espera a COREDB a través del Bus; las variables vienen del ConfigMap `bna-configuracion` y el Secret `bna-secretos` (`COBRANZA_COREDB_SECRETO`, `BUS_TOKEN_COBRANZA`).
+`k8s/base/cobranza.yaml`: Deployment + Service. El `initContainer` espera a COREDB a través del Bus; las variables vienen del ConfigMap `bna-configuracion` y el Secret `bna-secretos` (`COBRANZA_COREDB_SECRETO`, `BUS_TOKEN_COBRANZA`). En kind no tiene NodePort: se llega por el Bus (`/bus/cobranza`) o por la pantalla `/pagar-cuota` del frontend.
+
+## Decisiones adoptadas
+
+Un pago mayor que la cuota se aplica a las siguientes y se rechaza solo si supera la deuda total (T4); la mora no se cobra (T5). Las dos son revisables: [`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md).
 
 ## Pendiente
 
-- CR-INT-08 (Home Banking) no tiene consumidor real en el producto: la ruta se mantiene por compatibilidad con la pantalla "Pagar cuota", documentada como pendiente.
-- Decisiones del Comité de Créditos: propietario del calendario después del desembolso y tratamiento de un pago mayor a la cuota (hoy se rechaza si supera la deuda total).
+- Ratificar en el Comité de Créditos quién es dueño del calendario después del desembolso (hoy, el OFICIAL que COREDB copia del de Solicitud al confirmar).

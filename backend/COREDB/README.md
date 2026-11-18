@@ -1,8 +1,9 @@
 # COREDB: API de la base integrada
 
 API FastAPI sobre la base integrada de `database/`. Es la API del CORE que usa el producto:
-CUENTAS, TARJETAS y el frontend la llaman, y ningún otro servicio se conecta a esa base. El CORE
-legado (`backend/CORE`) es otra API, sobre otra base, y sigue aparte.
+la llaman el frontend, CUENTAS, TARJETAS, CAPTACION, EVALUACIÓN, DESEMBOLSO, COBRANZA y
+BILLETERA, todos a través del Bus de Servicios (`/bus/coredb`), y ningún otro servicio se conecta
+a esa base. El CORE legado (`backend/CORE`) es otra API, sobre otra base, y sigue aparte.
 
 > **Exige un JWT propio en toda ruta salvo `/coredb/salud` y el login.** No tiene TLS:
 > no exponer fuera de la máquina sin un proxy con TLS delante.
@@ -62,7 +63,8 @@ un desembolso) y el usuario de servicio de Clientes;
 `DESEMBOLSAR_CREDITO` (OPERADOR, ADMINISTRADOR) y `REGISTRAR_MORA` (ADMINISTRADOR y el servicio de Cobranza) son las
 propias de créditos. `REGISTRAR_EMPLEADO` (solo ADMINISTRADOR) registra empleados con
 `POST /coredb/empleados` y los liga a su usuario: así un analista queda disponible sin el
-administrador de la base. Hay usuarios de servicio para CLIENTES, EVALUACION, DESEMBOLSO y COBRANZA.
+administrador de la base. Hay usuarios de servicio para CLIENTES (en el producto, `svc-captacion`
+de CAPTACION), EVALUACION, DESEMBOLSO, COBRANZA y BILLETERA.
 Cada ruta declara su permiso con `requiere_permiso`; una prueba falla si una escritura no
 lo declara o si una ruta, salvo las públicas, no exige token.
 
@@ -79,8 +81,10 @@ su módulo), nunca con una cuenta de persona:
    `POST /coredb/usuarios/{id}/estado {"activo": false}` corta el acceso en la siguiente
    petición.
 
-En el producto, el usuario de Evaluación (`svc-evaluacion`) no se crea por la API sino en el
-arranque: `CORE_DB_SERVICIO_SECRETO=<secreto> python -m COREDB.scripts.crear_servicio --modulo
+En el producto, los cinco usuarios de servicio (`svc-evaluacion`, `svc-desembolso`,
+`svc-captacion`, `svc-cobranza` y `svc-billetera`) no se crean por la API sino en el arranque
+(`coredb-init` en compose, contenedores de inicio de `coredb` en Kubernetes). Por ejemplo,
+`CORE_DB_SERVICIO_SECRETO=<secreto> python -m COREDB.scripts.crear_servicio --modulo
 EVALUACION --username svc-evaluacion --nombre Evaluación` lo crea con el secreto que el despliegue
 ya tiene (`EVALUACION_COREDB_SECRETO` en `.env` o en el Secret de Kubernetes). Repetirlo no cambia
 nada; con otro secreto, reemplaza el anterior. No toca a una persona con ese nombre.
@@ -90,7 +94,8 @@ credenciales de la base y pide la contraseña en la terminal. Se niega si ya hay
 administrador activo. Con `--si-falta` eso no es un error: así lo usa el arranque del
 producto (`compose.yaml`), que toma la contraseña de `CORE_DB_ADMIN_INICIAL_PASSWORD`.
 
-**Pendiente:** ningún límite de intentos de login ni de frecuencia.
+**Pendiente:** el bloqueo por intentos (arriba) es el único límite: no hay límite de frecuencia por
+dirección ni por usuario.
 
 ## Clientes
 

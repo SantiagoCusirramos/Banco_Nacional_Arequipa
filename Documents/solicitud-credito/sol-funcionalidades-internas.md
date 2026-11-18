@@ -1,6 +1,6 @@
 # E02 — Funcionalidades internas SOL, RF002–008
 
-Fecha: 2026-11-14, America/Lima. Rama `feature/integracion-sol`. Base HEAD `86904edd8dc866c1d4260a996748a1cda3770007`; los cambios E02 están en el workspace, sin commit ni push. [Plan vigente](plan-integracion-sol.md), [matriz RF](sol-matriz-rf.md), [contratos E01](sol-contratos-finalizacion.md), [changelog](change-log.md).
+Fecha: 2026-11-14, America/Lima. Rama `feature/integracion-sol`. Base HEAD `86904edd8dc866c1d4260a996748a1cda3770007`; los cambios E02 están en el workspace, sin commit ni push. Plan vigente (`plan-integracion-sol.md`, retirado del repositorio; ver `change-log.md`), [matriz RF](sol-matriz-rf.md), [contratos E01](sol-contratos-finalizacion.md), [changelog](change-log.md).
 
 ## Resultado y alcance
 

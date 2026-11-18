@@ -1,6 +1,6 @@
 # Bus de Servicios
 
-Punto único por el que los canales llegan a los módulos del producto y los módulos llegan a COREDB, como pide [`Documents/01-stack-tecnologico.md`](../../Documents/01-stack-tecnologico.md) («Módulos de negocio → CORE: REST interno vía Bus»). Lo usan los puentes del frontend, el flujo de extremo a extremo y cada módulo que llama a COREDB (CUENTAS, TARJETAS, CAPTACION, Evaluación, Desembolso y COBRANZA; fase 2) el cajero automático (ATM, que llama a TARJETAS y CUENTAS) y la billetera Chaski (BILLETERA, que llama a COREDB con el token de su usuario de servicio y el del cliente en `X-Cliente-Token`), cada uno con su credencial.
+Punto único por el que los canales llegan a los módulos del producto y los módulos llegan a COREDB, como pide [`Documents/01-stack-tecnologico.md`](../../Documents/01-stack-tecnologico.md) («Módulos de negocio → CORE: REST interno vía Bus»). Lo usan los puentes del frontend, el flujo de extremo a extremo y cada módulo que llama a COREDB (CUENTAS, TARJETAS, CAPTACION, Evaluación, Desembolso y COBRANZA; fase 2), el cajero automático (ATM, que llama a TARJETAS y CUENTAS) y la billetera Chaski (BILLETERA, que llama a COREDB con el token de su usuario de servicio y el del cliente en `X-Cliente-Token`), cada uno con su credencial.
 
 Parte del aporte de Gabriel Tapia (PR #91): la idea de un Bus con credencial por consumidor y el reenvío de `Authorization` y de la llave de idempotencia.
 
@@ -49,7 +49,7 @@ Sin valores por omisión para direcciones ni credenciales: si falta algo, no arr
 
 | Variable | Qué es |
 |---|---|
-| `BUS_URL_<MÓDULO>` | Dirección de cada módulo de la tabla, `http(s)://host:puerto[/prefijo]`, sin credenciales ni consulta. Las diez son obligatorias |
+| `BUS_URL_<MÓDULO>` | Dirección de cada módulo de la tabla, `http(s)://host:puerto[/prefijo]`, sin credenciales ni consulta. Las once son obligatorias |
 | `BUS_CONSUMIDORES` | Nombres de los consumidores, separados por comas (mayúsculas, dígitos y `_`). En el producto: `FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA` |
 | `BUS_TOKEN_<CONSUMIDOR>` | Credencial de cada consumidor, que presenta en `X-Bus-Token`. Al menos 32 caracteres, distinta de las demás. `./bna up` las genera en `.env` (`BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS` y una por módulo: `BUS_TOKEN_CUENTAS`…) |
 | `BUS_PERMITIDOS_<MÓDULO>` | Opcional. Consumidores que pueden usar ese módulo, separados por comas; los demás reciben 403. Sin ella, todo consumidor con credencial lo usa |
@@ -57,7 +57,7 @@ Sin valores por omisión para direcciones ni credenciales: si falta algo, no arr
 | `BUS_TIMEOUT_SEG` | Segundos que espera la respuesta de un módulo. Por omisión 9, menos que los 10 del puente del frontend, para que el navegador vea el 504 del Bus |
 | `BUS_TIMEOUT_CONEXION_SEG` | Segundos para conectar con un módulo. Por omisión 2 |
 
-En compose el Bus escucha en el 8018 (`BNA_PUERTO_BUS`) y está en tres redes: la de los módulos, `canales` (solo con el frontend) y `core` (solo con COREDB, su base y `coredb-init`). Así ni el frontend ve los módulos ni los módulos ven COREDB. En kind, NodePort 30018 → `127.0.0.1:18018`; el Bus es el único que lee el ConfigMap `bna-bus`, el de las direcciones de los módulos.
+En compose el Bus escucha en el 8018 (`BNA_PUERTO_BUS`) y está en tres redes: la de los módulos, `canales` (con el frontend y los dos canales, ATM y BILLETERA) y `core` (solo con COREDB, su base y `coredb-init`). Así el frontend no ve los demás módulos y ningún módulo ve COREDB. En kind, NodePort 30018 → `127.0.0.1:18018`; el Bus es el único que lee el ConfigMap `bna-bus`, el de las direcciones de los módulos.
 
 Cada módulo que llama a COREDB tiene `CORE_BASE_URL` o `COREDB_URL` = `http://bus:8018/bus/coredb` y presenta `BUS_TOKEN` (en compose y k8s, su `BUS_TOKEN_<MÓDULO>`) en cada llamada, también en sus sondas y en los contenedores de arranque de k8s. Sus clientes de COREDB tienen un tiempo de espera de 5 s, menos que los 9 del Bus: si COREDB no responde, el módulo da su propio error, igual que antes. `scripts/comprobar_rutas_coredb.py` (en `./bna test`) falla si algún módulo tiene la dirección directa de COREDB.
 
@@ -73,4 +73,4 @@ docker run --rm bna/backend:local python -m pytest -q -o addopts= BUS_SERVICIOS/
 
 `tests/test_bus.py` simula los módulos con `httpx.MockTransport` para ver exactamente lo que les llega, y usa sockets reales para un módulo caído, uno que no responde y un recorrido completo con uvicorn delante y un servidor HTTP detrás. Comprueba: configuración obligatoria; credencial; una ruta por módulo; cabeceras, cuerpo, ruta y consulta iguales en los dos sentidos; errores del módulo con su código y su cuerpo; idempotencia sin reintentos; 503 y 504 claros sin colgar; métricas.
 
-El flujo de `./bna smoke` corre en el contenedor del Bus y solo conoce el Bus y el frontend. Al terminar comprueba con `/metricas` que cada módulo llegó a COREDB a través del Bus. Las suites de integración de CAPTACION, Evaluación y Desembolso levantan un Bus de pruebas delante de su COREDB (`scripts/bus_de_pruebas.sh`) y hacen la misma comprobación.
+El flujo de `./bna smoke` corre en el contenedor del Bus y solo conoce el Bus y el frontend. Al terminar comprueba con `/metricas` que cada módulo llegó a COREDB a través del Bus. Las suites de integración de CAPTACION, Evaluación, Desembolso y COBRANZA levantan un Bus de pruebas delante de su COREDB (`scripts/bus_de_pruebas.sh`) y hacen la misma comprobación.

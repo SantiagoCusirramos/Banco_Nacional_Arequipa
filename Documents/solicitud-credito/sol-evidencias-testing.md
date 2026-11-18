@@ -44,7 +44,7 @@ APROBADA en este recorrido es resultado sintético de laboratorio, no aprobació
 
 ## Reproducción segura
 
-Usar únicamente el [Compose E06](compose-e06.yaml). Sus puertos 13316/18016/13016 son loopback, MySQL guarda datos en tmpfs y no hay volumen de datos ni montajes institucionales. Dos bases separan suite destructiva de fixtures (`bna_sol_mvp_test`) y recorrido HTTP (`bna_sol_mvp_e06`). La scratch de migración debe estar vacía; un segundo ensayo se detiene si ya tiene tablas. Nunca apuntar estos comandos a otro servidor.
+Usar únicamente el Compose E06 (`compose-e06.yaml`, retirado del repositorio; ver `change-log.md`). Sus puertos 13316/18016/13016 son loopback, MySQL guarda datos en tmpfs y no hay volumen de datos ni montajes institucionales. Dos bases separan suite destructiva de fixtures (`bna_sol_mvp_test`) y recorrido HTTP (`bna_sol_mvp_e06`). La scratch de migración debe estar vacía; un segundo ensayo se detiene si ya tiene tablas. Nunca apuntar estos comandos a otro servidor.
 
 En esta ejecución se usó `/tmp/bna-sol-e06.env`, permisos 0600, con claves aleatorias `E06_MYSQL_PASSWORD`, `E06_LOGIN_PASSWORD` y `E06_FRONTEND_DIR=/tmp/bna-e05-frontend`. No versionar ni publicar ese archivo ni ejecutar `compose config` sin filtrar (puede imprimir secretos). La copia frontend contiene los archivos finales del repo, dependencias del lockfile y build; no `.env` privado. Instalar Node/dependencias y construir una copia temporal antes de arrancar, siguiendo `frontend/AGENTS.md`. La imagen Next ejecuta ese build mediante montaje de solo lectura: no se afirma haber construido el Dockerfile frontend de producción.
 

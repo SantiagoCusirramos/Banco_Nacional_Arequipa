@@ -1,6 +1,6 @@
 # SOL — Contratos y decisiones pendientes para CAP, EVA y Seguridad
 
-Estado de entrega: SOL validado localmente; ninguna integración institucional homologada. E01–E06 terminadas. Esta nota solicita definiciones para revisión del equipo; no abre desarrollo ni aprueba políticas. [Entrega](sol-entrega-final.md), [OpenAPI receptor SOL](sol-openapi-e06-real.json), [contratos detallados](sol-contratos-finalizacion.md).
+Estado de entrega: SOL validado localmente; ninguna integración institucional homologada. E01–E06 terminadas. Esta nota solicita definiciones para revisión del equipo; no abre desarrollo ni aprueba políticas. [Entrega](sol-entrega-final.md), OpenAPI receptor SOL (`sol-openapi-e06-real.json`, retirado del repositorio; ver `change-log.md`), [contratos detallados](sol-contratos-finalizacion.md).
 
 | Equipo / contrato | Necesitamos confirmar | Decisión o entrega pendiente |
 | --- | --- | --- |

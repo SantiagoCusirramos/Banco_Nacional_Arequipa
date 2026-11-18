@@ -1,6 +1,6 @@
 # Módulo 9 · Seguridad · Prototipo local v0.2.0
 
-Prototipo de laboratorio independiente de MySQL y del Bus. Corre como servicio aparte; no está montado en `main:app`. No autentica ni protege automáticamente los endpoints preexistentes `/core`. No sustituye la base de identidades del CORE. No mueve dinero.
+Prototipo de laboratorio independiente de MySQL y del CORE. Corre como servicio aparte; no está montado en `main:app` del CORE legado. El Bus de Servicios tiene su ruta (`/bus/seguridad`), pero ningún módulo lo llama. No autentica ni protege automáticamente los endpoints preexistentes `/core`. No sustituye la base de identidades del CORE. No mueve dinero.
 
 ## Con el producto
 
@@ -94,7 +94,7 @@ Copia consistente mediante SQLite Backup API. Conservar la clave por separado. P
 
 1. Comité de Tecnología: aprobar contrato e identidad del servicio, ubicación de datos y responsabilidad de topes.
 2. CORE: el CORE legado ya expone autenticación (`POST /core/auth/login`), migra SHA256 a bcrypt en el primer login y exige token y permiso del catálogo RBAC en todas sus rutas salvo el login; COREDB tiene su propio login y permisos. Sigue pendiente: las identidades locales de este módulo NO se migraron ni vincularon con ninguna de las dos.
-3. M8: Bus real, propagación de identidad/correlación, autenticación entre servicios, TLS/mTLS y políticas de reintentos.
+3. M8: el Bus de Servicios del producto ya existe (`backend/BUS_SERVICIOS`: credencial por consumidor, reenvía `Authorization` y `X-Correlation-ID`, sin reintentos); faltan TLS/mTLS y que este módulo se integre a él.
 4. M3/M4/M5/M6/M7: homologar topes, reservas/confirmación, Token Matriz, bloqueo de tarjeta, extorno y flujos por canal.
 5. Integrar segundo factor por canal independiente, RENIEC/biometría, SMS, HSM y SIEM.
 6. Protección contra tráfico abusivo por IP/usuario, gestión de claves, retención, control de acceso a respaldos, monitoreo, carga y revisión de seguridad.
