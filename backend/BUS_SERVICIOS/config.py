@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 # Una ruta por módulo del producto: /bus/<módulo en minúsculas>/<ruta del módulo>.
-MODULOS = ("COREDB", "CUENTAS", "TARJETAS", "CAPTACION", "SOL", "EVALUACION", "DESEMBOLSO", "COBRANZA", "SEGURIDAD", "ATM")
+MODULOS = ("COREDB", "CUENTAS", "TARJETAS", "CAPTACION", "SOL", "EVALUACION", "DESEMBOLSO", "COBRANZA", "SEGURIDAD", "ATM", "BILLETERA")
 
 LARGO_MINIMO_TOKEN = 32
 _NOMBRE = re.compile(r"^[A-Z][A-Z0-9_]*$")

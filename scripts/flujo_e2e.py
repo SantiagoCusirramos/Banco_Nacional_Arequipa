@@ -11,8 +11,10 @@ módulo TARJETAS (con un retiro autorizado y extornado), una solicitud de crédi
 por EVALUACIÓN (expediente con el formato de SOL → evaluación → decisión, todo en
 COREDB), su desembolso por DESEMBOLSO (identidad → orden → validación → confirmación,
 que abona una sola vez y crea el crédito), un prospecto captado y habilitado por
-CAPTACION (expediente en COREDB, cliente nuevo y referencia CR-INT-01 para SOL) y todo
-por los puentes del frontend, que es el camino que sigue el navegador.
+CAPTACION (expediente en COREDB, cliente nuevo y referencia CR-INT-01 para SOL), la
+billetera Chaski (dos clientes de CAPTACION afiliados por el banco: envío por celular y pago
+con QR, cada uno repetido con su llave, que mueven el dinero una sola vez) y todo por los
+puentes del frontend, que es el camino que sigue el navegador.
 
 Todo pasa por el Bus de Servicios: el flujo solo conoce el Bus (E2E_BUS, con su credencial
 BUS_TOKEN) y el frontend, y al final comprueba con las métricas del Bus que el flujo y cada
@@ -43,6 +45,7 @@ SOL = f"{BUS}/bus/sol"
 EVALUACION = f"{BUS}/bus/evaluacion"
 DESEMBOLSO = f"{BUS}/bus/desembolso"
 CAPTACION = f"{BUS}/bus/captacion"
+BILLETERA = f"{BUS}/bus/billetera/api"
 SEGURIDAD = f"{BUS}/bus/seguridad"
 FRONTEND = os.environ.get("E2E_FRONTEND", "http://frontend:3000")
 TOKEN_SOL = os.environ.get("CAP_SOL_TOKEN", "")
@@ -56,6 +59,7 @@ SERVICIOS = {
     "EVALUACIÓN": (EVALUACION + "/salud", {}),
     "DESEMBOLSO": (DESEMBOLSO + "/salud", {}),
     "CAPTACION": (CAPTACION + "/ready", {}),
+    "BILLETERA (Chaski)": (f"{BUS}/bus/billetera/api/salud", {}),
     "Seguridad": (SEGURIDAD + "/seguridad/estado", {"X-Correlation-ID": "flujo-e2e"}),
     "frontend": (FRONTEND + "/login", {}),
 }
@@ -692,9 +696,10 @@ def flujo():
         exigir(estado == esperado, f"CAPTACION {metodo} {ruta}: se esperaba {esperado} y respondió {estado}: {respuesta}")
         return respuesta["data"]
 
+    celular_cap = "9" + "".join(random.choices("0123456789", k=8))
     solicitante = captacion("POST", "/solicitantes", 201, {
         "tipo_documento": "DNI", "numero_documento": dni, "nombres": "Rosa", "apellido_paterno": "Huamán",
-        "apellido_materno": "Ccori", "celular": "9" + "".join(random.choices("0123456789", k=8)),
+        "apellido_materno": "Ccori", "celular": celular_cap,
         "correo": f"captacion.{dni}.{uuid.uuid4().hex[:6]}@example.com"})["solicitante"]
     caso = captacion("POST", "/casos", 201, {"id_solicitante": solicitante["id_solicitante"],
                                              "canal": "AGENCIA", "id_agencia": AGENCIA})["id_caso"]
@@ -750,6 +755,109 @@ def flujo():
            f"CR-INT-01: la búsqueda debía encontrar al cliente: {estado} {lista}")
     paso("CR-INT-01: SOL recibe una referencia vigente y HABILITADA, con su búsqueda; un token de persona no entra")
 
+    # ── BILLETERA (Chaski): envío por celular y pago con QR, por el Bus ──────
+    # Punto R-01: Chaski no crea clientes. Los dos son del flujo de Clientes (CAPTACION): el
+    # que se acaba de habilitar y otro que pasa por el mismo expediente. El banco les abre una
+    # cuenta y los afilia; desde ahí todo va por Chaski, que llega a COREDB por el Bus.
+    def captar(nombres, apellido):
+        dni_nuevo = "4" + "".join(random.choices("0123456789", k=6)) + "1"
+        celular_nuevo = "9" + "".join(random.choices("0123456789", k=8))
+        nuevo = captacion("POST", "/solicitantes", 201, {
+            "tipo_documento": "DNI", "numero_documento": dni_nuevo, "nombres": nombres,
+            "apellido_paterno": apellido, "apellido_materno": None, "celular": celular_nuevo,
+            "correo": f"billetera.{dni_nuevo}.{uuid.uuid4().hex[:6]}@example.com"})["solicitante"]
+        id_caso = captacion("POST", "/casos", 201, {"id_solicitante": nuevo["id_solicitante"],
+                                                    "canal": "AGENCIA", "id_agencia": AGENCIA})["id_caso"]
+        captacion("POST", f"/casos/{id_caso}/consentimientos", 201, {"consentimientos": [
+            {"tipo": t, "aceptado": True} for t in ("TRATAMIENTO_DATOS", "CONSULTA_BUROS", "TERMINOS")]})
+        otp = captacion("POST", f"/casos/{id_caso}/otp", 201, {"canal": "SMS"})["codigo_simulado"]
+        captacion("POST", f"/casos/{id_caso}/otp/verificar", 200, {"codigo": otp})
+        captacion("POST", f"/casos/{id_caso}/validaciones", 201, {"tipos": ["RENIEC", "LISTAS_NEGRAS", "PEP"]})
+        captacion("POST", f"/casos/{id_caso}/consultas-riesgo", 201, {"central": "SBS"})
+        captacion("POST", f"/casos/{id_caso}/perfil", 201)
+        return captacion("POST", f"/casos/{id_caso}/habilitar", 200)["cod_cliente"], celular_nuevo
+
+    beto, celular_beto = captar("Alberto", "Quispe")
+    billeteras = {}
+    for indice, (titular, cel, pin) in enumerate(((cod_cliente, celular_cap, "246810"),
+                                                  (beto, celular_beto, "135790"))):
+        numero = base + 50 + indice
+        cuenta = coredb("POST", "/coredb/cuentas", 201, {
+            "num_cuenta": f"CTA-{numero:016d}", "cci": f"{numero:020d}", "moneda": "PEN",
+            "regimen": "INDIVIDUAL", "id_agencia": AGENCIA, "titulares": [titular]}, token)["num_cuenta"]
+        afiliada = coredb("POST", "/coredb/billetera/afiliaciones", 201,
+                          {"cod_cliente": titular, "num_cuenta": cuenta, "pin": pin}, token)
+        exigir(afiliada["estado"] == "ACTIVA" and afiliada["nueva"] is True, f"Afiliación inesperada: {afiliada}")
+        billeteras[titular] = {"cuenta": cuenta, "celular": cel, "pin": pin}
+    rosa, alberto = billeteras[cod_cliente], billeteras[beto]
+    coredb("POST", "/coredb/movimientos", 201, {
+        "num_cuenta": rosa["cuenta"], "tipo": "DEPOSITO", "monto": "100.00", "glosa": "Fondeo de la billetera",
+        "id_canal": "VEN", "idempotency_key": str(uuid.uuid4())}, token)
+    paso(f"BILLETERA: el banco afilió a {cod_cliente} y a {beto} (clientes de CAPTACION) con su cuenta y su PIN; "
+         f"depósito de 100.00 para {cod_cliente}")
+
+    def chaski(metodo, ruta, esperado, cuerpo=None, sesion=None, cabeceras=None):
+        estado, respuesta = pedir(metodo, BILLETERA + ruta, cuerpo, sesion, cabeceras)
+        exigir(estado == esperado, f"Chaski {metodo} {ruta}: se esperaba {esperado} y respondió {estado}: {respuesta}")
+        return respuesta
+
+    chaski("POST", "/login", 401, {"celular": rosa["celular"], "pin": "000000"})
+    estado, _ = pedir("POST", BILLETERA + "/registro", {"celular": "900000001", "pin": "123456"})
+    exigir(estado == 403, f"Chaski no debe registrar clientes (R-01): respondió {estado}")
+    s_rosa = chaski("POST", "/login", 200, {"celular": rosa["celular"], "pin": rosa["pin"]})["token"]
+    s_alberto = chaski("POST", "/login", 200, {"celular": alberto["celular"], "pin": alberto["pin"]})["token"]
+    estado, _ = pedir("GET", f"{COREDB}/coredb/catalogos/monedas", token=s_rosa)
+    exigir(estado == 401, f"El token de cliente no debe servir como token del personal: respondió {estado}")
+    contacto = chaski("GET", f"/clientes/buscar?celular={alberto['celular']}", 200, sesion=s_rosa)
+    exigir(contacto["nombre"] == "Alberto Q.", f"Contacto inesperado: {contacto}")
+    paso("BILLETERA: login con celular y PIN (PIN equivocado 401, registro 403 por R-01), el token de cliente "
+         "no sirve como token del personal, y el contacto se ve solo con su nombre corto")
+
+    llave_envio = {"Idempotency-Key": str(uuid.uuid4())}
+    envio = {"celular_destino": alberto["celular"], "monto": 25, "referencia": "Pasaje"}
+    primero = chaski("POST", "/transferencias", 200, envio, s_rosa, llave_envio)
+    repetido = chaski("POST", "/transferencias", 200, envio, s_rosa, llave_envio)
+    exigir(primero["repetida"] is False and repetido["repetida"] is True
+           and repetido["id_transferencia"] == primero["id_transferencia"],
+           f"Repetir el envío con la misma llave debía devolver el mismo: {primero} {repetido}")
+    paso("BILLETERA: envío de 25.00 por celular; repetido con la misma llave devuelve el mismo envío")
+
+    qr = chaski("POST", "/qr", 200, {"monto": 10}, s_alberto)
+    visto = chaski("GET", f"/qr/{qr['id_qr']}", 200, sesion=s_rosa)
+    exigir(visto["nombre"] == "Alberto Q." and visto["monto"] == 10 and visto["tipo"] == "dinamico",
+           f"QR inesperado: {visto}")
+    llave_qr = {"Idempotency-Key": str(uuid.uuid4())}
+    pago = chaski("POST", f"/qr/{qr['id_qr']}/pagar", 200, {}, s_rosa, llave_qr)
+    pago_repetido = chaski("POST", f"/qr/{qr['id_qr']}/pagar", 200, {}, s_rosa, llave_qr)
+    exigir(pago_repetido["repetida"] is True and pago_repetido["id_pago"] == pago["id_pago"],
+           f"Repetir el pago con la misma llave debía devolver el mismo: {pago} {pago_repetido}")
+    chaski("POST", f"/qr/{qr['id_qr']}/pagar", 410, {}, s_rosa, {"Idempotency-Key": str(uuid.uuid4())})
+    paso("BILLETERA: QR dinámico de 10.00 pagado; repetido con la misma llave devuelve el mismo pago y con otra "
+         "llave se rechaza (410, ya pagado)")
+
+    saldos = {nombre: coredb("GET", f"/coredb/cuentas/{datos['cuenta']}", 200, token=token)["saldo_disponible"]
+              for nombre, datos in (("rosa", rosa), ("alberto", alberto))}
+    exigir(saldos == {"rosa": "65.00", "alberto": "35.00"}, f"Saldos inesperados de la billetera: {saldos}")
+    movimientos = coredb("GET", f"/coredb/movimientos/cuenta/{rosa['cuenta']}", 200, token=token)
+    debitos = [(m["tipo_operacion"], m["monto"], m["id_canal"]) for m in movimientos if m["naturaleza"] == "D"]
+    exigir(sorted(debitos) == [("TRANSFERENCIA_ENVIADA", "10.00", "BD"), ("TRANSFERENCIA_ENVIADA", "25.00", "BD")],
+           f"Débitos inesperados en la cuenta de la billetera: {debitos}")
+    yo = chaski("GET", "/me", 200, sesion=s_rosa)
+    exigir(yo["cuenta"]["saldo_actual"] == 65 and yo["disponible_hoy"] == 465,
+           f"La billetera debía mostrar 65.00 y 465.00 disponibles hoy: {yo}")
+    paso(f"BILLETERA: el dinero se movió una sola vez por el canal BD: {cod_cliente} = {saldos['rosa']}, "
+         f"{beto} = {saldos['alberto']}; dos débitos y el tope diario descontado")
+
+    eventos = coredb("GET", "/coredb/auditoria?modulo=BILLETERA&limite=200", 200, token=token)
+    acciones = {e["accion"] for e in eventos if e["id_entidad"] in (cod_cliente, beto) or e["actor"] in
+                (f"cliente:{cod_cliente}", f"cliente:{beto}")}
+    exigir({"AFILIAR", "VALIDAR_ACCESO", "OPERACION_P2P", "OPERACION_QR"} <= acciones,
+           f"Faltan eventos de la billetera en la bitácora: {acciones}")
+    texto = json.dumps([eventos, movimientos])
+    exigir(rosa["celular"] not in texto and alberto["celular"] not in texto,
+           "La bitácora o la glosa de los movimientos guardan un celular en claro")
+    paso("BILLETERA: la bitácora tiene la afiliación, el acceso y las dos operaciones, sin ningún celular")
+
     # ── Por los puentes del frontend, como lo hace el navegador ─────────────
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/core/coredb/auth/me", token=token)
     exigir(estado == 200 and respuesta["username"] == USUARIO, f"Puente a COREDB: {estado} {respuesta}")
@@ -801,16 +909,16 @@ def flujo():
               if not crecio("FRONTEND", m)]
     exigir(not faltan, f"Estos puentes del frontend no pasaron por el Bus: {faltan}")
     faltan = [m for m in ("COREDB", "CUENTAS", "TARJETAS", "ATM", "SOL", "EVALUACION", "DESEMBOLSO", "CAPTACION",
-                          "SEGURIDAD") if not crecio("PRUEBAS", m)]
+                          "SEGURIDAD", "BILLETERA") if not crecio("PRUEBAS", m)]
     exigir(not faltan, f"El flujo no llegó por el Bus a: {faltan}")
     # Fase 2: cada módulo llegó a COREDB a través del Bus, con su propia credencial.
     # ATM no llama a COREDB directo; llama a TARJETAS por el Bus con su propia credencial.
     exigir(crecio("ATM", "TARJETAS"), "El ATM no llegó a TARJETAS por el Bus con su credencial")
-    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA")
+    faltan = [m for m in ("CUENTAS", "TARJETAS", "CAPTACION", "EVALUACION", "DESEMBOLSO", "COBRANZA", "BILLETERA")
               if not crecio(m, "COREDB")]
     exigir(not faltan, f"Estos módulos no llegaron a COREDB por el Bus: {faltan}")
     paso("Bus de Servicios: el flujo y los ocho puentes del frontend llegaron a los módulos por el Bus, "
-         "CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO y COBRANZA llegaron a COREDB por él "
+         "CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO, COBRANZA y BILLETERA llegaron a COREDB por él "
          "y el ATM llegó a TARJETAS por él")
 
 

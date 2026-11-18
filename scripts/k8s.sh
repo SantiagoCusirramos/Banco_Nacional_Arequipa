@@ -12,7 +12,7 @@ CONTEXTO="kind-$CLUSTER"
 RED=kind
 NS=bna
 IMAGENES=(bna/core-db:local bna/db-aux:local bna/coredb:local bna/backend:local
-          bna/sol:local bna/seguridad:local bna/frontend:local)
+          bna/sol:local bna/seguridad:local bna/frontend:local bna/billetera:local)
 DESPLIEGUES=(db db-aux coredb cuentas tarjetas sol evaluacion desembolso cobranza captacion seguridad bus frontend)
 ESPERA="${BNA_ESPERA_SEGUNDOS:-600}"
 

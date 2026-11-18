@@ -62,6 +62,7 @@ correr "CORE legado contra MySQL" \
 correr "CUENTAS" en_backend CUENTAS/tests
 correr "TARJETAS" en_backend TARJETAS/tests
 correr "ATM" en_backend ATM/tests
+correr "BILLETERA (Chaski)" docker run --rm bna/billetera:local npm test --silent
 correr "Bus de Servicios" en_backend BUS_SERVICIOS/tests
 # Fase 2: ningún módulo tiene configurada la dirección directa de COREDB (compose, k8s,
 # .env.example, valores por omisión); solo el Bus, COREDB y su arranque.
