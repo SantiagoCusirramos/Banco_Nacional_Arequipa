@@ -17,9 +17,8 @@ class Login(StrictModel):
 
 
 class Guarantee(StrictModel):
-    tipo_garantia: Literal[
-        "PERSONAL", "HIPOTECARIA", "VEHICULAR", "MOBILIARIA", "FONDOS"
-    ]
+    # Los tipos del catálogo de la base (creditos.tipo_garantia); COREDB rechaza los demás.
+    tipo_garantia: Literal["HIPOTECARIA", "MOBILIARIA", "PRENDARIA"]
     descripcion: str = Field(min_length=5, max_length=200)
     valor_tasacion: Decimal = Field(gt=0, max_digits=15, decimal_places=2)
 
@@ -45,12 +44,6 @@ class RevisionInput(StrictModel):
     revision: int = Field(ge=1)
 
 
-class ResultInput(StrictModel):
-    version: int = Field(ge=1)
-    decision: Literal["APROBADO", "OBSERVADO", "RECHAZADO"]
-    observaciones: str = Field(min_length=5, max_length=1000)
-
-
 class EvaluationResult(StrictModel):
     """CR-INT-03 propuesto: la ronda pertenece a EVA, no al número de versión."""
     idSolicitud: str = Field(min_length=1, max_length=36)
@@ -66,10 +59,6 @@ class EvaluationResult(StrictModel):
 class ClientSearch(StrictModel):
     """El texto buscado (documento o nombre) va en el cuerpo, nunca en la URL."""
     search: str = Field(default="", max_length=80)
-
-
-class DisableUser(StrictModel):
-    motivo: str = Field(min_length=5, max_length=200)
 
 
 # Respuestas AS-IS: se preservan claves y nulos; los opcionales ausentes no se
@@ -232,22 +221,6 @@ class EvaluationReceiptResponse(BaseModel):
     reintento_reconocido: bool | None = None
 
 
-class DisableUserResponse(BaseModel):
-    usuario: str
-    activo: bool
-    sesiones_revocadas: int
-
-
-class AuditCountResponse(BaseModel):
-    estado: str
-    cantidad: int
-
-
-class PendingResponse(BaseModel):
-    envios: list[str]
-    auditoria: list[AuditCountResponse]
-
-
 class MetricResponse(BaseModel):
     operacion: str
     muestras: int
@@ -269,7 +242,7 @@ class HealthResponse(BaseModel):
 
 class ReadyResponse(BaseModel):
     status: str
-    base: str
+    coredb: str
 
 
 class ValidationIssue(BaseModel):

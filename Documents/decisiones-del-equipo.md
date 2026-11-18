@@ -37,6 +37,9 @@ Lo que no tiene valor por omisión está en el issue #116, «Pendientes tras la 
 | 20 | Topes de la evaluación de Seguridad | Los reales de `core.limite_canal` con el consumo real del día (`core.consumo_diario`), no los del prototipo (ATM 1000, HB 5000, BILLETERA 500, acumulando decisiones). Evaluar no suma al consumo | Decisión 12 y bd-v1.13-mysql | Seguridad |
 | 21 | Desafío de Seguridad | Sobre el 80 % del tope, vence a los 120 s y se agota al tercer fallo (`core.fn_umbral_desafio`, `fn_segundos_desafio`, `fn_intentos_desafio`): los valores del prototipo de Seguridad. El código se muestra por el mismo canal (simulación) | Prototipo de Seguridad (Barca318) | Seguridad |
 | 22 | Quién desbloquea una tarjeta | Una persona con `BLOQUEAR_TARJETA` (OPERADOR, ADMINISTRADOR), solo por el módulo Seguridad; en la base, solo `bna_seguridad` ejecuta `desbloquear_tarjeta` | bna-core-db (rol `bna_seguridad`) y PR de Seguridad | Seguridad, Tarjetas |
+| 23 | Perfil de SOL según el rol de COREDB | ASESOR prepara y envía; ADMINISTRADOR (SUPERVISOR en SOL) y AUDITOR consultan; los demás roles y los usuarios de servicio no entran. SOL ya no tiene cuentas propias | Decisión de Santiago Cusirramos: ningún módulo con base propia | SOL |
+| 24 | Tipos de garantía de una solicitud | Los del catálogo de la base (`creditos.tipo_garantia`): HIPOTECARIA, MOBILIARIA, PRENDARIA. SOL ofrecía también PERSONAL, VEHICULAR y FONDOS: **pregunta abierta** | Modelo de la base (bd-v1.14-mysql) | SOL, Créditos |
+| 25 | Cuántas solicitudes respalda un fiador | Una: su verificación es la de Captación y `uk_fiador_solicitud_1` del modelo la hace única. **Pregunta abierta** | Modelo de la base (bd-v1.14-mysql) | SOL, Créditos |
 
 ## Créditos
 

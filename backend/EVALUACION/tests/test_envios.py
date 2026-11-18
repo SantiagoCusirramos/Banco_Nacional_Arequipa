@@ -7,7 +7,7 @@ from SOL.schemas import EvaluationResult
 
 from EVALUACION.envios import id_operacion
 from EVALUACION.main import crear_app
-from EVALUACION.tests.ayudas import (TOKEN_RESULTADOS, SolFalso, cabeceras, contexto, decidir, evaluar, nuevo_sobre,
+from EVALUACION.tests.ayudas import (BUS_TOKEN, TOKEN_RESULTADOS, SolFalso, cabeceras, contexto, decidir, evaluar, nuevo_sobre,
                                      recibir)
 
 
@@ -25,6 +25,8 @@ def test_entrega_el_resultado_con_el_contrato_de_sol(api, sol, analista, cliente
     peticion = next(p for p in sol.recibidos if json.loads(p.content) == cuerpo)
     assert peticion.url.path == "/sol/integrations/evaluation-results"
     assert peticion.headers["Authorization"] == f"Bearer {TOKEN_RESULTADOS}"
+    # SOL se alcanza por el Bus: la entrega lleva la credencial de Evaluación ante el Bus.
+    assert peticion.headers.get("X-Bus-Token", "") == BUS_TOKEN
     assert peticion.headers["X-Idempotency-Key"] == cuerpo["idOperacion"]
     assert peticion.headers["X-Correlation-ID"] == cuerpo["idCorrelacion"]
     assert (cuerpo["idSolicitud"], cuerpo["versionSolicitud"], cuerpo["idEvaluacion"], cuerpo["ronda"]) == (

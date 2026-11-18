@@ -1,7 +1,7 @@
 /**
  * Frontera del navegador: la URL del gateway y el token quedan en servidor.
  * La sesión usa una cookie HttpOnly; el cliente nunca recibe el bearer token.
- * En esta entrega el gateway es SIMULADO y ejecuta SOL sobre su BD local.
+ * SOL_GATEWAY_URL es SOL por el Bus; SOL no tiene base propia y la sesión es la de COREDB.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { credencialBus } from "@/lib/proxy";

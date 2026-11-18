@@ -9,8 +9,8 @@ la decisión del analista (por omisión del equipo, T1, no vuelve a SOL como ped
 
 Sigue el contrato de SOL (Documents/solicitud-credito/CONTRATOS_HTTP_V2.md): POST
 /sol/integrations/evaluation-results con su token de resultados, X-Idempotency-Key igual a
-idOperacion y X-Correlation-ID igual a idCorrelacion. Mientras SOL siga en modo SIMULADO
-(`EVALUACION_SOL_URL` vacía) no hay a quién entregar y el ciclo no corre.
+idOperacion y X-Correlation-ID igual a idCorrelacion. Sin `EVALUACION_SOL_URL` no hay a quién
+entregar y el ciclo no corre; en el producto se entrega a SOL por el Bus.
 """
 from __future__ import annotations
 
@@ -59,8 +59,11 @@ class DespachadorResultados:
     def __init__(self, config: Config, coredb: ClienteCoreDb, transporte: httpx.BaseTransport | None = None):
         self._config = config
         self._coredb = coredb
+        # SOL se alcanza por el Bus (EVALUACION_SOL_URL=http://bus:8018/bus/sol): cada entrega lleva
+        # la credencial de Evaluación ante el Bus, que el Bus no reenvía a SOL.
         self._http = httpx.Client(base_url=config.sol_url or "http://sol.invalid", timeout=config.timeout_seg,
-                                  transport=transporte, follow_redirects=False, trust_env=False)
+                                  transport=transporte, follow_redirects=False, trust_env=False,
+                                  headers={"X-Bus-Token": config.bus_token} if config.bus_token else None)
 
     def cerrar(self) -> None:
         self._http.close()

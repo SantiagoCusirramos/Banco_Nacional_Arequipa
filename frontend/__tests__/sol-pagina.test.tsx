@@ -49,15 +49,6 @@ it("recupera operación pendiente tras recarga y no anuncia recepción EVA", asy
   const sent = api.mock.calls.find(([url]) => url.endsWith("/send"))!;
   expect((sent[1]!.headers as Record<string, string>)["X-Idempotency-Key"]).toBe("pendiente-e05");
 });
-it("observada ofrece subsanar y abre nueva versión editable", async () => {
-  detail.estado = "OBSERVADA"; detail.versiones[0].congelada = true;
-  override = (path) => path.endsWith("/revise") ? Response.json({ ...detail, estado: "BORRADOR", version: 2, revision: 3, versiones: [...detail.versiones, { numero: 2, congelada: false, expediente: snapshot }] }) : undefined;
-  await open();
-  await userEvent.click(screen.getByRole("button", { name: "Subsanar en nueva versión" }));
-  expect(await screen.findByRole("heading", { name: "Editar solicitud" })).toBeInTheDocument();
-  expect(screen.getByLabelText("Monto solicitado")).toHaveValue(15000);
-  expect(screen.getByRole("status")).toHaveTextContent("Versión 2 creada");
-});
 it("sesión caducada abandona expediente y muestra acceso", async () => {
   await open();
   override = () => Response.json({ detail: "Sesión vencida" }, { status: 401 });
@@ -65,16 +56,18 @@ it("sesión caducada abandona expediente y muestra acceso", async () => {
   expect(await screen.findByRole("heading", { name: "Bienvenido a BNA" })).toBeInTheDocument();
   expect(screen.queryByText("SOL-E05")).not.toBeInTheDocument();
 });
-it.each(["SUPERVISOR", "AUDITOR"])("%s consulta operación sin controles de asesor", async (rol) => {
+it.each(["SUPERVISOR", "AUDITOR"])("%s consulta métricas sin controles de asesor", async (rol) => {
   profile = { ...user, rol };
-  override = (path) => path === "ops/pending" ? Response.json({ envios: ["op-e05"], auditoria: [{ estado: "SIMULADO", cantidad: 1 }] }) : path === "ops/metrics" ? Response.json({ operaciones: [] }) : undefined;
+  override = (path) => path === "ops/metrics" ? Response.json({ operaciones: [{ operacion: "GET /sol/applications", muestras: 3, p95_ms: 12 }] }) : undefined;
   render(<SolicitudPage />);
   await screen.findByRole("button", { name: "Abrir SOL-E05" });
   expect(screen.queryByRole("button", { name: "Nueva solicitud" })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Integraciones" }));
-  await userEvent.click(screen.getByRole("button", { name: "Actualizar pendientes y métricas" }));
-  expect(await screen.findByText("op-e05")).toBeInTheDocument();
-  expect(Boolean(screen.queryByRole("button", { name: "Deshabilitar usuario" }))).toBe(rol === "SUPERVISOR");
+  await userEvent.click(screen.getByRole("button", { name: "Actualizar métricas" }));
+  expect(await screen.findByText(/GET \/sol\/applications: 3 muestras/)).toBeInTheDocument();
+  // Sin base propia: ni pendientes locales ni bajas de usuario (los usuarios están en COREDB).
+  expect(api.mock.calls.some(([url]) => url.includes("ops/pending") || url.includes("/admin/users/"))).toBe(false);
+  expect(screen.queryByRole("button", { name: "Deshabilitar usuario" })).not.toBeInTheDocument();
 });
 it("crea, previsualiza y guarda borrador sin ejecutar envío", async () => {
   override = (path, init) => path === "preview" ? Response.json(snapshot) : path === "applications" && init?.method === "POST" ? Response.json(detail, { status: 201 }) : undefined;
@@ -90,28 +83,13 @@ it("crea, previsualiza y guarda borrador sin ejecutar envío", async () => {
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Borrador guardado"));
   expect(api.mock.calls.some(([url]) => url.endsWith("/send"))).toBe(false);
 });
-it("supervisor revoca acceso desde la pantalla y limpia el motivo", async () => {
-  profile = { ...user, rol: "SUPERVISOR" };
-  override = (path) => path.startsWith("admin/users/") ? Response.json({ activo: false, sesiones_revocadas: 2 }) : path === "ops/pending" ? Response.json({ envios: [], auditoria: [] }) : path === "ops/metrics" ? Response.json({ operaciones: [] }) : undefined;
-  render(<SolicitudPage />);
-  await screen.findByRole("button", { name: "Abrir SOL-E05" });
-  await userEvent.click(screen.getByRole("button", { name: "Integraciones" }));
-  fireEvent.change(screen.getByLabelText("Usuario a deshabilitar"), { target: { value: "usuario-prueba" } });
-  fireEvent.change(screen.getByLabelText("Motivo de baja"), { target: { value: "Baja sintética autorizada" } });
-  await userEvent.click(screen.getByRole("button", { name: "Deshabilitar usuario" }));
-  expect(await screen.findByRole("status")).toHaveTextContent("sesiones revocadas");
-  const call = api.mock.calls.find(([url]) => url.includes("/admin/users/"))!;
-  expect(call[0]).toBe("/api/solicitud-credito/admin/users/usuario-prueba/disable");
-  expect(screen.getByLabelText("Motivo de baja")).toHaveValue("");
-});
 it("asesor no ve operaciones administrativas y error de contrato bloquea reenvío", async () => {
   detail.versiones[0].congelada = true;
   detail.envios = [{ version: 1, id_operacion: "error-e05", estado_transporte: "ERROR_CONTRATO", acuse: "", fecha: "2026-11-14T15:00:00Z" }];
   await open();
   expect(screen.getByRole("button", { name: "Envío requiere revisión" })).toBeDisabled();
   await userEvent.click(screen.getByRole("button", { name: "Integraciones" }));
-  expect(screen.queryByRole("button", { name: "Actualizar pendientes y métricas" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Deshabilitar usuario" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Actualizar métricas" })).not.toBeInTheDocument();
 });
 it("evita doble click mientras el envío está en curso", async () => {
   let finish!: (response: Response) => void;
@@ -127,6 +105,7 @@ it("login y logout manejan sesión sin recibir token en el navegador", async () 
   override = (path) => path === "auth/me" && !loggedIn ? Response.json({ detail: "Inicia sesión" }, { status: 401 }) : path === "auth/login" ? (loggedIn = true, Response.json({ usuario: user })) : path === "auth/logout" ? Response.json({ ok: true }) : undefined;
   render(<SolicitudPage />);
   await screen.findByRole("heading", { name: "Bienvenido a BNA" });
+  fireEvent.change(screen.getByLabelText("Usuario"), { target: { value: "asesora" } });
   fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "clave-sintetica" } });
   await userEvent.click(screen.getByRole("button", { name: "Ingresar al portal" }));
   await screen.findByRole("button", { name: "Abrir SOL-E05" });
@@ -134,15 +113,16 @@ it("login y logout manejan sesión sin recibir token en el navegador", async () 
   expect(await screen.findByRole("heading", { name: "Bienvenido a BNA" })).toBeInTheDocument();
   expect(screen.getByLabelText("Contraseña")).toHaveValue("");
 });
-it.each(["SIMULADO", "REAL"])("consola de resultado demo solo funciona en SIMULADO (%s)", async (mode) => {
-  profile = { ...user, rol: "EVALUADOR" }; policy.integracion = mode; detail.estado = "EN_EVALUACION";
-  override = (path) => path.endsWith("/demo-result") ? Response.json({ ...detail, estado: "OBSERVADA" }) : undefined;
-  await open();
-  const button = screen.queryByRole("button", { name: "Enviar resultado simulado" });
-  expect(Boolean(button)).toBe(mode === "SIMULADO");
-  if (button) {
-    fireEvent.change(screen.getByLabelText("Observación / sustento"), { target: { value: "Precisar destino de prueba" } });
-    await userEvent.click(button);
-    expect(await screen.findByRole("status")).toHaveTextContent("Resultado simulado recibido");
-  }
+it("las garantías se eligen del catálogo de la base", async () => {
+  render(<SolicitudPage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Nueva solicitud" }));
+  await userEvent.click(screen.getByRole("radio"));
+  await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+  fireEvent.change(screen.getByLabelText("Monto solicitado"), { target: { value: "15000" } });
+  fireEvent.change(screen.getByLabelText("Destino del crédito"), { target: { value: "Mejoras de prueba" } });
+  await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+  await userEvent.click(screen.getByRole("button", { name: "Agregar" }));
+  const opciones = Array.from(document.querySelectorAll("select option")).map((o) => o.textContent);
+  expect(opciones).toEqual(expect.arrayContaining(["HIPOTECARIA", "MOBILIARIA", "PRENDARIA"]));
+  expect(opciones).not.toContain("PERSONAL");
 });

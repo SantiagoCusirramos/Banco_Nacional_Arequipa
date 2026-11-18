@@ -14,7 +14,7 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | CAPTACION | `backend/CAPTACION` | Captación de clientes: registro del solicitante, consentimientos, OTP, RENIEC/listas/PEP, centrales y perfil de riesgo; registra al cliente HABILITADO en COREDB y publica la referencia CR-INT-01 que consulta SOL. Sin base propia: el expediente vive en la base integrada (`clientes.*_captacion`) y se trabaja por COREDB | En uso, con proveedores simulados |
 | COBRANZA | `backend/COBRANZA` | Cobranza de cuotas de crédito: consulta del cronograma y pago de cuotas en montos fraccionados (CR-INT-07, real en COREDB) y el pago de la pantalla `/pagar-cuota` (CR-INT-08). Sin base propia: el crédito lo crea Desembolso en COREDB y Cobranza lo lee y cobra. Llega a COREDB por el Bus (`/bus/cobranza`) con `BUS_TOKEN_COBRANZA` y su usuario de servicio (`COBRANZA_COREDB_SECRETO`) | En uso: sin base propia, llama a COREDB |
 | Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas, captación, solicitud de crédito y pago de cuotas (`/pagar-cuota`); pantallas del analista (`/evaluacion`) y del operador de desembolso (`/desembolso`); Home Banking en `/homebanking/index.html` | En uso |
-| SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas (modo `SIMULADO`). El frontend llega a SOL por el Bus | Base propia (`bna_sol_mvp` en `db-aux`); no llama a CAPTACION, Evaluación ni COREDB |
+| SOL | `backend/SOL` | Solicitud de crédito: el asesor arma el borrador (condiciones, garantías y fiadores) con clientes de CAPTACION (CR-INT-01), lo envía a Evaluación (CR-INT-02) y recibe el resultado (CR-INT-03). Sin base propia: el borrador y su historial están en COREDB, y sus eventos van a la bitácora de COREDB. Las personas entran con su usuario de COREDB y SOL llega a todo por el Bus | En uso: sin base propia, llama a COREDB, CAPTACION y Evaluación |
 | EVALUACIÓN | `backend/EVALUACION` | Evaluación crediticia: recibe el expediente de SOL y lo registra en COREDB; el analista evalúa con la regla RN-EVA-002-P y decide los casos observados. La aprobación queda en COREDB para Desembolso, con el calendario de SOL | En uso: sin base propia, llama a COREDB |
 | DESEMBOLSO | `backend/DESEMBOLSO` | Desembolso de créditos: el operador verifica el documento del titular, prepara la orden con una aprobación y una cuenta individual, y confirma; COREDB abona una sola vez, crea el crédito con su calendario oficial y deja la solicitud desembolsada | En uso: sin base propia, llama a COREDB |
 | Seguridad | `backend/seguridad` | Evaluación de una operación contra el tope real del canal, con desafío sobre el 80 % (código simulado); sellos HMAC encadenados de la bitácora de COREDB; incidentes; desbloqueo de tarjetas (el único camino). Sin base propia ni usuarios propios: entra el personal con su usuario de COREDB y Seguridad llega a COREDB por el Bus con `svc-seguridad` | En uso: sin base propia, llama a COREDB; ningún canal lo llama aún antes de debitar |
@@ -64,11 +64,11 @@ flowchart LR
   bus -->|"/bus/billetera"| bil["BILLETERA (Chaski) :8020"]
   app["App móvil y pantalla del cajero"] -.-> atm & bil
   atm -->|"/bus/tarjetas y /bus/cuentas"| bus
-  cta & tar & cap & eva & des & cob & bil & seg -->|"/bus/coredb, con su X-Bus-Token"| bus
+  cta & tar & cap & eva & des & cob & bil & seg & sol -->|"/bus/coredb, con su X-Bus-Token"| bus
+  sol -->|"/bus/captacion y /bus/evaluacion"| bus
   bus ==>|"/bus/coredb, red core"| coredb["COREDB :8012"]
   coredb --> db[("db: base integrada, MySQL 8.4 :3307")]
-  sol --> aux[("db-aux: bna_sol_mvp y bna legada")]
-  leg["CORE legado :8000 (perfil legado)"] -.-> aux
+  leg["CORE legado :8000 (perfil legado)"] -.-> aux[("db-legado: bna legada (perfil legado)")]
 ```
 
 Camino de una llamada, por ejemplo un depósito desde el frontend:
@@ -93,12 +93,12 @@ sequenceDiagram
 ```
 
 - El navegador solo habla con el frontend. Sus ocho puentes `/api/core`, `/api/cuenta`, `/api/tarjeta`, `/api/captacion`, `/api/solicitud-credito`, `/api/evaluacion`, `/api/desembolso` y `/api/cobranza` reenvían cada petición desde el servidor de Next.js al Bus de Servicios, así que el navegador nunca conoce la dirección de un servicio. Las excepciones son los dos canales con pantalla propia: la del cajero, que sirve el ATM en su puerto, y la app móvil, que llama a la API de Chaski.
-- Los módulos que usan COREDB (CUENTAS, TARJETAS, CAPTACION, Evaluación, Desembolso, COBRANZA y BILLETERA) también llegan a él a través del Bus: su dirección de COREDB es `http://bus:8018/bus/coredb` y presentan su propia credencial (`BUS_TOKEN`, un consumidor del Bus por módulo). El ATM no llama a COREDB: llega a TARJETAS y CUENTAS por el Bus con la suya.
+- Los módulos que usan COREDB (CUENTAS, TARJETAS, CAPTACION, SOL, Evaluación, Desembolso, COBRANZA, BILLETERA y Seguridad) también llegan a él a través del Bus: su dirección de COREDB es `http://bus:8018/bus/coredb` y presentan su propia credencial (`BUS_TOKEN`, un consumidor del Bus por módulo). El ATM no llama a COREDB: llega a TARJETAS y CUENTAS por el Bus con la suya.
 - El Bus reenvía cada petición sin tocarla (Authorization, X-Idempotency-Key, X-Correlation-ID, cuerpo y código de vuelta), quita solo su propia credencial y nunca reintenta: un reintento con llave de idempotencia lo decide el módulo. Si el destino no responde, contesta 503 o 504 con un error claro. Ver [`backend/BUS_SERVICIOS/README.md`](backend/BUS_SERVICIOS/README.md).
 - En compose hay dos redes cerradas: `canales` (el frontend, el Bus y los dos canales, ATM y BILLETERA: el frontend no ve los demás módulos) y `core` (la base, COREDB, `coredb-init` y el Bus: los módulos no ven COREDB). `scripts/comprobar_rutas_coredb.py`, que corre en `./bna test`, falla si algún módulo de compose, k8s, los `.env.example` o los valores por omisión tiene la dirección directa de COREDB. Solo la tienen el Bus (`BUS_URL_COREDB`; en k8s, el ConfigMap `bna-bus`, que solo lee el Bus), COREDB mismo y su arranque (`coredb-init` y los contenedores de arranque del Deployment `coredb`, que crean los usuarios iniciales conectados a la base). Las suites de integración de los módulos también levantan un Bus (`scripts/bus_de_pruebas.sh`).
-- SOL tiene base propia y, mientras siga en modo SIMULADO, no llama a CAPTACION ni a Evaluación; cuando pase a REAL, esas llamadas irán también por el Bus.
+- Ningún módulo tiene base propia. SOL llega también por el Bus a CAPTACION (referencias de clientes) y a Evaluación (expedientes); Evaluación le devuelve el resultado por el Bus.
 - COREDB es la única entrada a la base integrada, y escribe en ella solo por procedimientos almacenados.
-- `db-aux` es otro MySQL, con la base de SOL (`bna_sol_mvp`) y el esquema `bna` del CORE legado. La base integrada no recibe esquemas ni usuarios ajenos.
+- `db-legado` es otro MySQL, solo con el esquema `bna` del CORE legado y solo con el perfil `legado`. La base integrada no recibe esquemas ni usuarios ajenos.
 - Todos los puertos se publican solo en `127.0.0.1`.
 
 ## Servicios y puertos
@@ -107,7 +107,7 @@ sequenceDiagram
 |---|---|---|---|
 | Frontend | http://localhost:3000 | `admin` y `BNA_ADMIN_PASSWORD` | [`frontend/README.md`](frontend/README.md) |
 | Captación de clientes | http://localhost:3000/captacion | `admin` y `BNA_ADMIN_PASSWORD` (o un usuario ASESOR) | [`backend/CAPTACION/README.md`](backend/CAPTACION/README.md) |
-| Solicitud de crédito | http://localhost:3000/solicitud-credito | `asesor.bna`, `supervisor.bna`, `auditor.bna` o `evaluador.demo`, con `SOL_INITIAL_PASSWORD` | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
+| Solicitud de crédito | http://localhost:3000/solicitud-credito | Un usuario de COREDB: ASESOR (prepara y envía), ADMINISTRADOR o AUDITOR (consultan) | [`backend/SOL/README.md`](backend/SOL/README.md) |
 | Bus de Servicios | http://127.0.0.1:8018/docs | Credencial del consumidor en `X-Bus-Token` (`BUS_TOKEN_*` en `.env`), más la del módulo | [`backend/BUS_SERVICIOS/README.md`](backend/BUS_SERVICIOS/README.md) |
 | COREDB | http://127.0.0.1:8012/docs | Token de `POST /coredb/auth/login` con `admin` | [`backend/COREDB/README.md`](backend/COREDB/README.md) |
 | CUENTAS | http://127.0.0.1:8001/docs | El mismo token de COREDB | [`backend/CUENTAS/README.md`](backend/CUENTAS/README.md) |
@@ -116,14 +116,14 @@ sequenceDiagram
 | BILLETERA (Chaski) | http://127.0.0.1:8020/api/salud | El cliente entra con su celular y su PIN (`POST /api/login`), después de que un usuario del banco lo afilie con `POST /coredb/billetera/afiliaciones` | [`billetera-chaski/README.md`](billetera-chaski/README.md) |
 | CAPTACION | http://127.0.0.1:8017/docs | El mismo token de COREDB | [`backend/CAPTACION/README.md`](backend/CAPTACION/README.md) |
 | COBRANZA | http://localhost:3000/pagar-cuota (API: http://127.0.0.1:8014/docs) | El mismo token de COREDB (cada ruta comprueba sus permisos) | [`backend/COBRANZA/README.md`](backend/COBRANZA/README.md) |
-| SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
+| SOL | http://127.0.0.1:8011/docs | Token de `POST /sol/auth/login` (el login de COREDB) | [`backend/SOL/README.md`](backend/SOL/README.md) |
 | Evaluación | http://localhost:3000/evaluacion (API: http://127.0.0.1:8015/docs) | Un usuario de COREDB con rol ANALISTA (decidir exige además un analista registrado: el administrador lo da de alta con `POST /coredb/empleados` y `POST /coredb/creditos/analistas`); AUDITOR solo consulta | [`backend/EVALUACION/README.md`](backend/EVALUACION/README.md) |
 | Desembolso | http://localhost:3000/desembolso (API: http://127.0.0.1:8016/docs) | Un usuario de COREDB con rol OPERADOR; ADMINISTRADOR hace de supervisor y AUDITOR consulta | [`backend/DESEMBOLSO/README.md`](backend/DESEMBOLSO/README.md) |
 | Seguridad | http://127.0.0.1:8013 | Consola técnica; se entra con un usuario de COREDB (`admin`) | [`backend/seguridad/README.md`](backend/seguridad/README.md) |
 | MySQL de la base integrada | `127.0.0.1:3307` | `root` y `CORE_DB_ROOT_PASSWORD` | [`database/README.md`](database/README.md) |
 | CORE legado (opcional) | http://127.0.0.1:8000/docs | Token de `POST /core/auth/login` | [`backend/CORE/README.md`](backend/CORE/README.md) |
 
-Las contraseñas están en `.env`. `db-aux` no publica ningún puerto. Sin un cliente de MySQL en la máquina, la base integrada se abre con `docker compose exec db mysql -uroot -p`.
+Las contraseñas están en `.env`. `db-legado` no publica ningún puerto. Sin un cliente de MySQL en la máquina, la base integrada se abre con `docker compose exec db mysql -uroot -p`.
 
 El CORE legado solo se levanta si se pide: `COMPOSE_PROFILES=legado ./bna up`. Todas sus rutas salvo el login exigen token y permiso. `./bna down` y `./bna reset` lo detienen también; con `docker compose` directo hay que nombrar su perfil: `docker compose --profile legado down`.
 
@@ -152,9 +152,9 @@ Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo 
 | `BNA_ADMIN_USUARIO`, `BNA_ADMIN_PASSWORD` | Primer administrador de COREDB. Se crea al arrancar si no hay ninguno |
 | `CORE_DB_*_PASSWORD` | Usuarios de la base integrada |
 | `CORE_DB_JWT_CLAVE` | Clave que firma los tokens de COREDB |
-| `SOL_INITIAL_PASSWORD` | Clave inicial de las cuatro cuentas de demostración de SOL |
+| `SOL_COREDB_SECRETO`, `BUS_TOKEN_SOL` | Secreto del usuario de servicio de SOL en COREDB (`svc-sol`) y su credencial ante el Bus |
 | `SEGURIDAD_SECRET_KEY`, `SEGURIDAD_COREDB_SECRETO` | Clave de los HMAC de Seguridad (código del desafío y sellos de la bitácora) y secreto de su usuario de servicio en COREDB |
-| `AUX_DB_ROOT_PASSWORD`, `SOL_DB_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base auxiliar y CORE legado |
+| `LEGADO_DB_ROOT_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base y API del CORE legado (perfil `legado`) |
 | `EVALUACION_COREDB_SECRETO`, `EVALUACION_TOKEN_SOL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | Secreto del usuario de servicio de Evaluación en COREDB y los tokens de CR-INT-02 y CR-INT-03 con SOL |
 | `DESEMBOLSO_COREDB_SECRETO` | Secreto del usuario de servicio de Desembolso en COREDB |
 | `COBRANZA_COREDB_SECRETO` | Secreto del usuario de servicio de Cobranza en COREDB (svc-cobranza) |

@@ -1,4 +1,7 @@
-# SOL: solicitud de crédito, con Captación y Evaluación simuladas.
+# SOL: solicitud de crédito, sin base propia. El borrador, la bandeja y la bitácora están en
+# COREDB; las referencias de clientes, en CAPTACION (CR-INT-01); el expediente va a EVALUACION
+# (CR-INT-02), que devuelve el resultado (CR-INT-03). Todo por el Bus. La persona entra con su
+# usuario de COREDB; lo de SOL va con svc-sol (lo crea el arranque de COREDB).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,55 +20,32 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         seccompProfile: { type: RuntimeDefault }
-      initContainers:
-        - name: esperar-db-aux
-          image: bna/sol:local
-          command:
-            - python
-            - -c
-            - |
-              import socket, sys, time
-              for _ in range(150):
-                  try:
-                      socket.create_connection(("db-aux", 3306), 2).close()
-                      sys.exit(0)
-                  except OSError:
-                      time.sleep(2)
-              sys.exit("La base auxiliar no respondió a tiempo.")
-          resources: &recursos-arranque
-            requests: { cpu: 50m, memory: 64Mi }
-            limits: { cpu: 500m, memory: 256Mi }
-          securityContext: &contenedor-seguro
-            allowPrivilegeEscalation: false
-            capabilities: { drop: [ALL] }
-        # Crea la base de SOL y sus cuentas de demostración. No borra datos.
-        - name: preparar-base
-          image: bna/sol:local
-          command: [python, -m, SOL.manage, init]
-          envFrom:
-            - configMapRef: { name: bna-configuracion }
-          env:
-            - name: SOL_DB_PASSWORD
-              valueFrom: { secretKeyRef: { name: bna-secretos, key: SOL_DB_PASSWORD } }
-            - name: SOL_INITIAL_PASSWORD
-              valueFrom: { secretKeyRef: { name: bna-secretos, key: SOL_INITIAL_PASSWORD } }
-          resources: *recursos-arranque
-          securityContext: *contenedor-seguro
       containers:
         - name: sol
           image: bna/sol:local
           command: [uvicorn, SOL.app:app, --host, 0.0.0.0, --port, "8011"]
-          envFrom:
-            - configMapRef: { name: bna-configuracion }
           env:
-            - name: SOL_DB_PASSWORD
-              valueFrom: { secretKeyRef: { name: bna-secretos, key: SOL_DB_PASSWORD } }
+            - name: SOL_BUS_URL
+              value: http://bus:8018/bus
+            - name: SOL_BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_SOL } }
+            - name: SOL_COREDB_USUARIO
+              value: svc-sol
+            - name: SOL_COREDB_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: SOL_COREDB_SECRETO } }
+            - name: SOL_CAP_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CAP_SOL_TOKEN } }
+            - name: SOL_EVA_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: EVALUACION_TOKEN_SOL } }
+            - name: SOL_EVA_CALLBACK_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: EVALUACION_SOL_TOKEN_RESULTADOS } }
           ports:
             - { name: http, containerPort: 8011 }
+          # /ready comprueba que COREDB responde por el Bus.
           startupProbe:
             httpGet: { path: /ready, port: http }
             periodSeconds: 3
-            failureThreshold: 40
+            failureThreshold: 60
           readinessProbe:
             httpGet: { path: /ready, port: http }
             periodSeconds: 10
@@ -77,7 +57,9 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: "1", memory: 384Mi }
-          securityContext: *contenedor-seguro
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
 ---
 apiVersion: v1
 kind: Service

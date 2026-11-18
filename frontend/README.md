@@ -29,7 +29,7 @@ El navegador solo llama a rutas de este mismo servidor, que las reenvía desde e
 | `/api/cuenta/*` | CUENTAS, `/api/v1/cuentas/*` | `CUENTAS_GATEWAY_URL` |
 | `/api/tarjeta/*` | TARJETAS, `/api/v1/tarjetas/*` | `TARJETAS_GATEWAY_URL` |
 | `/api/captacion/*` | CAPTACION, `/api/v1/captacion/*` | `CAPTACION_GATEWAY_URL` |
-| `/api/solicitud-credito/*` | SOL, `/gateway/sol/*` | `SOL_GATEWAY_URL` |
+| `/api/solicitud-credito/*` | SOL, `/sol/*` (login con el usuario de COREDB) | `SOL_GATEWAY_URL` |
 | `/api/evaluacion/*` | EVALUACIÓN, `/eva/v1/*` | `EVALUACION_GATEWAY_URL` |
 | `/api/desembolso/*` | DESEMBOLSO, `/api/v1/*` | `DESEMBOLSO_GATEWAY_URL` |
 | `/api/cobranza/*` | COBRANZA | `COBRANZA_GATEWAY_URL` |

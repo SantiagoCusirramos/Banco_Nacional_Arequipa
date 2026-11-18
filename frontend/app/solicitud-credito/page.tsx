@@ -18,7 +18,7 @@ import {
 type User = {
   username: string;
   nombre: string;
-  rol: "ASESOR" | "SUPERVISOR" | "AUDITOR" | "EVALUADOR";
+  rol: "ASESOR" | "SUPERVISOR" | "AUDITOR";
 };
 type Policy = {
   version: string;
@@ -440,14 +440,9 @@ export default function SolicitudPage() {
   const [form, setForm] = useState<FormData>(freshForm);
   const [step, setStep] = useState(0);
   const [preview, setPreview] = useState<Snapshot | null>(null);
-  const [username, setUsername] = useState("asesor.bna");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [decision, setDecision] = useState("OBSERVADO");
-  const [observation, setObservation] = useState("");
-  const [operations, setOperations] = useState<{ envios: string[]; auditoria: { estado: string; cantidad: number }[] } | null>(null);
   const [metrics, setMetrics] = useState<{ operaciones: { operacion: string; muestras: number; p95_ms: number }[] } | null>(null);
-  const [disableUsername, setDisableUsername] = useState("");
-  const [disableReason, setDisableReason] = useState("");
   // Conservar la clave al reintentar tras un timeout reconoce un acuse que
   // pudo confirmarse aunque el navegador no recibiera la primera respuesta.
   const sendKeys = useRef(new Map<string, string>());
@@ -463,7 +458,7 @@ export default function SolicitudPage() {
   const clearSession = useCallback(() => {
     setUser(null); setSelected(null); setPreview(null); setApps([]); setClients([]);
     setPolicy(null); setForm(freshForm()); setPassword(""); setView("bandeja");
-    setOperations(null); setMetrics(null); setDisableUsername(""); setDisableReason("");
+    setMetrics(null);
     setPageOffset(0); sendKeys.current.clear();
   }, []);
   const fail = useCallback((e: unknown) => {
@@ -530,11 +525,7 @@ export default function SolicitudPage() {
   const current = selected?.versiones.find((v) => v.numero === version);
   const activeDelivery = selected?.envios.find((e) => e.version === selected.version);
   async function refreshOperations() {
-    const [pending, samples] = await Promise.all([
-      api<NonNullable<typeof operations>>("ops/pending"),
-      api<NonNullable<typeof metrics>>("ops/metrics"),
-    ]);
-    setOperations(pending); setMetrics(samples);
+    setMetrics(await api<NonNullable<typeof metrics>>("ops/metrics"));
   }
 
   function start() {
@@ -616,7 +607,7 @@ export default function SolicitudPage() {
         text: pending
           ? "Envío pendiente de confirmación. La versión está reservada; actualiza para consultar el acuse."
           : send
-          ? (policy?.integracion === "REAL" ? "Evaluación confirmó la recepción del expediente." : "Expediente enviado a Evaluación simulada. La versión quedó congelada.")
+          ? "Evaluación confirmó la recepción del expediente. La versión quedó congelada."
           : "Borrador guardado en la base de datos.",
         error: false,
       });
@@ -634,23 +625,7 @@ export default function SolicitudPage() {
         setSelected(d);
         await refresh();
         setNotice({
-          text: d.pendiente_envio ? "Envío pendiente de confirmación. Actualiza para consultar el acuse." : (policy?.integracion === "REAL" ? "Envío confirmado por Evaluación. Consulta el acuse." : "Envío recibido por EVA simulada. Consulta el acuse en el historial."),
-          error: false,
-        });
-      });
-  }
-  async function revise() {
-    if (selected)
-      await run(async () => {
-        const d = await api<Detail>(
-          `applications/${selected.id}/revise`,
-          "POST",
-          { revision: selected.revision },
-        );
-        await refresh();
-        edit(d);
-        setNotice({
-          text: `Versión ${d.version} creada. La anterior conserva sus condiciones.`,
+          text: d.pendiente_envio ? "Envío pendiente de confirmación. Actualiza para consultar el acuse." : "Envío confirmado por Evaluación. Consulta el acuse en el historial.",
           error: false,
         });
       });
@@ -730,25 +705,16 @@ export default function SolicitudPage() {
               });
             }}
           >
-            <Field title="Usuario">
-              <select
+            <Field title="Usuario" hint="Tu usuario del banco (COREDB): asesor, administrador o auditor.">
+              <input
+                required
+                autoComplete="username"
+                maxLength={60}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-              >
-                <option value="asesor.bna">asesor.bna · Asesor</option>
-                <option value="supervisor.bna">
-                  supervisor.bna · Solo consulta
-                </option>
-                <option value="auditor.bna">auditor.bna · Solo consulta</option>
-                <option value="evaluador.demo">
-                  evaluador.demo · Simulador EVA
-                </option>
-              </select>
+              />
             </Field>
-            <Field
-              title="Contraseña"
-              hint="Usa la clave que elegiste al inicializar el laboratorio."
-            >
+            <Field title="Contraseña">
               <input
                 required
                 type="password"
@@ -773,8 +739,8 @@ export default function SolicitudPage() {
             <p>
               <strong>Entorno académico de demostración</strong>
               <br />
-              Datos sintéticos y conexiones con otros módulos simuladas.
-              Políticas pendientes de aprobación.
+              Entra con tu usuario del banco (COREDB). Los datos de los clientes
+              vienen de Captación. Políticas pendientes de aprobación.
             </p>
           </div>
           <small>Solicitud de Crédito · Plataforma BNA · MVP 1.0</small>
@@ -803,10 +769,7 @@ export default function SolicitudPage() {
             {
               id: "bandeja",
               icon: "grid",
-              label:
-                user.rol === "EVALUADOR"
-                  ? "Consola EVA simulada"
-                  : "Solicitudes",
+              label: "Solicitudes",
               count: apps.length,
             },
             { id: "politicas", icon: "shield", label: "Políticas de crédito" },
@@ -836,7 +799,7 @@ export default function SolicitudPage() {
             <Icon name="shield" />
             <div>
               <strong>Laboratorio BNA</strong>
-              <small>{policy?.integracion === "REAL" ? "HTTP vía Bus configurado" : "Integración simulada"}</small>
+              <small>COREDB, Captación y Evaluación por el Bus</small>
             </div>
             <i />
           </div>
@@ -844,9 +807,7 @@ export default function SolicitudPage() {
             <span className="sol-avatar">{user.nombre[0]}</span>
             <div>
               <strong>{user.nombre.split(" · ")[0]}</strong>
-              <small>
-                {user.rol === "EVALUADOR" ? "SIMULADOR EVA" : user.rol}
-              </small>
+              <small>{user.rol}</small>
             </div>
             <button
               title="Cerrar sesión"
@@ -900,16 +861,8 @@ export default function SolicitudPage() {
               <div className="sol-heading">
                 <div>
                   <p className="sol-kicker">SOLICITUD DE CRÉDITO</p>
-                  <h1>
-                    {user.rol === "EVALUADOR"
-                      ? "Consola de Evaluación simulada"
-                      : "Cada solicitud, un nuevo comienzo."}
-                  </h1>
-                  <p>
-                    {user.rol === "EVALUADOR"
-                      ? "Emite respuestas de prueba para verificar el retorno hacia SOL. No representa una evaluación real de riesgo."
-                      : "Prepara expedientes completos y acompaña su avance hacia Evaluación."}
-                  </p>
+                  <h1>Cada solicitud, un nuevo comienzo.</h1>
+                  <p>Prepara expedientes completos y acompaña su avance hacia Evaluación.</p>
                 </div>
                 {writable && (
                   <button className="sol-button primary" onClick={start}>
@@ -1167,7 +1120,7 @@ export default function SolicitudPage() {
                           <div>
                             <h2>Selecciona al solicitante</h2>
                             <p>
-                              {policy.integracion === "REAL" ? "Referencias por HTTP configurado; validación institucional pendiente." : "Referencias recibidas desde Captación simulada."}
+                              Referencias de Captación (CR-INT-01), por el Bus.
                             </p>
                           </div>
                         </div>
@@ -1335,7 +1288,7 @@ export default function SolicitudPage() {
                               update("garantias", [
                                 ...form.garantias,
                                 {
-                                  tipo_garantia: "PERSONAL",
+                                  tipo_garantia: "HIPOTECARIA",
                                   descripcion: "",
                                   valor_tasacion: "",
                                 },
@@ -1371,12 +1324,11 @@ export default function SolicitudPage() {
                                     )
                                   }
                                 >
+                                  {/* El catálogo de la base (creditos.tipo_garantia). */}
                                   {[
-                                    "PERSONAL",
                                     "HIPOTECARIA",
-                                    "VEHICULAR",
                                     "MOBILIARIA",
-                                    "FONDOS",
+                                    "PRENDARIA",
                                   ].map((t) => (
                                     <option key={t}>{t}</option>
                                   ))}
@@ -1636,7 +1588,7 @@ export default function SolicitudPage() {
                   <Icon name="doc" />
                   <div>
                     <strong>
-                      Último resultado de EVA simulada:{" "}
+                      Último resultado de Evaluación:{" "}
                       {selected.resultados.at(-1)!.decision}
                     </strong>
                     <p>{selected.resultados.at(-1)!.observaciones}</p>
@@ -1678,16 +1630,6 @@ export default function SolicitudPage() {
                         <Icon name="arrow" size={16} />
                       </button>
                     </>
-                  )}
-                  {writable && selected.estado === "OBSERVADA" && (
-                    <button
-                      className="sol-button primary"
-                      disabled={busy}
-                      onClick={revise}
-                    >
-                      Subsanar en nueva versión
-                      <Icon name="arrow" size={16} />
-                    </button>
                   )}
                   <button
                     className="sol-link"
@@ -1774,7 +1716,7 @@ export default function SolicitudPage() {
                       <div className="sol-info-strip">
                         <Icon name="shield" />
                         <div>
-                          <strong>Referencia de Captación simulada</strong>
+                          <strong>Referencia de Captación</strong>
                           <p>
                             Caso: {current.expediente.cliente.id_caso}
                             <br />
@@ -1829,7 +1771,7 @@ export default function SolicitudPage() {
                       {selected.envios.map((e) => (
                         <p className="sol-mutedbox" key={e.id_operacion}>
                           <strong>
-                            {e.estado_transporte === "CONFIRMADO" ? (policy?.integracion === "REAL" ? "Acuse de Evaluación" : "Acuse de recepción EVA simulada") : "Envío pendiente de confirmación"} · v{e.version}
+                            {e.estado_transporte === "CONFIRMADO" ? "Acuse de Evaluación" : "Envío pendiente de confirmación"} · v{e.version}
                           </strong>
                           <br />
                           {e.acuse || e.estado_transporte}
@@ -1880,70 +1822,6 @@ export default function SolicitudPage() {
                   )}
                 </div>
               </section>
-              {user.rol === "EVALUADOR" && policy?.integracion === "SIMULADO" &&
-                selected.estado === "EN_EVALUACION" && (
-                  <section className="sol-card sol-simulator">
-                    <p className="sol-kicker">
-                      HERRAMIENTA DE PRUEBA · EVA SIMULADA
-                    </p>
-                    <h2>Enviar un resultado a Solicitud</h2>
-                    <p>
-                      Este control verifica CR-INT-03. No calcula scoring ni
-                      decide sobre un crédito real.
-                    </p>
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        run(async () => {
-                          const d = await api<Detail>(
-                            `applications/${selected.id}/demo-result`,
-                            "POST",
-                            {
-                              version: selected.version,
-                              decision,
-                              observaciones: observation,
-                            },
-                            crypto.randomUUID(),
-                          );
-                          setSelected(d);
-                          setObservation("");
-                          await refresh();
-                          setNotice({
-                            text: "Resultado simulado recibido y registrado por SOL.",
-                            error: false,
-                          });
-                        });
-                      }}
-                    >
-                      <div className="sol-form-grid">
-                        <Field title="Dictamen de prueba">
-                          <select
-                            value={decision}
-                            onChange={(e) => setDecision(e.target.value)}
-                          >
-                            {["OBSERVADO", "APROBADO", "RECHAZADO"].map((d) => (
-                              <option key={d}>{d}</option>
-                            ))}
-                          </select>
-                        </Field>
-                        <Field title="Observación / sustento">
-                          <input
-                            required
-                            minLength={5}
-                            maxLength={1000}
-                            placeholder="Ej. Precisar el destino del crédito"
-                            value={observation}
-                            onChange={(e) => setObservation(e.target.value)}
-                          />
-                        </Field>
-                      </div>
-                      <button className="sol-button primary" disabled={busy}>
-                        Enviar resultado simulado
-                        <Icon name="arrow" size={16} />
-                      </button>
-                    </form>
-                  </section>
-                )}
             </>
           )}
 
@@ -2021,7 +1899,7 @@ export default function SolicitudPage() {
                     integración.
                   </p>
                 </div>
-                <span className="sol-demo-pill">{policy?.integracion === "REAL" ? "HTTP VÍA BUS · VALIDACIÓN PENDIENTE" : "SERVICIOS SIMULADOS"}</span>
+                <span className="sol-demo-pill">POR EL BUS DE SERVICIOS</span>
               </div>
               <div className="sol-integration-grid">
                 {[
@@ -2041,20 +1919,20 @@ export default function SolicitudPage() {
                     id: "CR-INT-03",
                     name: "Evaluación → Solicitud",
                     description:
-                      "Dictamen y observaciones sobre la versión enviada. En HTTP se valida la evaluación y su ronda; la cuenta demo solo funciona en modo SIMULADO.",
+                      "Dictamen final de Evaluación sobre la versión enviada. SOL lo contrasta con COREDB (evaluación, ronda y decisión) y lo deja en la bitácora.",
                   },
                   {
                     id: "CR-INT-10",
                     name: "Eventos y auditoría",
                     description:
-                      "Eventos persistidos con identificador estable. La cola espera confirmación y recupera pendientes; el acuse demo se distingue de la confirmación central.",
+                      "SOL no tiene base propia: el borrador y su historial están en COREDB, y sus eventos (envío y resultado) van a la bitácora de COREDB, una vez por identificador.",
                   },
                 ].map((c) => (
                   <section className="sol-card sol-integration" key={c.id}>
                     <span>{c.id}</span>
                     <h2>{c.name}</h2>
                     <p>{c.description}</p>
-                    <Badge state={policy?.integracion === "REAL" ? "HTTP CONFIGURADO" : "SIMULADO"} />
+                    <Badge state="POR EL BUS" />
                   </section>
                 ))}
               </div>
@@ -2062,29 +1940,10 @@ export default function SolicitudPage() {
                 <section className="sol-card">
                   <h2>Operación y auditoría</h2>
                   <button className="sol-button secondary" disabled={busy} onClick={() => run(refreshOperations)}>
-                    Actualizar pendientes y métricas
+                    Actualizar métricas
                   </button>
-                  {operations && <div>
-                    <h3>Envíos pendientes o con error</h3>
-                    <ul>{operations.envios.map((id) => <li key={id}>{id}</li>)}</ul>
-                    <h3>Estado de auditoría</h3>
-                    <ul>{operations.auditoria.map((entry) => <li key={entry.estado}>{entry.estado}: {entry.cantidad}</li>)}</ul>
-                    <p>SIMULADO es un acuse local; CONFIRMADO identifica el acuse del receptor configurado, sin acreditar por sí solo integración institucional.</p>
-                  </div>}
                   {metrics && <ul>{metrics.operaciones.map((entry) => <li key={entry.operacion}>{entry.operacion}: {entry.muestras} muestras · p95 {entry.p95_ms} ms</li>)}</ul>}
-                  {user.rol === "SUPERVISOR" && <form onSubmit={(event) => {
-                    event.preventDefault();
-                    run(async () => {
-                      await api(`admin/users/${encodeURIComponent(disableUsername.trim())}/disable`, "POST", { motivo: disableReason });
-                      setDisableUsername(""); setDisableReason(""); await refreshOperations();
-                      setNotice({ text: "Usuario deshabilitado y sesiones revocadas.", error: false });
-                    });
-                  }}>
-                    <h3>Revocación local de acceso</h3>
-                    <Field title="Usuario a deshabilitar"><input required maxLength={60} value={disableUsername} onChange={(e) => setDisableUsername(e.target.value)} /></Field>
-                    <Field title="Motivo de baja"><input required minLength={5} maxLength={200} value={disableReason} onChange={(e) => setDisableReason(e.target.value)} /></Field>
-                    <button className="sol-button secondary" disabled={busy}>Deshabilitar usuario</button>
-                  </form>}
+                  <p>Los usuarios y sus accesos se administran en COREDB; la bitácora está en COREDB.</p>
                 </section>
               )}
               <div className="sol-bottom-note">

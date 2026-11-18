@@ -148,7 +148,6 @@ humo() {
     -e BUS_TOKEN="$(valor BUS_TOKEN_PRUEBAS)" \
     -e BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     -e BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
-    -e SOL_INITIAL_PASSWORD="$(valor SOL_INITIAL_PASSWORD)" \
     -e EVALUACION_TOKEN_SOL="$(valor EVALUACION_TOKEN_SOL)" \
     -e CAP_SOL_TOKEN="$(valor CAP_SOL_TOKEN)" \
     -e E2E_SENSIBLES=/tmp/bna-e2e-sensibles \

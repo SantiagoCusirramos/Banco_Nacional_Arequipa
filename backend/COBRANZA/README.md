@@ -87,7 +87,7 @@ docker compose exec -T -e BNA_ADMIN_PASSWORD="$(grep '^BNA_ADMIN_PASSWORD=' .env
 
 ## Arquitectura
 
-- **Sin base propia**: Cobranza no tiene `bna_cobranza` ni usa `db-aux`. Todo persiste en `creditos.*` de la base integrada (subtree `database/` desde `bna-core-db`).
+- **Sin base propia**: Cobranza no tiene `bna_cobranza`. Todo persiste en `creditos.*` de la base integrada (subtree `database/` desde `bna-core-db`).
 - **Sin X-API-Key / X-Token-Seguridad**: el personal usa su token de COREDB (Bearer); `svc-cobranza` usa su secreto para la tarea diaria.
 - **Bus de Servicios (fase 2)**: Cobranza llega a COREDB por `http://bus:8018/bus/coredb` con su credencial `BUS_TOKEN_COBRANZA` (cabecera `X-Bus-Token`).
 - **Idempotencia**: la `referencia` del pago evita cobrar dos veces; COREDB la hace cumplir atómicamente.

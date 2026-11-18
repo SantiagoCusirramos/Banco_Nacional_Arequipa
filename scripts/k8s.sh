@@ -11,9 +11,9 @@ CLUSTER=bna
 CONTEXTO="kind-$CLUSTER"
 RED=kind
 NS=bna
-IMAGENES=(bna/core-db:local bna/db-aux:local bna/coredb:local bna/backend:local
+IMAGENES=(bna/core-db:local bna/coredb:local bna/backend:local
           bna/sol:local bna/seguridad:local bna/frontend:local bna/billetera:local)
-DESPLIEGUES=(db db-aux coredb cuentas tarjetas sol evaluacion desembolso cobranza captacion seguridad bus frontend)
+DESPLIEGUES=(db coredb cuentas tarjetas sol evaluacion desembolso cobranza captacion seguridad bus frontend)
 ESPERA="${BNA_ESPERA_SEGUNDOS:-600}"
 
 k() { kubectl --context "$CONTEXTO" "$@"; }
@@ -129,7 +129,6 @@ humo() {
     BUS_TOKEN="$(valor BUS_TOKEN_PRUEBAS)" \
     BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
-    SOL_INITIAL_PASSWORD="$(valor SOL_INITIAL_PASSWORD)" \
     EVALUACION_TOKEN_SOL="$(valor EVALUACION_TOKEN_SOL)" \
     CAP_SOL_TOKEN="$(valor CAP_SOL_TOKEN)" \
     python - < scripts/flujo_e2e.py

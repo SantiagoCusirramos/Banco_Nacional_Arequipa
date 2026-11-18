@@ -67,6 +67,11 @@ spec:
               valueFrom: { secretKeyRef: { name: bna-secretos, key: EVALUACION_TOKEN_SOL } }
             - name: EVALUACION_SOL_TOKEN_RESULTADOS
               valueFrom: { secretKeyRef: { name: bna-secretos, key: EVALUACION_SOL_TOKEN_RESULTADOS } }
+            # El resultado vuelve a SOL por el Bus (CR-INT-03).
+            - name: EVALUACION_SOL_URL
+              value: http://bus:8018/bus/sol
+            - name: EVALUACION_ENVIO_INTERVALO_SEG
+              value: "10"
           ports:
             - { name: http, containerPort: 8015 }
           # /salud comprueba COREDB y el login del usuario de servicio: sirve para recibir tráfico,

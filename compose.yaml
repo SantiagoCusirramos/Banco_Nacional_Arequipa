@@ -27,17 +27,6 @@ x-coredb: &coredb
     CORE_DB_APP_PASSWORD: ${CORE_DB_APP_PASSWORD:?Falta en .env. Ejecute ./bna up}
     CORE_DB_JWT_CLAVE: ${CORE_DB_JWT_CLAVE:?Falta en .env. Ejecute ./bna up}
 
-x-sol: &sol
-  image: bna/sol:local
-  pull_policy: never
-  environment: &sol-entorno
-    SOL_DB_HOST: db-aux
-    SOL_DB_PORT: "3306"
-    SOL_DB_USER: sol_user
-    SOL_DB_PASSWORD: ${SOL_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
-    SOL_DB_NAME: bna_sol_mvp
-    SOL_INTEGRATION_MODE: SIMULADO
-
 x-captacion: &captacion
   image: bna/backend:local
   pull_policy: never
@@ -133,6 +122,9 @@ services:
         python -m COREDB.scripts.crear_servicio --modulo BILLETERA --username svc-billetera --nombre "Billetera Digital"
         && CORE_DB_SERVICIO_SECRETO="$$SEGURIDAD_COREDB_SECRETO"
         python -m COREDB.scripts.crear_servicio --modulo SEGURIDAD --username svc-seguridad --nombre Seguridad
+        && CORE_DB_SERVICIO_SECRETO="$$SOL_COREDB_SECRETO"
+        python -m COREDB.scripts.crear_servicio --modulo "SOLICITUD DE CREDITO" --username svc-sol
+        --nombre "Solicitud de Crédito"
     environment:
       <<: *coredb-entorno
       BNA_ADMIN_USUARIO: ${BNA_ADMIN_USUARIO:-admin}
@@ -143,6 +135,7 @@ services:
       COBRANZA_COREDB_SECRETO: ${COBRANZA_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       BILLETERA_COREDB_SECRETO: ${BILLETERA_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       SEGURIDAD_COREDB_SECRETO: ${SEGURIDAD_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+      SOL_COREDB_SECRETO: ${SOL_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
     networks: [core]
     depends_on:
       db:
@@ -230,16 +223,30 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8017/ready", timeout=3)
 
-  # ── SOL: solicitud de crédito, con Captación y Evaluación simuladas ─────
+  # ── SOL: solicitud de crédito, sin base propia ─────────────────────────
+  # El borrador del asesor, la bandeja y la bitácora están en COREDB; las referencias de
+  # clientes, en CAPTACION (CR-INT-01); el expediente va a EVALUACION (CR-INT-02), que le
+  # devuelve el resultado (CR-INT-03). Todo por el Bus. La persona entra con su usuario de
+  # COREDB y SOL reenvía su token; lo de SOL va con svc-sol (lo crea coredb-init).
   sol:
-    <<: *sol
+    image: bna/sol:local
     build:
       <<: *construir-backend
       args:
         REQUISITOS: requirements-sol.txt
     command: uvicorn SOL.app:app --host 0.0.0.0 --port 8011
+    environment:
+      SOL_BUS_URL: http://bus:8018/bus
+      SOL_BUS_TOKEN: ${BUS_TOKEN_SOL:?Falta en .env. Ejecute ./bna up}
+      SOL_COREDB_USUARIO: svc-sol
+      SOL_COREDB_SECRETO: ${SOL_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
+      SOL_CAP_TOKEN: ${CAP_SOL_TOKEN:?Falta en .env. Ejecute ./bna up}
+      SOL_EVA_TOKEN: ${EVALUACION_TOKEN_SOL:?Falta en .env. Ejecute ./bna up}
+      SOL_EVA_CALLBACK_TOKEN: ${EVALUACION_SOL_TOKEN_RESULTADOS:?Falta en .env. Ejecute ./bna up}
     depends_on:
-      sol-init:
+      bus:
+        condition: service_healthy
+      coredb-init:
         condition: service_completed_successfully
     ports:
       - "127.0.0.1:${BNA_PUERTO_SOL:-8011}:8011"
@@ -251,22 +258,11 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8011/ready", timeout=3)
 
-  # Crea la base de SOL y sus cuentas de demostración, y termina. No borra datos.
-  sol-init:
-    <<: *sol
-    command: python -m SOL.manage init
-    environment:
-      <<: *sol-entorno
-      SOL_INITIAL_PASSWORD: ${SOL_INITIAL_PASSWORD:?Falta en .env. Ejecute ./bna up}
-    depends_on:
-      db-aux:
-        condition: service_healthy
-
   # ── EVALUACIÓN: evaluación crediticia (Línea de Créditos), sobre COREDB ──
   # Sin base propia: recibe el expediente de SOL (CR-INT-02) y lo registra en COREDB con su
   # usuario de servicio (svc-evaluacion, que crea coredb-init); el analista entra con su
-  # token de COREDB, que Evaluación reenvía. Mientras SOL siga en modo SIMULADO,
-  # EVALUACION_SOL_URL queda vacía y CR-INT-03 no corre. Ver backend/EVALUACION/README.md.
+  # token de COREDB, que Evaluación reenvía. Devuelve el resultado a SOL por el Bus
+  # (CR-INT-03). Ver backend/EVALUACION/README.md.
   evaluacion:
     <<: *backend
     command: uvicorn EVALUACION.main:app --host 0.0.0.0 --port 8015
@@ -278,7 +274,9 @@ services:
       EVALUACION_COREDB_SECRETO: ${EVALUACION_COREDB_SECRETO:?Falta en .env. Ejecute ./bna up}
       EVALUACION_TOKEN_SOL: ${EVALUACION_TOKEN_SOL:?Falta en .env. Ejecute ./bna up}
       EVALUACION_SOL_TOKEN_RESULTADOS: ${EVALUACION_SOL_TOKEN_RESULTADOS:?Falta en .env. Ejecute ./bna up}
-      EVALUACION_SOL_URL: ${EVALUACION_SOL_URL:-}
+      EVALUACION_SOL_URL: http://bus:8018/bus/sol
+      # Cada cuánto se devuelven a SOL los resultados nuevos (CR-INT-03).
+      EVALUACION_ENVIO_INTERVALO_SEG: "10"
     depends_on:
       bus:
         condition: service_healthy
@@ -481,7 +479,7 @@ services:
       BUS_URL_BILLETERA: http://billetera:3000
       # FRONTEND: los puentes del frontend. PRUEBAS: el flujo de extremo a extremo. El resto:
       # cada módulo que llama a COREDB (fase 2).
-      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA,SEGURIDAD
+      BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA,SEGURIDAD,SOL
       BUS_TOKEN_FRONTEND: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_PRUEBAS: ${BUS_TOKEN_PRUEBAS:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_CUENTAS: ${BUS_TOKEN_CUENTAS:?Falta en .env. Ejecute ./bna up}
@@ -493,6 +491,7 @@ services:
       BUS_TOKEN_ATM: ${BUS_TOKEN_ATM:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_BILLETERA: ${BUS_TOKEN_BILLETERA:?Falta en .env. Ejecute ./bna up}
       BUS_TOKEN_SEGURIDAD: ${BUS_TOKEN_SEGURIDAD:?Falta en .env. Ejecute ./bna up}
+      BUS_TOKEN_SOL: ${BUS_TOKEN_SOL:?Falta en .env. Ejecute ./bna up}
     networks: [default, canales, core]
     ports:
       - "127.0.0.1:${BNA_PUERTO_BUS:-8018}:8018"
@@ -515,7 +514,7 @@ services:
       COREDB_URL: http://bus:8018/bus/coredb
       CUENTAS_GATEWAY_URL: http://bus:8018/bus/cuentas/api/v1/cuentas
       TARJETAS_GATEWAY_URL: http://bus:8018/bus/tarjetas/api/v1/tarjetas
-      SOL_GATEWAY_URL: http://bus:8018/bus/sol/gateway/sol
+      SOL_GATEWAY_URL: http://bus:8018/bus/sol/sol
       SOL_COOKIE_SECURE: "false"
       EVALUACION_GATEWAY_URL: http://bus:8018/bus/evaluacion/eva/v1
       DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
@@ -559,14 +558,14 @@ services:
     profiles: [legado]
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
-      DB_HOST: db-aux
+      DB_HOST: db-legado
       DB_PORT: "3306"
       DB_NAME: bna
       DB_USER: bna_user
       DB_PASSWORD: ${LEGADO_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
       SECRET_KEY: ${LEGADO_SECRET_KEY:?Falta en .env. Ejecute ./bna up}
     depends_on:
-      db-aux:
+      db-legado:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BNA_PUERTO_CORE_LEGADO:-8000}:8000"
@@ -578,23 +577,24 @@ services:
         - -c
         - import urllib.request as u; u.urlopen("http://127.0.0.1:8000/health", timeout=3)
 
-  # ── Base auxiliar: `bna` legada y `bna_sol_mvp` de SOL ────────────────
-  # Aparte de la base integrada, que no recibe esquemas ni usuarios ajenos.
-  db-aux:
-    image: bna/db-aux:local
-    build: ./docker/db-aux
+  # ── Base del CORE legado (opcional): el esquema `bna` ──────────────────
+  # Solo con el perfil `legado`, como el CORE legado. Ningún módulo del producto tiene
+  # base propia: todos usan la base integrada a través de COREDB.
+  db-legado:
+    image: bna/db-legado:local
+    build: ./docker/db-legado
+    profiles: [legado]
     environment:
-      MYSQL_ROOT_PASSWORD: ${AUX_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
+      MYSQL_ROOT_PASSWORD: ${LEGADO_DB_ROOT_PASSWORD:?Falta en .env. Ejecute ./bna up}
       LEGADO_DB_PASSWORD: ${LEGADO_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
-      SOL_DB_PASSWORD: ${SOL_DB_PASSWORD:?Falta en .env. Ejecute ./bna up}
     volumes:
       - "./backend/Infraestructura - BD/Trabajo_hecho/BD/99_bna_unificado.sql:/legado/bna_legada.sql:ro"
-      - db-aux-datos:/var/lib/mysql
+      - db-legado-datos:/var/lib/mysql
     healthcheck:
       <<: *sonda
       test:
         - CMD-SHELL
-        - MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -uroot -h127.0.0.1 --protocol=TCP -e 'SELECT 1 FROM mysql.user WHERE user = "sol_user"' | grep -q 1
+        - MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -uroot -h127.0.0.1 --protocol=TCP -e 'SELECT 1 FROM mysql.user WHERE user = "bna_user"' | grep -q 1
 
 networks:
   default:
@@ -605,4 +605,4 @@ networks:
 
 volumes:
   core-db-datos:
-  db-aux-datos:
+  db-legado-datos:
