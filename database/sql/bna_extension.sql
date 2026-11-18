@@ -5361,3 +5361,519 @@ GRANT EXECUTE ON FUNCTION core.fn_minutos_bloqueo_login TO bna_api;
 GRANT EXECUTE ON FUNCTION core.fn_login_bloqueado_hasta TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.registrar_login_fallido TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.desbloquear_login TO bna_api;
+
+-- ---------------------------------------------------------------------
+-- 18. Seguridad (v1.13)
+-- ---------------------------------------------------------------------
+-- El módulo Seguridad (backend/seguridad) ya no tiene base propia: lo que guardaba en
+-- SQLite pasa a esta base, y llega a ella solo por COREDB. Sus usuarios, su login y su
+-- bloqueo ya estaban aquí (secciones 1, 10 y 17) y su bitácora es core.evento_auditoria
+-- (sección 6). Faltaban la evaluación de una operación con su desafío, los sellos de la
+-- bitácora y los incidentes.
+-- DECISIÓN (v1.13): la evaluación compara el monto con el tope real del canal
+--   (core.limite_canal, en la moneda de la cuenta) y el consumo real del día
+--   (core.consumo_diario), no con topes ni acumulados propios. No mueve dinero ni suma al
+--   consumo: el débito real vuelve a pasar por el tope (RN-TOP-001). Cuenta que no está
+--   ACTIVA: RECHAZADA (CUENTA); canal sin fila o deshabilitado en esa moneda: RECHAZADA
+--   (CANAL); sobre el tope: RECHAZADA (TOPE); sobre el 80 % del tope
+--   (core.fn_umbral_desafio): DESAFIO_REQUERIDO; si no, AUTORIZADA. Un canal sin tope
+--   (monto nulo, ventanilla) se autoriza.
+-- DECISIÓN (v1.13): el uuid de la operación lo genera quien llama (RN-BUS-002). La decisión
+--   final (AUTORIZADA o RECHAZADA) se guarda: repetirla con los mismos datos devuelve la
+--   misma, y con otros falla con BNA-IDEMPOTENCIA. DESAFIO_REQUERIDO no se guarda.
+-- DECISIÓN (v1.13): el desafío lo genera el módulo Seguridad, que calcula el HMAC del
+--   código con una clave que la base no conoce: la base guarda solo ese HMAC (un código de
+--   seis dígitos con un hash sin clave se adivina en un millón de pruebas), liga el desafío
+--   a la operación (uuid, cuenta, canal, monto y actor), lo vence a los 120 segundos
+--   (core.fn_segundos_desafio) y lo agota al tercer fallo (core.fn_intentos_desafio). Un
+--   código incorrecto no es un error de la llamada: devuelve DESAFIO_RECHAZADO y el intento
+--   queda confirmado. 80 %, 120 s y 3 intentos son los valores del prototipo de Seguridad.
+-- DECISIÓN (v1.13): los sellos de la bitácora los calcula el módulo Seguridad: un HMAC
+--   encadenado sobre los eventos de un tramo, con su clave. La base guarda el sello y
+--   comprueba que el tramo empieza donde acabó el anterior y que tiene los eventos
+--   declarados. Con la clave fuera de la base, quien borre o cambie un evento sellado (o
+--   vacíe la bitácora, brecha G03) no puede rehacer los sellos. Lo no sellado no queda
+--   protegido. Sellar no deja un evento: cada sello dejaría otro evento por sellar.
+-- DECISIÓN (v1.13): un incidente pasa de ABIERTO a EN_PROGRESO, RESUELTO (con su
+--   resolución) y CERRADO, sin saltos ni vuelta atrás, como en el prototipo.
+CREATE TABLE core.evaluacion_operacion (
+    uuid_operacion  BINARY(16) NOT NULL,
+    num_cuenta      VARCHAR(20) NOT NULL,
+    id_canal        VARCHAR(5) NOT NULL,
+    monto           DECIMAL(15,2) NOT NULL,
+    actor           VARCHAR(40) NOT NULL,
+    decision        VARCHAR(15) NOT NULL,
+    motivo          VARCHAR(10),
+    limite          DECIMAL(15,2),
+    acumulado       DECIMAL(15,2) NOT NULL,
+    id_desafio      BINARY(16),
+    fecha_hora      DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_evaluacion_operacion PRIMARY KEY (uuid_operacion),
+    CONSTRAINT fk_evaluacion_operacion_cuenta FOREIGN KEY (num_cuenta) REFERENCES cuentas.cuenta_ahorro (num_cuenta),
+    CONSTRAINT fk_evaluacion_operacion_canal FOREIGN KEY (id_canal) REFERENCES core.canal (id_canal),
+    CONSTRAINT ck_evaluacion_operacion_decision CHECK (decision IN ('AUTORIZADA', 'RECHAZADA')),
+    CONSTRAINT ck_evaluacion_operacion_motivo CHECK ((decision = 'RECHAZADA') = (motivo IS NOT NULL)
+                                                     AND (motivo IS NULL OR motivo IN ('CUENTA', 'CANAL', 'TOPE'))),
+    CONSTRAINT ck_evaluacion_operacion_monto CHECK (monto > 0),
+    CONSTRAINT ck_evaluacion_operacion_id CHECK ((ASCII(SUBSTR(uuid_operacion, 7, 1)) >> 4) BETWEEN 1 AND 8
+                                                 AND (ASCII(SUBSTR(uuid_operacion, 9, 1)) & 0xC0) = 0x80)
+) ENGINE = InnoDB COMMENT = 'Decisión final de la evaluación de una operación por Seguridad (v1.13).';
+
+CREATE TABLE core.desafio_operacion (
+    id_desafio        BINARY(16) NOT NULL,
+    uuid_operacion    BINARY(16) NOT NULL,
+    num_cuenta        VARCHAR(20) NOT NULL,
+    id_canal          VARCHAR(5) NOT NULL,
+    monto             DECIMAL(15,2) NOT NULL,
+    actor             VARCHAR(40) NOT NULL,
+    hmac_codigo       CHAR(64) NOT NULL,
+    intentos_fallidos SMALLINT DEFAULT 0 NOT NULL,
+    usado             TINYINT(1) DEFAULT FALSE NOT NULL,
+    vence_en          DATETIME(6) NOT NULL,
+    creado_en         DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_desafio_operacion PRIMARY KEY (id_desafio),
+    CONSTRAINT fk_desafio_operacion_cuenta FOREIGN KEY (num_cuenta) REFERENCES cuentas.cuenta_ahorro (num_cuenta),
+    CONSTRAINT fk_desafio_operacion_canal FOREIGN KEY (id_canal) REFERENCES core.canal (id_canal),
+    CONSTRAINT ck_desafio_operacion_hmac CHECK (REGEXP_LIKE(hmac_codigo, '^[0-9a-f]{64}$', 'c')),
+    CONSTRAINT ck_desafio_operacion_intentos CHECK (intentos_fallidos >= 0),
+    CONSTRAINT ck_desafio_operacion_usado CHECK (usado IN (0, 1)),
+    CONSTRAINT ck_desafio_operacion_monto CHECK (monto > 0),
+    CONSTRAINT ck_desafio_operacion_id CHECK ((ASCII(SUBSTR(id_desafio, 7, 1)) >> 4) BETWEEN 1 AND 8
+                                              AND (ASCII(SUBSTR(id_desafio, 9, 1)) & 0xC0) = 0x80)
+) ENGINE = InnoDB COMMENT = 'Desafío de una operación: solo el HMAC del código, con la clave de Seguridad (v1.13).';
+
+CREATE TABLE core.sello_auditoria (
+    id_sello      BIGINT AUTO_INCREMENT,
+    desde_evento  BIGINT NOT NULL,
+    hasta_evento  BIGINT NOT NULL,
+    eventos       INT NOT NULL,
+    hmac          CHAR(64) NOT NULL,
+    actor         VARCHAR(40) NOT NULL,
+    fecha_hora    DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_sello_auditoria PRIMARY KEY (id_sello),
+    -- Dos sellos a la vez sobre el mismo tramo: el segundo choca aquí.
+    CONSTRAINT uk_sello_auditoria_desde UNIQUE (desde_evento),
+    CONSTRAINT uk_sello_auditoria_hasta UNIQUE (hasta_evento),
+    CONSTRAINT ck_sello_auditoria_tramo CHECK (desde_evento >= 0 AND hasta_evento > desde_evento),
+    CONSTRAINT ck_sello_auditoria_eventos CHECK (eventos > 0),
+    CONSTRAINT ck_sello_auditoria_hmac CHECK (REGEXP_LIKE(hmac, '^[0-9a-f]{64}$', 'c'))
+) ENGINE = InnoDB COMMENT = 'Sello HMAC encadenado de un tramo de core.evento_auditoria (v1.13); el tramo es (desde, hasta].';
+
+CREATE TABLE core.incidente_seguridad (
+    id_incidente    BINARY(16) NOT NULL,
+    prioridad       CHAR(2) NOT NULL,
+    titulo          VARCHAR(200) NOT NULL,
+    estado          VARCHAR(15) DEFAULT 'ABIERTO' NOT NULL,
+    resolucion      VARCHAR(500),
+    abierto_por     VARCHAR(40) NOT NULL,
+    creado_en       DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    actualizado_en  DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
+    CONSTRAINT pk_incidente_seguridad PRIMARY KEY (id_incidente),
+    CONSTRAINT ck_incidente_seguridad_prioridad CHECK (prioridad IN ('P1', 'P2', 'P3', 'P4')),
+    CONSTRAINT ck_incidente_seguridad_estado CHECK (estado IN ('ABIERTO', 'EN_PROGRESO', 'RESUELTO', 'CERRADO')),
+    CONSTRAINT ck_incidente_seguridad_resolucion CHECK (estado NOT IN ('RESUELTO', 'CERRADO') OR resolucion IS NOT NULL),
+    CONSTRAINT ck_incidente_seguridad_titulo CHECK (CHAR_LENGTH(TRIM(titulo)) > 0),
+    CONSTRAINT ck_incidente_seguridad_id CHECK ((ASCII(SUBSTR(id_incidente, 7, 1)) >> 4) BETWEEN 1 AND 8
+                                                AND (ASCII(SUBSTR(id_incidente, 9, 1)) & 0xC0) = 0x80)
+) ENGINE = InnoDB COMMENT = 'Incidente de seguridad y su ciclo de vida (v1.13).';
+
+DELIMITER //
+
+CREATE DEFINER = 'bna_owner'@'%' TRIGGER core.tg_evaluacion_operacion_solo_insercion_bu
+BEFORE UPDATE ON core.evaluacion_operacion
+FOR EACH ROW BEGIN CALL core.rechazar_cambio('BNA-SOLO-INSERCION', 'core.evaluacion_operacion', 'UPDATE'); END //
+
+CREATE DEFINER = 'bna_owner'@'%' TRIGGER core.tg_evaluacion_operacion_solo_insercion_bd
+BEFORE DELETE ON core.evaluacion_operacion
+FOR EACH ROW BEGIN CALL core.rechazar_cambio('BNA-SOLO-INSERCION', 'core.evaluacion_operacion', 'DELETE'); END //
+
+CREATE DEFINER = 'bna_owner'@'%' TRIGGER core.tg_sello_auditoria_solo_insercion_bu
+BEFORE UPDATE ON core.sello_auditoria
+FOR EACH ROW BEGIN CALL core.rechazar_cambio('BNA-SOLO-INSERCION', 'core.sello_auditoria', 'UPDATE'); END //
+
+CREATE DEFINER = 'bna_owner'@'%' TRIGGER core.tg_sello_auditoria_solo_insercion_bd
+BEFORE DELETE ON core.sello_auditoria
+FOR EACH ROW BEGIN CALL core.rechazar_cambio('BNA-SOLO-INSERCION', 'core.sello_auditoria', 'DELETE'); END //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION core.fn_umbral_desafio() RETURNS DECIMAL(3,2)
+    DETERMINISTIC NO SQL
+    COMMENT 'Fracción del tope del día sobre la cual una operación exige un desafío.'
+BEGIN
+    RETURN 0.80;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION core.fn_segundos_desafio() RETURNS SMALLINT
+    DETERMINISTIC NO SQL
+    COMMENT 'Segundos que vale un desafío.'
+BEGIN
+    RETURN 120;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' FUNCTION core.fn_intentos_desafio() RETURNS SMALLINT
+    DETERMINISTIC NO SQL
+    COMMENT 'Fallos que agotan un desafío.'
+BEGIN
+    RETURN 3;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.crear_desafio(
+    IN p_id BINARY(16), IN p_uuid BINARY(16), IN p_num_cuenta VARCHAR(20), IN p_canal VARCHAR(5),
+    IN p_monto DECIMAL(15,2), IN p_hmac CHAR(64), IN p_actor VARCHAR(40), OUT p_vence_en DATETIME(6))
+    COMMENT 'Registra el desafío de una operación con el HMAC de su código.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_actor IS NULL THEN
+            CALL core.fallar('BNA-ACTOR: falta el actor');
+        END IF;
+        IF p_id IS NULL OR p_uuid IS NULL THEN
+            CALL core.fallar('BNA-DESAFIO: faltan el desafío o la operación');
+        END IF;
+        IF p_hmac IS NULL OR NOT REGEXP_LIKE(p_hmac, '^[0-9a-f]{64}$', 'c') THEN
+            CALL core.fallar('BNA-DESAFIO: el HMAC del código no es válido');
+        END IF;
+        IF p_monto IS NULL OR p_monto <= 0 THEN
+            CALL core.fallar('BNA-MONTO: el monto debe ser positivo');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM cuentas.cuenta_ahorro WHERE num_cuenta = p_num_cuenta) THEN
+            CALL core.fallar('BNA-CUENTA: la cuenta no existe');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM core.canal WHERE id_canal = p_canal) THEN
+            CALL core.fallar('BNA-CANAL: el canal no existe');
+        END IF;
+        IF EXISTS (SELECT 1 FROM core.evaluacion_operacion WHERE uuid_operacion = p_uuid) THEN
+            CALL core.fallar('BNA-DESAFIO: la operación ya tiene una decisión');
+        END IF;
+        SET p_vence_en = UTC_TIMESTAMP(6) + INTERVAL core.fn_segundos_desafio() SECOND;
+        INSERT INTO core.desafio_operacion (id_desafio, uuid_operacion, num_cuenta, id_canal, monto, actor,
+                                            hmac_codigo, vence_en)
+        VALUES (p_id, p_uuid, p_num_cuenta, p_canal, p_monto, p_actor, p_hmac, p_vence_en);
+        CALL core.registrar_evento('SEGURIDAD', 'operacion', BIN_TO_UUID(p_uuid), 'CREAR_DESAFIO', p_actor, NULL,
+                                   JSON_OBJECT('id_desafio', BIN_TO_UUID(p_id), 'vence_en', p_vence_en));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.evaluar_operacion(
+    IN p_uuid BINARY(16), IN p_num_cuenta VARCHAR(20), IN p_canal VARCHAR(5), IN p_monto DECIMAL(15,2),
+    IN p_id_desafio BINARY(16), IN p_hmac CHAR(64), IN p_actor VARCHAR(40),
+    OUT p_decision VARCHAR(20), OUT p_motivo VARCHAR(10), OUT p_limite DECIMAL(15,2),
+    OUT p_acumulado DECIMAL(15,2), OUT p_repetido BOOLEAN)
+    COMMENT 'Evalúa una operación contra el tope del canal, con su desafío si pasa del umbral.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_moneda CHAR(3);
+    DECLARE v_estado VARCHAR(25);
+    DECLARE v_hay_limite BOOLEAN DEFAULT FALSE;
+    DECLARE v_habilitado BOOLEAN;
+    DECLARE v_duplicada BOOLEAN DEFAULT FALSE;
+    DECLARE v_e_cuenta VARCHAR(20);
+    DECLARE v_e_canal VARCHAR(5);
+    DECLARE v_e_monto DECIMAL(15,2);
+    DECLARE v_e_actor VARCHAR(40);
+    DECLARE v_d_uuid BINARY(16);
+    DECLARE v_d_cuenta VARCHAR(20);
+    DECLARE v_d_canal VARCHAR(5);
+    DECLARE v_d_monto DECIMAL(15,2);
+    DECLARE v_d_actor VARCHAR(40);
+    DECLARE v_d_hmac CHAR(64);
+    DECLARE v_d_intentos SMALLINT;
+    DECLARE v_d_usado BOOLEAN;
+    DECLARE v_d_vence DATETIME(6);
+    DECLARE v_ligado BOOLEAN DEFAULT FALSE;
+    DECLARE v_desafio BINARY(16) DEFAULT NULL;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    bna_evaluar: BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SET p_decision = NULL, p_motivo = NULL, p_limite = NULL, p_acumulado = NULL, p_repetido = FALSE;
+        IF p_actor IS NULL THEN
+            CALL core.fallar('BNA-ACTOR: falta el actor');
+        END IF;
+        IF p_uuid IS NULL THEN
+            CALL core.fallar('BNA-OPERACION: falta el uuid de la operación');
+        END IF;
+        IF p_monto IS NULL OR p_monto <= 0 THEN
+            CALL core.fallar('BNA-MONTO: el monto debe ser positivo');
+        END IF;
+        -- Repetición. Una lectura sin bloqueo puede no ver una decisión recién confirmada; en
+        -- ese caso el INSERT de abajo choca con la llave primaria y se vuelve a leer con bloqueo.
+        SELECT num_cuenta, id_canal, monto, actor, decision, motivo, limite, acumulado
+          INTO v_e_cuenta, v_e_canal, v_e_monto, v_e_actor, p_decision, p_motivo, p_limite, p_acumulado
+          FROM core.evaluacion_operacion WHERE uuid_operacion = p_uuid;
+        IF v_e_cuenta IS NOT NULL THEN
+            IF NOT (v_e_cuenta <=> p_num_cuenta AND v_e_canal <=> p_canal AND v_e_monto = p_monto
+                    AND v_e_actor = p_actor) THEN
+                CALL core.fallar('BNA-IDEMPOTENCIA: la operación ya se evaluó con otros datos');
+            END IF;
+            SET p_repetido = TRUE;
+            IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+            LEAVE bna_evaluar;
+        END IF;
+        SELECT moneda, estado_cuenta INTO v_moneda, v_estado FROM cuentas.cuenta_ahorro WHERE num_cuenta = p_num_cuenta;
+        IF v_moneda IS NULL THEN
+            CALL core.fallar('BNA-CUENTA: la cuenta no existe');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM core.canal WHERE id_canal = p_canal) THEN
+            CALL core.fallar('BNA-CANAL: el canal no existe');
+        END IF;
+        SELECT TRUE, monto_maximo_diario, habilitado INTO v_hay_limite, p_limite, v_habilitado
+          FROM core.limite_canal WHERE id_canal = p_canal AND moneda = v_moneda;
+        SET p_acumulado = coalesce((SELECT monto_acumulado FROM core.consumo_diario
+                                     WHERE num_cuenta = p_num_cuenta AND id_canal = p_canal
+                                       AND fecha_corte = core.fn_fecha_negocio(UTC_TIMESTAMP(6))), 0);
+        IF v_estado <> 'ACTIVA' THEN
+            SET p_decision = 'RECHAZADA', p_motivo = 'CUENTA';
+        ELSEIF NOT v_hay_limite OR NOT v_habilitado THEN
+            SET p_decision = 'RECHAZADA', p_motivo = 'CANAL';
+        ELSEIF p_limite IS NULL THEN
+            SET p_decision = 'AUTORIZADA';
+        ELSEIF p_acumulado + p_monto > p_limite THEN
+            SET p_decision = 'RECHAZADA', p_motivo = 'TOPE';
+        ELSEIF p_acumulado + p_monto > p_limite * core.fn_umbral_desafio() THEN
+            IF p_id_desafio IS NULL THEN
+                SET p_decision = 'DESAFIO_REQUERIDO';
+                IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+                LEAVE bna_evaluar;
+            END IF;
+            SELECT uuid_operacion, num_cuenta, id_canal, monto, actor, hmac_codigo, intentos_fallidos, usado, vence_en
+              INTO v_d_uuid, v_d_cuenta, v_d_canal, v_d_monto, v_d_actor, v_d_hmac, v_d_intentos, v_d_usado, v_d_vence
+              FROM core.desafio_operacion WHERE id_desafio = p_id_desafio FOR UPDATE;
+            SET v_ligado = coalesce(v_d_uuid = p_uuid AND v_d_cuenta = p_num_cuenta AND v_d_canal = p_canal
+                                    AND v_d_monto = p_monto AND v_d_actor = p_actor, FALSE);
+            IF v_ligado AND v_d_usado THEN
+                -- Quien lo usó guardó la decisión de esta misma operación en su transacción,
+                -- que ya terminó (esperamos su bloqueo): se devuelve esa decisión.
+                SELECT decision, motivo, limite, acumulado INTO p_decision, p_motivo, p_limite, p_acumulado
+                  FROM core.evaluacion_operacion WHERE uuid_operacion = p_uuid FOR SHARE;
+                SET p_repetido = TRUE;
+                IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+                LEAVE bna_evaluar;
+            END IF;
+            IF NOT v_ligado OR v_d_vence <= UTC_TIMESTAMP(6) OR v_d_intentos >= core.fn_intentos_desafio()
+               OR NOT (p_hmac <=> v_d_hmac) THEN
+                IF v_ligado THEN
+                    UPDATE core.desafio_operacion SET intentos_fallidos = intentos_fallidos + 1
+                     WHERE id_desafio = p_id_desafio;
+                END IF;
+                CALL core.registrar_evento('SEGURIDAD', 'operacion', BIN_TO_UUID(p_uuid), 'RECHAZAR_DESAFIO', p_actor,
+                                           NULL, JSON_OBJECT('id_desafio', BIN_TO_UUID(p_id_desafio)));
+                SET p_decision = 'DESAFIO_RECHAZADO';
+                IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+                LEAVE bna_evaluar;
+            END IF;
+            UPDATE core.desafio_operacion SET usado = TRUE WHERE id_desafio = p_id_desafio;
+            SET p_decision = 'AUTORIZADA', v_desafio = p_id_desafio;
+        ELSE
+            SET p_decision = 'AUTORIZADA';
+        END IF;
+        BEGIN
+            DECLARE CONTINUE HANDLER FOR 1062 SET v_duplicada = TRUE;
+            INSERT INTO core.evaluacion_operacion (uuid_operacion, num_cuenta, id_canal, monto, actor, decision, motivo,
+                                                   limite, acumulado, id_desafio)
+            VALUES (p_uuid, p_num_cuenta, p_canal, p_monto, p_actor, p_decision, p_motivo, p_limite, p_acumulado,
+                    v_desafio);
+        END;
+        IF v_duplicada THEN
+            -- Otra petición con el mismo uuid guardó su decisión mientras esperábamos.
+            SELECT num_cuenta, id_canal, monto, actor, decision, motivo, limite, acumulado
+              INTO v_e_cuenta, v_e_canal, v_e_monto, v_e_actor, p_decision, p_motivo, p_limite, p_acumulado
+              FROM core.evaluacion_operacion WHERE uuid_operacion = p_uuid FOR SHARE;
+            IF NOT (v_e_cuenta <=> p_num_cuenta AND v_e_canal <=> p_canal AND v_e_monto = p_monto
+                    AND v_e_actor = p_actor) THEN
+                CALL core.fallar('BNA-IDEMPOTENCIA: la operación ya se evaluó con otros datos');
+            END IF;
+            SET p_repetido = TRUE;
+        ELSE
+            CALL core.registrar_evento('SEGURIDAD', 'operacion', BIN_TO_UUID(p_uuid), 'EVALUAR_OPERACION', p_actor, NULL,
+                                       JSON_OBJECT('decision', p_decision, 'motivo', p_motivo, 'canal', p_canal,
+                                                   'monto', p_monto, 'con_desafio', v_desafio IS NOT NULL));
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.sellar_auditoria(
+    IN p_hasta BIGINT, IN p_eventos INT, IN p_hmac CHAR(64), IN p_actor VARCHAR(40),
+    OUT p_id_sello BIGINT, OUT p_desde BIGINT)
+    COMMENT 'Guarda el sello HMAC del tramo de la bitácora que sigue al último sello.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_duplicado BOOLEAN DEFAULT FALSE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_actor IS NULL THEN
+            CALL core.fallar('BNA-ACTOR: falta el actor');
+        END IF;
+        IF p_hmac IS NULL OR NOT REGEXP_LIKE(p_hmac, '^[0-9a-f]{64}$', 'c') THEN
+            CALL core.fallar('BNA-SELLO: el HMAC no es válido');
+        END IF;
+        SET p_desde = coalesce((SELECT max(hasta_evento) FROM core.sello_auditoria), 0);
+        IF p_hasta IS NULL OR p_hasta <= p_desde
+           OR NOT EXISTS (SELECT 1 FROM core.evento_auditoria WHERE id_evento = p_hasta) THEN
+            CALL core.fallar('BNA-SELLO: el tramo no sigue al último sello');
+        END IF;
+        IF p_eventos IS NULL OR p_eventos <> (SELECT COUNT(*) FROM core.evento_auditoria
+                                               WHERE id_evento > p_desde AND id_evento <= p_hasta) THEN
+            CALL core.fallar('BNA-SELLO: el tramo no tiene los eventos declarados');
+        END IF;
+        BEGIN
+            DECLARE CONTINUE HANDLER FOR 1062 SET v_duplicado = TRUE;
+            INSERT INTO core.sello_auditoria (desde_evento, hasta_evento, eventos, hmac, actor)
+            VALUES (p_desde, p_hasta, p_eventos, p_hmac, p_actor);
+        END;
+        IF v_duplicado THEN
+            CALL core.fallar('BNA-SELLO: otro sello cubrió el tramo a la vez');
+        END IF;
+        SET p_id_sello = LAST_INSERT_ID();
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.abrir_incidente(
+    IN p_id BINARY(16), IN p_prioridad CHAR(2), IN p_titulo VARCHAR(200), IN p_actor VARCHAR(40))
+    COMMENT 'Abre un incidente de seguridad.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_actor IS NULL THEN
+            CALL core.fallar('BNA-ACTOR: falta el actor');
+        END IF;
+        IF p_prioridad IS NULL OR p_prioridad NOT IN ('P1', 'P2', 'P3', 'P4') THEN
+            CALL core.fallar('BNA-INCIDENTE: la prioridad es P1, P2, P3 o P4');
+        END IF;
+        IF CHAR_LENGTH(TRIM(coalesce(p_titulo, ''))) = 0 THEN
+            CALL core.fallar('BNA-INCIDENTE: falta el título');
+        END IF;
+        INSERT INTO core.incidente_seguridad (id_incidente, prioridad, titulo, abierto_por)
+        VALUES (p_id, p_prioridad, p_titulo, p_actor);
+        CALL core.registrar_evento('SEGURIDAD', 'incidente', BIN_TO_UUID(p_id), 'ABRIR_INCIDENTE', p_actor, NULL,
+                                   JSON_OBJECT('prioridad', p_prioridad));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.avanzar_incidente(
+    IN p_id BINARY(16), IN p_estado VARCHAR(15), IN p_resolucion VARCHAR(500), IN p_actor VARCHAR(40))
+    COMMENT 'Pasa un incidente al estado siguiente de su ciclo de vida.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_estado VARCHAR(15);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        IF p_actor IS NULL THEN
+            CALL core.fallar('BNA-ACTOR: falta el actor');
+        END IF;
+        SELECT estado INTO v_estado FROM core.incidente_seguridad WHERE id_incidente = p_id FOR UPDATE;
+        IF v_estado IS NULL THEN
+            CALL core.fallar('BNA-INCIDENTE: el incidente no existe');
+        END IF;
+        IF NOT ((v_estado, p_estado) <=> ('ABIERTO', 'EN_PROGRESO') OR (v_estado, p_estado) <=> ('EN_PROGRESO', 'RESUELTO')
+                OR (v_estado, p_estado) <=> ('RESUELTO', 'CERRADO')) THEN
+            CALL core.fallar(CONCAT('BNA-INCIDENTE-TRANSICION: de ', v_estado, ' no se pasa a ', coalesce(p_estado, '(nulo)')));
+        END IF;
+        IF p_estado = 'RESUELTO' AND CHAR_LENGTH(TRIM(coalesce(p_resolucion, ''))) = 0 THEN
+            CALL core.fallar('BNA-INCIDENTE: resolverlo exige la resolución');
+        END IF;
+        UPDATE core.incidente_seguridad
+           SET estado = p_estado, resolucion = coalesce(p_resolucion, resolucion), actualizado_en = UTC_TIMESTAMP(6)
+         WHERE id_incidente = p_id;
+        CALL core.registrar_evento('SEGURIDAD', 'incidente', BIN_TO_UUID(p_id),
+                                   CONCAT('INCIDENTE_', p_estado), p_actor, NULL,
+                                   JSON_OBJECT('estado_anterior', v_estado));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+DELIMITER ;
+
+-- Lecturas de la API: los sellos (su HMAC no permite falsificar otro sin la clave) y los
+-- incidentes. Los desafíos y las evaluaciones no se leen: la API recibe la decisión.
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW core.v_sello_auditoria_api AS
+SELECT id_sello, desde_evento, hasta_evento, eventos, hmac, actor, fecha_hora
+  FROM core.sello_auditoria;
+
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW core.v_incidente_api AS
+SELECT BIN_TO_UUID(id_incidente) AS id_incidente, prioridad, titulo, estado, resolucion, abierto_por,
+       creado_en, actualizado_en
+  FROM core.incidente_seguridad;
+
+GRANT SELECT ON core.v_sello_auditoria_api TO bna_api;
+GRANT SELECT ON core.v_incidente_api TO bna_api;
+GRANT EXECUTE ON FUNCTION core.fn_umbral_desafio TO bna_api;
+GRANT EXECUTE ON FUNCTION core.fn_segundos_desafio TO bna_api;
+GRANT EXECUTE ON FUNCTION core.fn_intentos_desafio TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.crear_desafio TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.evaluar_operacion TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.sellar_auditoria TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.abrir_incidente TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.avanzar_incidente TO bna_api;
