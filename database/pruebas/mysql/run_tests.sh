@@ -267,6 +267,19 @@ registrar X520 bna_app_user Concurrencia 'Extensión v1.11' 'Confirmación y lib
   'DISPENSADA, un débito, disponible -30; segunda operación: aceptada' \
   "$(root_ -N -e "SELECT CONCAT(estado_autorizacion, ', débitos: ', (SELECT count(*) FROM cuentas.movimiento WHERE uuid_transaccion = uuid_autorizacion)) FROM tarjetas.autorizacion WHERE uuid_autorizacion = UUID_TO_BIN('a3000000-0000-4000-8000-000000000120')"), disponible $(disponible_pen1) (antes $d0); segunda: $(echo "$b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
 
+# X710 (v1.12): un bloqueo de login vencido ya no bloquea, y la cuenta de fallos empieza
+# de cero. El vencimiento se adelanta como root (nadie más escribe core.bloqueo_login).
+api_ -e "CALL core.crear_usuario(UUID_TO_BIN('70000000-0000-4000-8000-000000000010'), 'ana.x710', 'Ana', 'ASESOR', 'h', 'BCRYPT', 'v2', NULL, TRUE, 'pruebas')"
+for _ in 1 2 3 4 5; do api_ -e "CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000010'), NULL, @b)"; done
+antes="$(api_ -N -e "SELECT core.fn_login_bloqueado_hasta(UUID_TO_BIN('70000000-0000-4000-8000-000000000010')) IS NOT NULL")"
+root_ -e "UPDATE core.bloqueo_login SET bloqueado_hasta = UTC_TIMESTAMP(6) - INTERVAL 1 SECOND WHERE id_usuario = UUID_TO_BIN('70000000-0000-4000-8000-000000000010')"
+x710="$(api_ -N 2>&1 -e "SELECT coalesce(core.fn_login_bloqueado_hasta(UUID_TO_BIN('70000000-0000-4000-8000-000000000010')), 'libre');
+  CALL core.registrar_login_fallido(UUID_TO_BIN('70000000-0000-4000-8000-000000000010'), NULL, @b); SELECT coalesce(@b, 'sin bloqueo');
+  CALL core.registrar_login(UUID_TO_BIN('70000000-0000-4000-8000-000000000010'), NULL); SELECT 'login'" | tr '\n' ' ')"
+ok=0; [ "$antes" = 1 ] && [ "$x710" = 'libre sin bloqueo login ' ] && ok=1
+registrar X710 bna_api_user Extensión 'Login v1.12' 'Un bloqueo vencido ya no bloquea y la cuenta de fallos empieza de cero' procedimiento \
+  'libre sin bloqueo login' "bloqueado antes: $antes; después: $x710" "$ok"
+
 # Billetera Digital (v1.9): dos peticiones simultáneas, como bna_api_user. Las
 # afiliaciones de C001 (CTA-PEN-1) y C002 (CTA-PEN-2) quedan confirmadas para estas
 # pruebas y las de pruebas_sin_transaccion.sh.
