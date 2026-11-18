@@ -10,8 +10,9 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 | CUENTAS | `backend/CUENTAS` | Cuentas de ahorro: apertura, depósito, retiro, transferencia y consultas. No tiene base propia: llama a COREDB | En uso |
 | TARJETAS | `backend/TARJETAS` | Tarjetas de débito: emisión, consulta, bloqueo y cambio de estado. No tiene base propia: llama a COREDB | En uso |
 | ATM | `backend/ATM` | Cajero automático: pantalla, validar PIN, autorizar retención, dispensar, confirmar (idempotente), extorno, consultar saldo/movimientos. Sin base propia: llama a TARJETAS y CUENTAS por el Bus | En uso |
-| BILLETERA (Chaski) | `billetera-chaski/` | Billetera Digital (canal BD): API para la app móvil (login con celular y PIN, envío por celular, cobro y pago con QR, solicitudes de cobro, avisos). Sin base propia: opera sobre COREDB por el Bus; los clientes los registra Clientes/CAPTACION y el banco los afilia. La app Flutter (`app_movil/`) aún usa ids numéricos y falta adaptarla | En uso (API); app móvil sin adaptar |
+| BILLETERA (Chaski) | `billetera-chaski/` | Billetera Digital (canal BD): API para la app móvil (login con celular y PIN, envío por celular, cobro y pago con QR, solicitudes de cobro, avisos). Sin base propia: opera sobre COREDB por el Bus; los clientes los registra CAPTACION y el banco los afilia. La app Flutter (`app_movil/`) aún usa ids numéricos y falta adaptarla | En uso (API); app móvil sin adaptar |
 | CAPTACION | `backend/CAPTACION` | Captación de clientes: registro del solicitante, consentimientos, OTP, RENIEC/listas/PEP, centrales y perfil de riesgo; registra al cliente HABILITADO en COREDB y publica la referencia CR-INT-01 que consulta SOL. Sin base propia: el expediente vive en la base integrada (`clientes.*_captacion`) y se trabaja por COREDB | En uso, con proveedores simulados |
+| COBRANZA | `backend/COBRANZA` | Cobranza de cuotas de crédito: consulta del cronograma y pago de cuotas en montos fraccionados (CR-INT-07, real en COREDB) y el pago de la pantalla `/pagar-cuota` (CR-INT-08). Sin base propia: el crédito lo crea Desembolso en COREDB y Cobranza lo lee y cobra. Llega a COREDB por el Bus (`/bus/cobranza`) con `BUS_TOKEN_COBRANZA` y su usuario de servicio (`COBRANZA_COREDB_SECRETO`) | En uso: sin base propia, llama a COREDB |
 | Frontend | `frontend/` | Banca personal en Next.js: inicio de sesión, cuentas, tarjetas, captación y solicitud de crédito; pantallas del analista (`/evaluacion`) y del operador de desembolso (`/desembolso`) | En uso |
 | SOL | `backend/SOL` | Solicitud de crédito, con Captación y Evaluación simuladas | Laboratorio: base propia, sin conexión con el CORE |
 | EVALUACIÓN | `backend/EVALUACION` | Evaluación crediticia: recibe el expediente de SOL y lo registra en COREDB; el analista evalúa con la regla provisional y decide los casos observados. La aprobación queda en COREDB para Desembolso, con el calendario de SOL | En uso: sin base propia, llama a COREDB |
@@ -21,13 +22,13 @@ Sistema bancario modular, proyecto académico de la UCSM (2026). Este repositori
 
 Para contribuir, ver [`CONTRIBUTING.md`](CONTRIBUTING.md): rama, PR y CI en verde; nada directo a `main`.
 
-Lo que no está: el módulo Clientes (en revisión en el PR #25). Todo pasa por el Bus de Servicios, como pide [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md): el frontend llega a los módulos a través de él, y los módulos llegan a COREDB también a través de él.
+Lo que no está: el módulo Clientes (el PR #25 se cerró sin fusionar el 2026-11-17; los clientes los crea CAPTACION). Todo pasa por el Bus de Servicios, como pide [`Documents/01-stack-tecnologico.md`](Documents/01-stack-tecnologico.md): el frontend llega a los módulos a través de él, y los módulos llegan a COREDB también a través de él.
 
 ## Requisitos
 
 - Docker con Compose 2.20 o superior, en marcha (`docker compose version`, `docker info`).
 - Git y bash. En Windows, Git Bash o WSL2.
-- Libres en la máquina: los puertos 3000, 3307, 8001, 8002, 8011, 8012, 8013, 8015, 8016, 8017, 8018, 8019 y 8020, y unos 4 GB de disco para las imágenes.
+- Libres en la máquina: los puertos 3000, 3307, 8001, 8002, 8011, 8012, 8013, 8014, 8015, 8016, 8017, 8018, 8019 y 8020, y unos 4 GB de disco para las imágenes.
 
 No hace falta Python, Node ni MySQL: todo corre en contenedores.
 
@@ -110,6 +111,7 @@ sequenceDiagram
 | ATM | http://127.0.0.1:8019 (pantalla; panel técnico en `/tecnico.html`) / http://127.0.0.1:8019/docs (API) | Un operador abre el cajero con su usuario de COREDB; el cliente opera con el id de su tarjeta y su PIN | [`backend/ATM/README.md`](backend/ATM/README.md) |
 | BILLETERA (Chaski) | http://127.0.0.1:8020/api/salud | El cliente entra con su celular y su PIN (`POST /api/login`), después de que un usuario del banco lo afilie con `POST /coredb/billetera/afiliaciones` | [`billetera-chaski/README.md`](billetera-chaski/README.md) |
 | CAPTACION | http://127.0.0.1:8017/docs | El mismo token de COREDB | [`backend/CAPTACION/README.md`](backend/CAPTACION/README.md) |
+| COBRANZA | http://localhost:3000/pagar-cuota (API: http://127.0.0.1:8014/docs) | El mismo token de COREDB (cada ruta comprueba sus permisos) | [`backend/COBRANZA/README.md`](backend/COBRANZA/README.md) |
 | SOL | http://127.0.0.1:8011/docs | Las cuentas de la solicitud de crédito | [`EMPEZAR_AQUI_SOL.md`](EMPEZAR_AQUI_SOL.md) |
 | Evaluación | http://localhost:3000/evaluacion (API: http://127.0.0.1:8015/docs) | Un usuario de COREDB con rol ANALISTA (decidir exige además un analista registrado: el administrador lo da de alta con `POST /coredb/empleados` y `POST /coredb/creditos/analistas`); AUDITOR solo consulta | [`backend/EVALUACION/README.md`](backend/EVALUACION/README.md) |
 | Desembolso | http://localhost:3000/desembolso (API: http://127.0.0.1:8016/docs) | Un usuario de COREDB con rol OPERADOR; ADMINISTRADOR hace de supervisor y AUDITOR consulta | [`backend/DESEMBOLSO/README.md`](backend/DESEMBOLSO/README.md) |
@@ -127,6 +129,7 @@ El CORE legado solo se levanta si se pide: `COMPOSE_PROFILES=legado ./bna up`. T
 |---|---|
 | `./bna up` | Crea `.env` si falta, construye, levanta todo y espera a que esté sano |
 | `./bna down` | Detiene y elimina los contenedores; conserva los datos |
+| `./bna down -v` | Detiene, elimina los contenedores y elimina también los volúmenes |
 | `./bna reset` | Elimina también los datos y vuelve a levantar desde cero |
 | `./bna ps` | Estado de los servicios |
 | `./bna logs [servicio]` | Registros en vivo |
@@ -134,7 +137,7 @@ El CORE legado solo se levanta si se pide: `COMPOSE_PROFILES=legado ./bna up`. T
 | `./bna test` | Todas las suites de pruebas, en contenedores, y el flujo |
 | `./bna k8s-up`, `k8s-smoke`, `k8s-ps`, `k8s-down` | Lo mismo en un clúster local de Kubernetes |
 
-Con make: `make up`, `make test`, etc. Para quitar todo, datos incluidos: `docker compose down -v`.
+Con make: `make up`, `make test`, etc.
 
 ## Configuración
 
@@ -150,9 +153,11 @@ Toda la configuración del producto está en `.env`, en la raíz. `./bna up` lo 
 | `AUX_DB_ROOT_PASSWORD`, `SOL_DB_PASSWORD`, `LEGADO_DB_PASSWORD`, `LEGADO_SECRET_KEY` | Base auxiliar y CORE legado |
 | `EVALUACION_COREDB_SECRETO`, `EVALUACION_TOKEN_SOL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | Secreto del usuario de servicio de Evaluación en COREDB y los tokens de CR-INT-02 y CR-INT-03 con SOL |
 | `DESEMBOLSO_COREDB_SECRETO` | Secreto del usuario de servicio de Desembolso en COREDB |
-| `BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS`, `BUS_TOKEN_CUENTAS`, `BUS_TOKEN_TARJETAS`, `BUS_TOKEN_CAPTACION`, `BUS_TOKEN_EVALUACION`, `BUS_TOKEN_DESEMBOLSO`, `BUS_TOKEN_ATM`, `BUS_TOKEN_BILLETERA` | Bus de Servicios: credencial de los puentes del frontend, del flujo de extremo a extremo y de cada módulo que llama a COREDB (incluye ATM y la billetera) |
+| `COBRANZA_COREDB_SECRETO` | Secreto del usuario de servicio de Cobranza en COREDB (svc-cobranza) |
+| `BILLETERA_COREDB_SECRETO` | Secreto del usuario de servicio de Billetera en COREDB (svc-billetera) |
+| `BUS_TOKEN_FRONTEND`, `BUS_TOKEN_PRUEBAS`, `BUS_TOKEN_CUENTAS`, `BUS_TOKEN_TARJETAS`, `BUS_TOKEN_CAPTACION`, `BUS_TOKEN_EVALUACION`, `BUS_TOKEN_DESEMBOLSO`, `BUS_TOKEN_COBRANZA`, `BUS_TOKEN_ATM`, `BUS_TOKEN_BILLETERA` | Bus de Servicios: credencial de los puentes del frontend, del flujo de extremo a extremo y de cada módulo que llama a COREDB (incluye ATM, Cobranza y la billetera) |
 | `CAPTACION_COREDB_SECRETO`, `CAP_SOL_TOKEN`, `CAP_OTP_CLAVE` | CAPTACION: secreto de su usuario de servicio en COREDB, el token con el que SOL consulta las referencias y la clave de los OTP |
-| `BNA_PUERTO_*` | Puerto de cada servicio en esta máquina (incluye `BNA_PUERTO_ATM=8019` y `BNA_PUERTO_BILLETERA=8020`) |
+| `BNA_PUERTO_*` | Puerto de cada servicio en esta máquina (incluye `BNA_PUERTO_COBRANZA=8014`, `BNA_PUERTO_ATM=8019` y `BNA_PUERTO_BILLETERA=8020`) |
 
 - Para usar otro puerto, cambiar su `BNA_PUERTO_*` en `.env` y volver a ejecutar `./bna up`.
 - Las contraseñas de las bases y las cuentas iniciales solo se aplican al crear los datos. Para que un cambio en `.env` surta efecto en ellas: `./bna reset`, que borra los datos.
@@ -199,7 +204,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 | El administrador no puede entrar | La contraseña es la de `BNA_ADMIN_PASSWORD` en `.env`. Si se cambió después del primer arranque no se aplicó: `./bna reset` |
 | Tras actualizar el repositorio, COREDB no arranca o una ruta responde 500 | La base se carga solo sobre un volumen vacío, así que un esquema nuevo no llega a una base ya creada: `./bna reset` |
 | Un movimiento se rechaza por falta de periodo contable | Los datos de desarrollo traen periodos para 24 meses desde que se creó la base. Pasado ese plazo: `./bna reset` |
-| Quedó algo a medias | `docker compose down -v` y `./bna up` |
+| Quedó algo a medias | `./bna down -v` y `./bna up` |
 
 ## Estructura del repositorio
 

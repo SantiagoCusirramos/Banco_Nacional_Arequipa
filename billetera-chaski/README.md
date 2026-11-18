@@ -97,6 +97,54 @@ En la pantalla de ingreso, el engranaje ⚙ permite cambiar el servidor:
 - Emulador de Android: `http://10.0.2.2:8020` con el producto levantado (`./bna up`).
 - Celular real por Wi-Fi: `http://IP-de-tu-PC:8020`. El producto publica el puerto solo en `127.0.0.1`: para un celular real hay que exponerlo (por ejemplo, un túnel) bajo tu responsabilidad.
 
+## La app móvil frente a la API integrada (estado al 2026-11-18)
+
+**La app Flutter de `app_movil/` no funciona todavía con esta API.** La API (`backend/server.js`) sí: el
+flujo de extremo a extremo del producto entra, consulta, envía por celular, cobra con QR y responde
+solicitudes por ella. La app no se pudo compilar ni probar en la integración (no hay Flutter en el
+equipo que la hizo); lo que sigue sale de leer su código contra la API. Nada de esto está probado en un
+emulador.
+
+### Qué se rompe y dónde
+
+| Pantalla o pieza | Archivo | Qué pasa con la API nueva |
+|---|---|---|
+| Ingreso → inicio | `state/app_state.dart:138-150`, `models.dart:8, 46, 99, 104, 179, 196` | Cae justo después del login. `/api/me`, `/api/movimientos`, `/api/solicitudes` y `/api/notificaciones` devuelven ids de texto (`id_cliente` = código `CLI…`, `id_cuenta` = número de cuenta, UUID en movimientos, operaciones, solicitudes y avisos) y los modelos los declaran `int`: `TypeError` al leer `/api/me`. Además se guarda `setInt('id_cliente')`. |
+| Caché local | `services/cache_db.dart`, `models.dart:132` (`toRow(int idCliente)`) | Las tablas y `toRow` asumen ids enteros. |
+| Servidor por omisión | `state/app_state.dart:13`, `screens/login_screen.dart:72-74` | Apunta a `:3000`, que en el producto es el frontend web. La API de Chaski está en `8020`. |
+| Enviar por celular | `screens/enviar_screens.dart:41` | Llama `GET /clientes/buscar?celular=…`; la API solo tiene `POST /api/clientes/buscar` con `{"celular": …}` en el cuerpo (en la URL el celular quedaba en los registros del Bus) → 404 "Ruta no encontrada". El envío no puede empezar. |
+| Contactos recientes | `screens/enviar_screens.dart:30` | `/api/recientes` devuelve `[]`: COREDB ya no entrega celulares. `Solicitud.celular` llega vacío por lo mismo. |
+| Cobrar y pagar con QR | `models.dart:247, 372, 392-394`, `screens/qr_screens.dart:96, 151` | La trama es `CHASKI|<int>`, el escáner hace `int.parse` y el código manual `int.tryParse`; `id_qr` ahora es UUID: no se puede leer ni teclear un QR. |
+| Responder solicitudes | `screens/home_shell.dart:278, 296` | La ruta existe, pero `s.id` es `int` (ver la primera fila). Aceptar ya manda `Idempotency-Key`; rechazar (l. 278) no, y sin llave la API genera una nueva en cada intento. |
+| Registro | `state/app_state.dart:107` | `POST /api/registro` responde 403: la billetera se activa en una agencia (R-01). |
+| Promociones, ofertas, tienda, órdenes, cupones, recargas, servicios | `screens/tienda_screens.dart`, `screens/servicios_screen.dart`, `state/app_state.dart:142` | Promos y ofertas devuelven listas vacías; tienda, órdenes, cupones, recargas y servicios responden 501 "No disponible en esta versión". Las pantallas siguen visibles. |
+| Nombre y celular en el perfil | `models.dart:9-37` | `/api/me` trae el nombre corto (`apellidos` vacío) y no trae el celular. |
+| Celular real | `compose.yaml` (`127.0.0.1:${BNA_PUERTO_BILLETERA}`) | La API solo escucha en `127.0.0.1`: hoy solo llega el emulador de Android en la misma máquina (`http://10.0.2.2:8020`). La app no puede ir por el Bus: exige `X-Bus-Token`, que una app no puede guardar en secreto (ver #105, `BUS_MODULOS_PUBLICOS`). |
+
+### Cómo adaptarla
+
+1. `models.dart`: todos los ids (`idCliente`, `idCuenta`, `idMovimiento`, `idTransferencia`, `idPago`,
+   `Notificacion.id`, `Solicitud.id`, `idQr`, `idComercio`…) a `String`; `fromJson` sin conversiones a
+   número. `tramaQr(String idQr)`.
+2. `state/app_state.dart`: `servidorPorDefecto = 'http://10.0.2.2:8020'`; `setString('id_cliente', …)`;
+   no pedir `/api/promos` al iniciar. `login_screen.dart`: la pista con `:8020`.
+3. `services/cache_db.dart`: columnas de id como `TEXT` y una migración que borre la caché anterior.
+4. `screens/enviar_screens.dart`: `api.post('/clientes/buscar', {'celular': cel})`; ocultar "recientes"
+   mientras devuelva `[]`.
+5. `screens/qr_screens.dart`: leer `CHASKI|(<uuid>)` con una expresión regular de UUID y aceptar el
+   código manual como texto.
+6. `screens/home_shell.dart`: rechazar también con `Idempotency-Key` (la misma si se reintenta), como
+   ya hace aceptar.
+7. Esconder registro, tienda, órdenes, cupones, recargas, servicios y promociones (o mostrar "No
+   disponible en esta versión" sin llamar a la API).
+8. `test/logica_test.dart`: actualizar los casos con ids de texto; correr `flutter analyze` y
+   `flutter test`, y probar en el emulador contra `./bna up`: ingreso, saldo, envío por celular, QR,
+   solicitudes y avisos.
+
+Fuera de esto, `LEEME_Chaski.txt`, los PDF de `docs/`, `iniciar_backend.bat` y
+`.github/workflows/ios.yml` describen el prototipo (PostgreSQL propio, puerto 3000) y el flujo de
+GitHub de esta subcarpeta no corre (GitHub solo lee `.github/` en la raíz del repositorio).
+
 ## Compartir la app con compañeros
 
 **El producto tiene que estar levantado y accesible** (`./bna up`): la app no funciona sola, necesita la API de Chaski y COREDB.
@@ -124,13 +172,8 @@ flutter build apk --release --dart-define=SERVIDOR=http://TU-IP:8020
 - Integración (PR que cierra #94): `npm test` 16/16 contra un COREDB falso; COREDB contra MySQL
   real (acceso, envíos, QR, solicitudes, concurrencia con la misma llave y con llaves distintas);
   `./bna test` y el flujo de extremo a extremo con dos clientes de CAPTACION.
-- **La app móvil no se adaptó ni se compiló en la integración** (no había Flutter en el equipo).
-  Para usarla con esta API hay que cambiar en `lib/models.dart` los ids numéricos (`idCliente`,
-  `idCuenta`, `idMovimiento`, `id_solicitud`, `idQr`, `idComercio`…) a texto, porque ahora son
-  los UUID de la base integrada; quitar o esconder el registro, la tienda, las promociones y los
-  servicios; no esperar el celular ni el nombre completo en `/api/me` (llega el nombre corto); y buscar
-  un contacto con `POST /api/clientes/buscar` y el celular en el cuerpo (antes era `GET` con el
-  celular en la consulta, que queda en los registros del Bus).
+- **La app móvil no se adaptó ni se compiló en la integración** (no había Flutter en el equipo): ver
+  "La app móvil frente a la API integrada".
 - Prototipo original (PostgreSQL propio): `npm test` 12/12, `flutter analyze`, `flutter test` 6/6
   y `flutter build apk --debug` (Flutter 3.47.7).
 
