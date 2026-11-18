@@ -24,7 +24,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", upstream);
   vi.stubEnv("COREDB_URL", "http://bus:8018/bus/coredb");
   vi.stubEnv("CUENTAS_GATEWAY_URL", "http://bus:8018/bus/cuentas/api/v1/cuentas");
-  vi.stubEnv("SOL_GATEWAY_URL", "http://bus:8018/bus/sol/gateway/sol");
+  vi.stubEnv("SOL_GATEWAY_URL", "http://bus:8018/bus/sol/sol");
   vi.stubEnv("SOL_PUBLIC_ORIGIN", "");
   upstream.mockReset().mockImplementation(async () => Response.json({ ok: true }));
 });
@@ -74,6 +74,6 @@ it("el puente de SOL también presenta la credencial del Bus", async () => {
   vi.stubEnv("BUS_TOKEN", TOKEN);
   await sol(peticion("http://localhost:3000/api/solicitud-credito/auth/login", { "X-Bus-Token": "del-navegador" }),
     context(["auth", "login"]));
-  expect(upstream.mock.calls[0][0]).toBe("http://bus:8018/bus/sol/gateway/sol/auth/login");
+  expect(upstream.mock.calls[0][0]).toBe("http://bus:8018/bus/sol/sol/auth/login");
   expect(cabecerasEnviadas().get("X-Bus-Token")).toBe(TOKEN);
 });

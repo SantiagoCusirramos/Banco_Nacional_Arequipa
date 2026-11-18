@@ -2,7 +2,7 @@
 devuelve el acuse que SOL valida.
 
 El acuse se valida con `SOL.integrations.validate_receipt` y una prueba usa el propio cliente HTTP de
-SOL (`Integrations.deliver`, modo REAL) contra un servidor real. Todo queda en COREDB: lo que se
+SOL (`Integrations.deliver`) contra un servidor real. Todo queda en COREDB: lo que se
 comprueba allí se lee con el token del administrador.
 """
 import copy
@@ -10,8 +10,7 @@ import uuid
 from decimal import Decimal
 from types import SimpleNamespace
 
-from SOL.integrations import Integrations, evaluation_envelope, validate_receipt
-from SOL.settings import Settings
+from SOL.integrations import Integrations, validate_receipt
 
 from EVALUACION.main import crear_app
 from EVALUACION.tests.ayudas import (TOKEN_RESULTADOS, TOKEN_SOL, cabeceras, contexto, coredb, evaluar, nuevo_sobre,
@@ -128,24 +127,18 @@ def test_version_nueva_solo_mientras_la_ronda_no_esta_evaluada(api, analista, cl
 
 
 def test_entrega_con_el_cliente_http_de_sol(admin, sol, cliente):
-    """SOL en modo REAL: su `Integrations.deliver` consulta, envía y valida el acuse por HTTP."""
+    """SOL entrega con su `Integrations.deliver` y valida el acuse por HTTP; reenviar es seguro."""
     with servidor(crear_app(contexto=contexto(sol))) as url:
-        ajustes = Settings(database_url="sqlite://", mode="REAL", bus_base_url=url, bus_token=TOKEN_SOL,
-                           callback_token=TOKEN_RESULTADOS, cap_search_path="/cap/referencias",
-                           cap_reference_path="/cap/referencias/{idCliente}", eva_send_path="/eva/applications",
-                           eva_status_path="/eva/operations/{idOperacion}", audit_path="/seguridad/eventos",
-                           http_timeout=2.5, request_budget=2.9, worker_seconds=0)
-        ajustes.validate()
+        ajustes = SimpleNamespace(eva_url=url, eva_token=TOKEN_SOL, bus_token="", http_timeout=2.5, max_retries=1)
         cliente_sol = Integrations(ajustes)
         try:
             base = nuevo_sobre(cliente)
-            sobre = evaluation_envelope(SimpleNamespace(id=base["idSolicitud"]),
-                                        SimpleNamespace(number=1, snapshot=base["expediente"]),
-                                        str(uuid.uuid4()), str(uuid.uuid4()), "REAL")
-            sobre["actorEnvio"] = "asesor.bna"
+            sobre = {"versionContrato": "CR-INT-02-PROPUESTA-v2", "idSolicitud": base["idSolicitud"],
+                     "versionSolicitud": 1, "idOperacion": str(uuid.uuid4()), "idCorrelacion": str(uuid.uuid4()),
+                     "expediente": base["expediente"], "simulado": False, "actorEnvio": "asesora"}
             acuse = cliente_sol.deliver(sobre)
             assert acuse["idSolicitud"] == base["idSolicitud"] and acuse["ronda"] == 1
-            # La consulta previa responde 404 y SOL reenvía: COREDB devuelve el mismo acuse.
+            # Reenviar el mismo sobre: COREDB lo reconoce y devuelve el mismo acuse.
             assert cliente_sol.deliver(sobre) == acuse
         finally:
             cliente_sol.close()
