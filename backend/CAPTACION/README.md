@@ -50,15 +50,10 @@ flowchart LR
 - **El OTP**: CAPTACION genera el código y calcula su HMAC con `CAP_OTP_CLAVE` y el id del OTP;
   COREDB solo recibe el HMAC, lo compara, cuenta los intentos y lo vence según
   `clientes.tipo_contacto` (SMS: 5 minutos; correo: 10; 3 intentos).
-- **SOL hoy sigue en modo SIMULADO**: para pasar a REAL necesita además Evaluación, Seguridad y el
-  Bus. Mientras tanto, la prueba `tests/test_contrato_sol.py` usa **el adaptador real de SOL, sin
-  cambios**, contra CAPTACION: SOL acepta la referencia de un cliente habilitado y rechaza una
-  revocada o inexistente. Cuando exista el Bus, SOL se configura con:
-  ```dotenv
-  SOL_CAP_SEARCH_PATH=/cap/references/search
-  SOL_CAP_REFERENCE_PATH=/cap/references/{idCliente}
-  # SOL_BUS_TOKEN = CAP_SOL_TOKEN de CAPTACION
-  ```
+- **SOL consulta las referencias por el Bus** (`/bus/captacion/cap/references/...`) con
+  `SOL_CAP_TOKEN`, que es el `CAP_SOL_TOKEN` de CAPTACION. La prueba `tests/test_contrato_sol.py`
+  usa **el adaptador real de SOL** contra CAPTACION: SOL acepta la referencia de un cliente
+  habilitado y rechaza una revocada o inexistente.
 
 ## Estados del caso
 
@@ -145,6 +140,5 @@ lógica (`test_logica.py`).
 | Qué | De quién depende |
 |---|---|
 | Proveedores reales (RENIEC, centrales, SMS) en lugar del simulador | Contratos con terceros; se reemplaza `proveedores.py` |
-| SOL en modo REAL contra CAPTACION (hoy SOL corre en SIMULADO) | SOL: en REAL exige también un receptor de auditoría (`SOL_AUDIT_*`), que ningún módulo ofrece (Seguridad no recibe eventos) |
 | `apellido_materno`: COREDB lo admite vacío, SOL lo exige | Homologar CR-INT-01 con SOL |
 | Corregir celular o correo de un solicitante antes de habilitarlo | CAPTACION (siguiente versión) |

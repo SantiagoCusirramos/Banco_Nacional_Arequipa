@@ -26,14 +26,15 @@ por aquí.
 5. El resultado final (APROBADO o RECHAZADO) vuelve a SOL (CR-INT-03). Evaluación no guarda nada: cada
    ciclo lee de COREDB las solicitudes de los últimos `EVALUACION_ENVIO_VENTANA_DIAS` días con resultado
    final y se lo envía; el `idOperacion` sale del resultado (uuid5), así que repetirlo manda el mismo
-   mensaje y SOL lo reconoce sin duplicarlo. Un OBSERVADO sin decisión no se envía. Mientras SOL siga en
-   modo SIMULADO (`EVALUACION_SOL_URL` vacía) el ciclo no corre.
+   mensaje y SOL lo reconoce sin duplicarlo. Un OBSERVADO sin decisión no se envía. En el producto se entrega
+   a SOL por el Bus cada 10 s (`EVALUACION_SOL_URL=http://bus:8018/bus/sol`), con la credencial de Evaluación
+   ante el Bus.
 
 ## Rutas
 
 | Ruta | Quién | En COREDB |
 |---|---|---|
-| `POST /eva/applications` | SOL, token `EVALUACION_TOKEN_SOL` (su `SOL_BUS_TOKEN`) | `POST /coredb/creditos/solicitudes` (`svc-evaluacion`) |
+| `POST /eva/applications` | SOL, token `EVALUACION_TOKEN_SOL` (su `SOL_EVA_TOKEN`) | `POST /coredb/creditos/solicitudes` (`svc-evaluacion`) |
 | `GET /eva/operations/{id}` | SOL | Siempre 404: Evaluación no guarda operaciones y SOL reenvía, sin duplicar |
 | `GET /eva/v1/solicitudes`, `GET /eva/v1/solicitudes/{id}` | `VER_CREDITO` | Bandeja y detalle |
 | `POST /eva/v1/solicitudes/{id}/evaluaciones` | `EVALUAR_CREDITO` | Evaluación (regla) |
@@ -60,8 +61,9 @@ analista. Evaluar solo exige `EVALUAR_CREDITO`.
 | `EVALUACION_COREDB_USUARIO` | `svc-evaluacion` por omisión |
 | `COREDB_URL` | COREDB, a través del Bus: `http://bus:8018/bus/coredb` en compose y k8s |
 | `BUS_TOKEN` | Credencial del módulo ante el Bus (`X-Bus-Token`; en el producto, `BUS_TOKEN_EVALUACION`) |
-| `EVALUACION_TOKEN_SOL` | Token de SOL para CR-INT-02 |
-| `EVALUACION_SOL_URL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | CR-INT-03; la URL queda vacía mientras SOL sea SIMULADO |
+| `EVALUACION_TOKEN_SOL` | Token de SOL para CR-INT-02 (en SOL, `SOL_EVA_TOKEN`) |
+| `EVALUACION_SOL_URL`, `EVALUACION_SOL_TOKEN_RESULTADOS` | CR-INT-03: SOL por el Bus y el token que SOL espera (`SOL_EVA_CALLBACK_TOKEN`); sin URL no se envía |
+| `EVALUACION_ENVIO_INTERVALO_SEG` | Cada cuánto se envían los resultados nuevos (30 por omisión; 10 en el producto) |
 | `EVALUACION_ENVIO_INTERVALO_SEG`, `EVALUACION_ENVIO_VENTANA_DIAS` | Cada cuánto y hasta cuántos días atrás se reenvían resultados (30 s, 7 días) |
 
 ## Ejecutar y probar
@@ -75,7 +77,7 @@ backend/EVALUACION/scripts/pruebas_integracion.sh      # en contenedores: bna-co
 ```
 
 Las pruebas usan la base integrada y COREDB reales (no dobles) y validan el acuse y el resultado con el
-código de SOL (`validate_receipt`, `EvaluationResult` y su cliente `Integrations.deliver` en modo REAL).
+código de SOL (`validate_receipt`, `EvaluationResult` y su cliente `Integrations.deliver`).
 Al terminar no quedan contenedores ni volúmenes.
 
 ## Decisiones adoptadas y pendiente
@@ -84,6 +86,4 @@ Adoptadas, revisables ([`Documents/decisiones-del-equipo.md`](../../Documents/de
 el analista no observa ni devuelve a SOL (T1), los umbrales 80 % / 100 % (16), el dominio libre de
 `resultado_verificacion` (17) y el `cod_cliente` de COREDB como identificador común (8).
 
-Pendiente: que SOL pase a modo REAL (hoy SIMULADO, con `EVALUACION_SOL_URL` vacía), que ya admite la
-URL de Evaluación aparte del Bus (`SOL_EVA_BASE_URL`, `SOL_EVA_TOKEN`); y ratificar en el Comité que
-SOL arma el calendario.
+Pendiente: ratificar en el Comité que SOL arma el calendario.

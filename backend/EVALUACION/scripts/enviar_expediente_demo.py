@@ -1,8 +1,8 @@
 """Envía a Evaluación un expediente con el formato exacto de SOL, para demostraciones y pruebas.
 
-SOL sigue en modo SIMULADO en el producto, así que no envía nada a Evaluación. Este script arma el
-sobre CR-INT-02 con el propio código de SOL (su política, `SOL.finance.calendar` y la misma forma de
-`SOL.integrations.evaluation_envelope`) y lo entrega como lo haría SOL en modo REAL.
+En el producto SOL envía sus expedientes por el Bus. Este script arma, sin pasar por SOL, un sobre
+CR-INT-02 con el propio código de SOL (su política y `SOL.finance.calendar`) y lo entrega como lo hace
+SOL; sirve para probar Evaluación sola.
 
     python -m EVALUACION.scripts.enviar_expediente_demo --cliente CLI000000001 --documento 70000001 \
         --nombres Juan --paterno Perez --materno Quispe --monto 15000.00 --plazo 12

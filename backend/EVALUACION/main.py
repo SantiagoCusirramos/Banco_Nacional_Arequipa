@@ -156,7 +156,7 @@ def crear_app(config: Config | None = None, *, contexto: Contexto | None = None)
         except ErrorEva as exc:
             return _error(503, exc.codigo, exc.mensaje)
         return {"estado": "ok", "modulo": "EVALUACION", "version": VERSION,
-                "resultadosASol": "configurado" if c.despachador.configurado else "pendiente: SOL en modo SIMULADO"}
+                "resultadosASol": "configurado" if c.despachador.configurado else "pendiente: falta EVALUACION_SOL_URL"}
 
     # ------------------------------------------------------------------ CR-INT-02 (SOL)
     t02 = "CR-INT-02 Solicitud a Evaluación"

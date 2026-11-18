@@ -21,7 +21,7 @@ class Config:
     bus_token: str = ""
     # Bearer con el que SOL entrega expedientes (CR-INT-02). Es el SOL_BUS_TOKEN de SOL.
     token_sol: str = ""
-    # Base de SOL para devolverle el resultado (CR-INT-03). Vacía mientras SOL siga en modo SIMULADO.
+    # Base de SOL para devolverle el resultado (CR-INT-03); en el producto, SOL por el Bus. Vacía: no se envía.
     sol_url: str = ""
     # Bearer para el resultado: el SOL_EVA_CALLBACK_TOKEN de SOL.
     sol_token_resultados: str = ""

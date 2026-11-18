@@ -70,8 +70,6 @@ INTENTOS = max(1, int(os.environ.get("E2E_INTENTOS", "1")))
 ESPERA = float(os.environ.get("E2E_ESPERA", "2"))
 USUARIO = os.environ.get("BNA_ADMIN_USUARIO", "admin")
 PASSWORD = os.environ.get("BNA_ADMIN_PASSWORD", "")
-SOL_USUARIO = "asesor.bna"  # usuario sembrado por SOL (backend/SOL/seed.py)
-SOL_PASSWORD = os.environ.get("SOL_INITIAL_PASSWORD", "")
 TOKEN_SOL_EVALUACION = os.environ.get("EVALUACION_TOKEN_SOL", "")
 AGENCIA = "AQP01"
 CANAL = "HB"
@@ -130,7 +128,7 @@ def pedir(metodo, url, cuerpo=None, token=None, cabeceras=None):
     return estado, datos
 
 
-def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
+def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None, llave=None):
     """Como el navegador ante el proxy de SOL del frontend: Origin y cookie, sin token.
     Devuelve (estado, cuerpo JSON o texto, Set-Cookie)."""
     anotar_sensibles(cuerpo)
@@ -141,6 +139,8 @@ def pedir_navegador(metodo, ruta, cuerpo=None, origen=FRONTEND, cookie=None):
         peticion.add_header("Origin", origen)
     if cookie:
         peticion.add_header("Cookie", cookie)
+    if llave:
+        peticion.add_header("X-Idempotency-Key", llave)
     try:
         with urllib.request.urlopen(peticion, timeout=15) as respuesta:
             estado, texto, galleta = respuesta.status, respuesta.read().decode(), respuesta.headers.get("Set-Cookie", "")
@@ -971,31 +971,86 @@ def flujo():
     paso("frontend: sus puentes llegan a COREDB, a CUENTAS, a TARJETAS, a CAPTACION y a COBRANZA con el token del "
          "usuario, y sirve el Home Banking en /homebanking/index.html")
 
-    # ── SOL por el proxy del frontend: escribir exige el Origin del propio frontend ──
-    exigir(SOL_PASSWORD, "Falta SOL_INITIAL_PASSWORD para entrar a SOL por el frontend")
-    credenciales = {"username": SOL_USUARIO, "password": SOL_PASSWORD}
+    # ── SOL sin base propia, por el proxy del frontend ──────────────────────
+    # La asesora entra con su usuario de COREDB; el borrador queda en COREDB, el expediente va a
+    # EVALUACION por el Bus y el resultado vuelve a SOL (CR-INT-03), que lo deja en la bitácora.
+    asesora, clave_asesora = "as" + uuid.uuid4().hex[:12], "clave-" + uuid.uuid4().hex
+    coredb("POST", "/coredb/usuarios", 201, {"username": asesora, "nombre": "Asesora del flujo",
+                                             "password": clave_asesora, "rol": "ASESOR"}, token)
+    credenciales = {"username": asesora, "password": clave_asesora}
     estado, respuesta, _ = pedir_navegador("POST", "auth/login", credenciales, origen="http://otro.example")
     exigir(estado == 403, f"El proxy de SOL debía rechazar otro origen: {estado} {respuesta}")
     estado, respuesta, galleta = pedir_navegador("POST", "auth/login", credenciales)
     exigir(estado == 200 and respuesta.get("usuario", {}).get("rol") == "ASESOR" and "token" not in respuesta,
-           f"Login de SOL por el proxy del frontend: {estado} {respuesta}")
+           f"Login de SOL (usuario de COREDB) por el proxy del frontend: {estado} {respuesta}")
     exigir(galleta.startswith("bna_sol_session=") and "httponly" in galleta.lower(),
            "El login de SOL debía dejar la sesión en una cookie HttpOnly")
     sesion = galleta.split(";", 1)[0]
     SENSIBLES.add(sesion.split("=", 1)[1])
-    estado, respuesta, _ = pedir_navegador("GET", "policy", cookie=sesion)
-    exigir(estado == 200 and respuesta.get("integracion") == "SIMULADO",
-           f"Política de SOL con la cookie de sesión: {estado} {respuesta}")
-    # P-1: la búsqueda por documento va en el cuerpo de un POST, no en la URL.
-    estado, respuesta, _ = pedir_navegador("POST", "clients/search", {"search": "70000001"}, cookie=sesion)
-    exigir(estado == 200 and [c["numero_documento"] for c in respuesta] == ["70000001"],
-           f"Búsqueda de clientes de SOL por documento: {estado} {respuesta}")
-    estado, respuesta, _ = pedir_navegador("POST", "auth/logout", {}, cookie=sesion)
-    exigir(estado == 200, f"Cierre de sesión de SOL por el proxy: {estado} {respuesta}")
-    estado, _, _ = pedir_navegador("GET", "policy", cookie=sesion)
-    exigir(estado == 401, f"La sesión de SOL debía quedar revocada tras cerrar: respondió {estado}")
-    paso("frontend: SOL por su proxy, con login desde el origen del frontend (otro origen, 403), "
-         "sesión en cookie HttpOnly, consulta, búsqueda por documento en el cuerpo y cierre de sesión")
+    estado, politica, _ = pedir_navegador("GET", "policy", cookie=sesion)
+    exigir(estado == 200 and politica.get("integracion") == "REAL",
+           f"Política de SOL con la cookie de sesión: {estado} {politica}")
+    # P-1: la búsqueda por documento va en el cuerpo de un POST, no en la URL. Las referencias son
+    # las de CAPTACION: el cliente que se acaba de habilitar.
+    estado, respuesta, _ = pedir_navegador("POST", "clients/search", {"search": dni}, cookie=sesion)
+    exigir(estado == 200 and [c["id_cliente"] for c in respuesta] == [cod_cliente],
+           f"Búsqueda de clientes de SOL en CAPTACION por documento: {estado} {respuesta}")
+    borrador = {"id_cliente": cod_cliente, "monto_solicitado": politica["monto_minimo"], "moneda": "PEN",
+                "plazo_meses": politica["plazo_minimo_meses"], "destino_credito": "Capital de trabajo del flujo",
+                "fecha_base": time.strftime("%Y-%m-%d", time.gmtime(time.time() + 86400)), "pago_doble": False,
+                "garantias": [{"tipo_garantia": "PRENDARIA", "descripcion": "Prenda del flujo",
+                               "valor_tasacion": "1500.00"}], "fiadores": []}
+    estado, solicitud_sol, _ = pedir_navegador("POST", "applications", borrador, cookie=sesion)
+    exigir(estado == 201 and solicitud_sol["estado"] == "REGISTRADA" and solicitud_sol["revision"] == 1,
+           f"Borrador de SOL en COREDB: {estado} {solicitud_sol}")
+    id_sol = solicitud_sol["id"]
+    en_coredb = coredb("GET", f"/coredb/creditos/solicitudes/{id_sol}", 200, token=token)
+    exigir(en_coredb["estado"] == "REGISTRADA" and en_coredb["expediente"]["creadoPor"] == asesora
+           and [g["tipo"] for g in en_coredb["garantias"]] == ["PRENDARIA"],
+           f"El borrador debía estar en COREDB a nombre de la asesora: {en_coredb}")
+    borrador["monto_solicitado"] = str(float(politica["monto_minimo"]) + 500)
+    estado, editada, _ = pedir_navegador("PUT", f"applications/{id_sol}", {**borrador, "revision": 1}, cookie=sesion)
+    exigir(estado == 200 and editada["revision"] == 2, f"Edición del borrador con su revisión: {estado} {editada}")
+    # Repetir la misma edición es un reintento (200, la misma revisión); otra edición con la revisión
+    # vieja es de otra sesión: 409.
+    estado, repetida, _ = pedir_navegador("PUT", f"applications/{id_sol}", {**borrador, "revision": 1}, cookie=sesion)
+    exigir(estado == 200 and repetida["revision"] == 2, f"Repetir la edición debía reconocerse: {estado} {repetida}")
+    otra_sesion = {**borrador, "monto_solicitado": str(float(politica["monto_minimo"]) + 900), "revision": 1}
+    estado, vieja, _ = pedir_navegador("PUT", f"applications/{id_sol}", otra_sesion, cookie=sesion)
+    exigir(estado == 409, f"Editar con una revisión vieja debía dar 409: {estado} {vieja}")
+    estado, enviada, _ = pedir_navegador("POST", f"applications/{id_sol}/send", {"revision": 2}, cookie=sesion,
+                                         llave=str(uuid.uuid4()))
+    exigir(estado == 200 and enviada["estado"] == "EN_EVALUACION" and enviada["envios"][0]["ronda"] == 1,
+           f"Envío del expediente a EVALUACION por el Bus: {estado} {enviada}")
+    estado, otra, _ = pedir_navegador("POST", f"applications/{id_sol}/send", {"revision": 2}, cookie=sesion,
+                                      llave=str(uuid.uuid4()))
+    exigir(estado == 200 and otra.get("reintento_reconocido") is True, f"Reenviar debía reconocerse: {estado} {otra}")
+    situacion = {"versionSolicitud": 1, "ingresoMensual": "20000.00", "deudaMensual": "0.00", "riesgo": "BUENO",
+                 "verificada": True}
+    estado, evaluada = pedir("POST", f"{EVALUACION}/eva/v1/solicitudes/{id_sol}/evaluaciones", situacion, token)
+    exigir(estado == 200 and evaluada["resultado"] == "APROBADO", f"Evaluación del expediente de SOL: {estado} {evaluada}")
+    # CR-INT-03: EVALUACION entrega el resultado a SOL por el Bus en su próximo ciclo.
+    limite_espera, recibido = time.monotonic() + 45, []
+    while not recibido and time.monotonic() < limite_espera:
+        recibido = coredb("GET", f"/coredb/auditoria?id_entidad={id_sol}&accion=RECIBIR_CR_INT_03", 200, token=token)
+        if not recibido:
+            time.sleep(2)
+    exigir(len(recibido) == 1 and recibido[0]["modulo"] == "SOLICITUD DE CREDITO"
+           and recibido[0]["detalle"]["decision"] == "APROBADO",
+           f"El resultado (CR-INT-03) debía llegar a SOL y quedar en la bitácora: {recibido}")
+    enviado = coredb("GET", f"/coredb/auditoria?id_entidad={id_sol}&accion=ENVIAR_CR_INT_02", 200, token=token)
+    exigir(len(enviado) == 1 and enviado[0]["actor"] == asesora,
+           f"El envío debía quedar en la bitácora a nombre de la asesora: {enviado}")
+    estado, final, _ = pedir_navegador("GET", f"applications/{id_sol}", cookie=sesion)
+    exigir(estado == 200 and final["estado"] == "APROBADA" and final["resultados"][0]["decision"] == "APROBADO",
+           f"SOL debía mostrar la solicitud APROBADA desde COREDB: {estado} {final}")
+    estado, respuesta, galleta = pedir_navegador("POST", "auth/logout", {}, cookie=sesion)
+    exigir(estado == 200 and "bna_sol_session=;" in galleta.replace(" ", ""),
+           f"Cierre de sesión de SOL por el proxy (borra la cookie): {estado} {respuesta}")
+    paso(f"SOL: la asesora {asesora} (usuario de COREDB) entra por el proxy del frontend (otro origen, 403; cookie "
+         "HttpOnly), busca en CAPTACION por el cuerpo, guarda y edita el borrador en COREDB (repetir la edición, 200; revisión vieja, 409), "
+         "lo envía a EVALUACION por el Bus (reenvío reconocido); evaluado APROBADO, el resultado vuelve a SOL "
+         "(CR-INT-03) y queda en la bitácora con el envío de la asesora")
 
     # ── Retención vencida: la del cajero que cayó se libera y ya no se confirma ──
     # El plazo de la base es de 15 minutos; el operador libera con 1 para no esperarlo.
@@ -1141,6 +1196,6 @@ if __name__ == "__main__":
     print("Flujo completo.")
     destino = os.environ.get("E2E_SENSIBLES")
     if destino:
-        SENSIBLES.update(v for v in (TOKEN_BUS, TOKEN_SOL, PASSWORD, SOL_PASSWORD, TOKEN_SOL_EVALUACION) if v)
+        SENSIBLES.update(v for v in (TOKEN_BUS, TOKEN_SOL, PASSWORD, TOKEN_SOL_EVALUACION) if v)
         with open(destino, "w", encoding="utf-8") as archivo:
             archivo.write("\n".join(sorted(SENSIBLES)) + "\n")

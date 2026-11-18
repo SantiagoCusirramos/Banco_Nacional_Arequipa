@@ -75,7 +75,6 @@ next-env.d.ts
 !.env.example
 
 # Laboratorio SOL: las plantillas se versionan; claves y venv no.
-backend/.env.sol
 backend/.venv-sol/
 
 # ── Docker ──────────────────────────────────────────────────

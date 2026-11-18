@@ -86,7 +86,7 @@ Con el producto, desde la raíz del repositorio:
 COMPOSE_PROFILES=legado ./bna up     # queda en http://127.0.0.1:8000/docs
 ```
 
-Usa el esquema `bna` del servicio `db-aux`, que se carga desde
+Usa el esquema `bna` del servicio `db-legado` (perfil `legado`), que se carga desde
 `99_bna_unificado.sql`. Ese script trae cinco usuarios de ejemplo, uno por rol,
 con sus contraseñas a la vista en el propio archivo (tabla `usuario_sistema`):
 sirven para probar en local y nada más.
@@ -137,7 +137,7 @@ montaje de la app.
 `test_real_mysql.py` (autenticación) y `test_creditos_mysql.py` (ciclo de
 crédito por HTTP: ENUM y NOT NULL que SQLite no aplica, issue #19). Se omiten
 salvo que `BNA_INTEGRACION_MYSQL=1`. `CORE/scripts/pruebas_integracion.sh`
-levanta solo `db-aux` en un proyecto propio con claves nuevas, las corre en la
+levanta solo `db-legado` en un proyecto propio con claves nuevas, las corre en la
 imagen `bna/backend:local` y lo elimina todo al terminar; `./bna test` lo
 ejecuta como suite "CORE legado contra MySQL".
 

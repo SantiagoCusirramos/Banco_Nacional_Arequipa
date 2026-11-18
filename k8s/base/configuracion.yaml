@@ -9,11 +9,6 @@ data:
   CORE_DB_APP_USER: bna_app_user
   # COREDB, a través del Bus (fase 2): ningún módulo tiene la dirección directa.
   CORE_BASE_URL: http://bus:8018/bus/coredb
-  SOL_DB_HOST: db-aux
-  SOL_DB_PORT: "3306"
-  SOL_DB_USER: sol_user
-  SOL_DB_NAME: bna_sol_mvp
-  SOL_INTEGRATION_MODE: SIMULADO
   CAP_CORE_USUARIO: svc-captacion
   CAP_OTP_SIMULADO: "true"
   # Evaluación, Desembolso y el frontend: COREDB, también a través del Bus.
@@ -21,7 +16,7 @@ data:
   # Puentes del frontend: todos por el Bus.
   CUENTAS_GATEWAY_URL: http://bus:8018/bus/cuentas/api/v1/cuentas
   TARJETAS_GATEWAY_URL: http://bus:8018/bus/tarjetas/api/v1/tarjetas
-  SOL_GATEWAY_URL: http://bus:8018/bus/sol/gateway/sol
+  SOL_GATEWAY_URL: http://bus:8018/bus/sol/sol
   EVALUACION_GATEWAY_URL: http://bus:8018/bus/evaluacion/eva/v1
   DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
   CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
@@ -47,4 +42,4 @@ data:
   BUS_URL_SEGURIDAD: http://seguridad:8013
   BUS_URL_ATM: http://atm:8019
   BUS_URL_BILLETERA: http://billetera:3000
-  BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA,SEGURIDAD
+  BUS_CONSUMIDORES: FRONTEND,PRUEBAS,CUENTAS,TARJETAS,CAPTACION,EVALUACION,DESEMBOLSO,COBRANZA,ATM,BILLETERA,SEGURIDAD,SOL

@@ -132,6 +132,20 @@ spec:
               valueFrom: { secretKeyRef: { name: bna-secretos, key: SEGURIDAD_COREDB_SECRETO } }
           resources: *recursos-arranque
           securityContext: *contenedor-seguro
+        # Crea o alinea el usuario de servicio de SOL (módulo SOLICITUD DE CREDITO).
+        - name: servicio-sol
+          image: bna/coredb:local
+          command: [python, -m, COREDB.scripts.crear_servicio, --modulo, SOLICITUD DE CREDITO, --username, svc-sol,
+                    --nombre, Solicitud de Crédito]
+          envFrom:
+            - configMapRef: { name: bna-configuracion }
+          env:
+            - name: CORE_DB_APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: CORE_DB_APP_PASSWORD } }
+            - name: CORE_DB_SERVICIO_SECRETO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: SOL_COREDB_SECRETO } }
+          resources: *recursos-arranque
+          securityContext: *contenedor-seguro
       containers:
         - name: coredb
           image: bna/coredb:local

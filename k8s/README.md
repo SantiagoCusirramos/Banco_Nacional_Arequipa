@@ -4,7 +4,7 @@ Manifiestos del producto integrado, con [kustomize](https://kustomize.io/).
 
 | Carpeta | Qué contiene |
 |---|---|
-| `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `db-aux`, `coredb`, `cuentas`, `tarjetas`, `sol`, `evaluacion`, `desembolso`, `cobranza`, `captacion`, `seguridad`, `atm`, `billetera`, `bus` (Bus de Servicios) y `frontend`. Dos ConfigMap: `bna-configuracion` (las direcciones que usan los módulos, todas hacia el Bus) y `bna-bus` (las direcciones directas de los módulos, que solo lee el Bus) |
+| `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `coredb`, `cuentas`, `tarjetas`, `sol`, `evaluacion`, `desembolso`, `cobranza`, `captacion`, `seguridad`, `atm`, `billetera`, `bus` (Bus de Servicios) y `frontend`. Dos ConfigMap: `bna-configuracion` (las direcciones que usan los módulos, todas hacia el Bus) y `bna-bus` (las direcciones directas de los módulos, que solo lee el Bus) |
 | `overlays/local/` | Ajustes para un clúster local de [kind](https://kind.sigs.k8s.io/): las imágenes cargadas en el clúster y, como NodePort, el frontend, el Bus, COREDB, CUENTAS, TARJETAS, SOL, Evaluación, Desembolso, CAPTACION y Seguridad. Las bases, COBRANZA, ATM y BILLETERA quedan solo dentro del clúster |
 | `kind-config.yaml` | El clúster local, que publica esos NodePort en `127.0.0.1` |
 
