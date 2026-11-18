@@ -79,6 +79,9 @@ RUTAS_CREDITO = {
     ("GET", "/coredb/creditos/{cod_credito}/cuotas/{numero_cuota}/mora"): "CONSULTAR_DEUDA",
     ("POST", "/coredb/creditos/vencimientos"): "REGISTRAR_MORA",
     ("GET", "/coredb/creditos/conciliacion/pagos"): "GENERAR_REPORTES",
+    ("GET", "/coredb/creditos/solicitudes/conteo"): "VER_CREDITO",
+    ("POST", "/coredb/creditos/borradores"): "CREAR_SOLICITUD_CREDITO",
+    ("PUT", "/coredb/creditos/borradores/{id_solicitud}"): "CREAR_SOLICITUD_CREDITO",
 }
 
 
