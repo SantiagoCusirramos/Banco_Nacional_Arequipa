@@ -1,5 +1,7 @@
 # E03 — Captación HTTP, CR-INT-01 y límites COREDB
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 Fecha: 2026-11-14, America/Lima. Rama `feature/integracion-sol`. HEAD base `86904edd8dc866c1d4260a996748a1cda3770007` más cambios locales E02/E03, sin commit/push. Se preservó E02 y se reutilizó su entorno temporal. Referencias: [contratos E01](sol-contratos-finalizacion.md), [funcionalidades E02](sol-funcionalidades-internas.md), [matriz RF](sol-matriz-rf.md), [transporte v2](CONTRATOS_HTTP_V2.md), [changelog](change-log.md).
 
 ## Resultado

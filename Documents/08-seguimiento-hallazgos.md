@@ -1,5 +1,7 @@
 # Seguimiento de hallazgos — CORE (Informe de Errores BNA)
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 **Responsable:** Sebastian Alberto Monteagudo Miranda
 **Actualizado:** 2026-11-01 (Ronda 3)
 **Estado revisado:** 2026-11-11, sin ronda nueva: solo los cambios de estado de la sección 5

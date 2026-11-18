@@ -1,5 +1,7 @@
 # Pruebas manuales con Swagger — CORE
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 **Responsable:** Sebastian Alberto Monteagudo Miranda
 **Fecha:** pendiente (completar al ejecutar)
 **Entorno:** `uvicorn main:app --reload` · `http://localhost:8000/docs` · BD `bna` cargada con `99_bna_unificado.sql`

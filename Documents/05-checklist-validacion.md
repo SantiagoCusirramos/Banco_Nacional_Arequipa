@@ -1,5 +1,7 @@
 # Checklist de validación — CORE
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 **Responsable:** Sebastian Alberto Monteagudo Miranda
 **Base:** `REPORTE_ERRORES_BUGS_CORE_Y_ARQUITECTURA.md` (sección 7) e Informe de Errores BNA
 **Marcar:** `[x]` validado · `[ ]` pendiente · `[!]` falla (anotar abajo)

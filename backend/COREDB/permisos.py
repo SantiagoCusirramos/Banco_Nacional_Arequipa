@@ -1,9 +1,9 @@
 """Permisos por rol de COREDB: un mapa versionado y de solo lectura.
 
-Los cinco roles de personas se copiaron de CORE/data/rbac.json en a9bd70f. A
-diferencia de CORE, la API nunca escribe este mapa: un cambio de permisos es un
-cambio de código, revisado en un PR. Los usuarios de servicio se identifican por
-`SERVICIO:<módulo>`.
+Los cinco roles de personas se copiaron de CORE/data/rbac.json en a9bd70f (el CORE
+legado, eliminado en #125). A diferencia de aquel, la API nunca escribe este mapa:
+un cambio de permisos es un cambio de código, revisado en un PR. Los usuarios de
+servicio se identifican por `SERVICIO:<módulo>`.
 """
 
 from COREDB.auth_tipos import Actor

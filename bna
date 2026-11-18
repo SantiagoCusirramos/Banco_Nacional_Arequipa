@@ -33,17 +33,14 @@ En Kubernetes, sobre un clúster local de kind (requiere kind y kubectl):
   k8s-down        Elimina el clúster y la red de Docker `kind`, si nada más la usa
 
 Con make: `make up`, `make test`, etc.
-
-El CORE legado no se levanta por omisión. Para incluirlo:
-  COMPOSE_PROFILES=legado ./bna up     (queda en http://127.0.0.1:8000/docs)
 TEXTO
 }
 
 compose() { docker compose "$@"; }
 
-# down con el perfil legado activo: sin él, Compose deja en marcha el CORE legado
-# que se haya levantado antes, y con él la red.
-bajar() { COMPOSE_PROFILES="${COMPOSE_PROFILES:+$COMPOSE_PROFILES,}legado" compose down "$@"; }
+# --remove-orphans: también baja los contenedores de servicios que ya no están en
+# compose.yaml (el CORE legado y su base, eliminados en #125, en una instalación anterior).
+bajar() { compose down --remove-orphans "$@"; }
 
 # Valor de una variable: el del entorno si está definida; si no, el de .env.
 valor() {

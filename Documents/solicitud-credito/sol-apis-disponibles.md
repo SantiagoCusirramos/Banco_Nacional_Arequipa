@@ -1,5 +1,7 @@
 # APIs disponibles para integrar SOL con Captación y Evaluación
 
+> **Registro histórico.** El CORE legado (`backend/CORE`, su esquema `bna` en `backend/Infraestructura - BD/` y el perfil `legado` de compose) se eliminó en #125. Las rutas, archivos y servicios del CORE legado que se citan aquí ya no existen en `main`; quedan en el historial de git.
+
 Fecha de revisión: 14/11/2026.
 
 ## Dictamen

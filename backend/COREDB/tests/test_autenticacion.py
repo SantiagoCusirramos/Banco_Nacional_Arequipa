@@ -84,7 +84,7 @@ def test_claims_obligatorios(cambio):
 
 
 def test_un_token_de_core_no_sirve():
-    """CORE firma con su SECRET_KEY y emisor bna-core, sin audiencia."""
+    """Un token con la forma de los del CORE legado (eliminado en #125): emisor bna-core, sin audiencia."""
     ahora = int(time.time())
     token_core = jwt.encode(
         {"sub": str(uuid.uuid4()), "username": "ana", "rol": "ASESOR", "type": "access",

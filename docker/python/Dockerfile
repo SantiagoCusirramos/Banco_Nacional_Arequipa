@@ -18,7 +18,4 @@ RUN pip install --no-cache-dir -r /tmp/requisitos.txt \
 
 # backend/.dockerignore deja fuera los .env.
 COPY . .
-# El CORE legado guarda su catálogo de permisos en CORE/data/rbac.json y lo
-# reescribe al asignar un permiso: es lo único del código que el servicio puede escribir.
-RUN chown -R bna:bna CORE/data
 USER bna
