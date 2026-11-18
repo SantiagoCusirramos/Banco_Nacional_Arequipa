@@ -1,3 +1,9 @@
+billetera.v_afiliacion_api
+billetera.v_comercio_api
+billetera.v_notificacion_api
+billetera.v_operacion_api
+billetera.v_qr_api
+billetera.v_solicitud_api
 clientes.v_caso_captacion_api
 clientes.v_consentimiento_captacion_api
 clientes.v_consulta_riesgo_captacion_api
