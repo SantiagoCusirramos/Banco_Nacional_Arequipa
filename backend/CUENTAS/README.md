@@ -74,7 +74,7 @@ cd backend
 uvicorn CUENTAS.main:app --port 8001
 ```
 
-Variables: `CORE_BASE_URL` (por defecto http://localhost:8012, la API COREDB), `CORE_TIMEOUT_SECONDS` (5) y `CORS_ORIGINS` (por defecto http://localhost:3000,http://127.0.0.1:3000).
+Variables: `CORE_BASE_URL` (por defecto http://localhost:8018/bus/coredb: COREDB a través del Bus de Servicios), `BUS_TOKEN` (credencial de CUENTAS ante el Bus; en el producto, `BUS_TOKEN_CUENTAS`), `CORE_TIMEOUT_SECONDS` (5) y `CORS_ORIGINS` (por defecto http://localhost:3000,http://127.0.0.1:3000).
 
 ## Probar en Swagger (/docs)
 

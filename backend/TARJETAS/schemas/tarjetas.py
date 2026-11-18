@@ -91,6 +91,17 @@ class ExtornoIn(_Entrada):
     motivo: str = Field(min_length=3, max_length=255)
 
 
+class ConfirmacionIn(_Entrada):
+    id_canal: str | None = Field(default=None, min_length=1, max_length=5)
+    id_terminal: str | None = Field(default=None, min_length=1, max_length=30)
+
+    @model_validator(mode="after")
+    def _canal_o_terminal(self):
+        if self.id_canal is None and self.id_terminal is None:
+            raise ValueError("Se indica id_canal o id_terminal (o ambos)")
+        return self
+
+
 def _solo_digitos(valor: SecretStr) -> SecretStr:
     # COREDB exige 4 dígitos al PIN y 6 a la clave web (RN-TAR-001). El error no repite el valor.
     if not re.fullmatch(r"[0-9]{4,6}", valor.get_secret_value()):
@@ -122,6 +133,7 @@ class AutorizacionOut(BaseModel):
     estado_autorizacion: str
     codigo_respuesta: str | None
     motivo_rechazo: str | None
+    uuid_transaccion: str | None = None
 
     @computed_field
     @property

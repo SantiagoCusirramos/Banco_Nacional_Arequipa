@@ -3,3 +3,4 @@
 /compose.yaml text eol=lf
 /docker/** text eol=lf
 /scripts/** text eol=lf
+/.env.example text eol=lf

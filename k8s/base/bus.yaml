@@ -1,0 +1,77 @@
+# Bus de Servicios: los canales llegan a los módulos, y los módulos a COREDB, a través de él.
+# /bus/<módulo>/<ruta> se reenvía al módulo sin tocar cabeceras, cuerpo ni códigos. Las
+# direcciones de los módulos (BUS_URL_*) y la lista de consumidores salen del ConfigMap
+# bna-bus, que solo lee el Bus; sus credenciales, del Secret. Sin ellas no arranca.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bus
+  labels: { app.kubernetes.io/name: bus }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: bus }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: bus }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: bus
+          image: bna/backend:local
+          command: [uvicorn, BUS_SERVICIOS.main:app, --host, 0.0.0.0, --port, "8018"]
+          envFrom:
+            - configMapRef: { name: bna-bus }
+          env:
+            - name: BUS_TOKEN_FRONTEND
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_FRONTEND } }
+            - name: BUS_TOKEN_PRUEBAS
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_PRUEBAS } }
+            - name: BUS_TOKEN_CUENTAS
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_CUENTAS } }
+            - name: BUS_TOKEN_TARJETAS
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_TARJETAS } }
+            - name: BUS_TOKEN_CAPTACION
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_CAPTACION } }
+            - name: BUS_TOKEN_EVALUACION
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_EVALUACION } }
+            - name: BUS_TOKEN_DESEMBOLSO
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_DESEMBOLSO } }
+            - name: BUS_TOKEN_COBRANZA
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_COBRANZA } }
+            - name: BUS_TOKEN_ATM
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_ATM } }
+          ports:
+            - { name: http, containerPort: 8018 }
+          # /salud solo dice que el Bus atiende: no depende de los módulos.
+          startupProbe:
+            httpGet: { path: /salud, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: { path: /salud, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /salud, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bus
+spec:
+  selector: { app.kubernetes.io/name: bus }
+  ports:
+    - { name: http, port: 8018, targetPort: http }

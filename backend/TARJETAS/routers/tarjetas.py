@@ -6,7 +6,7 @@ from TARJETAS.core_client import CoreClient
 from TARJETAS.dependencies import autorizacion, correlation_id, get_core_client, idempotency_key
 from TARJETAS.respuestas import exito
 from TARJETAS.schemas.tarjetas import (
-    AutorizacionIn, AutorizacionOut, BloqueoIn, CredencialIn, EmisionIn, EstadoIn, ExtornoIn, TarjetaOut,
+    AutorizacionIn, AutorizacionOut, BloqueoIn, ConfirmacionIn, CredencialIn, EmisionIn, EstadoIn, ExtornoIn, TarjetaOut,
     TipoCredencial, ValidacionIn, ValidacionOut,
 )
 from TARJETAS.services import tarjetas as svc
@@ -47,6 +47,8 @@ def _autorizacion(autorizacion: dict) -> dict:
 def _mensaje_autorizacion(autorizacion: dict) -> str:
     if autorizacion["estado_autorizacion"] == "AUTORIZADA":
         return "Operación autorizada"
+    if autorizacion["estado_autorizacion"] == "DISPENSADA":
+        return "Operación confirmada"
     if autorizacion["estado_autorizacion"] == "EXTORNADA":
         return "Operación extornada"
     return f"Operación rechazada (código {autorizacion['codigo_respuesta']})"
@@ -63,6 +65,18 @@ def extornar(request: Request, uuid_autorizacion: str, datos: ExtornoIn, core: C
              cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
     """Libera el saldo retenido y el tope del día (RN-ATM-003). Repetirlo responde lo mismo."""
     resultado = _autorizacion(svc.extornar(core, uuid_autorizacion, datos, cid, token))
+    return exito(request, resultado, message=_mensaje_autorizacion(resultado))
+
+
+@router.post("/autorizaciones/{uuid_autorizacion}/confirmacion")
+def confirmar(request: Request, uuid_autorizacion: str, datos: ConfirmacionIn, core: CoreClient = Depends(get_core_client),
+              cid: str = Depends(correlation_id), token: str = Depends(autorizacion),
+              key: str = Depends(idempotency_key)):
+    """Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.
+    La llave de idempotencia (X-Idempotency-Key, UUIDv4) es obligatoria; repetirla devuelve
+    el mismo resultado sin segundo débito. La huella la calcula COREDB. El canal o terminal
+    deben coincidir con la autorización."""
+    resultado = _autorizacion(svc.confirmar_autorizacion(core, uuid_autorizacion, datos, cid, token, key))
     return exito(request, resultado, message=_mensaje_autorizacion(resultado))
 
 

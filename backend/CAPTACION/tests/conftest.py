@@ -14,6 +14,8 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 COREDB = os.environ.get("CAPTACION_TEST_COREDB", "").strip()
+# COREDB está detrás del Bus (fase 2): CAPTACION presenta su credencial y las pruebas, la suya.
+BUS_TOKEN_PRUEBAS = os.environ.get("CAPTACION_TEST_BUS_TOKEN_PRUEBAS", "").strip()
 ADMIN_USUARIO = os.environ.get("CAPTACION_TEST_ADMIN_USUARIO", "admin")
 ADMIN_PASSWORD = os.environ.get("CAPTACION_TEST_ADMIN_PASSWORD", "")
 TOKEN_SOL = "token-de-sol-para-pruebas-" + secrets.token_hex(16)
@@ -26,6 +28,7 @@ os.environ.update({
     "CAP_CORE_USUARIO": os.environ.get("CAPTACION_TEST_SERVICIO_USUARIO", "svc-captacion"),
     "CAP_CORE_SECRETO": os.environ.get("CAPTACION_TEST_SERVICIO_SECRETO", ""),
     "CORE_BASE_URL": COREDB or "http://coredb.prueba",
+    "BUS_TOKEN": os.environ.get("CAPTACION_TEST_BUS_TOKEN", ""),
 })
 
 import httpx  # noqa: E402
@@ -44,6 +47,8 @@ CLAVE = "clave-de-una-persona-1"
 def coredb(metodo: str, ruta: str, token: str | None = None, esperado: int | None = None, **opciones):
     """COREDB real, por HTTP."""
     cabeceras = {"Authorization": f"Bearer {token}"} if token else {}
+    if BUS_TOKEN_PRUEBAS:
+        cabeceras["X-Bus-Token"] = BUS_TOKEN_PRUEBAS
     r = httpx.request(metodo, COREDB + ruta, headers=cabeceras, timeout=15, **opciones)
     if esperado is not None:
         assert r.status_code == esperado, f"{metodo} {ruta}: {r.status_code} {r.text}"

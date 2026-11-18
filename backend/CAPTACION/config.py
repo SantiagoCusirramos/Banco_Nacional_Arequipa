@@ -23,8 +23,10 @@ def _logico(nombre: str) -> bool:
 
 @dataclass
 class Settings:
-    # COREDB, la única entrada a la base integrada.
-    core_base_url: str = field(default_factory=lambda: _texto("CORE_BASE_URL", "http://localhost:8012"))
+    # COREDB, la única entrada a la base integrada, a través del Bus de Servicios (fase 2).
+    core_base_url: str = field(default_factory=lambda: _texto("CORE_BASE_URL", "http://localhost:8018/bus/coredb"))
+    # Credencial de CAPTACION ante el Bus (X-Bus-Token). Sin valor por omisión.
+    bus_token: str = field(default_factory=lambda: _texto("BUS_TOKEN"))
     core_timeout_seconds: float = field(default_factory=lambda: float(_texto("CORE_TIMEOUT_SECONDS", "5")))
     # Usuario de servicio de CAPTACION en COREDB (módulo CLIENTES). Lo crea el arranque de
     # COREDB (coredb-init, o el contenedor de arranque en Kubernetes) con este secreto.

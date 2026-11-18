@@ -25,6 +25,9 @@ from EVALUACION.main import Contexto
 from EVALUACION.scripts.enviar_expediente_demo import sobre_de_sol
 
 COREDB = os.environ.get("EVALUACION_TEST_COREDB", "").strip()
+# COREDB está detrás del Bus (fase 2): el módulo presenta su credencial y las pruebas, la suya.
+BUS_TOKEN = os.environ.get("EVALUACION_TEST_BUS_TOKEN", "").strip()
+BUS_TOKEN_PRUEBAS = os.environ.get("EVALUACION_TEST_BUS_TOKEN_PRUEBAS", "").strip()
 ADMIN_USUARIO = os.environ.get("EVALUACION_TEST_ADMIN_USUARIO", "admin")
 ADMIN_PASSWORD = os.environ.get("EVALUACION_TEST_ADMIN_PASSWORD", "")
 SERVICIO_USUARIO = os.environ.get("EVALUACION_TEST_SERVICIO_USUARIO", "svc-evaluacion")
@@ -54,7 +57,7 @@ class SolFalso:
 
 
 def config(**cambios) -> Config:
-    valores = {"servicio_secreto": SERVICIO_SECRETO, "servicio_usuario": SERVICIO_USUARIO, "coredb_url": COREDB,
+    valores = {"servicio_secreto": SERVICIO_SECRETO, "servicio_usuario": SERVICIO_USUARIO, "coredb_url": COREDB, "bus_token": BUS_TOKEN,
                "token_sol": TOKEN_SOL, "sol_url": URL_SOL, "sol_token_resultados": TOKEN_RESULTADOS,
                "envio_intervalo_seg": 0, "sesion_cache_seg": 0}
     c = Config(**{**valores, **cambios})
@@ -72,7 +75,10 @@ def cabeceras(token: str) -> dict:
 
 # ------------------------------------------------------------------ COREDB real
 def coredb(metodo: str, ruta: str, token: str | None = None, esperado: int | None = None, **opciones):
-    r = httpx.request(metodo, COREDB + ruta, headers=cabeceras(token) if token else {}, timeout=15, **opciones)
+    encabezados = cabeceras(token) if token else {}
+    if BUS_TOKEN_PRUEBAS:
+        encabezados["X-Bus-Token"] = BUS_TOKEN_PRUEBAS
+    r = httpx.request(metodo, COREDB + ruta, headers=encabezados, timeout=15, **opciones)
     if esperado is not None:
         assert r.status_code == esperado, f"{metodo} {ruta}: {r.status_code} {r.text}"
     return r

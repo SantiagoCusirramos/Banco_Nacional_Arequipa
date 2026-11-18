@@ -6,11 +6,14 @@ from TARJETAS.exceptions import TarjetasError
 
 class CoreClient:
     def __init__(self, base_url: str | None = None, timeout: float | None = None,
-                 transport: httpx.BaseTransport | None = None):
+                 transport: httpx.BaseTransport | None = None, bus_token: str | None = None):
+        token = settings.bus_token if bus_token is None else bus_token
         self._http = httpx.Client(
             base_url=base_url or settings.core_base_url,
             timeout=timeout or settings.core_timeout_seconds,
             transport=transport,
+            # Credencial ante el Bus en cada llamada; el Bus no la reenvía a COREDB.
+            headers={"X-Bus-Token": token} if token else None,
         )
 
     def close(self) -> None:
@@ -20,12 +23,15 @@ class CoreClient:
                  params: dict | None = None,
                  correlation_id: str | None = None,
                  authorization: str | None = None,
-                 sin_cuerpo: bool = False):
+                 sin_cuerpo: bool = False,
+                 extra_headers: dict | None = None):
         headers = {}
         if authorization:
             headers["Authorization"] = authorization
         if correlation_id:
             headers["X-Correlation-ID"] = correlation_id
+        if extra_headers:
+            headers.update(extra_headers)
         try:
             resp = self._http.request(method, path, json=json, params=params, headers=headers)
         except httpx.ConnectError:
@@ -90,6 +96,12 @@ class CoreClient:
                  authorization: str | None = None):
         return self._request("POST", f"/coredb/autorizaciones/{uuid_autorizacion}/extorno", json=payload,
                              correlation_id=correlation_id, authorization=authorization)
+
+    def confirmar_autorizacion(self, uuid_autorizacion: str, payload: dict, correlation_id: str | None = None,
+                               authorization: str | None = None, idempotency_key: str | None = None):
+        extra_headers = {"X-Idempotency-Key": idempotency_key} if idempotency_key else None
+        return self._request("POST", f"/coredb/autorizaciones/{uuid_autorizacion}/confirmacion", json=payload,
+                             correlation_id=correlation_id, authorization=authorization, extra_headers=extra_headers)
 
     def registrar_credencial(self, id_tarjeta: str, tipo: str, payload: dict,
                              correlation_id: str | None = None, authorization: str | None = None):

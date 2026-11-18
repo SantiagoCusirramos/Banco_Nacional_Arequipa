@@ -106,6 +106,7 @@ resumen() {
 
   Frontend          http://localhost:$(valor BNA_PUERTO_FRONTEND)
   Solicitud crédito http://localhost:$(valor BNA_PUERTO_FRONTEND)/solicitud-credito
+  Bus de Servicios  http://127.0.0.1:$(valor BNA_PUERTO_BUS)/docs
   COREDB (API)      http://127.0.0.1:$(valor BNA_PUERTO_COREDB)/docs
   CUENTAS           http://127.0.0.1:$(valor BNA_PUERTO_CUENTAS)/docs
   TARJETAS          http://127.0.0.1:$(valor BNA_PUERTO_TARJETAS)/docs
@@ -135,13 +136,16 @@ levantar() {
 
 humo() {
   [ -f .env ] || { echo "No hay .env: ejecute primero ./bna up" >&2; exit 1; }
+  # Corre en el contenedor del Bus: llega a los módulos por el Bus y al frontend por la red `canales`.
   compose exec -T \
+    -e E2E_BUS=http://127.0.0.1:8018 \
+    -e BUS_TOKEN="$(valor BUS_TOKEN_PRUEBAS)" \
     -e BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
     -e BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
     -e SOL_INITIAL_PASSWORD="$(valor SOL_INITIAL_PASSWORD)" \
     -e EVALUACION_TOKEN_SOL="$(valor EVALUACION_TOKEN_SOL)" \
     -e CAP_SOL_TOKEN="$(valor CAP_SOL_TOKEN)" \
-    coredb python - < scripts/flujo_e2e.py
+    bus python - < scripts/flujo_e2e.py
 }
 
 orden="${1:-help}"

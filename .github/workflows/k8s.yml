@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - k8s/**
+      - backend/BUS_SERVICIOS/**
       - docker/**
       - database/**
       - compose.yaml

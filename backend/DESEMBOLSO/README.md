@@ -66,7 +66,8 @@ permiso y la bitácora de la orden registra al operador. El usuario de servicio 
 |---|---|
 | `DESEMBOLSO_COREDB_SECRETO` | Secreto de `svc-desembolso`. En el producto lo crea `coredb-init` con `COREDB.scripts.crear_servicio` |
 | `DESEMBOLSO_COREDB_USUARIO` | `svc-desembolso` por omisión |
-| `COREDB_URL` | `http://coredb:8012` en compose |
+| `COREDB_URL` | COREDB, a través del Bus: `http://bus:8018/bus/coredb` en compose y k8s |
+| `BUS_TOKEN` | Credencial del módulo ante el Bus (`X-Bus-Token`; en el producto, `BUS_TOKEN_DESEMBOLSO`) |
 
 ## Ejecutar y probar
 

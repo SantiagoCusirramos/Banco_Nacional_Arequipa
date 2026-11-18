@@ -4,6 +4,7 @@
  * En esta entrega el gateway es SIMULADO y ejecuta SOL sobre su BD local.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { credencialBus } from "@/lib/proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,6 +78,7 @@ async function proxy(
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const operation = request.headers.get("X-Idempotency-Key");
   if (operation) headers.set("X-Idempotency-Key", operation);
+  credencialBus(headers);
   try {
     const upstream = await fetch(
       `${base.replace(/\/$/, "")}/${route}${request.nextUrl.search}`,

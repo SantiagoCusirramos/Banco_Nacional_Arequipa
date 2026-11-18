@@ -1,16 +1,18 @@
-"""Autorizaciones de operaciones con tarjeta y su extorno (bd-v1.5).
+"""Autorizaciones de operaciones con tarjeta, su extorno y confirmación (bd-v1.8).
 
 Las reglas (tarjeta operativa y vigente, canal, saldo, tope diario, cajero) las aplica la
 base. Una regla que no se cumple no es un error de la petición: la autorización queda
 RECHAZADA con su código de respuesta y se devuelve con 201, como la aprobada.
 """
 
+import hashlib
 import ipaddress
+import json
 import uuid
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
@@ -23,6 +25,21 @@ from COREDB.transacciones import con_reintentos
 router = APIRouter(prefix="/coredb/autorizaciones", tags=["tarjetas"])
 
 Monto = Annotated[Decimal, Field(gt=0, max_digits=15, decimal_places=2)]
+
+
+def _huella_confirmacion(
+    uuid_autorizacion: uuid.UUID, id_canal: str | None, id_terminal: str | None
+) -> str:
+    """Calcula la huella SHA-256 de los parámetros de la confirmación para idempotencia fuerte.
+    Igual que movimientos._huella: JSON ordenado de los parámetros determinísticos."""
+    parametros = {
+        "uuid_autorizacion": str(uuid_autorizacion),
+        "id_canal": id_canal,
+        "id_terminal": id_terminal,
+    }
+    return hashlib.sha256(
+        json.dumps(parametros, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
 
 
 class AutorizacionRegistrar(BaseModel):
@@ -50,6 +67,19 @@ class ExtornoRegistrar(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     motivo: str = Field(min_length=1, max_length=255)
+
+
+class ConfirmacionRegistrar(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id_canal: str | None = Field(default=None, min_length=1, max_length=5)
+    id_terminal: str | None = Field(default=None, min_length=1, max_length=30)
+
+    @model_validator(mode="after")
+    def _canal_o_terminal(self):
+        if self.id_canal is None and self.id_terminal is None:
+            raise ValueError("Se indica el canal o la terminal (o ambos).")
+        return self
 
 
 class AutorizacionRespuesta(BaseModel):
@@ -139,5 +169,35 @@ def extornar(
             salidas=1,
         ),
         nombre="extornar_autorizacion",
+    )
+    return _obtener(db, uuid_autorizacion)
+
+
+@router.post("/{uuid_autorizacion}/confirmacion", response_model=AutorizacionRespuesta,
+              responses={404: {"description": "BNA-AUTORIZACION"},
+                         409: {"description": "BNA-CONFIRMACION, BNA-IDEMPOTENCIA"},
+                         422: {"description": "BNA-CONFIRMACION"}})
+def confirmar(
+    uuid_autorizacion: uuid.UUID,
+    datos: ConfirmacionRegistrar,
+    llave_idempotencia: uuid.UUID = Header(alias="X-Idempotency-Key"),
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("REGISTRAR_MOVIMIENTO")),
+):
+    """Confirma una autorización retenida: registra el movimiento real y pasa a DISPENSADA.
+    La llave de idempotencia (X-Idempotency-Key, UUID) es obligatoria; repetirla devuelve
+    el mismo resultado sin segundo débito. La huella se calcula en el servidor a partir
+    de uuid_autorizacion, id_canal e id_terminal. El canal o terminal deben coincidir
+    con la autorización."""
+    huella = _huella_confirmacion(uuid_autorizacion, datos.id_canal, datos.id_terminal)
+    con_reintentos(
+        db,
+        lambda: llamar(
+            db, "tarjetas.confirmar_autorizacion",
+            uuid_autorizacion, str(llave_idempotencia), huella, actor.usuario,
+            datos.id_canal, datos.id_terminal,
+            salidas=2,
+        ),
+        nombre="confirmar_autorizacion",
     )
     return _obtener(db, uuid_autorizacion)

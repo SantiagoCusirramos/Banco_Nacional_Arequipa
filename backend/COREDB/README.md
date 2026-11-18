@@ -154,6 +154,7 @@ Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica 
 | `POST /coredb/autorizaciones` | `REGISTRAR_MOVIMIENTO` | Autoriza una operación con tarjeta o registra su rechazo |
 | `GET /coredb/autorizaciones/{uuid_autorizacion}` | `VER_TARJETA` | Una autorización |
 | `POST /coredb/autorizaciones/{uuid_autorizacion}/extorno` | `REGISTRAR_MOVIMIENTO` | Extorna una autorización sin movimiento |
+| `POST /coredb/autorizaciones/{uuid_autorizacion}/confirmacion` | `REGISTRAR_MOVIMIENTO` | Confirma una autorización retenida: registra el movimiento real |
 | `PUT /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}` | `CREAR_TARJETA` | Asigna o cambia el `PIN_ATM` o la `CLAVE_WEB` |
 | `POST /coredb/tarjetas/{id_tarjeta}/credenciales/{tipo}/validacion` | `REGISTRAR_MOVIMIENTO` | Valida el PIN o la clave web |
 
@@ -166,6 +167,13 @@ Desde `bd-v1.5-mysql`, por los procedimientos de la base; las reglas las aplica 
   de los dos.
 - El extorno libera el saldo retenido y el tope del día. Repetirlo responde lo mismo; una
   autorización rechazada o ya contabilizada responde 409 `BNA-EXTORNO`.
+- **La confirmación** convierte una autorización `AUTORIZADA` o `DISPENSADA` sin movimiento
+  en el débito real: registra el movimiento con el mismo `uuid_autorizacion`, pasa la
+  autorización a `DISPENSADA` y libera la retención (el saldo contable ya bajó). Exige
+  `X-Idempotency-Key` y su huella SHA-256 hex (64 caracteres). Repetir con la misma llave
+  devuelve el mismo resultado sin segundo débito; repetir con otra llave falla (ya no está
+  en estado vigente). El canal o terminal deben coincidir con la autorización. Una
+  autorización extornada o rechazada responde 409 `BNA-CONFIRMACION`.
 - Un PIN equivocado responde 200 con `FALLIDO` y los intentos que quedan; el tercero
   seguido bloquea la tarjeta. Con la tarjeta no operativa responde 422 `ERR-TAR-003` sin
   registrar el intento. El valor no se devuelve, no se registra y no aparece en los errores.

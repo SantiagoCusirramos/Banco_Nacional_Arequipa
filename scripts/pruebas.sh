@@ -61,6 +61,12 @@ correr "CORE legado contra MySQL" \
   env CORE_IMAGEN_PRUEBAS=bna/backend:local backend/CORE/scripts/pruebas_integracion.sh
 correr "CUENTAS" en_backend CUENTAS/tests
 correr "TARJETAS" en_backend TARJETAS/tests
+correr "ATM" en_backend ATM/tests
+correr "Bus de Servicios" en_backend BUS_SERVICIOS/tests
+# Fase 2: ningún módulo tiene configurada la dirección directa de COREDB (compose, k8s,
+# .env.example, valores por omisión); solo el Bus, COREDB y su arranque.
+correr "Bus de Servicios, rutas a COREDB" \
+  docker run --rm -v "$RAIZ:/repo:ro" -e REPO=/repo bna/backend:local $PYTEST /repo/scripts/test_comprobar_rutas_coredb.py
 correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests
 correr "EVALUACION contra COREDB y MySQL" \
   env EVALUACION_IMAGEN_PRUEBAS=bna/backend:local EVALUACION_IMAGEN_COREDB=bna/coredb:local \
@@ -68,6 +74,9 @@ correr "EVALUACION contra COREDB y MySQL" \
 correr "DESEMBOLSO contra COREDB y MySQL" \
   env DESEMBOLSO_IMAGEN_PRUEBAS=bna/backend:local DESEMBOLSO_IMAGEN_COREDB=bna/coredb:local \
   backend/DESEMBOLSO/scripts/pruebas_integracion.sh
+correr "COBRANZA contra COREDB y MySQL" \
+  env COBRANZA_IMAGEN_PRUEBAS=bna/backend:local COBRANZA_IMAGEN_COREDB=bna/coredb:local \
+  backend/COBRANZA/scripts/pruebas_integracion.sh
 # CAPTACION y, en la imagen de SOL, su contrato CR-INT-01 con el adaptador real de SOL.
 correr "CAPTACION contra COREDB y MySQL" \
   env CAPTACION_IMAGEN_PRUEBAS=bna/backend:local CAPTACION_IMAGEN_COREDB=bna/coredb:local \

@@ -15,7 +15,10 @@ class Config:
     # expediente de SOL y se leen los resultados para CR-INT-03.
     servicio_secreto: str
     servicio_usuario: str = "svc-evaluacion"
-    coredb_url: str = "http://127.0.0.1:8012"
+    # COREDB se alcanza a través del Bus de Servicios (fase 2), nunca directo.
+    coredb_url: str = "http://127.0.0.1:8018/bus/coredb"
+    # Credencial de este módulo ante el Bus (X-Bus-Token). Sin valor por omisión.
+    bus_token: str = ""
     # Bearer con el que SOL entrega expedientes (CR-INT-02). Es el SOL_BUS_TOKEN de SOL.
     token_sol: str = ""
     # Base de SOL para devolverle el resultado (CR-INT-03). Vacía mientras SOL siga en modo SIMULADO.
@@ -34,7 +37,8 @@ class Config:
         config = cls(
             servicio_secreto=os.environ.get("EVALUACION_COREDB_SECRETO", "").strip(),
             servicio_usuario=os.environ.get("EVALUACION_COREDB_USUARIO", "svc-evaluacion").strip(),
-            coredb_url=os.environ.get("COREDB_URL", "http://127.0.0.1:8012").strip().rstrip("/"),
+            coredb_url=os.environ.get("COREDB_URL", "http://127.0.0.1:8018/bus/coredb").strip().rstrip("/"),
+            bus_token=os.environ.get("BUS_TOKEN", "").strip(),
             token_sol=os.environ.get("EVALUACION_TOKEN_SOL", "").strip(),
             sol_url=os.environ.get("EVALUACION_SOL_URL", "").strip().rstrip("/"),
             sol_token_resultados=os.environ.get("EVALUACION_SOL_TOKEN_RESULTADOS", "").strip(),

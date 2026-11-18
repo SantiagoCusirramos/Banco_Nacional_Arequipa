@@ -59,9 +59,11 @@ class VerificadorCoreDb:
     MAXIMO_EN_MEMORIA = 2000
 
     def __init__(self, coredb_url: str, timeout: float = 5.0, recordar_seg: float = 30.0,
-                 transporte: httpx.BaseTransport | None = None):
+                 transporte: httpx.BaseTransport | None = None, bus_token: str = ""):
+        # Credencial ante el Bus en cada llamada; el Bus no la reenvía a COREDB.
         self._http = httpx.Client(base_url=coredb_url, timeout=timeout, transport=transporte,
-                                  follow_redirects=False, trust_env=False)
+                                  follow_redirects=False, trust_env=False,
+                                  headers={"X-Bus-Token": bus_token} if bus_token else None)
         self._recordar = recordar_seg
         self._memoria: dict[str, tuple[float, Perfil]] = {}
         self._candado = threading.Lock()

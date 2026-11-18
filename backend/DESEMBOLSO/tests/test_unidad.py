@@ -121,7 +121,7 @@ def test_salud_falla_si_el_servicio_no_inicia_sesion():
         if peticion.url.path == "/coredb/salud":
             return httpx.Response(200, json={"estado": "ok"})
         return httpx.Response(401, json={"error": {"code": "CREDENCIALES_INVALIDAS", "message": "x"}})
-    ctx = Contexto(Config(servicio_secreto=SECRETO), transporte_coredb=httpx.MockTransport(coredb))
+    ctx = Contexto(Config(servicio_secreto=SECRETO, coredb_url="http://coredb"), transporte_coredb=httpx.MockTransport(coredb))
     with TestClient(crear_app(contexto=ctx)) as api:
         r = api.get("/salud")
         assert r.status_code == 503 and r.json()["error"]["code"] == "SERVICIO_SIN_SESION"

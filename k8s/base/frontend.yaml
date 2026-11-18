@@ -1,5 +1,5 @@
-# Frontend (Next.js). El navegador solo habla con él; reenvía a COREDB, CUENTAS, TARJETAS, SOL, Evaluación y Desembolso
-# desde su servidor.
+# Frontend (Next.js). El navegador solo habla con él; reenvía desde su servidor a COREDB, CUENTAS,
+# TARJETAS, SOL, Evaluación, Desembolso y CAPTACION, siempre por el Bus de Servicios.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,6 +23,9 @@ spec:
           image: bna/frontend:local
           envFrom:
             - configMapRef: { name: bna-configuracion }
+          env:
+            - name: BUS_TOKEN
+              valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_FRONTEND } }
           ports:
             - { name: http, containerPort: 3000 }
           startupProbe:
