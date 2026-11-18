@@ -237,6 +237,7 @@ Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000).
 ## Documentación
 
 - Por módulo: los README enlazados en [Servicios y puertos](#servicios-y-puertos).
+- Decisiones del equipo (valores adoptados donde las fuentes no deciden, revisables): [`Documents/decisiones-del-equipo.md`](Documents/decisiones-del-equipo.md).
 - Contrato de COREDB para el módulo Clientes: [`backend/COREDB/CONTRATO_CLIENTES.md`](backend/COREDB/CONTRATO_CLIENTES.md).
 - Contrato de COREDB para la línea de créditos (Evaluación, Desembolso y Cobranza): [`backend/COREDB/CONTRATO_CREDITOS.md`](backend/COREDB/CONTRATO_CREDITOS.md).
 - Cómo se actualiza `database/`: [`database/README-UPSTREAM.md`](database/README-UPSTREAM.md).

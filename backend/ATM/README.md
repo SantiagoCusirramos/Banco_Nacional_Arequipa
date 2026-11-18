@@ -73,8 +73,8 @@ Los topes de retiro por canal los aplica la **autorización de Tarjetas** (RN-AT
 - Todas las llamadas a TARJETAS/CUENTAS van por el Bus: `http://bus:8018/bus/tarjetas/...`, `http://bus:8018/bus/cuentas/...`
 - El ATM presenta su credencial `X-Bus-Token: ${BUS_TOKEN_ATM}` en cada llamada.
 - El token del operador que abrió el cajero (`Authorization: Bearer ...`) se reenvía a TARJETAS/CUENTAS,
-  que comprueban sus permisos. Pregunta de equipo abierta (#34): si el cajero debe tener credencial propia
-  de terminal o usuario de servicio en lugar del operador; por ahora, el operador.
+  que comprueban sus permisos. Decisión del equipo, revisable: lo abre un operador del banco, sin credencial de
+  terminal ([`Documents/decisiones-del-equipo.md`](../../Documents/decisiones-del-equipo.md), decisión 13).
 
 ## Configuración
 
