@@ -411,6 +411,37 @@ X753	bna_api_user	Resolver un incidente exige la resolución	pasa
 X754	bna_api_user	No se avanza un incidente que no existe	pasa
 X755	bna_api_user	La prioridad de un incidente es P1 a P4	pasa
 X736	bna_api_user	Un desafío vencido (más de 120 s) no autoriza	pasa
+X800	bna_api_user	Un borrador nuevo queda REGISTRADO con su revisión, código, garantías, fiadores, historial y evento	pasa
+X801	bna_api_user	Repetir la creación con el mismo contenido devuelve el mismo borrador sin duplicar nada	pasa
+X802	bna_api_user	Crear otra vez el mismo id con otro contenido se rechaza	pasa
+X803	bna_api_user	Editar con la revisión vigente reemplaza condiciones, garantías y fiadores y sube la revisión	pasa
+X804	bna_api_user	Editar con una revisión vieja y otro contenido se rechaza (otra sesión la cambió)	pasa
+X805	bna_api_user	Repetir la última edición (misma revisión de partida y mismo contenido) devuelve la revisión ya guardada	pasa
+X806	bna_api_user	El cliente de un borrador no se cambia	pasa
+X807	bna_api_user	Un cliente que no puede operar no registra un borrador	pasa
+X808	bna_api_user	El solicitante no es su propio fiador	pasa
+X809	bna_api_user	Un fiador no se repite en la misma solicitud	pasa
+X810	bna_api_user	Un fiador que no existe o no puede operar se rechaza	pasa
+X811	bna_api_user	Una garantía de un tipo fuera del catálogo se rechaza	pasa
+X812	bna_api_user	Una garantía sin valor positivo se rechaza	pasa
+X813	bna_api_user	Más de diez garantías se rechazan	pasa
+X814	bna_api_user	El destino del crédito tiene entre 5 y 120 caracteres	pasa
+X815	bna_api_user	El expediente de un borrador lo pasa a EN_EVALUACION en la ronda 1 con su calendario PRELIMINAR	pasa
+X816	bna_api_user	Un expediente que no coincide con el borrador registrado se rechaza	pasa
+X817	bna_api_user	El expediente de un borrador llega con su misma versión	pasa
+X818	bna_api_user	Un borrador enviado a evaluación ya no se edita	pasa
+X819	bna_api_user	Con su verificación de Captación, un fiador respalda una sola solicitud (uk_fiador_solicitud_1)	pasa
+X820	bna_api_user	La revisión de una edición es positiva	pasa
+X821	bna_api_user	bna_api no escribe creditos.expediente_sol	pasa
+X822	bna_api_user	bna_api no borra garantías directamente	pasa
+X823	bna_api_user	Editar un borrador que no existe se rechaza	pasa
+X830	bna_api_user	Un evento de módulo queda en la bitácora con su módulo, acción, actor e id de origen	pasa
+X831	bna_api_user	Repetir el mismo evento devuelve el mismo registro sin duplicarlo	pasa
+X832	bna_api_user	El mismo id de evento con otro contenido se rechaza	pasa
+X833	bna_api_user	La acción de un evento es un código en mayúsculas	pasa
+X834	bna_api_user	Un evento de un módulo desconocido se rechaza	pasa
+X835	bna_api_user	bna_api no escribe core.evento_modulo	pasa
+X836	bna_api_user	Un evento sin actor se rechaza	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
@@ -433,6 +464,8 @@ X520	bna_app_user	Confirmación y liberación simultáneas: gana la confirmació
 X710	bna_api_user	Un bloqueo vencido ya no bloquea y la cuenta de fallos empieza de cero	pasa
 X760	bna_api_user	Dos evaluaciones simultáneas con el mismo desafío: una decisión, la segunda la repite	pasa
 X761	bna_api_user	Dos sellos simultáneos del mismo tramo: uno pasa, el otro falla con BNA-SELLO	pasa
+X880	bna_api_user	Dos ediciones simultáneas con la misma revisión: una pasa, la otra falla con BNA-REVISION	pasa
+X881	bna_api_user	El mismo evento de módulo entregado dos veces a la vez: un evento, la segunda entrega es repetida	pasa
 X650	bna_api_user	Dos envíos simultáneos con la misma llave mueven el dinero una vez	pasa
 X651	bna_api_user	Dos pagos simultáneos de un QR dinámico con llaves distintas cobran una vez	pasa
 X652	bna_api_user	Dos pagos simultáneos de un QR con la misma llave: el segundo es el mismo pago	pasa

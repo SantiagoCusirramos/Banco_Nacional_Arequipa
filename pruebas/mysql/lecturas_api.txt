@@ -30,10 +30,14 @@ creditos.v_credito_api
 creditos.v_cuota_api
 creditos.v_evaluacion_api
 creditos.v_evento_credito_api
+creditos.v_expediente_sol_api
+creditos.v_fiador_solicitud_api
+creditos.v_garantia_api
 creditos.v_historial_solicitud_api
 creditos.v_mora_api
 creditos.v_orden_api
 creditos.v_pago_api
+creditos.v_recepcion_solicitud_api
 creditos.v_solicitud_api
 creditos.v_validacion_orden_api
 cuentas.cuenta_ahorro

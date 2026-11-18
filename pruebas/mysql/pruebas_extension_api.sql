@@ -919,7 +919,7 @@ CALL prueba.verifica('X331', 'Extensión', 'Créditos', 'El id de evaluación es
 CALL prueba.verifica('X332', 'Extensión', 'Créditos', 'Las vistas de créditos no exponen nombres, documentos ni contactos del cliente',
   JSON_ARRAY("SET @n = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'creditos' AND table_name LIKE 'v\\_%\\_api' AND column_name IN ('nombres', 'apellido_paterno', 'apellido_materno', 'numero_documento', 'tipo_documento', 'correo', 'celular'))",
              "SET @v = (SELECT COUNT(*) FROM information_schema.views WHERE table_schema = 'creditos' AND table_name LIKE 'v\\_%\\_api')"),
-  "SELECT @n = 0 AND @v = 12", '0 columnas personales en 12 vistas', "SELECT CONCAT(@n, ' columnas en ', @v, ' vistas')", 'vista');
+  "SELECT @n = 0 AND @v = 16", '0 columnas personales en 16 vistas', "SELECT CONCAT(@n, ' columnas en ', @v, ' vistas')", 'vista');
 
 -- Permisos de bna_api sobre creditos
 CALL prueba.rechaza('X333', 'Extensión', 'bna_api', 'bna_api no puede: SELECT creditos.solicitud_credito',
@@ -1790,3 +1790,156 @@ CALL prueba.verifica('X736', 'Extensión', 'Seguridad', 'Un desafío vencido (m�
              "SET TIMESTAMP = DEFAULT"),
   "@d = 'DESAFIO_RECHAZADO'", 'DESAFIO_RECHAZADO', "@d", 'procedimiento');
 SET TIMESTAMP = DEFAULT;
+
+-- ---------------------------------------------------------------------
+-- Solicitud de crédito sin base propia (v1.14): el borrador del asesor, sus garantías y
+-- fiadores, el paso a evaluación y el receptor de eventos de auditoría de los módulos.
+-- ---------------------------------------------------------------------
+SET @sol_id = "UUID_TO_BIN('80000000-0000-4000-8000-000000000001')";
+SET @sol_pol = "JSON_OBJECT('version', 'SOL-DEMO-2026-01', 'tea', '0.2200', 'amortizacion', 'FRANCES', 'dias_por_periodo', 30)";
+SET @sol_gar1 = "JSON_ARRAY(JSON_OBJECT('tipo', 'HIPOTECARIA', 'descripcion', 'Casa en Cayma', 'valor', 25000))";
+SET @sol_crear = CONCAT("CALL creditos.guardar_borrador(", @sol_id, ", NULL, 'C001', 3000, 'PEN', 3, FALSE, 'Capital de trabajo', CURRENT_DATE, ",
+                        @sol_pol, ", ", @sol_gar1, ", JSON_ARRAY('C002'), REPEAT('a', 64), 'asesor.sol', UUID_TO_BIN(UUID()), @rev, @cod, @rep)");
+SET @sol_editar = CONCAT("CALL creditos.guardar_borrador(", @sol_id, ", 1, 'C001', 3000, 'PEN', 3, FALSE, 'Capital de trabajo y equipos', CURRENT_DATE, ",
+                         @sol_pol, ", JSON_ARRAY(JSON_OBJECT('tipo', 'MOBILIARIA', 'descripcion', 'Camioneta 2024', 'valor', 18000), JSON_OBJECT('tipo', 'PRENDARIA', 'descripcion', 'Joyas de oro', 'valor', 2000.50)), ",
+                         "JSON_ARRAY('C003'), REPEAT('b', 64), 'asesor.sol', UUID_TO_BIN(UUID()), @rev2, @cod2, @rep2)");
+-- El borrador con otros datos: p_extra cambia un argumento a la vez.
+SET @sol_otro = CONCAT("CALL creditos.guardar_borrador(", @sol_id, ", NULL, '%CLI%', 3000, 'PEN', 3, FALSE, '%DES%', CURRENT_DATE, ",
+                       @sol_pol, ", %GAR%, %FIA%, REPEAT('c', 64), 'asesor.sol', UUID_TO_BIN(UUID()), @rev, @cod, @rep)");
+SET @sol_base = REPLACE(REPLACE(REPLACE(@sol_otro, '%CLI%', 'C001'), '%DES%', 'Capital de trabajo'), '%GAR%', 'JSON_ARRAY()');
+SET @sol_enviar = CONCAT("CALL creditos.registrar_solicitud(", @sol_id, ", 1, 'C001', %MONTO%, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @cuotas, REPEAT('e', 64), 'svc-evaluacion', UUID_TO_BIN(UUID()), @ronda, @eval, @rep3)");
+
+CALL prueba.verifica('X800', 'Extensión', 'Solicitud', 'Un borrador nuevo queda REGISTRADO con su revisión, código, garantías, fiadores, historial y evento',
+  JSON_ARRAY(@sol_crear),
+  "@rev = 1 AND NOT @rep AND @cod REGEXP '^SOL-[0-9]{4}-80000000$' AND (SELECT CONCAT(estado_solicitud, ' ', codigo, ' ', revision, ' ', destino) FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = CONCAT('REGISTRADA ', @cod, ' 1 Capital de trabajo') AND (SELECT COUNT(*) FROM creditos.v_garantia_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001') AND tipo_garantia = 'HIPOTECARIA' AND moneda = 'PEN' AND estado_garantia = 'REGISTRADA') = 1 AND (SELECT GROUP_CONCAT(cod_cliente) FROM creditos.v_fiador_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = 'C002' AND (SELECT COUNT(*) FROM creditos.v_historial_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001') AND estado_nuevo = 'REGISTRADA' AND actor = 'asesor.sol') = 1 AND EXISTS (SELECT 1 FROM core.v_evento_auditoria_api WHERE id_entidad = '80000000-0000-4000-8000-000000000001' AND accion = 'CREAR_BORRADOR')",
+  'REGISTRADA, revisión 1, SOL-AAMM-80000000, 1 garantía, fiador C002, historial y evento',
+  "CONCAT_WS(' ', @rev, @cod, @rep, (SELECT estado_solicitud FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')))", 'procedimiento');
+
+CALL prueba.verifica('X801', 'Extensión', 'Solicitud', 'Repetir la creación con el mismo contenido devuelve el mismo borrador sin duplicar nada',
+  JSON_ARRAY(@sol_crear, "SET @c1 = @cod", @sol_crear),
+  "@rep AND @rev = 1 AND @cod = @c1 AND (SELECT COUNT(*) FROM creditos.v_garantia_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = 1 AND (SELECT COUNT(*) FROM creditos.v_historial_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = 1",
+  'repetido, revisión 1, una garantía, un historial', "CONCAT_WS(' ', @rep, @rev)", 'procedimiento');
+
+CALL prueba.rechaza('X802', 'Extensión', 'Solicitud', 'Crear otra vez el mismo id con otro contenido se rechaza',
+  JSON_ARRAY(@sol_crear, REPLACE(@sol_base, '%FIA%', 'JSON_ARRAY()')), '^BNA-IDEMPOTENCIA:', 'procedimiento');
+
+CALL prueba.verifica('X803', 'Extensión', 'Solicitud', 'Editar con la revisión vigente reemplaza condiciones, garantías y fiadores y sube la revisión',
+  JSON_ARRAY(@sol_crear, @sol_editar),
+  "@rev2 = 2 AND NOT @rep2 AND @cod2 = @cod AND (SELECT CONCAT(revision, ' ', destino) FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = '2 Capital de trabajo y equipos' AND (SELECT GROUP_CONCAT(tipo_garantia ORDER BY tipo_garantia) FROM creditos.v_garantia_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = 'MOBILIARIA,PRENDARIA' AND (SELECT GROUP_CONCAT(cod_cliente) FROM creditos.v_fiador_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = 'C003' AND (SELECT COUNT(*) FROM creditos.v_historial_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = 2 AND EXISTS (SELECT 1 FROM core.v_evento_auditoria_api WHERE id_entidad = '80000000-0000-4000-8000-000000000001' AND accion = 'EDITAR_BORRADOR')",
+  'revisión 2; MOBILIARIA,PRENDARIA; fiador C003; dos historiales; evento EDITAR_BORRADOR',
+  "CONCAT_WS(' ', @rev2, (SELECT GROUP_CONCAT(tipo_garantia) FROM creditos.v_garantia_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')))", 'procedimiento');
+
+CALL prueba.rechaza('X804', 'Extensión', 'Solicitud', 'Editar con una revisión vieja y otro contenido se rechaza (otra sesión la cambió)',
+  JSON_ARRAY(@sol_crear, @sol_editar, REPLACE(@sol_editar, "REPEAT('b', 64)", "REPEAT('d', 64)")), '^BNA-REVISION:', 'procedimiento');
+
+CALL prueba.verifica('X805', 'Extensión', 'Solicitud', 'Repetir la última edición (misma revisión de partida y mismo contenido) devuelve la revisión ya guardada',
+  JSON_ARRAY(@sol_crear, @sol_editar, @sol_editar),
+  "@rep2 AND @rev2 = 2 AND (SELECT COUNT(*) FROM creditos.v_historial_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = 2",
+  'repetido, revisión 2, dos historiales', "CONCAT_WS(' ', @rep2, @rev2)", 'procedimiento');
+
+CALL prueba.rechaza('X806', 'Extensión', 'Solicitud', 'El cliente de un borrador no se cambia',
+  JSON_ARRAY(@sol_crear, REPLACE(@sol_editar, "1, 'C001'", "1, 'C002'")), '^BNA-SOLICITUD: el cliente', 'procedimiento');
+
+CALL prueba.rechaza('X807', 'Extensión', 'Solicitud', 'Un cliente que no puede operar no registra un borrador',
+  JSON_ARRAY(REPLACE(REPLACE(@sol_base, '%FIA%', 'JSON_ARRAY()'), "'C001'", "'C004'")), '^BNA-CLIENTE:', 'procedimiento');
+
+CALL prueba.rechaza('X808', 'Extensión', 'Solicitud', 'El solicitante no es su propio fiador',
+  JSON_ARRAY(REPLACE(@sol_base, '%FIA%', "JSON_ARRAY('C001')")), '^BNA-FIADOR:', 'procedimiento');
+
+CALL prueba.rechaza('X809', 'Extensión', 'Solicitud', 'Un fiador no se repite en la misma solicitud',
+  JSON_ARRAY(REPLACE(@sol_base, '%FIA%', "JSON_ARRAY('C002', 'C002')")), '^BNA-FIADOR:', 'procedimiento');
+
+CALL prueba.rechaza('X810', 'Extensión', 'Solicitud', 'Un fiador que no existe o no puede operar se rechaza',
+  JSON_ARRAY(REPLACE(@sol_base, '%FIA%', "JSON_ARRAY('C004')")), '^BNA-FIADOR:', 'procedimiento');
+
+CALL prueba.rechaza('X811', 'Extensión', 'Solicitud', 'Una garantía de un tipo fuera del catálogo se rechaza',
+  JSON_ARRAY(REPLACE(REPLACE(REPLACE(REPLACE(@sol_otro, '%CLI%', 'C001'), '%DES%', 'Capital de trabajo'), '%FIA%', 'JSON_ARRAY()'),
+             '%GAR%', "JSON_ARRAY(JSON_OBJECT('tipo', 'PERSONAL', 'descripcion', 'Aval personal', 'valor', 100))")),
+  '^BNA-GARANTIA:', 'procedimiento');
+
+CALL prueba.rechaza('X812', 'Extensión', 'Solicitud', 'Una garantía sin valor positivo se rechaza',
+  JSON_ARRAY(REPLACE(REPLACE(REPLACE(REPLACE(@sol_otro, '%CLI%', 'C001'), '%DES%', 'Capital de trabajo'), '%FIA%', 'JSON_ARRAY()'),
+             '%GAR%', "JSON_ARRAY(JSON_OBJECT('tipo', 'HIPOTECARIA', 'descripcion', 'Casa en Cayma', 'valor', 0))")),
+  '^BNA-GARANTIA:', 'procedimiento');
+
+CALL prueba.rechaza('X813', 'Extensión', 'Solicitud', 'Más de diez garantías se rechazan',
+  JSON_ARRAY(CONCAT("SET @g = JSON_ARRAY(", REPEAT("JSON_OBJECT('tipo', 'PRENDARIA', 'descripcion', 'Prenda de prueba', 'valor', 10), ", 10),
+                    "JSON_OBJECT('tipo', 'PRENDARIA', 'descripcion', 'Prenda de prueba', 'valor', 10))"),
+             REPLACE(REPLACE(REPLACE(REPLACE(@sol_otro, '%CLI%', 'C001'), '%DES%', 'Capital de trabajo'), '%FIA%', 'JSON_ARRAY()'), '%GAR%', '@g')),
+  '^BNA-GARANTIA:', 'procedimiento');
+
+CALL prueba.rechaza('X814', 'Extensión', 'Solicitud', 'El destino del crédito tiene entre 5 y 120 caracteres',
+  JSON_ARRAY(REPLACE(REPLACE(REPLACE(REPLACE(@sol_otro, '%CLI%', 'C001'), '%DES%', 'Uso'), '%FIA%', 'JSON_ARRAY()'), '%GAR%', 'JSON_ARRAY()')),
+  '^BNA-SOLICITUD: el destino', 'procedimiento');
+
+CALL prueba.verifica('X815', 'Extensión', 'Solicitud', 'El expediente de un borrador lo pasa a EN_EVALUACION en la ronda 1 con su calendario PRELIMINAR',
+  JSON_ARRAY(@sol_crear, "CALL prueba.cr_calendario(3000, 3, CURRENT_DATE + INTERVAL 30 DAY, @cuotas)", REPLACE(@sol_enviar, '%MONTO%', '3000')),
+  "@ronda = 1 AND NOT @rep3 AND (SELECT CONCAT(estado_solicitud, ' ', ronda, ' ', tipo_calendario, ' ', numero_cuotas, ' ', codigo) FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = CONCAT('EN_EVALUACION 1 PRELIMINAR 3 ', @cod) AND (SELECT GROUP_CONCAT(estado_nuevo ORDER BY id_historial) FROM creditos.v_historial_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = 'REGISTRADA,EN_EVALUACION' AND (SELECT CONCAT(version_solicitud, ' ', ronda, ' ', id_evaluacion = @eval) FROM creditos.v_recepcion_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001')) = '1 1 1'",
+  'EN_EVALUACION, ronda 1, PRELIMINAR de 3 cuotas; historial REGISTRADA,EN_EVALUACION; recepción con el id de la evaluación',
+  "(SELECT CONCAT_WS(' ', estado_solicitud, ronda, tipo_calendario, numero_cuotas) FROM creditos.v_solicitud_api WHERE id_solicitud = UUID_TO_BIN('80000000-0000-4000-8000-000000000001'))", 'procedimiento');
+
+CALL prueba.rechaza('X816', 'Extensión', 'Solicitud', 'Un expediente que no coincide con el borrador registrado se rechaza',
+  JSON_ARRAY(@sol_crear, "CALL prueba.cr_calendario(3500, 3, CURRENT_DATE + INTERVAL 30 DAY, @cuotas)",
+             CONCAT("CALL creditos.registrar_solicitud(", @sol_id, ", 1, 'C001', 3500, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @cuotas, REPEAT('e', 64), 'svc-evaluacion', UUID_TO_BIN(UUID()), @ronda, @eval, @rep3)")),
+  '^BNA-SOLICITUD: el expediente no coincide', 'procedimiento');
+
+CALL prueba.rechaza('X817', 'Extensión', 'Solicitud', 'El expediente de un borrador llega con su misma versión',
+  JSON_ARRAY(@sol_crear, "CALL prueba.cr_calendario(3000, 3, CURRENT_DATE + INTERVAL 30 DAY, @cuotas)",
+             CONCAT("CALL creditos.registrar_solicitud(", @sol_id, ", 2, 'C001', 3000, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @cuotas, REPEAT('e', 64), 'svc-evaluacion', UUID_TO_BIN(UUID()), @ronda, @eval, @rep3)")),
+  '^BNA-SOLICITUD: la versión', 'procedimiento');
+
+CALL prueba.rechaza('X818', 'Extensión', 'Solicitud', 'Un borrador enviado a evaluación ya no se edita',
+  JSON_ARRAY(@sol_crear, "CALL prueba.cr_calendario(3000, 3, CURRENT_DATE + INTERVAL 30 DAY, @cuotas)",
+             CONCAT("CALL creditos.registrar_solicitud(", @sol_id, ", 1, 'C001', 3000, 'PEN', 3, FALSE, 'FRANCES', 0.2200, @cuotas, REPEAT('e', 64), 'svc-evaluacion', UUID_TO_BIN(UUID()), @ronda, @eval, @rep3)"),
+             @sol_editar),
+  '^BNA-SOLICITUD: la solicitud ya se envió', 'procedimiento');
+
+CALL prueba.rechaza('X819', 'Extensión', 'Solicitud', 'Con su verificación de Captación, un fiador respalda una sola solicitud (uk_fiador_solicitud_1)',
+  JSON_ARRAY(@sol_crear,
+             CONCAT("CALL creditos.guardar_borrador(UUID_TO_BIN('80000000-0000-4000-8000-000000000002'), NULL, 'C003', 3000, 'PEN', 3, FALSE, 'Capital de trabajo', CURRENT_DATE, ",
+                    @sol_pol, ", JSON_ARRAY(), JSON_ARRAY('C002'), REPEAT('f', 64), 'asesor.sol', UUID_TO_BIN(UUID()), @r, @c, @p)")),
+  '^BNA-FIADOR: el fiador ya respalda', 'procedimiento');
+
+CALL prueba.rechaza('X820', 'Extensión', 'Solicitud', 'La revisión de una edición es positiva',
+  JSON_ARRAY(@sol_crear, REPLACE(@sol_editar, "1, 'C001'", "0, 'C001'")), '^BNA-REVISION:', 'procedimiento');
+
+CALL prueba.rechaza('X821', 'Extensión', 'bna_api', 'bna_api no escribe creditos.expediente_sol',
+  JSON_ARRAY("UPDATE creditos.expediente_sol SET revision = 9"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X822', 'Extensión', 'bna_api', 'bna_api no borra garantías directamente',
+  JSON_ARRAY("DELETE FROM creditos.garantia"), 'denied', 'privilegio');
+
+CALL prueba.rechaza('X823', 'Extensión', 'Solicitud', 'Editar un borrador que no existe se rechaza',
+  JSON_ARRAY(@sol_editar), '^BNA-SOLICITUD: la solicitud no existe', 'procedimiento');
+
+-- Receptor de eventos de auditoría de los módulos.
+SET @aud = CONCAT("CALL core.recibir_evento_modulo(UUID_TO_BIN('81000000-0000-4000-8000-000000000001'), 'SOLICITUD DE CREDITO', ",
+                  "'solicitud_credito', '80000000-0000-4000-8000-000000000001', 'RECIBIR_CR_INT_03', 'svc-sol', UUID_TO_BIN(UUID()), ",
+                  "JSON_OBJECT('decision', 'APROBADO'), REPEAT('a', 64), @ev, @aud_rep)");
+
+CALL prueba.verifica('X830', 'Extensión', 'Auditoría', 'Un evento de módulo queda en la bitácora con su módulo, acción, actor e id de origen',
+  JSON_ARRAY(@aud),
+  "NOT @aud_rep AND (SELECT CONCAT(modulo, ' ', accion, ' ', actor, ' ', JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.id_evento_modulo')), ' ', JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.decision'))) FROM core.v_evento_auditoria_api WHERE id_evento = @ev) = 'SOLICITUD DE CREDITO RECIBIR_CR_INT_03 svc-sol 81000000-0000-4000-8000-000000000001 APROBADO'",
+  'SOLICITUD DE CREDITO RECIBIR_CR_INT_03 svc-sol <id> APROBADO',
+  "(SELECT CONCAT_WS(' ', modulo, accion, actor) FROM core.v_evento_auditoria_api WHERE id_evento = @ev)", 'procedimiento');
+
+CALL prueba.verifica('X831', 'Extensión', 'Auditoría', 'Repetir el mismo evento devuelve el mismo registro sin duplicarlo',
+  JSON_ARRAY(@aud, "SET @ev1 = @ev", @aud),
+  "@aud_rep AND @ev = @ev1 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE JSON_UNQUOTE(JSON_EXTRACT(detalle, '$.id_evento_modulo')) = '81000000-0000-4000-8000-000000000001') = 1",
+  'repetido, mismo registro, un evento', "CONCAT_WS(' ', @aud_rep, @ev = @ev1)", 'procedimiento');
+
+CALL prueba.rechaza('X832', 'Extensión', 'Auditoría', 'El mismo id de evento con otro contenido se rechaza',
+  JSON_ARRAY(@aud, REPLACE(@aud, "REPEAT('a', 64)", "REPEAT('b', 64)")), '^BNA-IDEMPOTENCIA:', 'procedimiento');
+
+CALL prueba.rechaza('X833', 'Extensión', 'Auditoría', 'La acción de un evento es un código en mayúsculas',
+  JSON_ARRAY(REPLACE(@aud, "'RECIBIR_CR_INT_03'", "'borrar todo'")), '^BNA-AUDITORIA:', 'procedimiento');
+
+CALL prueba.rechaza('X834', 'Extensión', 'Auditoría', 'Un evento de un módulo desconocido se rechaza',
+  JSON_ARRAY(REPLACE(@aud, "'SOLICITUD DE CREDITO'", "'NINGUNO'")), '^BNA-AUDITORIA:', 'procedimiento');
+
+CALL prueba.rechaza('X835', 'Extensión', 'bna_api', 'bna_api no escribe core.evento_modulo',
+  JSON_ARRAY("INSERT INTO core.evento_modulo (id_evento_modulo, id_modulo, huella, id_evento) VALUES (UUID_TO_BIN(UUID()), 11, REPEAT('a', 64), 1)"),
+  'denied', 'privilegio');
+
+CALL prueba.rechaza('X836', 'Extensión', 'Auditoría', 'Un evento sin actor se rechaza',
+  JSON_ARRAY(REPLACE(@aud, "'svc-sol'", "NULL")), '^BNA-AUDITORIA:', 'procedimiento');
