@@ -20,6 +20,18 @@ class _Peticion(BaseModel):
 
 
 # ── Solicitante y caso ──────────────────────────────────────────────────────
+class SolicitantesBuscar(_Peticion):
+    """La búsqueda va en el cuerpo: un documento en la consulta quedaría en los registros de acceso."""
+    documento: str | None = Field(default=None, max_length=12)
+    limite: int = Field(default=50, ge=1, le=200)
+
+
+class ReferenciasBuscar(_Peticion):
+    """CR-INT-01: búsqueda de SOL. `search` puede ser un documento: va en el cuerpo, nunca en la consulta."""
+    search: str = Field(default="", max_length=100)
+    limit: int = Field(default=50, ge=1, le=50)
+
+
 class SolicitanteRegistrar(_Peticion):
     tipo_documento: TipoDocumento
     numero_documento: str = Field(min_length=6, max_length=12)

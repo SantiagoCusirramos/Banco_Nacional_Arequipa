@@ -20,7 +20,7 @@ Las siguientes rutas son **solo del simulador local**, reemplazables por las aco
 ```dotenv
 SOL_INTEGRATION_MODE=REAL
 SOL_BUS_BASE_URL=http://127.0.0.1:8020
-SOL_CAP_SEARCH_PATH=/cap/references
+SOL_CAP_SEARCH_PATH=/cap/references/search
 SOL_CAP_REFERENCE_PATH=/cap/references/{idCliente}
 SOL_EVA_SEND_PATH=/eva/applications
 SOL_EVA_STATUS_PATH=/eva/operations/{idOperacion}
@@ -33,7 +33,7 @@ El frontend usa `SOL_GATEWAY_URL=http://127.0.0.1:8011/sol` al practicar HTTP lo
 
 ## CR-INT-01
 
-GET de búsqueda con `search` y `limit=50`; devuelve una lista acotada. GET de referencia con `{idCliente}`; devuelve:
+POST de búsqueda con `{"search": ..., "limit": 50}` en el cuerpo (el texto suele ser un documento: en la URL quedaría en los registros de acceso del Bus y de cada servicio); devuelve una lista acotada. GET de referencia con `{idCliente}`; devuelve:
 
 ```json
 {"id_cliente":"0198b000-0000-7009-8000-000000000001","cod_tipo_documento":"DNI","numero_documento":"70000001","nombres":"Cliente sintético","apellido_paterno":"Prueba","apellido_materno":"Laboratorio","estado_cliente":"ACTIVO","id_caso":"CASO-DEMO-1","id_verificacion":"VER-DEMO-1","fecha_verificacion":"2026-10-23","vigente_hasta":"2026-11-22","estado_habilitante":"HABILITADO","version_contrato":"CR-INT-01-PROPUESTA-v2","simulado":true}

@@ -21,6 +21,8 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
+from BUS_SERVICIOS import registros
+
 CABECERA_CREDENCIAL = "x-bus-token"
 # Cabeceras de salto a salto (RFC 9110 §7.6.1): son de cada conexión, no del mensaje.
 SALTO_A_SALTO = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
@@ -45,6 +47,7 @@ def crear_app(config, transport=None):
 
     @asynccontextmanager
     async def ciclo(_app):
+        quitar_filtro = registros.proteger()
         estado["cliente"] = httpx.AsyncClient(
             transport=transport,
             timeout=httpx.Timeout(config.timeout, connect=config.timeout_conexion),
@@ -55,6 +58,7 @@ def crear_app(config, transport=None):
             yield
         finally:
             await estado["cliente"].aclose()
+            quitar_filtro()
 
     app = FastAPI(
         title="BNA - Bus de Servicios",

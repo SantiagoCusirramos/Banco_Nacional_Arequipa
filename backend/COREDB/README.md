@@ -121,7 +121,7 @@ ligar el cliente que registró y leer las referencias que consulta SOL.
 | Ruta | Permiso |
 |---|---|
 | `POST /coredb/captacion/solicitantes` (201; 200 con `duplicado` si el documento ya estaba) | `CREAR_CLIENTE` |
-| `GET /coredb/captacion/solicitantes` (`documento`, `texto`, `con_cliente`), `GET …/solicitantes/{id}` | `VER_CLIENTE` |
+| `POST /coredb/captacion/solicitantes/busqueda` (cuerpo: `documento`, `texto`, `con_cliente`, `limite`), `GET …/solicitantes/{id}` | `VER_CLIENTE` |
 | `POST /coredb/captacion/casos`, `GET /coredb/captacion/casos` (`estado`, `id_solicitante`, `cod_cliente`) | `CREAR_CLIENTE` / `VER_CLIENTE` |
 | `GET /coredb/captacion/casos/{id_caso}`: el expediente con `faltantes` y `listo_para_habilitar` | `VER_CLIENTE` |
 | `POST …/casos/{id_caso}/consentimientos`, `/validaciones`, `/consultas-riesgo`, `/perfil`, `/estado` | `CREAR_CLIENTE` |

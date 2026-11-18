@@ -474,3 +474,33 @@ def test_la_billetera_tiene_ruta_y_credencial_propias_y_el_bus_reenvia_el_token_
     assert "X-Bus-Token" not in modulo.recibidas[1].headers
     assert metricas["reenvios"]["PRUEBAS"] == {"BILLETERA": 1}
     assert metricas["reenvios"]["BILLETERA"] == {"COREDB": 1}
+
+
+# ── Privacidad de los registros (P-1) ──────────────────────────────────────
+
+def test_los_registros_no_guardan_consulta_cuerpo_ni_credenciales(caplog):
+    import logging
+    modulo = Modulo()
+    sensibles = ["12345678", "87654321", "987654321", "token-de-una-persona", TOKEN_PRUEBAS]
+    # uvicorn (si otra prueba ya lo arrancó) deja uvicorn.access sin propagar y en WARNING:
+    # se escucha directo y en INFO, como en el producto.
+    acceso = logging.getLogger("uvicorn.access")
+    nivel_previo = acceso.level
+    acceso.setLevel(logging.INFO)
+    acceso.addHandler(caplog.handler)
+    with caplog.at_level(logging.DEBUG):
+        with cliente(modulo) as c:
+            r = c.post("/bus/captacion/cap/references/search?documento=12345678",
+                       json={"search": "87654321", "celular": "987654321"},
+                       headers={**AUT, "Authorization": "Bearer token-de-una-persona"})
+            # La línea de acceso de uvicorn, con el formato de uvicorn (no corre en TestClient).
+            logging.getLogger("uvicorn.access").info(
+                '%s - "%s %s HTTP/%s" %d', "127.0.0.1:1234", "POST",
+                "/bus/captacion/cap/references/search?documento=12345678", "1.1", 200)
+    acceso.removeHandler(caplog.handler)
+    acceso.setLevel(nivel_previo)
+    assert r.status_code == 200
+    # El módulo sí recibe todo; los registros, no.
+    assert modulo.recibidas[0].url.query == b"documento=12345678"
+    assert "CAPTACION" in caplog.text and "/bus/captacion/cap/references/search" in caplog.text
+    assert [s for s in sensibles if s in caplog.text] == []

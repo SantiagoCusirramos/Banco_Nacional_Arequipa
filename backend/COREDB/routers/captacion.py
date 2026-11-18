@@ -54,6 +54,14 @@ class SolicitanteCaptacionRegistrar(_Peticion):
         return valor.upper()
 
 
+class SolicitantesCaptacionBuscar(_Peticion):
+    """La búsqueda va en el cuerpo: un documento en la consulta quedaría en los registros de acceso."""
+    documento: str | None = Field(default=None, max_length=12, description="Parte del número de documento.")
+    texto: str | None = Field(default=None, max_length=100, description="Documento, nombres o apellidos.")
+    con_cliente: bool = Field(default=False, description="Solo los que ya tienen un cliente ligado.")
+    limite: int = Field(default=50, ge=1, le=200)
+
+
 class SolicitanteCaptacion(BaseModel):
     id_solicitante: str
     tipo_documento: str
@@ -253,16 +261,11 @@ def registrar_solicitante(
     return {"solicitante": solicitante, "duplicado": duplicado}
 
 
-@router.get("/solicitantes", response_model=list[SolicitanteCaptacion], responses=ERRORES,
-            dependencies=[Depends(lector)])
-def buscar_solicitantes(
-    documento: str | None = Query(default=None, max_length=12, description="Parte del número de documento."),
-    texto: str | None = Query(default=None, max_length=100, description="Documento, nombres o apellidos."),
-    con_cliente: bool = Query(default=False, description="Solo los que ya tienen un cliente ligado."),
-    limite: int = Query(default=50, ge=1, le=200),
-    db: Session = Depends(db_session),
-):
-    return captacion.buscar_solicitantes(db, documento=documento, texto=texto, con_cliente=con_cliente, limite=limite)
+@router.post("/solicitantes/busqueda", response_model=list[SolicitanteCaptacion], responses=ERRORES,
+             dependencies=[Depends(lector)])
+def buscar_solicitantes(datos: SolicitantesCaptacionBuscar, db: Session = Depends(db_session)):
+    return captacion.buscar_solicitantes(db, documento=datos.documento, texto=datos.texto,
+                                         con_cliente=datos.con_cliente, limite=datos.limite)
 
 
 @router.get("/solicitantes/{id_solicitante}", response_model=SolicitanteCaptacion,

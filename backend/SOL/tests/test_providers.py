@@ -28,7 +28,7 @@ def settings(**changes):
         cap_base_url="http://cap.test", cap_token="cap-sintetico-" + "a" * 32,
         eva_base_url="http://eva.test", eva_token="eva-sintetico-" + "e" * 32,
         audit_base_url="http://audit.test", audit_token="audit-sintetico-" + "s" * 32,
-        cap_search_path="/cap/references", cap_reference_path="/cap/references/{idCliente}",
+        cap_search_path="/cap/references/search", cap_reference_path="/cap/references/{idCliente}",
         eva_send_path="/eva/applications", eva_status_path="/eva/operations/{idOperacion}",
         audit_path="/security/events", **changes)
 
@@ -53,7 +53,7 @@ def test_separate_providers_receive_only_their_own_credentials_and_reconcile():
         assert request.headers["Authorization"] == "Bearer " + expected[request.url.host]
         assert all(cfg.callback_token not in value for value in request.headers.values())
         if request.url.host == "cap.test":
-            return httpx.Response(200, json=[reference()] if request.url.path == "/cap/references" else reference())
+            return httpx.Response(200, json=[reference()] if request.url.path == "/cap/references/search" else reference())
         if request.url.host == "audit.test":
             payload = json.loads(request.content)
             assert request.headers["X-Idempotency-Key"] == payload["idEvento"]
@@ -171,7 +171,7 @@ def test_optional_maternal_surname_in_reference_and_search(materno):
         data["apellido_materno"] = materno
     before = copy.deepcopy(data)
     adapter = Integrations(settings(), httpx.MockTransport(lambda r: httpx.Response(
-        200, json=[data] if r.url.path == "/cap/references" else data)))
+        200, json=[data] if r.url.path == "/cap/references/search" else data)))
     try:
         for value in [adapter.reference(CLIENT, "trace"), adapter.clients("", "trace")[0]]:
             assert value["apellido_materno"] == ("Prueba" if materno == "Prueba" else "")
@@ -339,3 +339,17 @@ def test_real_three_provider_workflow_preserves_pending_callback_and_subsanation
                 assert d["estado"] == "APROBADA" and d["versiones"][0] == frozen
         assert len(d["envios"]) == 2
         assert sum(m == "POST" and host == "eva.test" for m, host in calls) == 2
+
+
+def test_client_search_takes_the_document_in_the_body_not_the_query(lab):
+    # P-1: un documento en la consulta queda en los registros de acceso del Bus y de cada salto.
+    c, _ = lab
+    h = auth(c)
+    found = c.post("/gateway/sol/clients/search", headers=h, json={"search": "70000001"})
+    assert found.status_code == 200
+    assert [r["numero_documento"] for r in found.json()] == ["70000001"]
+    assert c.post("/gateway/sol/clients/search", headers=h, json={"search": "x" * 81}).status_code == 422
+    assert c.post("/gateway/sol/clients/search", json={"search": "70000001"}).status_code == 401
+    # La lista sin búsqueda sigue disponible; el parámetro de consulta ya no filtra.
+    listing = c.get("/gateway/sol/clients", headers=h, params={"search": "70000001"})
+    assert listing.status_code == 200 and len(listing.json()) > 1

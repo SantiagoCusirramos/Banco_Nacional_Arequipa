@@ -39,7 +39,7 @@ from .models import (
     AuditOutbox,
 )
 from .policy import load_policy
-from .schemas import ApplicationInput, Login, ResultInput, RevisionInput, EvaluationResult, DisableUser
+from .schemas import ApplicationInput, ClientSearch, Login, ResultInput, RevisionInput, EvaluationResult, DisableUser
 from .schemas import (ApplicationPageResponse, ClientResponse, DetailResponse, DisableUserResponse,
     EvaluationReceiptResponse, HealthResponse, LoginResponse, MetricsResponse, OkResponse,
     PendingResponse, PolicyResponse, ReadyResponse, SnapshotResponse, UserResponse, http_errors)
@@ -268,9 +268,7 @@ def create_app(settings=None, transport=None):
     def get_policy(user=Depends(authenticated)):
         return {**policy().model_dump(mode="json"), "integracion": settings.mode}
 
-    @router.get("/clients", response_model=list[ClientResponse], response_model_exclude_unset=True, responses=http_errors(401, 422, 503))
-    def clients(request: Request, search: str = Query("", max_length=80),
-                user=Depends(authenticated), db=Depends(db_session)):
+    def find_clients(request, search, db):
         if settings.mode == "REAL":
             records = integrations.clients(search, correlation(request))
         else:
@@ -282,6 +280,16 @@ def create_app(settings=None, transport=None):
             records = [row.snapshot for row in records]
         # Todos los roles reciben solo identidad y habilitación, nunca contacto/DOB.
         return [project_identity(r) for r in records]
+
+    @router.get("/clients", response_model=list[ClientResponse], response_model_exclude_unset=True, responses=http_errors(401, 503))
+    def clients(request: Request, user=Depends(authenticated), db=Depends(db_session)):
+        return find_clients(request, "", db)
+
+    # P-1: buscar por documento es POST con el texto en el cuerpo; en la consulta quedaría en
+    # los registros de acceso del Bus y de cada salto.
+    @router.post("/clients/search", response_model=list[ClientResponse], response_model_exclude_unset=True, responses=http_errors(401, 422, 503))
+    def search_clients(request: Request, payload: ClientSearch, user=Depends(authenticated), db=Depends(db_session)):
+        return find_clients(request, payload.search, db)
 
     @router.get("/applications", response_model=ApplicationPageResponse, responses=http_errors(401, 422, 503))
     def applications(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),

@@ -41,7 +41,10 @@ class BusSimulator:
         assert request.headers["Authorization"] == "Bearer " + "b"*32
         assert request.headers.get("X-Correlation-ID")
         path = request.url.path
-        if path == "/cap/references":
+        if path == "/cap/references/search":
+            # P-1: el texto buscado (un documento) va en el cuerpo, nunca en la consulta.
+            assert request.method == "POST" and not request.url.query
+            assert set(json.loads(request.content)) == {"search", "limit"}
             return httpx.Response(200, json=list(self.references.values()))
         if path.startswith("/cap/references/"):
             data = self.references.get(path.rsplit("/", 1)[1])
@@ -82,7 +85,7 @@ def real_lab(tmp_path):
         assert make_url(database).database == "bna_sol_mvp_test"
     settings = Settings(database, mode="REAL",
                         bus_base_url="http://bus.simulador.test", bus_token="b"*32,
-                        callback_token="c"*32, cap_search_path="/cap/references",
+                        callback_token="c"*32, cap_search_path="/cap/references/search",
                         cap_reference_path="/cap/references/{idCliente}", eva_send_path="/eva/applications",
                         eva_status_path="/eva/operations/{idOperacion}", audit_path="/security/events",
                         worker_seconds=0)
@@ -542,14 +545,16 @@ def test_e03_success_config_headers_retry_and_pii_minimization(e03_adapter):
                  "biometria": {"dato": "SINTETICO-NO-EXPORTAR"}}
     def handler(request):
         calls.append(request)
-        assert request.method == "GET"
+        # La búsqueda es POST (P-1: el texto va en el cuerpo); la referencia, GET. Ambas se reintentan.
+        assert request.method == ("POST" if request.url.path == "/fake-cap/search" else "GET")
         assert request.headers["Authorization"] == "Bearer " + "b" * 32
         assert request.headers["X-Correlation-ID"] == "trace-e03"
         assert request.extensions["timeout"]["read"] <= 0.6
         if len(calls) == 1:
             raise httpx.ReadTimeout("Fallo transitorio", request=request)
         if request.url.path == "/fake-cap/search":
-            assert request.url.params["search"] == "prueba" and request.url.params["limit"] == "50"
+            assert not request.url.query
+            assert json.loads(request.content) == {"search": "prueba", "limit": 50}
             return httpx.Response(200, json=[reference])
         assert request.url.path == "/fake-cap/ref/cliente-e03"
         return httpx.Response(200, json=reference)
@@ -571,9 +576,9 @@ def test_e03_missing_real_adapter_cannot_read_local_reference(lab):
 def test_e03_rechecks_cap_before_send_without_duplicate_queries(real_lab):
     c, app, bus = real_lab
     h = real_auth(c)
-    assert c.get("/sol/clients", headers=h, params={"search": "prueba"}).status_code == 200
+    assert c.post("/sol/clients/search", headers=h, json={"search": "prueba"}).status_code == 200
     d = real_create(c, h)
-    assert bus.calls == [("GET", "/cap/references"), ("GET", "/cap/references/" + CLIENT)]
+    assert bus.calls == [("POST", "/cap/references/search"), ("GET", "/cap/references/" + CLIENT)]
     bus.references[CLIENT]["estado_habilitante"] = "OBSERVADO"
     response = c.post(f"/sol/applications/{d['id']}/send", headers={**h, "X-Idempotency-Key": str(uuid4())},
                       json={"revision": d["revision"]})

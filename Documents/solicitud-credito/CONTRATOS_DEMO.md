@@ -26,7 +26,7 @@ El Route Handler de Next.js usa `SOL_GATEWAY_URL`. Cambiar únicamente esa URL n
 | POST `auth/logout` | Invalidar token | Autenticado |
 | GET `auth/me` | Identidad y rol de la sesión | Autenticado |
 | GET `policy` | Política vigente | Autenticado |
-| GET `clients?search=` | Referencias de Captación simulada | Autenticado |
+| GET `clients` · POST `clients/search` (`{"search": ...}` en el cuerpo) | Referencias de Captación simulada; la búsqueda por documento nunca va en la URL | Autenticado |
 | POST `preview` | Validar y recalcular calendario | ASESOR |
 | GET / POST `applications` | Listar / crear | Autenticado / ASESOR |
 | GET / PUT `applications/{id}` | Consultar / editar borrador | Autenticado / ASESOR |

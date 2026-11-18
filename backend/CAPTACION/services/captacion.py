@@ -82,8 +82,9 @@ def registrar_solicitante(core: CoreDb, token: str, datos: dict, cid: str | None
 
 
 def buscar_solicitantes(core: CoreDb, token: str, documento: str | None, limite: int, cid: str | None) -> list[dict]:
-    params = {"limite": limite, **({"documento": documento} if documento else {})}
-    return [_solicitante(s) for s in core.persona("GET", f"{RUTA}/solicitantes", token, cid, params=params)]
+    busqueda = {"limite": limite, **({"documento": documento} if documento else {})}
+    return [_solicitante(s) for s in core.persona("POST", f"{RUTA}/solicitantes/busqueda", token, cid,
+                                                  json=busqueda, aceptar=(200,))]
 
 
 # ── Caso ────────────────────────────────────────────────────────────────────
@@ -358,9 +359,9 @@ def referencia_de_caso(core: CoreDb, token: str, id_caso: str, cid: str | None) 
 def buscar_referencias(core: CoreDb, texto: str, limite: int, cid: str | None) -> list[dict]:
     """Búsqueda acotada para el buscador de SOL. No consulta al cliente por cada fila: SOL
     vuelve a pedir la referencia individual antes de guardar o enviar."""
-    params = {"con_cliente": True, "limite": 200, **({"texto": texto.strip()} if texto.strip() else {})}
+    busqueda = {"con_cliente": True, "limite": 200, **({"texto": texto.strip()} if texto.strip() else {})}
     resultado = []
-    for sol in core.servicio("GET", f"{RUTA}/solicitantes", cid, params=params):
+    for sol in core.servicio("POST", f"{RUTA}/solicitantes/busqueda", cid, json=busqueda, aceptar=(200,)):
         caso = _ultimo_caso_de(core, sol["cod_cliente"], cid)
         if caso is not None:
             resultado.append(_referencia(caso, sol))

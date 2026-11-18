@@ -63,6 +63,11 @@ class EvaluationResult(StrictModel):
     observaciones: str = Field(min_length=5, max_length=1000)
 
 
+class ClientSearch(StrictModel):
+    """El texto buscado (documento o nombre) va en el cuerpo, nunca en la URL."""
+    search: str = Field(default="", max_length=80)
+
+
 class DisableUser(StrictModel):
     motivo: str = Field(min_length=5, max_length=200)
 

@@ -5907,6 +5907,53 @@
         "title": "SolicitanteCaptacionRegistrar",
         "type": "object"
       },
+      "SolicitantesCaptacionBuscar": {
+        "additionalProperties": false,
+        "description": "La búsqueda va en el cuerpo: un documento en la consulta quedaría en los registros de acceso.",
+        "properties": {
+          "con_cliente": {
+            "default": false,
+            "description": "Solo los que ya tienen un cliente ligado.",
+            "title": "Con Cliente",
+            "type": "boolean"
+          },
+          "documento": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Parte del número de documento.",
+            "title": "Documento"
+          },
+          "limite": {
+            "default": 50,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Limite",
+            "type": "integer"
+          },
+          "texto": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Documento, nombres o apellidos.",
+            "title": "Texto"
+          }
+        },
+        "title": "SolicitantesCaptacionBuscar",
+        "type": "object"
+      },
       "SolicitudDetalle": {
         "properties": {
           "calendario": {
@@ -9965,114 +10012,6 @@
       }
     },
     "/coredb/captacion/solicitantes": {
-      "get": {
-        "operationId": "buscar_solicitantes_coredb_captacion_solicitantes_get",
-        "parameters": [
-          {
-            "description": "Parte del número de documento.",
-            "in": "query",
-            "name": "documento",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 12,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Parte del número de documento.",
-              "title": "Documento"
-            }
-          },
-          {
-            "description": "Documento, nombres o apellidos.",
-            "in": "query",
-            "name": "texto",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 100,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Documento, nombres o apellidos.",
-              "title": "Texto"
-            }
-          },
-          {
-            "description": "Solo los que ya tienen un cliente ligado.",
-            "in": "query",
-            "name": "con_cliente",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Solo los que ya tienen un cliente ligado.",
-              "title": "Con Cliente",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limite",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Limite",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SolicitanteCaptacion"
-                  },
-                  "title": "Response Buscar Solicitantes Coredb Captacion Solicitantes Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "description": "Sin token o token no válido"
-          },
-          "403": {
-            "description": "PERMISO_DENEGADO"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "JWT": []
-          }
-        ],
-        "summary": "Buscar Solicitantes",
-        "tags": [
-          "captación"
-        ]
-      },
       "post": {
         "description": "Registra al prospecto. Un documento ya registrado devuelve el mismo solicitante, sin\ncambiar sus datos, con 200 y `duplicado: true`.",
         "operationId": "registrar_solicitante_coredb_captacion_solicitantes_post",
@@ -10134,6 +10073,62 @@
           }
         ],
         "summary": "Registrar Solicitante",
+        "tags": [
+          "captación"
+        ]
+      }
+    },
+    "/coredb/captacion/solicitantes/busqueda": {
+      "post": {
+        "operationId": "buscar_solicitantes_coredb_captacion_solicitantes_busqueda_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitantesCaptacionBuscar"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SolicitanteCaptacion"
+                  },
+                  "title": "Response Buscar Solicitantes Coredb Captacion Solicitantes Busqueda Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Sin token o token no válido"
+          },
+          "403": {
+            "description": "PERMISO_DENEGADO"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Buscar Solicitantes",
         "tags": [
           "captación"
         ]

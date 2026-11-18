@@ -11,7 +11,8 @@ from CAPTACION.core_client import CoreDb
 from CAPTACION.dependencies import Actor, asesor, get_core, lector
 from CAPTACION.schemas import (
     CasoAbrir, CasoEstado, CasoVista, ConsentimientoVista, Consentimientos, ConsultaPedir, ConsultaVista,
-    OtpEnviar, OtpVerificar, PerfilVista, SolicitanteRegistrar, SolicitanteVista, ValidacionesEjecutar,
+    OtpEnviar, OtpVerificar, PerfilVista, SolicitanteRegistrar, SolicitantesBuscar, SolicitanteVista,
+    ValidacionesEjecutar,
     ValidacionManual, ValidacionVista,
 )
 from CAPTACION.services import captacion as svc
@@ -51,11 +52,10 @@ def registrar_solicitante(request: Request, datos: SolicitanteRegistrar, core: C
                             "Solicitante ya registrado" if duplicado else "Solicitante registrado")
 
 
-@router.get("/solicitantes", summary="Buscar solicitantes por documento")
-def buscar_solicitantes(request: Request, documento: str | None = Query(default=None, max_length=12),
-                        limite: int = Query(default=50, ge=1, le=200), core: CoreDb = Depends(get_core),
+@router.post("/solicitantes/busqueda", summary="Buscar solicitantes por documento (en el cuerpo)")
+def buscar_solicitantes(request: Request, datos: SolicitantesBuscar, core: CoreDb = Depends(get_core),
                         actor: Actor = Depends(lector)):
-    filas = svc.buscar_solicitantes(core, actor.token, documento, limite, actor.correlation_id)
+    filas = svc.buscar_solicitantes(core, actor.token, datos.documento, datos.limite, actor.correlation_id)
     return respuestas.exito(request, [_solicitante(s) for s in filas])
 
 

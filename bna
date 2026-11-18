@@ -145,7 +145,32 @@ humo() {
     -e SOL_INITIAL_PASSWORD="$(valor SOL_INITIAL_PASSWORD)" \
     -e EVALUACION_TOKEN_SOL="$(valor EVALUACION_TOKEN_SOL)" \
     -e CAP_SOL_TOKEN="$(valor CAP_SOL_TOKEN)" \
+    -e E2E_SENSIBLES=/tmp/bna-e2e-sensibles \
     bus python - < scripts/flujo_e2e.py
+  revisar_registros
+}
+
+# P-1: ningún registro de contenedor guarda un documento, celular, PIN, clave o token de la
+# corrida. El flujo deja esos valores en el contenedor del Bus; aquí se buscan sin mostrarlos.
+revisar_registros() {
+  local valores hallados
+  valores="$(mktemp)"
+  compose exec -T bus sh -c 'cat /tmp/bna-e2e-sensibles && rm -f /tmp/bna-e2e-sensibles' > "$valores"
+  if [ ! -s "$valores" ]; then
+    rm -f "$valores"
+    echo "  FALLA  El flujo no dejó la lista de datos sensibles de la corrida." >&2
+    exit 1
+  fi
+  hallados="$(compose logs --no-color 2>&1 | grep -wFf "$valores" | cut -d'|' -f1 | sort | uniq -c || true)"
+  local revisados
+  revisados="$(wc -l < "$valores")"
+  rm -f "$valores"
+  if [ -n "$hallados" ]; then
+    echo "  FALLA  Datos sensibles de la corrida en los registros (líneas por servicio):" >&2
+    echo "$hallados" >&2
+    exit 1
+  fi
+  echo "  ok  registros: ninguno de los $revisados documentos, celulares, PIN, claves y tokens de la corrida"
 }
 
 orden="${1:-help}"
