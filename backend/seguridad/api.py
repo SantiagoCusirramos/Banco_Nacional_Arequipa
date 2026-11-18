@@ -1,216 +1,201 @@
-"""Contratos del prototipo. Montable en main:app, con estado independiente."""
+"""Rutas de Seguridad (módulo 9). Sin base propia: todo se guarda en la base integrada por
+COREDB, a través del Bus, con el usuario de servicio svc-seguridad y por la persona que llama.
+
+Todas las rutas /seguridad/* exigen X-Correlation-ID; las protegidas, el token de COREDB de la
+persona (Authorization: Bearer).
+"""
+from __future__ import annotations
+
 import hashlib
 import hmac
-import json
-import re
 import secrets
-import time
-from datetime import datetime
+import uuid
 from decimal import Decimal
-from uuid import uuid4
-from zoneinfo import ZoneInfo
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from .schemas import Login, Operation, Incident, IncidentUpdate
-from .security import HASHER, DUMMY, matches, issue, decode
-from .store import Store, utcnow
+from fastapi import APIRouter, Depends, Header, Path, Request
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-bearer = HTTPBearer(auto_error=False)
-LIMITS = {'ATM': Decimal('1000.00'), 'HOME_BANKING': Decimal('5000.00'), 'BILLETERA': Decimal('500.00')}
-SLA = {'P1': (15, 120), 'P2': (30, 240), 'P3': (120, 1440), 'P4': (480, 4320)}
+from . import auditoria
+from .auth import DESBLOQUEAR, EVALUAR, INCIDENTES, VER_AUDITORIA, Sesion, _bearer, persona, token_de
+from .comun import PATRON_CORRELACION, ErrorSeg
 
-
-def store(request: Request):
-    # Inicialización diferida: importar el CORE no exige configurar este prototipo.
-    if not getattr(request.app.state, 'seguridad_store', None):
-        from .config import Settings
-        request.app.state.seguridad_store = Store(Settings.from_env())
-    return request.app.state.seguridad_store
+VERSION = "1.0.0"
+SEGUNDOS_DESAFIO = 120  # core.fn_segundos_desafio()
+# Objetivos de atención y resolución en minutos: propuestos, no medidos; reloj continuo.
+SLA = {"P1": (15, 120), "P2": (30, 240), "P3": (120, 1440), "P4": (480, 4320)}
 
 
-def correlation(request: Request):
-    cid = request.headers.get('X-Correlation-ID', '')
-    if not re.fullmatch(r'[a-zA-Z0-9_.:-]{1,100}', cid):
-        raise HTTPException(400, 'X-Correlation-ID obligatorio: 1–100 caracteres seguros')
-    return cid
+def correlacion(x_correlation_id: str = Header(default="", alias="X-Correlation-ID")) -> str:
+    if not PATRON_CORRELACION.fullmatch(x_correlation_id):
+        raise ErrorSeg(400, "CORRELACION_REQUERIDA", "X-Correlation-ID obligatorio: 1 a 100 caracteres seguros.")
+    return x_correlation_id
 
 
-def current_user(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
-    if credentials is None:
-        raise HTTPException(401, 'Bearer requerido', headers={'WWW-Authenticate': 'Bearer'})
-    state = store(request)
-    claims = decode(credentials.credentials, state.settings)
-    with state.transaction() as db:
-        user = db.execute('SELECT * FROM users WHERE id=?', (claims['sub'],)).fetchone()
-        if not user or not user['active'] or user['token_version'] != claims['ver'] or user['locked_until'] > time.time():
-            raise HTTPException(401, 'Sesión no vigente')
-        return dict(user)
+router = APIRouter(prefix="/seguridad", tags=["Módulo 9 · Seguridad"], dependencies=[Depends(correlacion)])
 
 
-def roles(*allowed):
-    def dependency(user=Depends(current_user)):
-        if user['role'] not in allowed:
-            raise HTTPException(403, 'Acción no autorizada para el rol')
-        return user
-    return dependency
+def _ctx(request: Request):
+    return request.app.state.ctx
 
 
-router = APIRouter(prefix='/seguridad', tags=['Módulo 9 · Seguridad'], dependencies=[Depends(correlation)])
+def hmac_codigo(clave: str, id_desafio: uuid.UUID, codigo: str) -> str:
+    """El HMAC que guarda la base; separado por dominio del de los sellos."""
+    return hmac.new(clave.encode(), f"desafio-v1:{id_desafio}:{codigo}".encode(), hashlib.sha256).hexdigest()
 
 
-@router.get('/estado')
-def status():
-    return dict(module='SEGURIDAD', mode='PROTOTIPO_LOCAL', version='0.2.0',
-                real_integrations=[], pending=['Bus M8', 'identidades CORE/MySQL', 'M4 Token Matriz',
-                 'M3 topes y saldos', 'M5 extorno', 'RENIEC', 'HSM', 'SIEM', 'SMS'],
-                currency_policy='Topes de demostración por moneda; sin conversión FX')
+# --------------------------------------------------------------------- estado y sesión
+@router.get("/estado")
+def estado(request: Request):
+    ctx = _ctx(request)
+    return {"modulo": "SEGURIDAD", "version": VERSION, "base_propia": False,
+            "persistencia": "COREDB por el Bus de Servicios", "coredb_disponible": ctx.coredb.salud(),
+            "sellado_cada_seg": ctx.config.sellado_seg or None,
+            "pendientes": ["segundo factor por canal independiente", "RENIEC", "HSM", "SIEM", "SMS"]}
 
 
-@router.post('/auth/login')
-def login(body: Login, request: Request):
-    state = store(request)
-    valid = False
-    with state.transaction() as db:
-        user = db.execute('SELECT * FROM users WHERE username=?', (body.username,)).fetchone()
-        now = time.time()
-        verified = matches(user['password_hash'] if user else DUMMY, body.password)
-        if user and user['active'] and user['locked_until'] <= now:
-            valid = verified
-            if valid:
-                db.execute('UPDATE users SET failures=0,locked_until=0 WHERE id=?', (user['id'],))
-            else:
-                failures = (user['failures'] if not user['locked_until'] else 0) + 1
-                locked = now + state.settings.lock_seconds if failures >= 3 else 0
-                db.execute('UPDATE users SET failures=?,locked_until=?,token_version=token_version+? WHERE id=?',
-                           (failures, locked, int(locked > 0), user['id']))
-        state.audit(db, 'LOGIN_OK' if valid else 'LOGIN_RECHAZADO', user['id'] if user else 'desconocido',
-                    correlation(request), {'canal': 'PROTOTIPO'})
-        token = issue(user, state.settings) if valid else None
-    # El rechazo se emite después del commit: los intentos y el bloqueo persisten.
-    if not valid:
-        raise HTTPException(401, 'Usuario o contraseña incorrectos', headers={'WWW-Authenticate': 'Bearer'})
-    return dict(access_token=token, token_type='bearer', expires_in=state.settings.token_minutes * 60)
+class Login(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=40)
+    password: str = Field(min_length=1, max_length=256)
 
 
-@router.get('/auth/me')
-def me(user=Depends(current_user)):
-    return {key: user[key] for key in ('id', 'username', 'role')}
+@router.post("/auth/login")
+def login(datos: Login, request: Request):
+    """El login de COREDB, tal cual: Seguridad no tiene usuarios propios. Cinco fallos seguidos
+    bloquean a la persona 15 minutos (bd-v1.12)."""
+    return _ctx(request).coredb.como_persona(None, "POST", "/coredb/auth/login", json=datos.model_dump())
 
 
-@router.post('/auth/logout')
-def logout(request: Request, user=Depends(current_user)):
-    state = store(request)
-    with state.transaction() as db:
-        db.execute('UPDATE users SET token_version=token_version+1 WHERE id=?', (user['id'],))
-        state.audit(db, 'LOGOUT_TODAS_SESIONES', user['id'], correlation(request))
-    return {'revoked': True}
+@router.get("/auth/me")
+def me(request: Request, credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer)):
+    perfil = _ctx(request).verificador.perfil(token_de(credenciales))
+    return {"username": perfil.usuario, "rol": perfil.rol, "acciones": sorted(perfil.acciones)}
 
 
-@router.post('/operaciones/evaluar')
-def evaluate(body: Operation, request: Request, user=Depends(roles('CLIENTE', 'ADMINISTRADOR'))):
-    """Decisión local, NO movimiento contable. Acumula autorizaciones, sin confiar en body."""
-    state = store(request)
-    day = datetime.now(ZoneInfo('America/Lima')).date().isoformat()
-    error = None
-    result = None
-    with state.transaction() as db:
-        existing = db.execute('SELECT * FROM decisions WHERE operation_id=?', (body.operation_id,)).fetchone()
-        amount = format(body.amount, '.2f')
-        if existing:
-            if (existing['user_id'], existing['amount'], existing['currency'], existing['channel']) != (user['id'], amount, body.currency, body.channel):
-                raise HTTPException(409, 'operation_id ya utilizado con otros datos')
-            return json.loads(existing['result'])
-        rows = db.execute('SELECT amount FROM decisions WHERE user_id=? AND currency=? AND channel=? AND day=?',
-                          (user['id'], body.currency, body.channel, day)).fetchall()
-        accumulated = sum((Decimal(row['amount']) for row in rows), Decimal('0.00'))
-        total = accumulated + body.amount
-        limit = LIMITS[body.channel]
-        if total > limit:
-            state.audit(db, 'TOPE_RECHAZADO', user['id'], correlation(request), {'operation_id': body.operation_id})
-            error = (403, 'Tope diario de demostración excedido')
-        elif total > limit * Decimal('0.80'):
-            challenge = db.execute('SELECT * FROM challenges WHERE id=?', (body.challenge_id or '',)).fetchone()
-            binding = challenge and (challenge['user_id'], challenge['operation_id'], challenge['amount'], challenge['currency'], challenge['channel']) == (user['id'], body.operation_id, amount, body.currency, body.channel)
-            if not body.challenge_id and not body.otp:
-                cid, otp = str(uuid4()), f'{secrets.randbelow(1000000):06d}'
-                digest = hmac.new(state.settings.secret.encode(), (cid + ':' + otp).encode(), hashlib.sha256).hexdigest()
-                db.execute('INSERT INTO challenges(id,user_id,operation_id,amount,currency,channel,expires,digest) VALUES(?,?,?,?,?,?,?,?)',
-                           (cid, user['id'], body.operation_id, amount, body.currency, body.channel, time.time() + 120, digest))
-                state.audit(db, 'DESAFIO_LOCAL_CREADO', user['id'], correlation(request), {'operation_id': body.operation_id})
-                # El OTP viaja por el mismo canal SOLO para la demostración. No constituye 2FA real.
-                return dict(decision='DESAFIO_REQUERIDO', challenge_id=cid, expires_in=120,
-                            demo_otp=otp, warning='SIMULACION: mismo canal; pendiente proveedor de segundo factor')
-            digest = hmac.new(state.settings.secret.encode(), ((body.challenge_id or '') + ':' + (body.otp or '')).encode(), hashlib.sha256).hexdigest()
-            if not binding or challenge['used'] or challenge['expires'] < time.time() or challenge['tries'] >= 3 or not hmac.compare_digest(challenge['digest'], digest):
-                if binding:
-                    db.execute('UPDATE challenges SET tries=tries+1 WHERE id=?', (body.challenge_id,))
-                state.audit(db, 'DESAFIO_RECHAZADO', user['id'], correlation(request))
-                error = (401, 'Desafío inválido, vencido o agotado')
-            else:
-                db.execute('UPDATE challenges SET used=1 WHERE id=?', (body.challenge_id,))
-        if error is None:
-            result = dict(decision='AUTORIZADA_LOCAL', operation_id=body.operation_id,
-                          accumulated=format(total, '.2f'), limit=format(limit, '.2f'),
-                          currency=body.currency, financial_effect=False)
-            db.execute('INSERT INTO decisions VALUES(?,?,?,?,?,?,?)',
-                       (body.operation_id, user['id'], amount, body.currency, body.channel, day, json.dumps(result)))
-            state.audit(db, 'OPERACION_AUTORIZADA_LOCAL', user['id'], correlation(request),
-                        {'operation_id': body.operation_id, 'amount': amount, 'currency': body.currency})
-    if error:
-        raise HTTPException(*error)
-    return result
+# --------------------------------------------------------------------- evaluación de operaciones
+Canal = Literal["ATM", "HB", "BD", "VEN", "AGE"]
 
 
-@router.get('/auditoria')
-def audit_list(request: Request, user=Depends(roles('ADMINISTRADOR', 'AUDITOR'))):
-    with store(request).transaction() as db:
-        rows = db.execute('SELECT * FROM audit ORDER BY seq DESC LIMIT 100').fetchall()
-        return [dict(seq=r['seq'], **json.loads(r['payload']), signature=r['signature']) for r in rows]
+class Operacion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    uuid_operacion: uuid.UUID = Field(description="Lo genera quien llama; repetirlo devuelve la misma decisión.")
+    num_cuenta: str = Field(min_length=1, max_length=20)
+    canal: Canal
+    monto: Annotated[Decimal, Field(gt=0, max_digits=15, decimal_places=2)]
+    id_desafio: uuid.UUID | None = None
+    codigo: str | None = Field(default=None, pattern=r"^\d{6}$")
+
+    @model_validator(mode="after")
+    def _desafio_completo(self):
+        if (self.id_desafio is None) != (self.codigo is None):
+            raise ValueError("id_desafio y codigo van juntos")
+        return self
 
 
-@router.get('/auditoria/verificar')
-def audit_verify(request: Request, user=Depends(roles('ADMINISTRADOR', 'AUDITOR'))):
-    state = store(request)
-    with state.transaction() as db:
-        return state.verify(db)
+@router.post("/operaciones/evaluar")
+def evaluar(datos: Operacion, request: Request, quien: Sesion = Depends(persona(EVALUAR))):
+    """Decisión de seguridad, no movimiento contable: compara el monto con el tope real del canal y
+    el consumo real del día de la cuenta (COREDB). Sobre el 80 % del tope pide un desafío de 120 s;
+    tres códigos incorrectos lo agotan. El código se muestra por el mismo canal: es una simulación,
+    no un segundo factor."""
+    ctx = _ctx(request)
+    cuerpo = {"uuid_operacion": str(datos.uuid_operacion), "num_cuenta": datos.num_cuenta,
+              "canal": datos.canal, "monto": f"{datos.monto:.2f}"}
+    if datos.id_desafio is not None:
+        cuerpo |= {"id_desafio": str(datos.id_desafio),
+                   "hmac_codigo": hmac_codigo(ctx.config.clave, datos.id_desafio, datos.codigo)}
+    resultado = ctx.coredb.por_persona(quien.token, "POST", "/coredb/seguridad/evaluaciones", json=cuerpo)
+    if resultado["decision"] != "DESAFIO_REQUERIDO":
+        return {**resultado, "efecto_financiero": False}
+    id_desafio, codigo = uuid.uuid4(), f"{secrets.randbelow(1_000_000):06d}"
+    creado = ctx.coredb.por_persona(quien.token, "POST", "/coredb/seguridad/desafios", json={
+        **{k: cuerpo[k] for k in ("uuid_operacion", "num_cuenta", "canal", "monto")},
+        "id_desafio": str(id_desafio), "hmac_codigo": hmac_codigo(ctx.config.clave, id_desafio, codigo)})
+    return {**resultado, "id_desafio": str(id_desafio), "vence_en": creado["vence_en"],
+            "vence_en_seg": SEGUNDOS_DESAFIO, "codigo_demo": codigo,
+            "aviso": "SIMULACIÓN: el código viaja por el mismo canal; falta un proveedor de segundo factor.",
+            "efecto_financiero": False}
 
 
-@router.post('/incidentes', status_code=201)
-def create_incident(body: Incident, request: Request, user=Depends(roles('ADMINISTRADOR', 'OPERADOR'))):
-    state, iid = store(request), str(uuid4())
-    now = utcnow()
-    with state.transaction() as db:
-        db.execute('INSERT INTO incidents VALUES(?,?,?,?,?,?,?,?)',
-                   (iid, body.priority, body.title, 'ABIERTO', user['id'], now, now, None,))
-        state.audit(db, 'INCIDENTE_ABIERTO', user['id'], correlation(request), {'incident_id': iid})
-    return dict(id=iid, status='ABIERTO', response_minutes=SLA[body.priority][0],
-                resolution_minutes=SLA[body.priority][1], targets='propuestos; reloj de demostración continuo')
+# --------------------------------------------------------------------- bitácora
+@router.get("/auditoria")
+def eventos(request: Request, quien: Sesion = Depends(persona(VER_AUDITORIA))):
+    """Los últimos 100 eventos de la bitácora general de COREDB."""
+    return _ctx(request).coredb.como_persona(quien.token, "GET", "/coredb/auditoria", params={"limite": 100})
 
 
-@router.get('/incidentes')
-def incidents(request: Request, user=Depends(roles('ADMINISTRADOR', 'AUDITOR', 'OPERADOR'))):
-    with store(request).transaction() as db:
-        return [dict(r) for r in db.execute('SELECT * FROM incidents ORDER BY created DESC')]
+@router.post("/auditoria/sellos")
+def sellar(request: Request, quien: Sesion = Depends(persona(VER_AUDITORIA))):
+    """Sella ahora los eventos que siguen al último sello (sin esperar a la tarea periódica). Sella
+    solo los que tienen la antigüedad mínima configurada."""
+    ctx = _ctx(request)
+    sello = auditoria.sellar(ctx.coredb, ctx.config.clave, ctx.config.sellado_antiguedad_seg)
+    return {"sellado": sello is not None, "sello": sello}
 
 
-@router.patch('/incidentes/{iid}')
-def update_incident(iid: str, body: IncidentUpdate, request: Request, user=Depends(roles('ADMINISTRADOR', 'OPERADOR'))):
-    transitions = {'ABIERTO': 'EN_PROGRESO', 'EN_PROGRESO': 'RESUELTO', 'RESUELTO': 'CERRADO'}
-    state = store(request)
-    with state.transaction() as db:
-        row = db.execute('SELECT * FROM incidents WHERE id=?', (iid,)).fetchone()
-        if not row:
-            raise HTTPException(404, 'Incidente no encontrado')
-        if transitions.get(row['status']) != body.status:
-            raise HTTPException(409, 'Transición de estado inválida')
-        if body.status == 'RESUELTO' and not body.resolution:
-            raise HTTPException(422, 'La resolución requiere descripción')
-        db.execute('UPDATE incidents SET status=?,updated=?,resolution=COALESCE(?,resolution) WHERE id=?',
-                   (body.status, utcnow(), body.resolution, iid))
-        state.audit(db, 'INCIDENTE_' + body.status, user['id'], correlation(request), {'incident_id': iid})
-    return dict(id=iid, status=body.status)
+@router.get("/auditoria/verificar")
+def verificar(request: Request, quien: Sesion = Depends(persona(VER_AUDITORIA))):
+    ctx = _ctx(request)
+    return auditoria.verificar(ctx.coredb, ctx.config.clave)
 
 
-def mount(app):
-    app.include_router(router)
+# --------------------------------------------------------------------- incidentes
+class Incidente(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prioridad: Literal["P1", "P2", "P3", "P4"]
+    titulo: str = Field(min_length=8, max_length=200)
+
+
+class Avance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    estado: Literal["EN_PROGRESO", "RESUELTO", "CERRADO"]
+    resolucion: str | None = Field(default=None, min_length=8, max_length=500)
+
+
+def _con_sla(incidente: dict) -> dict:
+    atencion, resolucion = SLA[incidente["prioridad"]]
+    return {**incidente, "sla_atencion_min": atencion, "sla_resolucion_min": resolucion,
+            "sla": "objetivos propuestos; reloj continuo, sin calendario hábil"}
+
+
+@router.get("/incidentes")
+def incidentes(request: Request, quien: Sesion = Depends(persona(VER_AUDITORIA, INCIDENTES))):
+    lista = _ctx(request).coredb.por_persona(quien.token, "GET", "/coredb/seguridad/incidentes")
+    return [_con_sla(i) for i in lista]
+
+
+@router.post("/incidentes", status_code=201)
+def abrir_incidente(datos: Incidente, request: Request, quien: Sesion = Depends(persona(INCIDENTES))):
+    return _con_sla(_ctx(request).coredb.por_persona(quien.token, "POST", "/coredb/seguridad/incidentes",
+                                                     json=datos.model_dump()))
+
+
+@router.patch("/incidentes/{id_incidente}")
+def avanzar_incidente(datos: Avance, request: Request, id_incidente: uuid.UUID = Path(),
+                      quien: Sesion = Depends(persona(INCIDENTES))):
+    """ABIERTO → EN_PROGRESO → RESUELTO (con resolución) → CERRADO, sin saltos."""
+    return _con_sla(_ctx(request).coredb.por_persona(
+        quien.token, "POST", f"/coredb/seguridad/incidentes/{id_incidente}/estado",
+        json=datos.model_dump(exclude_none=True)))
+
+
+# --------------------------------------------------------------------- tarjetas
+class Desbloqueo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    motivo: str = Field(min_length=3, max_length=255)
+
+
+@router.post("/tarjetas/{id_tarjeta}/desbloqueo")
+def desbloquear_tarjeta(datos: Desbloqueo, request: Request, id_tarjeta: uuid.UUID = Path(),
+                        quien: Sesion = Depends(persona(DESBLOQUEAR))):
+    """Devuelve a ACTIVA una tarjeta BLOQUEADA o RETENIDA. Es el único camino: COREDB lo ejecuta con
+    la cuenta bna_seguridad de la base y registra a la persona como actor (origen SEGURIDAD)."""
+    return _ctx(request).coredb.por_persona(quien.token, "POST", f"/coredb/tarjetas/{id_tarjeta}/desbloqueo",
+                                            json=datos.model_dump())

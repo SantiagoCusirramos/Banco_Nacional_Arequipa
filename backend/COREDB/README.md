@@ -1,8 +1,8 @@
 # COREDB: API de la base integrada
 
 API FastAPI sobre la base integrada de `database/`. Es la API del CORE que usa el producto:
-la llaman el frontend, CUENTAS, TARJETAS, CAPTACION, EVALUACIÓN, DESEMBOLSO, COBRANZA y
-BILLETERA, todos a través del Bus de Servicios (`/bus/coredb`), y ningún otro servicio se conecta
+la llaman el frontend, CUENTAS, TARJETAS, CAPTACION, EVALUACIÓN, DESEMBOLSO, COBRANZA,
+BILLETERA y Seguridad, todos a través del Bus de Servicios (`/bus/coredb`), y ningún otro servicio se conecta
 a esa base. El CORE legado (`backend/CORE`) es otra API, sobre otra base, y sigue aparte.
 
 > **Exige un JWT propio en toda ruta salvo `/coredb/salud` y el login.** No tiene TLS:
@@ -81,8 +81,8 @@ su módulo), nunca con una cuenta de persona:
    `POST /coredb/usuarios/{id}/estado {"activo": false}` corta el acceso en la siguiente
    petición.
 
-En el producto, los cinco usuarios de servicio (`svc-evaluacion`, `svc-desembolso`,
-`svc-captacion`, `svc-cobranza` y `svc-billetera`) no se crean por la API sino en el arranque
+En el producto, los seis usuarios de servicio (`svc-evaluacion`, `svc-desembolso`,
+`svc-captacion`, `svc-cobranza`, `svc-billetera` y `svc-seguridad`) no se crean por la API sino en el arranque
 (`coredb-init` en compose, contenedores de inicio de `coredb` en Kubernetes). Por ejemplo,
 `CORE_DB_SERVICIO_SECRETO=<secreto> python -m COREDB.scripts.crear_servicio --modulo
 EVALUACION --username svc-evaluacion --nombre Evaluación` lo crea con el secreto que el despliegue
@@ -278,6 +278,30 @@ consulta, que quedan en los registros de acceso) y ninguna respuesta ni evento l
 Pruebas: `tests/test_billetera_rutas.py` (sin base) y `tests/integracion/test_billetera.py`
 (contra MySQL, con concurrencia).
 
+## Seguridad
+
+Sobre la sección 18 de `bd-v1.13-mysql`. Lo usa solo el módulo Seguridad (`backend/seguridad`),
+que no tiene base propia. Llama con su usuario de servicio (`svc-seguridad`, módulo SEGURIDAD) y,
+en `X-Persona-Token`, el token de la persona por la que actúa. `OPERAR_SEGURIDAD` la tiene solo
+`SERVICIO:SEGURIDAD`; COREDB exige además el permiso propio de la persona (relee su usuario: uno
+desactivado o de servicio da 401 `PERSONA_NO_VIGENTE`; sin cabecera, `PERSONA_TOKEN_REQUERIDO`) y
+la registra como actor. Nadie llega a estas rutas sin pasar por Seguridad.
+
+| Ruta | Persona | Qué hace |
+|---|---|---|
+| `POST /coredb/seguridad/evaluaciones` | `REGISTRAR_MOVIMIENTO` | Compara el monto con el tope real del canal y el consumo real del día: `AUTORIZADA`, `RECHAZADA` (`TOPE`, `CANAL`, `CUENTA`), `DESAFIO_REQUERIDO` (sobre el 80 %) o, con `id_desafio` y `hmac_codigo`, `DESAFIO_RECHAZADO`. No mueve dinero. El `uuid_operacion` repetido devuelve la misma decisión (`repetida`); con otros datos, 409 `BNA-IDEMPOTENCIA` |
+| `POST /coredb/seguridad/desafios` | `REGISTRAR_MOVIMIENTO` | Guarda el desafío con el HMAC del código (la clave es de Seguridad; COREDB nunca ve el código). Vence a los 120 s, tres fallos lo agotan |
+| `GET /coredb/seguridad/incidentes` | `VER_AUDITORIA` o `GESTIONAR_INCIDENTES` | Los incidentes, del más reciente al más antiguo |
+| `POST /coredb/seguridad/incidentes` | `GESTIONAR_INCIDENTES` (OPERADOR, ADMINISTRADOR) | Abre un incidente P1 a P4 |
+| `POST /coredb/seguridad/incidentes/{id}/estado` | `GESTIONAR_INCIDENTES` | EN_PROGRESO → RESUELTO (con `resolucion`) → CERRADO, sin saltos (409 `BNA-INCIDENTE-TRANSICION`) |
+| `POST /coredb/tarjetas/{id}/desbloqueo` | `BLOQUEAR_TARJETA` | BLOQUEADA o RETENIDA → ACTIVA, origen SEGURIDAD, con la cuenta `bna_seguridad_user`; 409 `TARJETA_NO_BLOQUEADA` |
+
+Sellos de la bitácora: `POST /coredb/auditoria/sellos` (solo `OPERAR_SEGURIDAD`, sin persona)
+guarda el HMAC encadenado que calculó Seguridad sobre los eventos que siguen al último sello; la
+base comprueba el tramo (409 `BNA-SELLO`). `GET /coredb/auditoria/sellos` (`VER_AUDITORIA`) los
+lista y `GET /coredb/auditoria?despues_de_id=` lee los eventos del más antiguo al más reciente
+para sellar y verificar. Pruebas: `tests/integracion/test_seguridad.py`.
+
 ## Consultas
 
 | Ruta | Permiso | Qué devuelve |
@@ -286,7 +310,8 @@ Pruebas: `tests/test_billetera_rutas.py` (sin base) y `tests/integracion/test_bi
 | `GET /coredb/movimientos/{uuid_transaccion}` | `VER_CUENTA` | Un movimiento |
 | `GET /coredb/cuentas?cod_cliente=` | `VER_CUENTA` | Las cuentas en las que el cliente es titular |
 | `GET /coredb/tarjetas?cod_cliente=` | `VER_TARJETA` | Las tarjetas del cliente, de la más reciente a la más antigua |
-| `GET /coredb/auditoria` | `VER_AUDITORIA` | La bitácora, del evento más reciente al más antiguo, con filtros |
+| `GET /coredb/auditoria` | `VER_AUDITORIA` | La bitácora, del evento más reciente al más antiguo, con filtros (con `despues_de_id`, del más antiguo al más reciente) |
+| `GET /coredb/auditoria/sellos` | `VER_AUDITORIA` | Los sellos HMAC de la bitácora (ver «Seguridad») |
 
 - Un movimiento trae `naturaleza` (`D` débito, `C` crédito) y la moneda de su cuenta, y
   no trae el asiento contable. Una transferencia se lee como `TRANSFERENCIA_ENVIADA` en
@@ -306,8 +331,11 @@ Documentación interactiva: `http://127.0.0.1:8012/docs`. Especificación public
   tablas que usa; un endpoint que lea otra necesita su `GRANT` en la base. La tarjeta se lee
   por `tarjetas.v_tarjeta_api`, sin `pan_token`. No lee credenciales ni datos biométricos.
   En UTC y modo estricto. El arranque falla si `core.verificar_configuracion()` no pasa.
-- **Desbloqueo de tarjetas:** no disponible, pendiente de un cliente de Seguridad. La API
-  responde 403 `BNA-DESBLOQUEO`, porque solo el rol `bna_seguridad` puede desbloquear.
+- **Desbloqueo de tarjetas:** solo por el módulo Seguridad (`POST /coredb/tarjetas/{id}/desbloqueo`,
+  ver «Seguridad»). `POST /coredb/tarjetas/{id}/estado` lo rechaza con 403 `BNA-DESBLOQUEO`,
+  porque en la base solo el rol `bna_seguridad` puede desbloquear. Para esa sola ruta COREDB abre
+  una segunda conexión como `bna_seguridad_user` (`CORE_DB_SEGURIDAD_PASSWORD`); sin ella
+  responde 503 `SEGURIDAD_NO_CONFIGURADA`.
 - **Emisión de tarjetas:** `POST /coredb/tarjetas` acepta un `id_tarjeta` opcional. Con un id
   que ya existe responde 409 `REGISTRO_DUPLICADO` y no emite otra tarjeta; el módulo TARJETAS
   lo deriva de su `X-Idempotency-Key` para repetir una emisión sin duplicarla. Cada tarjeta se

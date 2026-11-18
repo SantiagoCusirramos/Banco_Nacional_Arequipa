@@ -126,7 +126,8 @@ def test_desafio_completo(cliente, por_persona, abrir_cuenta, consulta):
         "id_desafio": id_desafio, "uuid_operacion": operacion, "num_cuenta": cuenta, "canal": "ATM",
         "monto": "1300.00", "hmac_codigo": _hmac(id_desafio, "123456")})
     assert creado.status_code == 201, creado.text
-    assert creado.json()["id_desafio"] == id_desafio and creado.json()["vence_en"]
+    assert creado.json()["id_desafio"] == id_desafio
+    assert creado.json()["vence_en"].endswith("Z")
     # La base guarda el HMAC, nunca el código.
     assert consulta("SELECT hmac_codigo h FROM core.desafio_operacion WHERE id_desafio = UUID_TO_BIN(%s)",
                     id_desafio) == [{"h": _hmac(id_desafio, "123456")}]

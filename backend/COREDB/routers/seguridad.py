@@ -7,7 +7,7 @@ registra como actor. Seguridad no tiene base propia; lo que guarda está en la b
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -119,7 +119,11 @@ def crear_desafio(
         ),
         nombre="crear_desafio",
     )
-    return DesafioRespuesta(id_desafio=datos.id_desafio, vence_en=vence_en)
+    # Un OUT llega como texto y la base guarda UTC sin zona; como en el resto de COREDB, se
+    # publica con zona.
+    if not isinstance(vence_en, datetime):
+        vence_en = datetime.fromisoformat(str(vence_en))
+    return DesafioRespuesta(id_desafio=datos.id_desafio, vence_en=vence_en.replace(tzinfo=timezone.utc))
 
 
 # --------------------------------------------------------------------- incidentes
