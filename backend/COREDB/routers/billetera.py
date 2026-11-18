@@ -66,6 +66,16 @@ class AccesoRespuesta(BaseModel):
     cliente: ClienteSesion
 
 
+class PinPeticion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pin: Pin
+
+
+class PinRespuesta(BaseModel):
+    valido: bool
+
+
 class AfiliacionPeticion(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -305,6 +315,24 @@ def acceso(
 
 
 # --- Rutas del cliente --------------------------------------------------------------
+
+@router.post("/pin/verificacion", response_model=PinRespuesta,
+             responses={401: {"description": "PIN_INCORRECTO"}, 403: {"description": "BILLETERA_BLOQUEADA"}})
+def verificar_pin(
+    datos: PinPeticion,
+    cliente: ClienteBilletera = Depends(cliente_actual),
+    db: Session = Depends(db_session),
+    x_correlation_id: str | None = Header(default=None),
+):
+    """Confirma el PIN del cliente de la sesión antes de una operación (la app lo pide si el
+    celular no tiene biometría). Cuenta intentos como el acceso: el tercero bloquea."""
+    resultado = billetera.verificar_pin(db, cliente.cod_cliente, datos.pin, _correlacion(x_correlation_id))
+    if resultado == "EXITOSO":
+        return PinRespuesta(valido=True)
+    if resultado == "BLOQUEADA":
+        raise ErrorCoreDb("BILLETERA_BLOQUEADA", "La billetera está bloqueada. Acérquese al banco.", 403)
+    raise ErrorAutenticacion("PIN_INCORRECTO", "PIN incorrecto.")
+
 
 @router.get("/yo", response_model=PerfilRespuesta)
 def yo(cliente: ClienteBilletera = Depends(cliente_actual), db: Session = Depends(db_session)):

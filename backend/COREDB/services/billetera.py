@@ -45,6 +45,17 @@ def validar_acceso(db: Session, celular: str, pin: str, correlacion: uuid.UUID |
     return Acceso(resultado, cod)
 
 
+def verificar_pin(db: Session, cod_cliente: str, pin: str, correlacion: uuid.UUID | None) -> str:
+    """El PIN del cliente de la sesión, con los mismos intentos que el acceso. El celular lo
+    lee COREDB (clientes.consultar_cliente) y no sale de aquí."""
+    (cliente,) = llamar(db, "clientes.consultar_cliente", cod_cliente, salidas=1)
+    db.commit()
+    celular = json.loads(cliente)["celular"] if cliente else None
+    if not celular:
+        return "NO_AFILIADO"
+    return validar_acceso(db, celular, pin, correlacion).resultado
+
+
 def afiliar(db: Session, cod_cliente: str, num_cuenta: str, pin: str, actor: str,
             correlacion: uuid.UUID | None) -> bool:
     (nueva,) = con_reintentos(

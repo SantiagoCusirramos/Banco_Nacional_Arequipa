@@ -5293,6 +5293,34 @@
         "title": "PerfilRiesgoCaptacion",
         "type": "object"
       },
+      "PinPeticion": {
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "pattern": "^[0-9]{6}$",
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ],
+        "title": "PinPeticion",
+        "type": "object"
+      },
+      "PinRespuesta": {
+        "properties": {
+          "valido": {
+            "title": "Valido",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valido"
+        ],
+        "title": "PinRespuesta",
+        "type": "object"
+      },
       "ProductoAhorroRespuesta": {
         "properties": {
           "activo": {
@@ -8221,6 +8249,93 @@
           }
         ],
         "summary": "Operaciones",
+        "tags": [
+          "billetera"
+        ]
+      }
+    },
+    "/coredb/billetera/pin/verificacion": {
+      "post": {
+        "description": "Confirma el PIN del cliente de la sesión antes de una operación (la app lo pide si el\ncelular no tiene biometría). Cuenta intentos como el acceso: el tercero bloquea.",
+        "operationId": "verificar_pin_coredb_billetera_pin_verificacion_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Cliente-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Cliente-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinPeticion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinRespuesta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "PIN_INCORRECTO"
+          },
+          "403": {
+            "description": "BILLETERA_BLOQUEADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Verificar Pin",
         "tags": [
           "billetera"
         ]
