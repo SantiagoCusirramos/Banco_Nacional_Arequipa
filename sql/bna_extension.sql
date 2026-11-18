@@ -4241,6 +4241,8 @@ GRANT SELECT ON clientes.v_perfil_riesgo_captacion_api TO bna_api;
 --   FA-02); las vistas la muestran VENCIDA sin que nadie la actualice.
 CREATE DATABASE IF NOT EXISTS billetera CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs;
 GRANT ALL PRIVILEGES ON billetera.* TO 'bna_owner'@'%';
+-- v1.10: como sobre los demás esquemas (bna_core.sql).
+GRANT ALL PRIVILEGES ON billetera.* TO bna_admin;
 
 -- El modelo deja libre el id 10 entre SEGURIDAD y SOLICITUD DE CREDITO.
 INSERT INTO core.modulo (id_modulo, nombre) VALUES (10, 'BILLETERA') AS nueva
@@ -4757,12 +4759,19 @@ BEGIN
 END //
 
 -- Interno. Con la llave ya usada, la operación que la usó si es la misma; si no, falla.
+-- v1.10: lectura con bloqueo (FOR SHARE). Quien llama pudo leer antes en su transacción
+-- (la API lee la afiliación del cliente), y con REPEATABLE READ una lectura sin bloqueo vería
+-- esa instantánea, anterior a la operación que confirmó la petición por la que se esperó.
 CREATE DEFINER = 'bna_owner'@'%' PROCEDURE billetera.operacion_repetida(
-    IN p_debito BINARY(16), IN p_tipo VARCHAR(10), IN p_origen VARCHAR(12), OUT p_id_operacion BINARY(16))
+    IN p_debito BINARY(16), IN p_tipo VARCHAR(10), IN p_origen VARCHAR(12), IN p_id_qr BINARY(16),
+    IN p_id_solicitud BINARY(16), OUT p_id_operacion BINARY(16))
     COMMENT 'Interno. Devuelve la operación de una llave repetida.'
 BEGIN
+    SET p_id_operacion = NULL;
     SELECT id_operacion INTO p_id_operacion FROM billetera.operacion
-     WHERE uuid_debito = p_debito AND tipo = p_tipo AND cod_cliente_origen = p_origen;
+     WHERE uuid_debito = p_debito AND tipo = p_tipo AND cod_cliente_origen = p_origen
+       AND (p_id_qr IS NULL OR id_qr = p_id_qr) AND (p_id_solicitud IS NULL OR id_solicitud = p_id_solicitud)
+       FOR SHARE;
     IF p_id_operacion IS NULL THEN
         CALL core.fallar('BNA-IDEMPOTENCIA: la llave se usó en otra operación');
     END IF;
@@ -4797,7 +4806,7 @@ BEGIN
         CALL billetera.exigir_llave(p_llave, p_huella);
         CALL cuentas.reservar_llave(p_llave, p_huella, p_repetido, p_uuid_debito, v_abono);
         IF p_repetido THEN
-            CALL billetera.operacion_repetida(p_uuid_debito, 'P2P', p_cod_cliente, p_id_operacion);
+            CALL billetera.operacion_repetida(p_uuid_debito, 'P2P', p_cod_cliente, NULL, NULL, p_id_operacion);
         ELSE
             CALL billetera.cuenta_activa(p_cod_cliente, v_cuenta);
             CALL billetera.destino_por_celular(p_celular_destino, v_destino, v_cuenta_destino);
@@ -4848,10 +4857,7 @@ BEGIN
         CALL billetera.exigir_llave(p_llave, p_huella);
         CALL cuentas.reservar_llave(p_llave, p_huella, p_repetido, p_uuid_debito, v_abono);
         IF p_repetido THEN
-            CALL billetera.operacion_repetida(p_uuid_debito, 'QR', p_cod_cliente, p_id_operacion);
-            IF NOT EXISTS (SELECT 1 FROM billetera.operacion WHERE id_operacion = p_id_operacion AND id_qr = p_id_qr) THEN
-                CALL core.fallar('BNA-IDEMPOTENCIA: la llave se usó en otra operación');
-            END IF;
+            CALL billetera.operacion_repetida(p_uuid_debito, 'QR', p_cod_cliente, p_id_qr, NULL, p_id_operacion);
         ELSE
             CALL billetera.cuenta_activa(p_cod_cliente, v_cuenta);
             SELECT q.tipo, q.estado, q.num_cuenta, q.cod_cliente, q.id_comercio, q.monto, q.fecha_expiracion
@@ -4969,11 +4975,8 @@ BEGIN
             CALL cuentas.reservar_llave(p_llave, p_huella, p_repetido, p_uuid_debito, v_abono);
         END IF;
         IF p_repetido THEN
-            CALL billetera.operacion_repetida(p_uuid_debito, 'SOLICITUD', p_cod_cliente, p_id_operacion);
-            IF NOT EXISTS (SELECT 1 FROM billetera.operacion WHERE id_operacion = p_id_operacion
-                                                               AND id_solicitud = p_id_solicitud) THEN
-                CALL core.fallar('BNA-IDEMPOTENCIA: la llave se usó en otra operación');
-            END IF;
+            CALL billetera.operacion_repetida(p_uuid_debito, 'SOLICITUD', p_cod_cliente, NULL, p_id_solicitud,
+                                              p_id_operacion);
             SET p_estado = 'PAGADA';
         ELSE
             SELECT cod_solicitante, cod_pagador, estado, monto, concepto, fecha_vencimiento

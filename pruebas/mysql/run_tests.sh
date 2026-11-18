@@ -272,6 +272,26 @@ ok=0; [ "$n" = 1 ] && echo "$bd_b" | grep -q 'BNA-SOLICITUD-NO-PENDIENTE' && ok=
 registrar X653 bna_api_user Concurrencia 'Extensión v1.9' 'Dos aceptaciones simultáneas de una solicitud con llaves distintas pagan una vez' procedimiento \
   'pagos: 1; segunda: BNA-SOLICITUD-NO-PENDIENTE' "pagos: $n; segunda: $(echo "$bd_b" | grep -m1 ERROR | cut -c1-80 | tr -d "'")" "$ok"
 
+# X654 y X655 (v1.10): como X650 y X652, pero la sesión B ya leyó sin bloqueo antes de
+# llamar, como la API (que lee la afiliación del cliente). Con REPEATABLE READ esa lectura
+# fija la instantánea: la operación repetida se busca con una lectura con bloqueo, que ve
+# lo que la primera confirmó mientras B esperaba.
+bd_simultaneas X654 \
+  "CALL billetera.transferir('C001', '959000002', 5, NULL, 'k654', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)" \
+  "SELECT COUNT(*) INTO @antes FROM billetera.v_afiliacion_api; CALL billetera.transferir('C001', '959000002', 5, NULL, 'k654', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r); SELECT @r"
+n="$(root_ -N -e "SELECT COUNT(*) FROM billetera.operacion o JOIN cuentas.idempotencia_movimiento i ON i.uuid_transaccion = o.uuid_debito WHERE i.llave = 'k654'")"
+ok=0; [ "$n" = 1 ] && ! echo "$bd_b" | grep -q ERROR && [ "$(echo "$bd_b" | tail -1)" = 1 ] && ok=1
+registrar X654 bna_api_user Concurrencia 'Extensión v1.10' 'Un envío repetido a la vez devuelve la misma operación aunque la sesión ya hubiera leído' procedimiento \
+  'operaciones: 1; segunda: repetida' "operaciones: $n; segunda: $(echo "$bd_b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+q="$(bd_qr_dinamico 6)"
+bd_simultaneas X655 \
+  "CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k655', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r)" \
+  "SELECT COUNT(*) INTO @antes FROM billetera.v_qr_api; CALL billetera.pagar_qr('C001', UNHEX('$q'), NULL, 'k655', REPEAT('a', 64), 'cliente:C001', NULL, @o, @d, @r); SELECT @r"
+n="$(root_ -N -e "SELECT COUNT(*) FROM billetera.operacion WHERE id_qr = UNHEX('$q')")"
+ok=0; [ "$n" = 1 ] && ! echo "$bd_b" | grep -q ERROR && [ "$(echo "$bd_b" | tail -1)" = 1 ] && ok=1
+registrar X655 bna_api_user Concurrencia 'Extensión v1.10' 'Un pago de QR repetido a la vez devuelve el mismo pago aunque la sesión ya hubiera leído' procedimiento \
+  'pagos: 1; segunda: repetida' "pagos: $n; segunda: $(echo "$bd_b" | tail -1 | cut -c1-80 | tr -d "'")" "$ok"
+
 # X234 (v1.1): dos registros simultáneos con el mismo correo; el segundo espera en el
 # índice único y se rechaza cuando el primero confirma.
 CLIENTE=api_ concurrente X234 'Extensión v1.1' 'Dos registros simultáneos con el mismo correo dejan un solo cliente' \

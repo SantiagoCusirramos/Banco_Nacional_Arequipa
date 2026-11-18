@@ -60,3 +60,9 @@ CALL prueba.verifica('X342', 'Extensión', 'Créditos', 'bna_admin ejecuta los p
   JSON_ARRAY("CALL prueba.cr_solicitud('33000000-0000-4000-8000-000000000342', 'C001', 3000, 3, 1, NULL, @r, @e)",
              "CALL creditos.catalogos_credito(@cat)"),
   "SELECT @r = 1 AND JSON_LENGTH(@cat, '$.estados_solicitud') = 5", 'ronda 1 y catálogos', "SELECT @r", 'procedimiento');
+
+-- v1.10: bna_admin tiene sobre billetera.* lo mismo que sobre los demás esquemas.
+CALL prueba.verifica('X670', 'Extensión', 'Billetera', 'bna_admin lee las tablas de la billetera y ejecuta sus procedimientos',
+  JSON_ARRAY("CALL billetera.afiliar('C001', 'CTA-PEN-1', '123456', 'pruebas', NULL, @n)",
+             "SELECT COUNT(*) INTO @a FROM billetera.afiliacion WHERE cod_cliente = 'C001'"),
+  "SELECT @a = 1 AND @n = 1", 'afiliación leída', "SELECT @a", 'privilegio');
