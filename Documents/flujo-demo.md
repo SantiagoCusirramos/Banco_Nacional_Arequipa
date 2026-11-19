@@ -2,7 +2,7 @@
 
 Recorrido completo del producto integrado con un cliente nuevo: crear cliente, cuenta y tarjeta; pedir un crédito de S/ 1000.00; desembolsarlo; consultar el saldo en el cajero; depositar S/ 1000.00 en ventanilla; pagar S/ 500.00 con la billetera digital, y bloquear la tarjeta.
 
-Comprobado el 2026-11-19 sobre `main` (`f87e7c0`) con `./bna up`, recorriendo cada paso con las mismas peticiones que hacen las pantallas, y con [`scripts/flujo_demo.py`](../scripts/flujo_demo.py), que lo repite entero y verifica los saldos en COREDB.
+Comprobado el 2026-11-19 con `./bna up`, recorriendo cada paso con las mismas peticiones que hacen las pantallas, y con [`scripts/flujo_demo.py`](../scripts/flujo_demo.py), que lo repite entero y verifica los saldos en COREDB. Los dos pasos que estaban bloqueados (la consulta de saldo del cajero y el bloqueo desde el Home Banking) se corrigieron en #128 y #129.
 
 ## Resumen
 
@@ -15,11 +15,11 @@ Comprobado el 2026-11-19 sobre `main` (`f87e7c0`) con `./bna up`, recorriendo ca
 | 2a | Pedir el crédito de 1000.00 | `/solicitud-credito` | Funciona |
 | 2b | Evaluar la solicitud | `/evaluacion` | Funciona |
 | 3 | Desembolsar | `/desembolso` | Funciona |
-| 4 | Consultar el saldo en el cajero | Cajero, `http://127.0.0.1:8019` | **Bloqueado**: la consulta de saldo responde 500 (código que falta) |
+| 4 | Consultar el saldo en el cajero | Cajero, `http://127.0.0.1:8019` | Funciona |
 | 5 | Depositar 1000.00 en ventanilla | `/cuenta` | Funciona |
 | 6a | Afiliar la billetera y registrar el comercio | Sin pantalla: curl al Bus | Funciona por la API |
 | 6b | Pagar 500.00 con la billetera | App Chaski sin compilar: curl al Bus | Funciona por la API |
-| 7 | Bloquear la tarjeta | `/tarjetas` | Funciona en `/tarjetas`; **el Home Banking (`/homebanking`) no tiene la opción** (código que falta) |
+| 7 | Bloquear la tarjeta | Home Banking, `/homebanking/cuentas.html` (también `/tarjetas`) | Funciona |
 
 Saldo de la cuenta del cliente después de cada paso: 0.00 → 1000.00 (desembolso) → 1000.00 (consulta) → 2000.00 (depósito) → 1500.00 (pago).
 
@@ -129,15 +129,13 @@ Los datos de ejemplo son los de la corrida del script. Use otros en cada demostr
 - **Calendario obtenido** (1000.00, 6 meses, TEA 22 %, francés): cuotas de 176.55 (la última 176.54), total 1059.29; capital 159.84, 162.51, 165.23, 167.99, 170.79 y 173.64.
 - **Comprobar:** `curl -s "${H[@]}" $BUS/bus/coredb/coredb/creditos/<cod_credito>` (estado, `cuotas`, `eventos` con CREAR_CREDITO).
 
-### 4. Consultar el saldo en el cajero (bloqueado)
+### 4. Consultar el saldo en el cajero
 
-- **Pantalla:** http://127.0.0.1:8019. El operador abre el cajero con su usuario de COREDB; el cliente escribe su `id_tarjeta` y su PIN y pide la consulta de saldo.
-- **Peticiones:** `POST /api/apertura` (200), `POST /api/validar-pin` (200, EXITOSO, abre la sesión de la tarjeta), `GET /api/saldo?id_tarjeta=` con `X-ATM-Sesion`.
-- **Resultado real:** `/api/saldo` responde **500** `ERR` `DESCONOCIDO`: «ATM.schemas.atm.SaldoOut() argument after ** must be a mapping, not list».
-- **Causa:** `backend/ATM/services/atm.py` (`consultar_saldo`) hace `SaldoOut(**resp)` con lo que devuelve `GET /api/v1/cuentas/consolidada/{cod_cliente}` de CUENTAS. CUENTAS devuelve una lista de cuentas (`num_cuenta`, `moneda`, `saldo_disponible`…); el cajero espera un objeto `{lista_cuentas, uuid_consulta}` con `id_cuenta` y `num_cuenta_enmascarado`. La prueba unitaria del cajero simula la forma que espera el cajero, no la que devuelve CUENTAS, y el flujo de `./bna smoke` retira con la API sin consultar el saldo; por eso no se había visto.
-- **Clasificación:** código que falta (adaptar la respuesta de CUENTAS en el cajero). No es un dato de referencia ni configuración.
-- **Consecuencia:** la pantalla del cajero arma la lista de cuentas para el retiro con esa misma consulta, así que tampoco se puede retirar desde la pantalla (por la API, `POST /api/autorizar` y `/api/confirmar` sí funcionan, como hace `./bna smoke`).
-- **Mientras tanto:** el saldo se ve en `/cuenta` o con `curl … /coredb/cuentas/<num_cuenta>`. Saldo esperado: **1000.00**.
+- **Pantalla:** http://127.0.0.1:8019. El operador abre el cajero con su usuario de COREDB; el cliente escribe su `id_tarjeta` y su PIN y elige «Consultar saldo».
+- **Peticiones:** `POST /api/apertura` (200), `POST /api/validar-pin` (200, EXITOSO, abre la sesión de la tarjeta), `GET /api/saldo?id_tarjeta=` con `X-ATM-Sesion` (ATM → TARJETAS y CUENTAS `/consolidada` por el Bus).
+- **Resultado:** la pantalla muestra la cuenta de la tarjeta (`****` y los últimos 4 dígitos) con **S/ 1000.00**. Solo aparece la cuenta vinculada a la tarjeta, aunque el cliente tenga otras: es la única que el cajero puede operar.
+- **Retiro desde la pantalla:** «Retirar efectivo» usa la misma consulta para elegir la cuenta; luego `POST /api/autorizar` (retiene) y `POST /api/confirmar` (debita), cada uno con su `X-Idempotency-Key`. Este flujo no retira, para que el saldo final siga siendo 1500.00.
+- **Antes de #128** esta consulta respondía 500 («SaldoOut() argument after ** must be a mapping, not list») y la pantalla tampoco podía retirar.
 
 ### 5. Depositar 1000.00 en ventanilla
 
@@ -179,10 +177,10 @@ curl -s -X POST $BUS/bus/billetera/api/qr/<id_qr>/pagar -H "X-Bus-Token: $BT" -H
 
 ### 7. Bloquear la tarjeta
 
-- **Pantalla:** http://localhost:3000/tarjetas, «Bloquear o cambiar el estado»: estado BLOQUEADA, motivo «Pérdida reportada por el cliente».
-- **Petición:** `POST /api/tarjeta/{id}/estado` `{"estado":"BLOQUEADA","motivo":"…"}` (TARJETAS → COREDB). TARJETAS también tiene `POST /api/v1/tarjetas/{id}/bloqueo`.
-- **Resultado:** tarjeta **BLOQUEADA**. El cajero ya no la acepta: `POST /api/validar-pin` responde 400. El desbloqueo no se hace en TARJETAS (403): lo hace Seguridad.
-- **En Home Banking no se puede:** el prototipo `http://localhost:3000/homebanking/` lista las tarjetas del cliente (`GET /api/tarjeta/cliente/{cod}`), pero no tiene ninguna opción para bloquearlas. Además, en el Home Banking no entra el cliente: entra un usuario del banco con su clave de COREDB y escribe el código del cliente que atiende (`frontend/public/homebanking/js/bus.js`, «El Home Banking no tiene todavía autenticación de clientes»). **Clasificación:** código que falta (la opción en la pantalla); la autenticación de clientes es una pregunta abierta del equipo.
+- **Pantalla:** http://localhost:3000/homebanking/, con el usuario del banco y el código del cliente; en «Cuentas por tarjeta», «Mis tarjetas», botón **«Bloquear»** de la tarjeta ACTIVA. La pantalla pide confirmación («¿Bloquear la tarjeta terminada en …?») y, al aceptar, muestra «Tarjeta terminada en … bloqueada. Ya no se acepta en el cajero.».
+- **Petición:** `POST /api/tarjeta/{id}/bloqueo` `{"motivo":"Bloqueo solicitado por el cliente en Home Banking"}` (puente del frontend → Bus → TARJETAS → COREDB). El personal también puede hacerlo en http://localhost:3000/tarjetas, «Bloquear o cambiar el estado».
+- **Resultado:** tarjeta **BLOQUEADA**. El cajero ya no la acepta: `POST /api/validar-pin` responde 400 `ERR-ATM-TARJETA-NO-OPERATIVA`. El desbloqueo no se hace en TARJETAS ni en el Home Banking (403): lo hace Seguridad.
+- **Quién entra al Home Banking:** un usuario del banco con su clave de COREDB, que escribe el código del cliente que atiende (decisión 14 de [`decisiones-del-equipo.md`](decisiones-del-equipo.md)). Que entre el propio cliente sigue siendo una pregunta del equipo.
 
 ### 8. Comprobar en COREDB
 
@@ -226,10 +224,9 @@ Hace las mismas peticiones que las pantallas, por los puentes del frontend (`htt
 Por cada paso imprime dónde (pantalla y ruta), con qué usuario, el resultado y el saldo o estado después, y al final la comprobación en COREDB. Sale con:
 
 - **0** y «Flujo de demostración completo.»: todo pasó.
-- **2**: todo lo demás pasó, pero quedó un paso bloqueado por una falta conocida. Hoy es el paso 4 (consulta de saldo del cajero); cuando se corrija, el script lo verifica sin cambios (saldo 1000.00) y sale con 0.
 - **1**: un paso falló; imprime cuál y la respuesta.
 
-Corrido dos veces seguidas el 2026-11-19 sobre la misma base: las dos terminaron con 2 (solo el paso 4 bloqueado) y saldo final 1500.00.
+Corrido dos veces seguidas el 2026-11-19 sobre la misma base (`main` `aa500a6`, con #128 y #129): las dos terminaron con 0 («Flujo de demostración completo.»), saldo final 1500.00.
 
 ## Errores frecuentes
 
@@ -243,16 +240,15 @@ Corrido dos veces seguidas el 2026-11-19 sobre la misma base: las dos terminaron
 | La evaluación queda OBSERVADO | Zona gris de la regla (cuota alta respecto del ingreso) | Subir el ingreso o decidir con un usuario ANALISTA registrado como analista |
 | La billetera rechaza el pago con «límite por operación» o RN-TOP-001 | Más de 500.00 en una operación o en el día | Pagar 500.00 o menos; el tope se renueva al día siguiente |
 | El celular de la billetera da 401 | La billetera no está afiliada o el PIN no es el de la afiliación | Repetir la afiliación (cambia el PIN) |
-| El cajero responde 500 en «consultar saldo» | El paso 4, bloqueado | Ver el paso 4 |
 | `./bna down -v` deja volúmenes | Ocurrió en versiones anteriores | `docker compose -p bna down -v` y `docker volume ls` |
 
-## Pasos bloqueados y PR mínimo propuesto
+## Lo que sigue sin pantalla
 
-| Paso | Bloqueo | Tipo | PR mínimo | ¿Mueve dinero? |
-|---|---|---|---|---|
-| 4 | El cajero no muestra el saldo (500) | Código que falta | En `backend/ATM/services/atm.py`, convertir la lista de CUENTAS `/consolidada` en `SaldoOut` (`id_cuenta` = `num_cuenta`, `num_cuenta_enmascarado` con los últimos 4 dígitos, `uuid_consulta` nuevo). Cambiar el simulacro de `backend/ATM/tests/test_atm.py` a la forma real de CUENTAS (la prueba falla primero) y agregar la consulta de saldo a `scripts/flujo_e2e.py` | La consulta, no. Pero habilita el retiro desde la pantalla del cajero, que sí mueve dinero |
-| 7 (en Home Banking) | El Home Banking no tiene la opción de bloquear | Código que falta (pantalla) | En `frontend/public/homebanking/` (página de tarjetas), un botón «Bloquear» que llame a `POST /api/tarjeta/{id}/bloqueo` con un motivo, y su prueba. Que entre el propio cliente (autenticación de clientes) es una decisión del equipo: queda como pregunta | No |
-| 6 (pantallas) | Afiliar la billetera y registrar comercios no tienen pantalla; la app Chaski no se compila | Pantalla que falta | Opcional: un formulario de afiliación en el frontend. La app la documenta `billetera-chaski/README.md` (#116) | La afiliación, no |
+Ningún paso está bloqueado. Sin pantalla quedan:
+
+| Paso | Qué falta | Tipo | ¿Mueve dinero? |
+|---|---|---|---|
+| 6 | Afiliar la billetera y registrar comercios no tienen pantalla; la app Chaski no se compila. Opcional: un formulario de afiliación en el frontend. La app la documenta `billetera-chaski/README.md` (#116) | Pantalla que falta | La afiliación, no |
 
 Ningún paso falló por un dato de referencia que falte: la agencia `AQP01`, los terminales `DEV-*`, el BIN `004499`, los periodos contables y los topes por canal los carga `database/sql/bna_datos_dev.sql` al crear el volumen.
 
@@ -288,7 +284,7 @@ Qué cambia al desplegar este flujo en el clúster de Infraestructura. La refere
   BNA_FRONTEND=http://<frontend publicado> BNA_BUS=http://<bus publicado> python3 scripts/flujo_demo.py
   ```
   con el mismo `.env` con el que se creó `bna-secretos` (de ahí lee `BNA_ADMIN_PASSWORD` y `BUS_TOKEN_PRUEBAS`). Direcciones: **pendiente de recibir kubeconfig**.
-- Comprobado en kind el 2026-11-19 (`./bna k8s-up`, kind v0.27.0): `BNA_FRONTEND=http://localhost:13000 BNA_BUS=http://127.0.0.1:18018 python3 scripts/flujo_demo.py` da el mismo resultado que con compose (salida 2, solo el paso 4 bloqueado, saldo final 1500.00), usando solo el frontend y el Bus publicados.
+- Comprobado en kind el 2026-11-19 (`./bna k8s-up`, kind v0.27.0): `BNA_FRONTEND=http://localhost:13000 BNA_BUS=http://127.0.0.1:18018 python3 scripts/flujo_demo.py` dio el mismo resultado que con compose en ese momento, antes de #128 (salida 2 por el paso 4, saldo final 1500.00), usando solo el frontend y el Bus publicados. No se volvió a correr en kind después de #128 y #129.
 
 ### Pasos, cuando llegue el kubeconfig
 
