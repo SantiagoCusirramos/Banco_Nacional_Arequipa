@@ -569,9 +569,25 @@ def flujo():
     disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     exigir(float(disponible) == 20.0, f"La retención sin confirmar debía retener 10.00: disponible {disponible}")
 
-    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
+    # Bloqueo desde el Home Banking: la misma petición que el botón «Bloquear» de /homebanking/cuentas.html,
+    # por el puente del frontend → Bus → TARJETAS.
+    estado, respuesta = pedir("POST", f"{FRONTEND}/api/tarjeta/{tarjeta}/bloqueo",
+                              {"motivo": "Bloqueo solicitado por el cliente en Home Banking"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
-           f"Bloqueo por TARJETAS: {estado} {respuesta}")
+           f"Bloqueo desde el Home Banking: {estado} {respuesta}")
+    # El cajero deja de aceptarla: ni el PIN correcto abre sesión, ni la sesión abierta antes retira.
+    estado, respuesta = pedir("POST", f"{atm_base}/validar-pin",
+                              {"id_tarjeta": tarjeta, "pin": "4821", "id_terminal": "DEV-ATM-01"}, token)
+    exigir(estado != 200 or respuesta["data"].get("resultado") != "EXITOSO",
+           f"El cajero no debía aceptar la tarjeta bloqueada: {estado} {respuesta}")
+    estado, respuesta = pedir("POST", f"{atm_base}/autorizar", {**retiro_atm, "uuid_transaccion": str(uuid.uuid4())},
+                              token, cabeceras={"X-Idempotency-Key": str(uuid.uuid4()), **sesion_atm})
+    exigir(not (estado == 201 and respuesta["data"].get("aprobada")),
+           f"La sesión abierta antes del bloqueo no debía retirar: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 20.0, f"Con la tarjeta bloqueada no debía retenerse nada: disponible {disponible}")
+    paso("Home Banking: «Bloquear» deja la tarjeta BLOQUEADA (puente del frontend → Bus → TARJETAS) y el cajero "
+         "ya no la acepta (PIN rechazado; la sesión abierta antes no retira; saldo intacto)")
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
     exigir(estado == 403 and respuesta["error_code"] == "ERR-TAR-DESBLOQUEO-NO-PERMITIDO",
            f"El desbloqueo por TARJETAS debía responder 403: {estado} {respuesta}")

@@ -178,6 +178,7 @@ const Bus = (() => {
     return {
       codCliente,
       tarjetas: (lista || []).map(t => ({
+        idTarjeta: t.id_tarjeta,
         numTarjeta: t.numero_enmascarado || ("•••• " + t.ultimos4),
         marca: "BNA",
         tipo: "DÉBITO",
@@ -185,6 +186,12 @@ const Bus = (() => {
         estado: t.estado_tarjeta
       }))
     };
+  }
+
+  // Bloqueo de la tarjeta: ruta de bloqueo de TARJETAS (por el Bus). El desbloqueo no se hace aquí:
+  // TARJETAS lo rechaza y lo hace Seguridad.
+  async function bloquearTarjeta(idTarjeta, motivo) {
+    return invocarAPI(`/api/tarjeta/${encodeURIComponent(idTarjeta)}/bloqueo`, { motivo }, "TARJETAS · bloqueo");
   }
 
   async function verificarTitularidad() {
@@ -356,6 +363,7 @@ const Bus = (() => {
     invocar: invocarAPI,
     autenticar,
     obtenerTarjetasAsociadas,
+    bloquearTarjeta,
     verificarTitularidad,
     consultarPosicion,
     consultarMovimientos,
