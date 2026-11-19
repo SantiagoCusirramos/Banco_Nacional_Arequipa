@@ -12,9 +12,7 @@ Las claves salen de `.env` (la genera `./bna up`); ninguna se imprime. Cada corr
 nuevos (documentos, celulares y RUC al azar), así que se puede repetir sobre la misma base.
 
 Al final comprueba en COREDB los saldos, el crédito y su calendario, el estado de la tarjeta y
-la bitácora. Sale con 0 («Flujo de demostración completo.»), con 2 si todo lo demás pasó pero
-quedó un paso bloqueado por una falta conocida (hoy, la consulta de saldo del cajero), o con 1 y
-el paso que falló.
+la bitácora. Sale con 0 («Flujo de demostración completo.») o con 1 y el paso que falló.
 Documentación: Documents/flujo-demo.md.
 """
 
@@ -157,19 +155,6 @@ def paso(numero, titulo, donde, usuario, resultado, despues=""):
     print(f"    resultado: {resultado}")
     if despues:
         print(f"    después:   {despues}")
-
-
-BLOQUEADOS = []
-
-
-def bloqueado(numero, titulo, donde, usuario, causa):
-    BLOQUEADOS.append({"paso": numero, "titulo": titulo, "causa": causa})
-    PASOS.append({"paso": numero, "titulo": titulo, "donde": donde, "usuario": usuario,
-                  "resultado": "BLOQUEADO: " + causa, "despues": ""})
-    print(f"\n[{numero}] {titulo}  ** BLOQUEADO **", flush=True)
-    print(f"    dónde:     {donde}")
-    print(f"    usuario:   {usuario}")
-    print(f"    causa:     {causa}")
 
 
 def captar(token, nombres, apellido_paterno, apellido_materno):
@@ -354,24 +339,16 @@ def flujo():
                                  {"id_tarjeta": id_tarjeta, "pin": pin, "id_terminal": CAJERO}, token_cajero))
     exigir(validacion["resultado"] == "EXITOSO" and validacion["token_sesion"], f"PIN en el cajero: {validacion}")
     sesion_atm = {"X-ATM-Sesion": validacion["token_sesion"]}
-    estado, respuesta, _ = pedir("GET", f"{atm}/saldo?id_tarjeta={id_tarjeta}", token=token_cajero,
-                                 cabeceras=sesion_atm)
-    donde = (f"Pantalla del cajero (http://127.0.0.1:8019) → /api/apertura, /api/validar-pin, /api/saldo "
-             f"(ATM → TARJETAS y CUENTAS por el Bus), terminal {CAJERO}")
-    quien = f"{operador} abre el cajero; el cliente usa su tarjeta y PIN"
-    if estado == 200:
-        consulta = datos_de(respuesta)
-        saldos_atm = [Decimal(c["saldo_disponible"]) for c in consulta["lista_cuentas"]]
-        exigir(saldos_atm == [MONTO_CREDITO], f"El cajero debía mostrar 1000.00: {consulta}")
-        paso(4, "Consultar el saldo en el cajero", donde, quien, f"saldo mostrado {saldos_atm[0]:.2f}",
-             "sin cambios: 1000.00")
-    else:
-        mensaje = datos_de(respuesta).get("message", "") if isinstance(respuesta, dict) else str(respuesta)
-        exigir(estado == 500 and "SaldoOut" in mensaje, f"GET /api/saldo del cajero: {estado} {respuesta}")
-        bloqueado(4, "Consultar el saldo en el cajero", donde, quien,
-                  f"PIN validado (EXITOSO), pero GET /api/saldo responde {estado}: {mensaje}. "
-                  "El cajero espera {lista_cuentas, uuid_consulta} y CUENTAS /consolidada devuelve una lista "
-                  "(código que falta en backend/ATM/services/atm.py)")
+    consulta = datos_de(llamar("GET", f"{atm}/saldo?id_tarjeta={id_tarjeta}", 200, token=token_cajero,
+                               cabeceras=sesion_atm))
+    mostradas = [(c["id_cuenta"], Decimal(c["saldo_disponible"])) for c in consulta["lista_cuentas"]]
+    exigir(mostradas == [(cuenta, MONTO_CREDITO)], f"El cajero debía mostrar la cuenta {cuenta} con 1000.00: {consulta}")
+    paso(4, "Consultar el saldo en el cajero",
+         f"Pantalla del cajero (http://127.0.0.1:8019) → /api/apertura, /api/validar-pin, /api/saldo "
+         f"(ATM → TARJETAS y CUENTAS por el Bus), terminal {CAJERO}",
+         f"{operador} abre el cajero; el cliente usa su tarjeta y PIN",
+         f"saldo mostrado {mostradas[0][1]:.2f} ({consulta['lista_cuentas'][0]['num_cuenta_enmascarado']})",
+         "sin cambios: 1000.00")
     llamar("POST", f"{atm}/cerrar-sesion", 200, {}, token_cajero, sesion_atm)
 
     # 5. Depósito de 1000.00 en ventanilla.
@@ -425,17 +402,18 @@ def flujo():
          f"pago {pago['id_pago']} (la repetición con la misma llave no lo duplica)",
          f"saldo {saldo(cuenta, token)}; comercio {saldo(cuenta_comercio, token)}")
 
-    # 7. Bloqueo de la tarjeta.
-    bloqueada = datos_de(llamar("POST", api(f"tarjeta/{id_tarjeta}/estado"), 200,
-                                {"estado": "BLOQUEADA", "motivo": "Pérdida reportada por el cliente (demo)"}, token))
+    # 7. Bloqueo de la tarjeta desde el Home Banking: la petición del botón «Bloquear» de cuentas.html.
+    bloqueada = datos_de(llamar("POST", api(f"tarjeta/{id_tarjeta}/bloqueo"), 200,
+                                {"motivo": "Bloqueo solicitado por el cliente en Home Banking"}, token))
     exigir(bloqueada["estado_tarjeta"] == "BLOQUEADA", f"Bloqueo: {bloqueada}")
     estado, respuesta, _ = pedir("POST", f"{atm}/validar-pin",
                                  {"id_tarjeta": id_tarjeta, "pin": pin, "id_terminal": CAJERO}, token_cajero)
     rechazada = estado != 200 or datos_de(respuesta).get("resultado") != "EXITOSO"
     exigir(rechazada, f"El cajero no debía aceptar la tarjeta bloqueada: {estado} {respuesta}")
     paso(7, "Bloquear la tarjeta",
-         "Pantalla /tarjetas, «Bloqueos y estados» → POST /api/tarjeta/{id}/estado BLOQUEADA (TARJETAS → COREDB). "
-         "El prototipo /homebanking no tiene esta opción", ADMIN,
+         "Home Banking /homebanking/cuentas.html, «Mis tarjetas» → «Bloquear» y confirmar → "
+         "POST /api/tarjeta/{id}/bloqueo (TARJETAS por el Bus → COREDB)",
+         f"{ADMIN} (usuario del banco que atiende al cliente en el Home Banking)",
          f"tarjeta BLOQUEADA; el cajero ya no la acepta ({estado})", "tarjeta BLOQUEADA")
 
     # 8. Comprobación en COREDB.
@@ -502,7 +480,7 @@ def flujo():
     print("    bitácora: " + ", ".join(sorted({a for _, a, _ in esperados} | {"DESEMBOLSO"})))
     print(f"\nSaldo final de {cuenta}: {final} (1000.00 del crédito + 1000.00 de ventanilla - 500.00 de la billetera)")
     return {"cliente": cliente["cod_cliente"], "cuenta": cuenta, "tarjeta": id_tarjeta, "solicitud": id_solicitud,
-            "credito": cod_credito, "saldo_final": str(final), "pasos": PASOS, "bloqueados": BLOQUEADOS}
+            "credito": cod_credito, "saldo_final": str(final), "pasos": PASOS}
 
 
 def main():
@@ -519,10 +497,6 @@ def main():
         return 1
     if args.json:
         Path(args.json).write_text(json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8")
-    if BLOQUEADOS:
-        print(f"\nFlujo de demostración terminado con {len(BLOQUEADOS)} paso(s) bloqueado(s): "
-              + ", ".join(str(b["paso"]) for b in BLOQUEADOS) + ". Ver Documents/flujo-demo.md.")
-        return 2
     print("\nFlujo de demostración completo.")
     return 0
 
