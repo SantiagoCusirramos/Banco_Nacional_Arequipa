@@ -73,6 +73,15 @@ class CoreClient:
         return self._request("GET", f"/coredb/cuentas/{num_cuenta}",
                              correlation_id=correlation_id, authorization=authorization)
 
+    def cambiar_estado_cuenta(self, num_cuenta: str, estado: str, motivo: str | None,
+                              correlation_id: str | None = None,
+                              authorization: str | None = None):
+        payload = {"estado": estado}
+        if motivo:
+            payload["motivo"] = motivo
+        return self._request("PATCH", f"/coredb/cuentas/{num_cuenta}/estado", json=payload,
+                             correlation_id=correlation_id, authorization=authorization)
+
     def cuentas_de_cliente(self, cod_cliente: str, correlation_id: str | None = None,
                            authorization: str | None = None):
         return self._request("GET", "/coredb/cuentas", params={"cod_cliente": cod_cliente},

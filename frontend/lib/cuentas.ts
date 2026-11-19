@@ -1,6 +1,12 @@
 import { apiCuentas as api, cabecerasDeOperacion, mensajeError } from "@/lib/api";
 
-export type EstadoCuenta = "ACTIVA" | "BLOQUEADA" | "BLOQUEADA_PREVENTIVA" | "CANCELADA";
+export type EstadoCuenta =
+  | "ACTIVA"
+  | "BLOQUEADA"
+  | "BLOQUEADA_PREVENTIVA"
+  | "INACTIVA"
+  | "EMBARGO"
+  | "CANCELADA";
 export type Regimen = "INDIVIDUAL" | "MANCOMUNADA_INDISTINTA" | "MANCOMUNADA_CONJUNTA";
 export type Moneda = "PEN" | "USD";
 
@@ -56,7 +62,14 @@ type Sobre<T> = { success: boolean; message?: string; data: T };
 
 export const REGIMENES: [Regimen, ...Regimen[]] = ["INDIVIDUAL", "MANCOMUNADA_INDISTINTA", "MANCOMUNADA_CONJUNTA"];
 export const MONEDAS: [Moneda, ...Moneda[]] = ["PEN", "USD"];
-export const ESTADOS_CUENTA: EstadoCuenta[] = ["ACTIVA", "BLOQUEADA", "BLOQUEADA_PREVENTIVA", "CANCELADA"];
+export const ESTADOS_CUENTA: EstadoCuenta[] = [
+  "ACTIVA",
+  "BLOQUEADA",
+  "BLOQUEADA_PREVENTIVA",
+  "INACTIVA",
+  "EMBARGO",
+  "CANCELADA",
+];
 
 export const formatoFecha = (fecha: string) => new Date(fecha).toLocaleString("es-PE");
 export const formatoMoneda = (monto: string | number, moneda?: string) =>
@@ -83,6 +96,20 @@ export async function abrirCuenta(apertura: Apertura): Promise<Cuenta> {
 
 export async function verCuenta(numCuenta: string): Promise<Cuenta> {
   const { data } = await api.get<Sobre<Cuenta>>(`/${encodeURIComponent(numCuenta)}`);
+  return data.data;
+}
+
+export async function cambiarEstadoCuenta(
+  numCuenta: string,
+  estado: EstadoCuenta,
+  motivo?: string,
+): Promise<Cuenta> {
+  const cuerpo: { estado: EstadoCuenta; motivo?: string } = { estado };
+  if (motivo) cuerpo.motivo = motivo;
+  const { data } = await api.patch<Sobre<Cuenta>>(
+    `/${encodeURIComponent(numCuenta)}/estado`,
+    cuerpo,
+  );
   return data.data;
 }
 

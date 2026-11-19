@@ -6,7 +6,8 @@ from CUENTAS.dependencies import (
 )
 from CUENTAS.respuestas import exito
 from CUENTAS.schemas.cuentas import (
-    AbrirCuentaIn, CuentaOut, MovimientoOut, OperacionIn, TransferenciaIn, TransferenciaOut,
+    AbrirCuentaIn, CuentaEstadoCambiarIn, CuentaOut, MovimientoOut, OperacionIn,
+    TransferenciaIn, TransferenciaOut,
 )
 from CUENTAS.services import cuentas as svc
 
@@ -38,6 +39,16 @@ def ver_cuenta(request: Request, num_cuenta: str, core: CoreClient = Depends(get
                cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
     cuenta = CuentaOut(**svc.ver_cuenta(core, num_cuenta, cid, token))
     return exito(request, cuenta.model_dump(mode="json"))
+
+
+@router.patch("/{num_cuenta}/estado")
+def cambiar_estado_cuenta(request: Request, num_cuenta: str, datos: CuentaEstadoCambiarIn,
+                          core: CoreClient = Depends(get_core_client),
+                          cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
+    cuenta = CuentaOut(**svc.cambiar_estado_cuenta(
+        core, num_cuenta, datos.estado, datos.motivo, cid, token
+    ))
+    return exito(request, cuenta.model_dump(mode="json"), 200, "Estado de cuenta actualizado")
 
 
 @router.post("/deposito", status_code=201)

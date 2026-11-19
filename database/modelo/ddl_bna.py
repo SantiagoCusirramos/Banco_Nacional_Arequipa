@@ -437,6 +437,7 @@ SEEDS = [
     ("ESTADO_CUENTA", ["cod_estado", "descripcion", "permite_debito", "permite_credito"],
      [("ACTIVA", "Cuenta activa", True, True), ("BLOQUEADA", "Cuenta bloqueada", False, False),
       ("BLOQUEADA_PREVENTIVA", "Bloqueo por seguridad", False, True),
+      ("INACTIVA", "Cuenta inactiva", False, False), ("EMBARGO", "Cuenta embargada", False, False),
       ("CANCELADA", "Cuenta cancelada", False, False)]),
     ("TIPO_OPERACION", ["tipo_operacion", "naturaleza"],
      [("RETIRO", "D"), ("TRANSFERENCIA_ENVIADA", "D"), ("PAGO", "D"), ("FONDEO_BILLETERA", "D"),

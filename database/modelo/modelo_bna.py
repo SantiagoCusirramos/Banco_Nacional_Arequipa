@@ -183,7 +183,7 @@ entity("CUENTA_AHORRO", "CTA", "fuerte", "CTA, TAR, DES, COB",
            A("regimen", "INDIVIDUAL, MANCOMUNADA_INDISTINTA o MANCOMUNADA_CONJUNTA (RN-CTA-002)."),
            A("saldo_contable", "Saldo contabilizado; resulta de los movimientos.", der=True),
            A("saldo_disponible", "Saldo líquido: contable menos retenciones.", der=True),
-           A("estado_cuenta", "ACTIVA, BLOQUEADA, BLOQUEADA_PREVENTIVA o CANCELADA."),
+           A("estado_cuenta", "ACTIVA, BLOQUEADA, BLOQUEADA_PREVENTIVA, INACTIVA, EMBARGO o CANCELADA."),
            A("fecha_apertura", "Fecha de creación de la cuenta."),
        ])
 

@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,6 +23,13 @@ class CuentaAbrir(BaseModel):
     regimen: str = Field(max_length=25)
     id_agencia: str | None = Field(default=None, max_length=10)
     titulares: list[str] = Field(min_length=1)
+
+
+class CuentaEstadoCambiar(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    estado: Literal["ACTIVA", "BLOQUEADA", "BLOQUEADA_PREVENTIVA", "INACTIVA", "EMBARGO", "CANCELADA"]
+    motivo: str | None = Field(default=None, max_length=255)
 
 
 class CuentaRespuesta(BaseModel):
@@ -89,6 +97,25 @@ def de_un_cliente(
 @router.get("/{num_cuenta}", response_model=CuentaRespuesta,
             dependencies=[Depends(requiere_permiso("VER_CUENTA"))])
 def ver(num_cuenta: str, db: Session = Depends(db_session)):
+    return _con_titulares(db, [obtener(db, num_cuenta)])[0]
+
+
+@router.patch("/{num_cuenta}/estado", response_model=CuentaRespuesta)
+def cambiar_estado(
+    num_cuenta: str,
+    datos: CuentaEstadoCambiar,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("MODIFICAR_CUENTA")),
+):
+    obtener(db, num_cuenta)
+    con_reintentos(
+        db,
+        lambda: llamar(
+            db, "cuentas.cambiar_estado_cuenta",
+            num_cuenta, datos.estado, datos.motivo, actor.usuario,
+        ),
+        nombre="cambiar_estado_cuenta",
+    )
     return _con_titulares(db, [obtener(db, num_cuenta)])[0]
 
 

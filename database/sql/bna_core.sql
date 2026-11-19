@@ -2630,6 +2630,8 @@ INSERT INTO cuentas.estado_cuenta (cod_estado, descripcion, permite_debito, perm
     ('ACTIVA', 'Cuenta activa', TRUE, TRUE),
     ('BLOQUEADA', 'Cuenta bloqueada', FALSE, FALSE),
     ('BLOQUEADA_PREVENTIVA', 'Bloqueo por seguridad', FALSE, TRUE),
+    ('INACTIVA', 'Cuenta inactiva', FALSE, FALSE),
+    ('EMBARGO', 'Cuenta embargada', FALSE, FALSE),
     ('CANCELADA', 'Cuenta cancelada', FALSE, FALSE);
 INSERT INTO cuentas.tipo_operacion (tipo_operacion, naturaleza) VALUES
     ('RETIRO', 'D'),

@@ -43,6 +43,11 @@ def ver_cuenta(core: CoreClient, num_cuenta: str, correlation_id: str,
     return core.ver_cuenta(num_cuenta, correlation_id, authorization)
 
 
+def cambiar_estado_cuenta(core: CoreClient, num_cuenta: str, estado: str, motivo: str | None,
+                          correlation_id: str, authorization: str | None = None):
+    return core.cambiar_estado_cuenta(num_cuenta, estado, motivo, correlation_id, authorization)
+
+
 def cuentas_del_cliente(core: CoreClient, id_cliente: str, correlation_id: str,
                         authorization: str | None = None):
     return core.cuentas_de_cliente(id_cliente, correlation_id, authorization)
