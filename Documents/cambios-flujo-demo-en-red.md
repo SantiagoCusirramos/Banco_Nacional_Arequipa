@@ -157,6 +157,7 @@ por defecto era 3000 en vez de 8020.
 | `lib/state/app_state.dart` | 14 | Servidor por defecto `http://10.0.2.2:8020` (o el `--dart-define=SERVIDOR=…` de la compilación) |
 | `lib/state/app_state.dart` | 124, 152, 170 | El cliente de la caché se guarda como texto (`setString('cliente')`) |
 | `lib/screens/login_screen.dart` | 72, 74 | La ayuda del servidor indica el puerto 8020 |
+| `lib/screens/login_screen.dart` | 198–199 | Se quitó el usuario de demostración `900000001 · PIN 123456` (no existe en la base del banco) y el aviso "Recibirás S/ 100" del registro: ahora el banco afilia al cliente |
 | `lib/screens/qr_screens.dart` | 16, 96, 150–155 | `abrirPagoQr` recibe el UUID; el código manual acepta el UUID o la trama completa |
 | `lib/widgets/comunes.dart` | 150 | El detalle muestra el saldo resultante solo si viene |
 | `test/logica_test.dart` | 43–74 | Prueba de la trama con UUID y prueba nueva con las respuestas reales de la API |

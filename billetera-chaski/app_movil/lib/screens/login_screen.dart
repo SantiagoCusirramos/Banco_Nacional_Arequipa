@@ -195,7 +195,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? 'Crear mi cuenta'
                                 : 'Ingresar')),
                     const SizedBox(height: 10),
-                    Text(_registro ? 'Recibirás S/ 100 de saldo de prueba.' : 'Demo: 900000001 · PIN 123456',
+                    // El banco afilia al cliente (pantalla Billetera Chaski del frontend): no hay usuario de demostración fijo.
+                    Text(_registro ? 'La billetera se activa en una agencia del BNA con tu DNI.' : 'Usa el celular que registraste en el banco y tu PIN de Chaski.',
                         style: const TextStyle(fontSize: 13, color: C.muted)),
                   ],
                 ),
