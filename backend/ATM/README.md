@@ -59,7 +59,7 @@ solo de las cuentas que mostró su consulta de saldo. Un token del personal sin 
 
 ## Consultas
 
-- **Saldo**: `GET /api/saldo?id_tarjeta=...` → obtiene `cod_cliente` de la tarjeta (TARJETAS) y consulta cuentas consolidadas (CUENTAS)
+- **Saldo**: `GET /api/saldo?id_tarjeta=...` → obtiene `cod_cliente` y la cuenta de la tarjeta (TARJETAS), consulta las cuentas consolidadas (CUENTAS) y muestra solo la de la tarjeta
 - **Movimientos**: `GET /api/movimientos?num_cuenta=...` → llama a CUENTAS
 
 ## Topes ATM

@@ -170,3 +170,21 @@ def test_el_registro_no_guarda_el_id_completo_de_la_tarjeta(client, core):
     evento = {"tipo": "RETIRO", "estado": "OK", "correlationId": "c-2", "tarjeta": ID_TARJETA}
     r = client.post("/api/registrar", json=evento, headers={"Authorization": "Bearer token-del-operador"})
     assert r.status_code == 400
+
+
+def test_la_pantalla_manda_la_llave_de_idempotencia_al_retirar():
+    # /api/autorizar y /api/confirmar exigen X-Idempotency-Key (UUIDv4): sin ella, el retiro desde la
+    # pantalla respondía 400 ERR-ATM-HEADER-REQUERIDO.
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert "apiPost('/api/autorizar', solicitud, 30000, {'X-Idempotency-Key': llaveAutorizar})" in html
+    assert "apiPost('/api/confirmar', solicitud, 30000, {'X-Idempotency-Key': llaveConfirmar})" in html
+    # Fuera de localhost (http) no hay crypto.randomUUID: la alternativa también es un UUIDv4.
+    assert "Math.random" not in html and "crypto.getRandomValues" in html
+    # La validación del monto lee el saldo con el nombre que devuelve /api/saldo.
+    assert "saldoDisponible" not in html
+
+
+def test_la_pantalla_no_muestra_el_id_completo_de_la_tarjeta():
+    # El menú y el comprobante muestran solo los últimos 4 caracteres, como la pantalla de la clave.
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert "(tarjeta || '----')" not in html
