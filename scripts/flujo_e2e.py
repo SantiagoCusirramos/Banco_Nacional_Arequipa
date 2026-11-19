@@ -494,6 +494,20 @@ def flujo():
     sesion_atm = {"X-ATM-Sesion": respuesta["data"]["token_sesion"]}
     paso("ATM: PIN validado por TARJETAS a través del Bus; abre la sesión de la tarjeta")
 
+    def saldo_atm():
+        estado, respuesta = pedir("GET", f"{atm_base}/saldo?id_tarjeta={tarjeta}", token=token,
+                                  cabeceras=sesion_atm)
+        exigir(estado == 200 and respuesta["success"] is True, f"ATM consultar saldo: {estado} {respuesta}")
+        return [(c["id_cuenta"], c["num_cuenta_enmascarado"], c["saldo_disponible"])
+                for c in respuesta["data"]["lista_cuentas"]]
+
+    # La consulta de saldo de la pantalla: TARJETAS (la cuenta de la tarjeta) y CUENTAS /consolidada.
+    # El titular tiene otra cuenta, pero el cajero solo muestra la vinculada a la tarjeta.
+    mostrado = saldo_atm()
+    exigir(mostrado == [(cuenta_tarjeta, "****" + cuenta_tarjeta[-4:], "60.00")],
+           f"El cajero debía mostrar solo la cuenta de la tarjeta con 60.00: {mostrado}")
+    paso("ATM: consulta de saldo por la pantalla, solo la cuenta de la tarjeta (60.00)")
+
     # Autorizar retención
     retiro_atm = {"id_tarjeta": tarjeta, "num_cuenta": cuenta_tarjeta, "moneda": "PEN",
                   "monto": "30.00", "id_terminal": "DEV-ATM-01",
@@ -530,7 +544,10 @@ def flujo():
     saldo_despues = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     # 60.00 tras el retiro de TARJETAS, menos los 30.00 del cajero.
     exigir(float(saldo_despues) == 30.0, f"El saldo debía bajar 30.00 una sola vez: disponible {saldo_despues}")
-    paso(f"ATM: retiro de 30.00 en el cajero DEV-ATM-01 confirmado, saldo final {saldo_despues}")
+    mostrado = saldo_atm()
+    exigir(mostrado == [(cuenta_tarjeta, "****" + cuenta_tarjeta[-4:], "30.00")],
+           f"El cajero debía mostrar 30.00 tras el retiro: {mostrado}")
+    paso(f"ATM: retiro de 30.00 en el cajero DEV-ATM-01 confirmado, saldo final {saldo_despues} (también en el cajero)")
 
     # Repetir confirmación con misma llave → sin segundo débito (idempotencia)
     estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras={**llave_conf, **sesion_atm})

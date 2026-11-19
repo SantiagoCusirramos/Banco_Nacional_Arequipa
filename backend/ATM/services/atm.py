@@ -1,12 +1,13 @@
 """Lógica de negocio del módulo ATM."""
 
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 from ATM.core_client import CoreClient
 from ATM.exceptions import AtmError
 from ATM.errores import validar_monto, validar_resultado_dispensacion, traducir
 from ATM.schemas.atm import (
-    AutorizarIn, AutorizacionOut, ConfirmarIn, ExtornarIn, SaldoOut, ValidarPinIn, ValidarPinOut,
+    AutorizarIn, AutorizacionOut, ConfirmarIn, CuentaSaldoOut, ExtornarIn, SaldoOut, ValidarPinIn,
+    ValidarPinOut,
 )
 
 
@@ -120,13 +121,29 @@ async def consultar_saldo(core: CoreClient, id_tarjeta: str,
     if not cod_cliente:
         raise AtmError("ERR-ATM-TARJETA-SIN-CLIENTE", "La tarjeta no tiene cliente asociado", 400)
 
-    # Consultar cuentas consolidadas del cliente
-    resp = core.consultar_saldo(
+    # Consultar cuentas consolidadas del cliente: CUENTAS devuelve una lista con todas sus cuentas.
+    cuentas = core.consultar_saldo(
         cod_cliente=cod_cliente,
         correlation_id=correlation_id,
         authorization=authorization,
     )
-    return SaldoOut(**resp)
+    if not isinstance(cuentas, list):
+        raise AtmError("ERR-ATM-RESPUESTA_INVALIDA", "CUENTAS devolvió una respuesta inesperada", 502)
+    # El cajero solo opera la cuenta vinculada a la tarjeta (la base rechaza las demás con
+    # ERR-TAR-008); TARJETAS la devuelve en num_cuenta.
+    num_cuenta = tarjeta.get("num_cuenta")
+    return SaldoOut(
+        lista_cuentas=[
+            CuentaSaldoOut(
+                id_cuenta=c["num_cuenta"],
+                num_cuenta_enmascarado="****" + c["num_cuenta"][-4:],
+                moneda=c["moneda"],
+                saldo_disponible=str(c["saldo_disponible"]),
+            )
+            for c in cuentas if num_cuenta and c.get("num_cuenta") == num_cuenta
+        ],
+        uuid_consulta=str(uuid4()),
+    )
 
 
 async def consultar_movimientos(core: CoreClient, num_cuenta: str,

@@ -3,6 +3,8 @@
 Usa transporte simulado para TARJETAS y CUENTAS (CoreFalso).
 """
 
+from uuid import UUID
+
 import httpx
 import pytest
 
@@ -47,15 +49,42 @@ def extorno_ok(uuid_aut="5a1f0c3e-0000-4000-8000-000000000001"):
         "saldo_disponible": "100.00",
     }
 
-def saldo_cuentas():
-    return {
-        "lista_cuentas": [
-            {"id_cuenta": "10100000000001", "num_cuenta_enmascarado": "****0001", "moneda": "PEN", "saldo_disponible": "500.00"},
-            {"id_cuenta": "10100000000002", "num_cuenta_enmascarado": "****0002", "moneda": "USD", "saldo_disponible": "100.00"},
-        ],
-        "uuid_consulta": "corr-test-001",
-        "simulado": False,
-    }
+# Respuestas reales capturadas por el Bus con `./bna up` sobre main 8f4e1b0 (2026-11-19, cliente del
+# flujo de demostración). Solo cambian el id_tarjeta (el de la sesión de prueba), el estado y una segunda
+# cuenta del mismo cliente, que no está vinculada a la tarjeta.
+CUENTA_TARJETA = "59144088949989"
+OTRA_CUENTA = "59144088940011"
+
+
+def tarjeta_real(num_cuenta=CUENTA_TARJETA):
+    """GET /bus/tarjetas/api/v1/tarjetas/{id}: la tarjeta trae su cuenta principal en num_cuenta."""
+    return {"success": True, "status_code": 200, "message": "Operacion ejecutada satisfactoriamente",
+            "data": {"id_tarjeta": ID_TARJETA, "bin": "004499", "ultimos4": "9102",
+                     "fecha_emision": "2026-11-19", "fecha_vencimiento": "2030-11-19",
+                     "estado_tarjeta": "ACTIVA", "cod_cliente": "CLI000000001", "num_cuenta": num_cuenta,
+                     "numero_enmascarado": "0044 99** **** 9102", "vencimiento_mm_aa": "11/30"},
+            "metadata": {"uuid_transaccion": "84211040-c1a2-4c3a-899d-3e603819211c",
+                         "timestamp": "2026-11-19T15:24:47.380Z", "modulo_emisor": "TARJETAS",
+                         "tiempo_ejecucion_ms": 12.79}}
+
+
+def cuenta_real(num_cuenta=CUENTA_TARJETA, saldo="1500.00", moneda="PEN"):
+    return {"num_cuenta": num_cuenta, "cci": "85860109737394047877", "moneda": moneda,
+            "regimen": "INDIVIDUAL", "estado_cuenta": "ACTIVA", "saldo_contable": saldo,
+            "saldo_disponible": saldo, "id_agencia": "AQP01", "titulares": ["CLI000000001"]}
+
+
+def consolidada_real(*cuentas):
+    """GET /bus/cuentas/api/v1/cuentas/consolidada/{cod_cliente}: una LISTA de cuentas del cliente."""
+    return {"success": True, "status_code": 200, "message": "Operacion ejecutada satisfactoriamente",
+            "data": list(cuentas) if cuentas else [cuenta_real()],
+            "metadata": {"uuid_transaccion": "0970e11c-860d-41b0-86ce-dd4e28c4d1d8",
+                         "timestamp": "2026-11-19T15:24:47.364Z", "modulo_emisor": "CUENTAS",
+                         "tiempo_ejecucion_ms": 12.73}}
+
+
+def saldo_reales(*cuentas, num_cuenta=CUENTA_TARJETA):
+    return [httpx.Response(200, json=tarjeta_real(num_cuenta)), httpx.Response(200, json=consolidada_real(*cuentas))]
 
 def movimientos_cuenta():
     return [
@@ -402,32 +431,52 @@ def test_extornar_no_existe_404(client, core, autorizada):
 # ── Consultar Saldo ───────────────────────────────────────────────────────
 
 def test_consultar_saldo_ok(client, core, sesion):
-    # El servicio hace dos llamadas: 1) TARJETAS para obtener tarjeta (cod_cliente), 2) CUENTAS para saldo consolidado
-    core.respuesta = [
-        httpx.Response(200, json={"id_tarjeta": ID_TARJETA, "cod_cliente": "CLI001", "estado_tarjeta": "ACTIVA"}),
-        httpx.Response(200, json=saldo_cuentas()),
-    ]
+    # Dos llamadas por el Bus: 1) TARJETAS (cod_cliente y la cuenta de la tarjeta), 2) CUENTAS /consolidada.
+    core.respuesta = saldo_reales()
     r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR, **sesion})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     data = r.json()["data"]
-    assert len(data["lista_cuentas"]) == 2
-    assert data["lista_cuentas"][0]["moneda"] == "PEN"
-    assert data["lista_cuentas"][0]["saldo_disponible"] == "500.00"
-    # Verifica que llamó a TARJETAS y luego a CUENTAS por el Bus
+    assert data["lista_cuentas"] == [{"id_cuenta": CUENTA_TARJETA, "num_cuenta_enmascarado": "****9989",
+                                      "moneda": "PEN", "saldo_disponible": "1500.00"}]
+    assert str(UUID(data["uuid_consulta"])) == data["uuid_consulta"]
+    assert data["simulado"] is False
     assert len(core.llamadas) == 2
-    assert "tarjetas" in core.llamadas[0]["ruta"]
-    assert "cuentas" in core.llamadas[1]["ruta"]
+    assert core.llamadas[0]["ruta"] == f"/bus/tarjetas/api/v1/tarjetas/{ID_TARJETA}"
+    assert core.llamadas[1]["ruta"] == "/bus/cuentas/api/v1/cuentas/consolidada/CLI000000001"
+
+
+def test_consultar_saldo_solo_la_cuenta_de_la_tarjeta(client, core, sesion):
+    # CUENTAS lista todas las cuentas del cliente; el cajero solo puede operar la vinculada a la
+    # tarjeta (la base rechaza las demás con ERR-TAR-008), así que solo muestra esa.
+    core.respuesta = saldo_reales(cuenta_real(OTRA_CUENTA, "80.00"), cuenta_real(CUENTA_TARJETA, "1000.00"))
+    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **sesion})
+    assert r.status_code == 200, r.text
+    cuentas = r.json()["data"]["lista_cuentas"]
+    assert [(c["id_cuenta"], c["saldo_disponible"]) for c in cuentas] == [(CUENTA_TARJETA, "1000.00")]
+    ajena = client.get(f"{BASE}/movimientos", params={"num_cuenta": OTRA_CUENTA}, headers={**AUTH, **sesion})
+    assert ajena.status_code == 403 and ajena.json()["error_code"] == "ERR-ATM-CUENTA-AJENA"
 
 
 def test_consultar_saldo_sin_cuentas(client, core, sesion):
-    core.respuesta = [
-        httpx.Response(200, json={"id_tarjeta": ID_TARJETA, "cod_cliente": "CLI001", "estado_tarjeta": "ACTIVA"}),
-        httpx.Response(200, json={"lista_cuentas": [], "uuid_consulta": "corr-test", "simulado": False}),
-    ]
+    core.respuesta = [httpx.Response(200, json=tarjeta_real()),
+                      httpx.Response(200, json={**consolidada_real(), "data": []})]
     r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **CORR, **sesion})
     assert r.status_code == 200
-    data = r.json()["data"]
-    assert data["lista_cuentas"] == []
+    assert r.json()["data"]["lista_cuentas"] == []
+
+
+def test_consultar_saldo_tarjeta_sin_cuenta_vinculada(client, core, sesion):
+    core.respuesta = saldo_reales(num_cuenta=None)
+    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **sesion})
+    assert r.status_code == 200
+    assert r.json()["data"]["lista_cuentas"] == []
+
+
+def test_consultar_saldo_respuesta_inesperada_502(client, core, sesion):
+    core.respuesta = [httpx.Response(200, json=tarjeta_real()),
+                      httpx.Response(200, json={"lista_cuentas": [], "uuid_consulta": "x"})]
+    r = client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **sesion})
+    assert r.status_code == 502 and r.json()["error_code"] == "ERR-ATM-RESPUESTA_INVALIDA"
 
 
 def test_consultar_saldo_sesion_invalida_401(client, core, sesion):
@@ -440,15 +489,12 @@ def test_consultar_saldo_sesion_invalida_401(client, core, sesion):
 
 def test_consultar_movimientos_ok(client, core, sesion):
     # Solo de una cuenta de la tarjeta de la sesión: primero el saldo, que las lista.
-    core.respuesta = [
-        httpx.Response(200, json={"id_tarjeta": ID_TARJETA, "cod_cliente": "CLI001", "estado_tarjeta": "ACTIVA"}),
-        httpx.Response(200, json=saldo_cuentas()),
-    ]
+    core.respuesta = saldo_reales()
     assert client.get(f"{BASE}/saldo", params={"id_tarjeta": ID_TARJETA}, headers={**AUTH, **sesion}).status_code == 200
     ajena = client.get(f"{BASE}/movimientos", params={"num_cuenta": "99999999999999"}, headers={**AUTH, **sesion})
     assert ajena.status_code == 403 and ajena.json()["error_code"] == "ERR-ATM-CUENTA-AJENA"
     core.respuesta = httpx.Response(200, json=movimientos_cuenta())
-    r = client.get(f"{BASE}/movimientos", params={"num_cuenta": saldo_cuentas()["lista_cuentas"][0]["id_cuenta"]},
+    r = client.get(f"{BASE}/movimientos", params={"num_cuenta": CUENTA_TARJETA},
                    headers={**AUTH, **CORR, **sesion})
     assert r.status_code == 200
     data = r.json()["data"]
