@@ -16,6 +16,7 @@ Lo que no tiene valor por omisión está en el issue #116, «Pendientes tras la 
 | 6 | Transferencias entre monedas (RF-COR-14) | Se rechazan; falta el documento fuente | #34, pregunta 8 | Cuentas |
 | 7 | Quién abre y cierra los periodos contables | Los carga el administrador de la base con los datos iniciales; en desarrollo, 24 meses abiertos desde el mes en curso. El producto no tiene ruta para abrirlos ni cerrarlos. Sin periodo para la fecha no se registra ningún movimiento | #34, pregunta 9 | Contabilidad |
 | 8 | Identificador común del cliente | `cod_cliente`, que la base ya exige en todos los módulos | Contrato de créditos, sección 7 | Todos |
+| 26 | Canal declarado por el Home Banking | `VEN` en la transferencia y en el pago de cuota: es el canal con el que el producto quedó verificado. No se cambia a `HB` mientras `HB` en USD no tenga fila en `core.limite_canal` (decisión 3); la decisión 2 sigue revisable | Home Banking verificado con datos reales, 2026-11-19 | Home Banking (frontend) |
 
 ## Tarjetas, cajero y Home Banking
 

@@ -11,9 +11,6 @@
   const selDestino = document.getElementById("selDestinoPropia");
   const ctaTercero = document.getElementById("ctaTercero");
   const titularTercero = document.getElementById("titularTercero");
-  const entidad = document.getElementById("entidad");
-  const ctaInter = document.getElementById("ctaInter");
-  const titularInter = document.getElementById("titularInter");
   const monto = document.getElementById("monto");
   const txtMoneda = document.getElementById("txtMoneda");
   const txtDisponible = document.getElementById("txtDisponible");
@@ -25,10 +22,6 @@
   let cuentas = [];
   let tipo = "PROPIA";
   let idemActual = null;
-
-  const LIMITE_DIARIO_PEN = 10000;
-  const LIMITE_DIARIO_USD = 3000;
-  const CANAL = "HB_WEB";
 
   const cuentaActual = () => cuentas.find(c => c.numCuenta === selOrigen.value);
   const monedaActual = () => cuentaActual() ? cuentaActual().moneda : "PEN";
@@ -42,8 +35,7 @@
     }
     txtDisponible.value = fmt.moneda(c.saldoDisponible, c.moneda);
     txtMoneda.value = c.moneda;
-    const limite = c.moneda === "USD" ? LIMITE_DIARIO_USD : LIMITE_DIARIO_PEN;
-    monto.max = Math.min(c.saldoDisponible, limite);
+    monto.max = c.saldoDisponible;
   }
 
   function llenarDestinosPropios() {
@@ -60,7 +52,7 @@
 
   async function cargarCuentas(conservarOrigen = true) {
     try {
-      const pos = await Bus.consultarPosicion(sesion.codCliente, null);
+      const pos = await Bus.consultarPosicion(sesion.codCliente);
       cuentas = pos.cuentas || [];
       const anterior = conservarOrigen ? selOrigen.value : null;
       selOrigen.innerHTML = cuentas.map(c =>
@@ -84,7 +76,6 @@
     [...tabs.querySelectorAll(".tab")].forEach(b => b.classList.toggle("activo", b.dataset.tipo === tipo));
     document.getElementById("bloquePropia").hidden = tipo !== "PROPIA";
     document.getElementById("bloqueTercero").hidden = tipo !== "TERCERO";
-    document.getElementById("bloqueInter").hidden = tipo !== "INTERBANCARIA";
     idemActual = null;
     ocultarMensaje(msg);
   }
@@ -100,7 +91,7 @@
     idemActual = null;
   });
 
-  [monto, ctaTercero, titularTercero, ctaInter, titularInter, glosa, selDestino, entidad].forEach(el => {
+  [monto, ctaTercero, titularTercero, glosa, selDestino].forEach(el => {
     if (el) el.addEventListener("input", () => { idemActual = null; });
   });
 
@@ -116,11 +107,6 @@
       mostrarMensaje(msg, "error", "El monto supera el saldo disponible de la cuenta de origen.");
       return null;
     }
-    const limite = c.moneda === "USD" ? LIMITE_DIARIO_USD : LIMITE_DIARIO_PEN;
-    if (valor > limite) {
-      mostrarMensaje(msg, "error", `El monto supera el tope diario de ${fmt.moneda(limite, c.moneda)}.`);
-      return null;
-    }
     if (tipo === "PROPIA") {
       if (!selDestino.value) { mostrarMensaje(msg, "error", "Seleccione una cuenta de destino propia."); return null; }
       if (selDestino.value === c.numCuenta) { mostrarMensaje(msg, "error", "La cuenta de origen y destino no pueden ser la misma."); return null; }
@@ -128,12 +114,6 @@
     if (tipo === "TERCERO") {
       if (!ctaTercero.value.trim()) { mostrarMensaje(msg, "error", "Ingrese la cuenta destino BNA."); return null; }
       if (ctaTercero.value.trim() === c.numCuenta) { mostrarMensaje(msg, "error", "La cuenta de destino no puede ser la cuenta de origen."); return null; }
-    }
-    if (tipo === "INTERBANCARIA") {
-      if (!ctaInter.value.trim() || !titularInter.value.trim()) {
-        mostrarMensaje(msg, "error", "Complete la cuenta y el titular destino de la transferencia interbancaria.");
-        return null;
-      }
     }
     return { cuenta: c, monto: Math.round(valor * 100) / 100 };
   }
@@ -144,19 +124,13 @@
       cuentaOrigen: v.cuenta.numCuenta,
       monto: v.monto,
       moneda: v.cuenta.moneda,
-      descripcion: glosa.value.trim(),
-      canal: CANAL,
-      ipOrigen: "190.12.44.107"
+      descripcion: glosa.value.trim()
     };
     if (tipo === "PROPIA") {
       p.cuentaDestino = selDestino.value;
-    } else if (tipo === "TERCERO") {
+    } else {
       p.cuentaDestino = ctaTercero.value.trim();
       p.titularDestino = titularTercero.value.trim();
-    } else {
-      p.cuentaDestino = ctaInter.value.trim();
-      p.entidadDestino = entidad.value;
-      p.titularDestino = titularInter.value.trim();
     }
     return p;
   }

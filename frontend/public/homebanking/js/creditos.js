@@ -90,7 +90,7 @@
     try {
       const [rc, rp] = await Promise.all([
         Bus.obtenerCreditosCliente(),
-        Bus.consultarPosicion(sesion.codCliente, null)
+        Bus.consultarPosicion(sesion.codCliente)
       ]);
       creditos = rc.creditos || [];
       cuentas = rp.cuentas || [];

@@ -17,8 +17,10 @@ const Sesion = {
     catch (e) { this.memoria[this.clave] = raw; }
   },
   cerrar() {
-    try { sessionStorage.removeItem(this.clave); }
-    catch (e) { delete this.memoria[this.clave]; }
+    try {
+      sessionStorage.removeItem(this.clave);
+      localStorage.removeItem("bna_access_token");
+    } catch (e) { delete this.memoria[this.clave]; }
   },
   exigir() {
     const s = this.leer();
@@ -53,7 +55,7 @@ function pintarCabecera() {
   const n = document.getElementById("sesionNombre");
   const c = document.getElementById("sesionCliente");
   if (n && s) n.textContent = s.nombres;
-  if (c && s) c.textContent = `${s.codCliente} · ${s.dni}`;
+  if (c && s) c.textContent = `Cliente ${s.codCliente}`;
   const sal = document.getElementById("btnSalir");
   if (sal) sal.addEventListener("click", () => { Sesion.cerrar(); window.location.href = "index.html"; });
 }

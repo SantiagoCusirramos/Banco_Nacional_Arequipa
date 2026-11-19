@@ -13,6 +13,7 @@
   const pTit = document.getElementById("plasticoTitular");
   const pVen = document.getElementById("plasticoVenc");
   let tarjetas = [];
+  let tarjetaSel = null;
 
   /* ---------- Tarjetas del cliente ---------- */
   (async function cargarTarjetas() {
@@ -34,7 +35,8 @@
         b.addEventListener("click", () => {
           chips.querySelectorAll(".chip").forEach(c => c.classList.remove("sel"));
           b.classList.add("sel");
-          inp.value = formatear(b.dataset.num);
+          tarjetaSel = t;
+          inp.value = t.numTarjeta;
           pintarPlastico();
         });
         grupo.appendChild(b);
@@ -69,7 +71,7 @@
       chip.querySelector(".tipo").textContent = `${t.tipo} · ${t.estado}`;
       chip.style.opacity = ".6";
       boton.remove();
-      mostrarMensaje("msgBloqueo", "ok", `La tarjeta terminada en ${fin} fue bloqueada correctamente.`);
+      mostrarMensaje("msgBloqueo", "ok", `Tarjeta terminada en ${fin} bloqueada. Ya no podrá utilizarse en operaciones.`);
     } catch (err) {
       cargando(boton, false);
       mostrarMensaje("msgBloqueo", "error",
@@ -86,16 +88,18 @@
 
   function pintarPlastico() {
     const d = soloDigitos();
-    pNum.textContent = formatear(d) || "•••• •••• •••• ••••";
+    const mascara = inp.value.replace(/\s/g, "");
+    const tarjeta = tarjetaSel || tarjetas.find(t => t.numTarjeta.replace(/\s/g, "") === mascara);
+    pNum.textContent = tarjeta ? tarjeta.numTarjeta : (formatear(d) || "•••• •••• •••• ••••");
     const sel = chips.querySelector(".chip.sel");
     pTit.textContent = sel ? (sel.dataset.titular || "TITULAR").toUpperCase() : (sesion.nombres || "TITULAR").toUpperCase();
-    pVen.textContent = sel ? sel.dataset.venc : "--/--";
+    pVen.textContent = sel ? sel.dataset.venc : (tarjeta ? tarjeta.vencimiento : "--/--");
   }
 
   inp.addEventListener("input", () => {
+    tarjetaSel = null;
+    chips.querySelectorAll(".chip").forEach(c => c.classList.remove("sel"));
     inp.value = formatear(soloDigitos());
-    const sel = chips.querySelector(".chip.sel");
-    if (sel && sel.dataset.num !== soloDigitos()) sel.classList.remove("sel");
     pintarPlastico();
   });
 
@@ -110,7 +114,7 @@
   /* Recuerda la última tarjeta consultada (al volver desde movimientos) */
   try {
     const ultima = sessionStorage.getItem("hb_ultima_tarjeta");
-    if (ultima) inp.value = formatear(ultima);
+    if (ultima) inp.value = ultima;
     pintarPlastico();
   } catch (e) { /* almacenamiento no disponible */ }
 
@@ -121,24 +125,27 @@
     ocultarMensaje("msgOmitidas");
 
     const num = soloDigitos();
-    if (num.length !== 16) {
-      mostrarMensaje(msg, "error", "Ingrese los 16 dígitos de su tarjeta.");
+    const mascara = inp.value.replace(/\s/g, "");
+    let tarjeta = tarjetaSel || tarjetas.find(t => t.numTarjeta.replace(/\s/g, "") === mascara);
+    if (!tarjeta && num.length === 16) {
+      tarjeta = tarjetas.find(t => {
+        const conocidos = t.numTarjeta.replace(/\D/g, "");
+        return conocidos.length >= 10 && num.startsWith(conocidos.slice(0, 6)) && num.endsWith(conocidos.slice(-4));
+      });
+    }
+    if (!tarjeta) {
+      mostrarMensaje(msg, num.length === 16
+        ? "La tarjeta ingresada no está asociada al cliente."
+        : "Seleccione una tarjeta o ingrese los 16 dígitos de su tarjeta.");
       return;
     }
 
     cargando(btn, true, "Consultando");
     try {
       const pos = await Bus.consultarPosicion(sesion.codCliente);
-
-      const tarjeta = tarjetas.find(t => t.numTarjeta.replace(/\s/g, "") === num) || {
-        numTarjeta: num,
-        marca: "BNA",
-        vencimiento: "--/--",
-        estado: "ACTIVA"
-      };
       pintarResultado(tarjeta, pos);
       pintarPasos(true);
-      try { sessionStorage.setItem("hb_ultima_tarjeta", num); } catch (e) { /* no disponible */ }
+      try { sessionStorage.setItem("hb_ultima_tarjeta", tarjeta.numTarjeta); } catch (e) { /* no disponible */ }
       mostrarMensaje(msg, "ok", `Se obtuvieron ${pos.totalCuentasActivas} cuenta(s) activa(s).`);
     } catch (err) {
       pintarPasos(false);

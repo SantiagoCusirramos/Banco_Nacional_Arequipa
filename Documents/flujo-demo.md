@@ -177,7 +177,7 @@ curl -s -X POST $BUS/bus/billetera/api/qr/<id_qr>/pagar -H "X-Bus-Token: $BT" -H
 
 ### 7. Bloquear la tarjeta
 
-- **Pantalla:** http://localhost:3000/homebanking/, con el usuario del banco y el código del cliente; en «Cuentas por tarjeta», «Mis tarjetas», botón **«Bloquear»** de la tarjeta ACTIVA. La pantalla pide confirmación («¿Bloquear la tarjeta terminada en …?») y, al aceptar, muestra «Tarjeta terminada en … bloqueada. Ya no se acepta en el cajero.».
+- **Pantalla:** http://localhost:3000/homebanking/, con el usuario del banco y el código del cliente; en «Cuentas por tarjeta», «Mis tarjetas», botón **«Bloquear»** de la tarjeta ACTIVA. La pantalla pide confirmación («¿Bloquear la tarjeta terminada en …?») y, al aceptar, muestra «Tarjeta terminada en … bloqueada. Ya no podrá utilizarse en operaciones.».
 - **Petición:** `POST /api/tarjeta/{id}/bloqueo` `{"motivo":"Bloqueo solicitado por el cliente en Home Banking"}` (puente del frontend → Bus → TARJETAS → COREDB). El personal también puede hacerlo en http://localhost:3000/tarjetas, «Bloquear o cambiar el estado».
 - **Resultado:** tarjeta **BLOQUEADA**. El cajero ya no la acepta: `POST /api/validar-pin` responde 400 `ERR-ATM-TARJETA-NO-OPERATIVA`. El desbloqueo no se hace en TARJETAS ni en el Home Banking (403): lo hace Seguridad.
 - **Quién entra al Home Banking:** un usuario del banco con su clave de COREDB, que escribe el código del cliente que atiende (decisión 14 de [`decisiones-del-equipo.md`](decisiones-del-equipo.md)). Que entre el propio cliente sigue siendo una pregunta del equipo.

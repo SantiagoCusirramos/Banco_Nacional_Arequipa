@@ -243,14 +243,19 @@ const Bus = (() => {
     const lista = await invocarAPI(`/api/core/coredb/auditoria?${params.toString()}`, null, { method: "GET" }) || [];
     const eventos = lista.map(e => ({
       idEvento: e.id_evento, fechaHora: e.fecha_hora, modulo: e.modulo, tipoEvento: e.accion,
-      usuario: e.actor, resultado: "OK", detalle: `${e.entidad} ${e.id_entidad}`,
-      canal: "-", ip: "-", uuid: e.correlation_id || "-"
+      usuario: e.actor,
+      resultado: String((e.detalle && e.detalle.resultado) || e.resultado || "OK").toUpperCase(),
+      detalle: `${e.entidad} ${e.id_entidad}`,
+      canal: (e.detalle && e.detalle.canal) || "-",
+      ip: (e.detalle && e.detalle.ip) || "-",
+      uuid: e.correlation_id || "-"
     }));
+    const aplicables = filtros.resultado ? eventos.filter(e => e.resultado === filtros.resultado) : eventos;
     return {
-      total: eventos.length,
-      eventos,
-      modulos: [...new Set(eventos.map(e => e.modulo))],
-      tipos: [...new Set(eventos.map(e => e.tipoEvento))]
+      total: aplicables.length,
+      eventos: aplicables,
+      modulos: [...new Set(aplicables.map(e => e.modulo))],
+      tipos: [...new Set(aplicables.map(e => e.tipoEvento))]
     };
   }
 

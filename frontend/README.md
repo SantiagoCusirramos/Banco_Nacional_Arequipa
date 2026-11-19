@@ -15,7 +15,7 @@ Banca personal del BNA en [Next.js](https://nextjs.org) 16 (App Router) con Reac
 | `/captacion` | Captación: prospectos, consentimientos, OTP, validaciones, habilitación | CAPTACION |
 | `/solicitud-credito` | Solicitud de crédito (asesor) | SOL |
 | `/pagar-cuota` | Pago de cuotas de crédito (CR-INT-08): créditos de un cliente, monto a pagar hoy, pago desde una cuenta de ahorros y su resultado | COBRANZA, con las cuentas del cliente desde CUENTAS |
-| `/homebanking/index.html` | Home Banking estático (prototipo HTML+JS) | Servido por Next.js desde `public/`. Usa puentes `/api/*`. |
+| `/homebanking/index.html` | Home Banking (HTML+JS servido desde `public/`) | Usa puentes `/api/*`. |
 
 El cambio de estado de una cuenta se muestra deshabilitado: falta decidir los estados y quién los cambia, y COREDB no ofrece esa operación (`MODIFICAR_CUENTA`, issue #116).
 
@@ -40,9 +40,9 @@ Las variables se leen al ejecutar, no al construir. De cada petición se reenví
 
 Cobranza funciona igual que los demás: el puente `/api/cobranza` reenvía el bearer token de COREDB y `X-Bus-Token`; sin claves propias.
 
-## Home Banking (prototipo estático)
+## Home Banking
 
-El prototipo de Home Banking de Tamara-Martinez (commit c73fa20, issue #100) estaba en `app/homebanking/`, donde Next no lo servía, y llamaba a 14 rutas `/bus/v1/...` que no existen, con datos simulados en `js/datos.js`. Ahora está en `public/homebanking/` y se abre en `/homebanking/index.html`.
+El Home Banking está en `public/homebanking/` y se abre en `/homebanking/index.html`. El navegador solo llama a los puentes `/api/*` que reenvían por el Bus; no hay datos simulados ni rutas `/bus/v1`.
 
 - **Acceso:** no hay login de clientes. Entra un usuario del banco con su clave de COREDB e indica el código del cliente que atiende (decisión 14 de [`Documents/decisiones-del-equipo.md`](../Documents/decisiones-del-equipo.md), revisable). El token queda en `localStorage` (`bna_access_token`), como en el resto del frontend.
 - **Rutas que usa** (`js/bus.js`, solo puentes de `app/api/`):
@@ -51,6 +51,7 @@ El prototipo de Home Banking de Tamara-Martinez (commit c73fa20, issue #100) est
   - Tarjetas: `GET /api/tarjeta/cliente/{codCliente}`; «Bloquear» en `cuentas.html` (solo tarjetas ACTIVA, tras confirmar): `POST /api/tarjeta/{idTarjeta}/bloqueo` con un motivo. El desbloqueo no se hace en el Home Banking (TARJETAS responde 403; lo hace Seguridad).
   - Créditos: `GET /api/cobranza/clientes/{codCliente}/creditos`, `GET /api/cobranza/creditos/{codCredito}/monto-a-pagar`, `POST /api/cobranza/cr-int-08/pagos`.
 - **Dinero:** la transferencia y el pago de cuota llevan una llave por operación (`X-Idempotency-Key`; en el pago, `referenciaTransaccion`). Se conserva si se reintenta tras un error o un timeout y cambia al editar los datos o cuando la operación se registra.
+- **Canal:** ambas operaciones declaran `X-Channel-ID: VEN`, el canal con el que el producto quedó verificado. No se cambia a `HB` mientras `HB` en USD no tenga fila en `core.limite_canal` (decisiones 2 y 3 de [`Documents/decisiones-del-equipo.md`](../Documents/decisiones-del-equipo.md)).
 - **Fuera de esta versión** (no hacen ninguna petición): Token Matriz, verificar titularidad, evaluación de riesgo, validación de topes (los aplica COREDB al registrar), transferencias interbancarias, constancias PDF y el reinicio de la demo.
 - Pruebas: `__tests__/homebanking.test.ts` y `__tests__/homebanking-bloqueo.test.ts` (la página de cuentas en jsdom); el flujo de extremo a extremo pide `/homebanking/index.html` y bloquea una tarjeta con la misma petición que el botón.
 
