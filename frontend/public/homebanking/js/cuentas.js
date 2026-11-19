@@ -22,6 +22,8 @@
       const r = await Bus.obtenerTarjetasAsociadas(sesion.codCliente);
       chips.innerHTML = "";
       r.tarjetas.forEach(t => {
+        const grupo = document.createElement("span");
+        grupo.className = "chip-grupo";
         const b = document.createElement("button");
         b.type = "button";
         b.className = "chip";
@@ -31,17 +33,50 @@
         b.innerHTML = `${t.numTarjeta} <span class="tipo">${t.tipo} · ${t.estado}</span>`;
         if (t.estado !== "ACTIVA") b.style.opacity = ".6";
         b.addEventListener("click", () => {
-          [...chips.children].forEach(c => c.classList.remove("sel"));
+          chips.querySelectorAll(".chip").forEach(c => c.classList.remove("sel"));
           b.classList.add("sel");
           inp.value = formatear(b.dataset.num);
           pintarPlastico();
         });
-        chips.appendChild(b);
+        grupo.appendChild(b);
+        if (t.estado === "ACTIVA" && t.idTarjeta) {
+          const bloq = document.createElement("button");
+          bloq.type = "button";
+          bloq.className = "btn btn-sec btn-sm";
+          bloq.dataset.bloquear = t.idTarjeta;
+          bloq.textContent = "Bloquear";
+          bloq.setAttribute("aria-label", `Bloquear la tarjeta terminada en ${t.numTarjeta.slice(-4)}`);
+          bloq.addEventListener("click", () => bloquear(t, b, bloq));
+          grupo.appendChild(bloq);
+        }
+        chips.appendChild(grupo);
       });
     } catch (e) {
       chips.innerHTML = `<span class="tono-suave">No fue posible recuperar sus tarjetas: ${e.mensaje || "servicio no disponible"}.</span>`;
     }
   })();
+
+  /* ---------- Bloqueo de una tarjeta ---------- */
+  async function bloquear(t, chip, boton) {
+    const fin = t.numTarjeta.slice(-4);
+    const pregunta = `¿Bloquear la tarjeta terminada en ${fin}?\n\n` +
+      "Dejará de aceptarse en el cajero. El desbloqueo no se hace en el Home Banking: lo hace el banco.";
+    if (!window.confirm(pregunta)) return;
+    ocultarMensaje("msgBloqueo");
+    cargando(boton, true, "Bloqueando");
+    try {
+      const r = await Bus.bloquearTarjeta(t.idTarjeta, "Bloqueo solicitado por el cliente en Home Banking");
+      t.estado = (r && r.estado_tarjeta) || "BLOQUEADA";
+      chip.querySelector(".tipo").textContent = `${t.tipo} · ${t.estado}`;
+      chip.style.opacity = ".6";
+      boton.remove();
+      mostrarMensaje("msgBloqueo", "ok", `Tarjeta terminada en ${fin} bloqueada. Ya no se acepta en el cajero.`);
+    } catch (err) {
+      cargando(boton, false);
+      mostrarMensaje("msgBloqueo", "error",
+        `No se pudo bloquear la tarjeta terminada en ${fin}: ${err.mensaje || "servicio no disponible"}.`);
+    }
+  }
 
   /* ---------- Utilidades de interfaz ---------- */
   const formatear = v => (v.match(/.{1,4}/g) || []).join(" ");

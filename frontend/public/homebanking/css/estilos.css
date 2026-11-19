@@ -222,6 +222,7 @@ a { color: var(--azul-3); }
 }
 .chip:hover { border-color: var(--azul-3); }
 .chip.sel { border-color: var(--azul-3); background: var(--info-fondo); box-shadow: 0 0 0 3px rgba(29,78,137,.12); }
+.chip-grupo { display: inline-flex; align-items: center; gap: 6px; }
 .chip .tipo { font-family: "Segoe UI", sans-serif; color: var(--texto-suave); font-size: 12px; }
 
 /* ---------- Tarjeta plástica ---------- */
