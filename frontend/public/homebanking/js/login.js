@@ -13,13 +13,13 @@
   (async function verificarCanal() {
     const etiqueta = document.getElementById("estadoCanal");
     if (!Bus.esApi) {
-      if (etiqueta) etiqueta.textContent = "MOCK local · sin servidor";
-      mostrarMensaje(msg, "warn", "Modo local limitado. Ejecute ./iniciar.sh para habilitar transferencias, Token Matriz, créditos y auditoría.");
+      if (etiqueta) etiqueta.textContent = "Sin conexión al bus";
+      mostrarMensaje(msg, "warn", "Este canal necesita el frontend y el Bus de Servicios en ejecución.");
       return;
     }
     try {
       const r = await fetch("/api/core/coredb/salud");
-      if (etiqueta && r.ok) etiqueta.textContent = "COREDB · en línea";
+      if (etiqueta) etiqueta.textContent = r.ok ? "COREDB · en línea" : "COREDB no disponible";
     } catch (e) {
       if (etiqueta) etiqueta.textContent = "COREDB no disponible";
       mostrarMensaje(msg, "warn", "COREDB no responde. Verifique que los servicios estén en ejecución.");

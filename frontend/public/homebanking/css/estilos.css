@@ -305,6 +305,8 @@ tbody tr:hover { background: #f7f9fc; }
   margin-top: 16px;
 }
 .nota code { font-family: var(--mono); background: #e9eef6; padding: 1px 5px; border-radius: 4px; color: var(--azul); }
+.lista-demo { margin: 8px 0 8px 18px; padding: 0; }
+.lista-demo li { margin-bottom: 5px; }
 
 /* ---------- Consola del Bus de Servicios ---------- */
 .consola {

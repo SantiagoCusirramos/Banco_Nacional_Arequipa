@@ -15,6 +15,9 @@
   const pNum = document.getElementById("plasticoNumero");
   const pTit = document.getElementById("plasticoTitular");
   const pVen = document.getElementById("plasticoVenc");
+  const panelVerif = document.getElementById("verifBloqueo");
+  const btnVerificar = document.getElementById("btnVerificarBloqueo");
+  let idVerificacion = null;
 
   /* ---------- Tarjetas del cliente ---------- */
   (async function cargarTarjetas() {
@@ -71,12 +74,45 @@
       chip.style.opacity = ".6";
       boton.remove();
       mostrarMensaje("msgBloqueo", "ok", `Tarjeta terminada en ${fin} bloqueada. Ya no se acepta en el cajero.`);
+      idVerificacion = t.idTarjeta;
+      ocultarMensaje("msgVerificacion");
+      if (panelVerif) panelVerif.hidden = false;
     } catch (err) {
       cargando(boton, false);
       mostrarMensaje("msgBloqueo", "error",
         `No se pudo bloquear la tarjeta terminada en ${fin}: ${err.mensaje || "servicio no disponible"}.`);
     }
   }
+
+  /* ---------- Verificación del bloqueo contra TARJETAS ---------- */
+  async function verificarBloqueo() {
+    if (!idVerificacion) return;
+    ocultarMensaje("msgVerificacion");
+    cargando(btnVerificar, true, "Consultando");
+    try {
+      const r = await Bus.obtenerTarjetasAsociadas(sesion.codCliente);
+      const tarjeta = (r.tarjetas || []).find(t => t.idTarjeta === idVerificacion);
+      if (!tarjeta) {
+        mostrarMensaje("msgVerificacion", "error", "La tarjeta ya no aparece en la lista del cliente.");
+        return;
+      }
+      const fin = tarjeta.numTarjeta.slice(-4);
+      if (tarjeta.estado === "BLOQUEADA") {
+        mostrarMensaje("msgVerificacion", "ok",
+          `TARJETAS confirma BLOQUEADA la tarjeta terminada en ${fin}. Falta la comprobación en el cajero.`);
+      } else {
+        mostrarMensaje("msgVerificacion", "warn",
+          `TARJETAS todavía reporta ${tarjeta.estado} la tarjeta terminada en ${fin}. Repita el bloqueo o avise al equipo de Tarjetas.`);
+      }
+    } catch (err) {
+      mostrarMensaje("msgVerificacion", "error",
+        `No se pudo consultar el estado: ${err.mensaje || "servicio no disponible"}.`);
+    } finally {
+      cargando(btnVerificar, false);
+    }
+  }
+
+  if (btnVerificar) btnVerificar.addEventListener("click", verificarBloqueo);
 
   /* ---------- Utilidades de interfaz ---------- */
   const formatear = v => (v.match(/.{1,4}/g) || []).join(" ");

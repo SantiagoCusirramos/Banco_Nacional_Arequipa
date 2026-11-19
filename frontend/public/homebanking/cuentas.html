@@ -72,6 +72,15 @@
       <div class="chips" id="chipsTarjetas"></div>
       <div class="msg" id="msgBloqueo" role="status"></div>
 
+      <div class="nota" id="verifBloqueo" hidden>
+        <b>Verificación del bloqueo</b>
+        <div class="fila-flex" style="margin-top:8px">
+          <button type="button" class="btn btn-sec btn-sm" id="btnVerificarBloqueo">Consultar estado en TARJETAS</button>
+          <span class="tono-suave">Después compruebe en el cajero que el PIN ya no es aceptado.</span>
+        </div>
+        <div class="msg" id="msgVerificacion" role="status"></div>
+      </div>
+
       <form id="formTarjeta" autocomplete="off" novalidate>
         <div class="fila-flex">
           <div class="campo">
@@ -94,6 +103,8 @@
         <b>Cuentas</b> devuelve las cuentas activas con saldos.<br>
         3) «Bloquear», tras confirmar: <code>POST /api/tarjeta/{id}/bloqueo</code> → módulo <b>Tarjetas</b>
         (por el Bus) deja la tarjeta BLOQUEADA.<br>
+        4) «Consultar estado en TARJETAS» repite <code>GET /api/tarjeta/cliente/{codCliente}</code> para confirmar
+        el bloqueo; la comprobación final se hace en el cajero.<br>
         <i>Nota: Verificar titularidad no disponible en esta versión (requiere endpoint /api/tarjeta/{id}/verificar-titularidad).</i>
       </div>
     </section>

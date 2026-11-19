@@ -205,7 +205,7 @@ function avisoModoLocal(contenedor) {
   const el = typeof contenedor === "string" ? document.getElementById(contenedor) : contenedor;
   if (el) {
     mostrarMensaje(el, "warn",
-      "Modo local limitado: para transferencias, Token Matriz, pago de créditos y auditoría ejecute ./iniciar.sh y abra http://127.0.0.1:8080/.");
+      "Modo local limitado: este canal necesita el frontend y el Bus de Servicios en ejecución.");
   }
 }
 

@@ -13,13 +13,13 @@
     <div class="marca-logo">BNA</div>
     <div class="marca-txt">
       <strong>Banco Nacional de Arequipa</strong>
-      <span>Home Banking · Prototipo de interfaz</span>
+      <span>Home Banking · canal web integrado</span>
     </div>
   </div>
   <div class="sesion">
     <div class="quien">
       <b>Canal web seguro</b>
-      <span id="estadoCanal">Bus local REST/JSON · simulación</span>
+      <span id="estadoCanal">Conectando con COREDB…</span>
     </div>
   </div>
 </header>
@@ -28,8 +28,8 @@
   <div class="login-tarjeta">
     <div class="login-cab">
       <div class="marca-logo">BNA</div>
-      <h1>Ingresa a tu Home Banking</h1>
-      <p>RF-HB-001 · Clave de 6 dígitos numéricos</p>
+      <h1>Ingresa al Home Banking</h1>
+      <p>Acceso del personal del banco · atiende a un cliente</p>
     </div>
 
     <div class="login-cuerpo-int">
@@ -40,9 +40,9 @@
         </div>
 
         <div class="campo">
-          <label for="claveWeb">Clave</label>
+          <label for="claveWeb">Clave de COREDB</label>
           <input type="password" id="claveWeb" name="claveWeb" maxlength="200" required>
-          <div class="pista">Todavía no hay acceso de clientes al Home Banking: entra un usuario del banco y atiende a un cliente.</div>
+          <div class="pista">Ingresa con tu usuario del banco; después indicas el código del cliente que atiendes.</div>
         </div>
 
         <div class="campo">
@@ -57,28 +57,17 @@
 
       <div class="separador"></div>
 
-      <p class="tono-suave mb-0">
-        <b>Datos de prueba del prototipo</b> (Bus de Servicios local):
-      </p>
-      <div class="tabla-env" style="margin-top:10px">
-        <table>
-          <thead>
-            <tr><th>Código</th><th>Clave</th><th>Estado</th></tr>
-          </thead>
-          <tbody>
-            <tr><td class="num">CL-0004821</td><td class="num">246810</td><td><span class="badge ok">Activo</span></td></tr>
-            <tr><td class="num">CL-0009930</td><td class="num">777777</td><td><span class="badge ok">Activo</span></td></tr>
-            <tr><td class="num">CL-0007712</td><td class="num">—</td><td><span class="badge err">Bloqueado</span></td></tr>
-          </tbody>
-        </table>
+      <div class="nota mb-0">
+        <b>Para la prueba del sistema</b>
+        <ol class="lista-demo">
+          <li>Entra con <code>admin</code> y la clave de COREDB, y escribe el código del cliente
+              creado en Captación (por ejemplo <code>CLI000000002</code>).</li>
+          <li>En «Cuentas por tarjeta» → «Mis tarjetas», pulsa <b>Bloquear</b> en la tarjeta ACTIVA
+              y confirma. La operación va por el Bus a TARJETAS.</li>
+          <li>Verifica el estado de la tarjeta y comprueba en el cajero que su PIN ya no es aceptado.</li>
+        </ol>
+        El desbloqueo no se hace aquí: lo realiza el módulo Seguridad.
       </div>
-      <p class="tono-suave" style="margin-top:10px">
-        Ingresa 3 claves incorrectas para ver el bloqueo preventivo (RN-TAR-004).
-      </p>
-      <p class="tono-suave" style="margin-top:10px">
-        <b>Fase III:</b> transferencias, Token Matriz, pago de créditos y auditoría están disponibles
-        al ejecutar <code>./iniciar.sh</code> y abrir <code>http://127.0.0.1:8080/</code>.
-      </p>
     </div>
   </div>
 </main>
