@@ -1,15 +1,8 @@
-/* RF-HB-007 – Pago de cuota de crédito (CR-INT-08)
-   Usa puentes: /api/cobranza/clientes/{codCliente}/creditos, /api/cobranza/creditos/{codCredito}/monto-a-pagar,
-   /api/cobranza/cr-int-08/pagos
-   NOTA: Token Matriz, evaluar-riesgo y validar topes NO DISPONIBLES en esta versión
-*/
-
 (function () {
   const sesion = Sesion.exigir();
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const msg = document.getElementById("msgCredito");
   const contenedor = document.getElementById("creditos");
@@ -26,12 +19,6 @@
   let cuentas = [];
   let creditoActual = null;
   let idemActual = null;
-
-  if (!Bus.esApi) {
-    avisoModoLocal(msg);
-    btn.disabled = true;
-    btn.title = "Pago de créditos requiere COBRANZA y CUENTAS";
-  }
 
   function pintarCreditos() {
     contenedor.innerHTML = "";
@@ -116,8 +103,7 @@
         seleccionarCredito(creditos[0].codCredito);
       }
     } catch (e) {
-      if (e.codigo === "MODO_LOCAL_LIMITADO") avisoModoLocal(msg);
-      else mostrarMensaje(msg, "error", e.mensaje || "No se pudieron recuperar los créditos.");
+      mostrarMensaje(msg, "error", e.mensaje || "No se pudieron recuperar los créditos.");
     }
   }
 
@@ -144,15 +130,15 @@
       <div class="resumen-operacion">
         <h3>Pago de crédito ${r.estadoPago}</h3>
         <div class="operacion-id">${r.idPago}</div>
-        ${r.idempotente ? '<span class="badge warn">Reintento idempotente</span>' : ""}
+        ${r.idempotente ? '<span class="badge warn">Operación ya registrada</span>' : ""}
         <div class="detalle-lista">
           <div><span>Crédito</span><b>${r.codCredito} · ${r.producto}</b></div>
           <div><span>Monto pagado</span><b>${fmt.moneda(r.montoPagado, r.moneda)}</b></div>
           <div><span>Saldo del crédito</span><b>${fmt.moneda(r.saldoCredito, r.moneda)}</b></div>
           <div><span>Cuotas pendientes</span><b>${r.cuotasPendientes}</b></div>
           <div><span>Saldo disponible</span><b>${fmt.moneda(r.saldoActualizado?.saldoDisponible || 0, r.moneda)}</b></div>
-          <div><span>Asiento Core</span><b class="num">${r.idAsientoCore || "N/D"}</b></div>
-          <div><span>UUID</span><b class="num">${r.uuidTransaccion || "N/D"}</b></div>
+          <div><span>Comprobante</span><b class="num">${r.idAsientoCore || "N/D"}</b></div>
+          <div><span>Identificador de operación</span><b class="num">${r.uuidTransaccion || "N/D"}</b></div>
         </div>
         <div class="constancia-acciones">
           ${constancia ? `<a class="btn" href="${constancia}" target="_blank" rel="noopener">Descargar constancia PDF</a>` : ""}
@@ -173,16 +159,12 @@
   form.addEventListener("submit", async e => {
     e.preventDefault();
     ocultarMensaje(msg);
-    if (!Bus.esApi) { avisoModoLocal(msg); return; }
     const v = validar();
     if (!v) return;
     if (!idemActual) idemActual = Bus.nuevoIdempotencyKey();
 
     cargando(btn, true, "Procesando");
     try {
-      // Token Matriz, evaluación de riesgo y topes no tienen ruta en el producto: no se piden.
-
-      // Pago CR-INT-08
       const r = await Bus.pagarCuota(creditoActual.codCredito, {
         numCuentaOrigen: v.cuenta.numCuenta,
         montoPago: v.monto,
@@ -198,14 +180,11 @@
         mostrarMensaje(msg, "info", err.mensaje);
       } else if (err.codigo === "BUS_TIMEOUT") {
         mostrarMensaje(msg, "warn",
-          "El Bus no respondió. El pago queda PENDIENTE / NO CONFIRMADA. No se reintentó automáticamente; verifique antes de repetir.");
-      } else if (err.codigo === "NO_DISPONIBLE") {
-        mostrarMensaje(msg, "error", "Pago de crédito: No disponible en esta versión (requiere endpoint /api/cobranza/cr-int-08/pagos).");
+          "El servicio no respondió. No se reintentó automáticamente; verifique antes de repetir.");
       } else {
         mostrarMensaje(msg, "error", err.mensaje || "El pago no pudo procesarse.");
       }
-      // La llave (referenciaTransaccion) se conserva: reintentar el mismo pago no cobra dos
-      // veces. Cambia al editar el monto o la cuenta.
+      // Conservar la llave evita cobrar dos veces si la respuesta se perdió.
     } finally {
       cargando(btn, false);
     }

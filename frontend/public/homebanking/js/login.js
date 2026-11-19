@@ -1,8 +1,4 @@
-/* RF-HB-001 – Autenticación del cliente en Home Banking */
-
 (function () {
-  crearConsola();
-
   const form = document.getElementById("formLogin");
   const btn = document.getElementById("btnIngresar");
   const msg = document.getElementById("msgLogin");
@@ -12,17 +8,12 @@
 
   (async function verificarCanal() {
     const etiqueta = document.getElementById("estadoCanal");
-    if (!Bus.esApi) {
-      if (etiqueta) etiqueta.textContent = "Sin conexión al bus";
-      mostrarMensaje(msg, "warn", "Este canal necesita el frontend y el Bus de Servicios en ejecución.");
-      return;
-    }
     try {
       const r = await fetch("/api/core/coredb/salud");
-      if (etiqueta) etiqueta.textContent = r.ok ? "COREDB · en línea" : "COREDB no disponible";
+      if (etiqueta) etiqueta.textContent = r.ok ? "Servicio disponible" : "Servicio no disponible";
     } catch (e) {
-      if (etiqueta) etiqueta.textContent = "COREDB no disponible";
-      mostrarMensaje(msg, "warn", "COREDB no responde. Verifique que los servicios estén en ejecución.");
+      if (etiqueta) etiqueta.textContent = "Servicio no disponible";
+      mostrarMensaje(msg, "warn", "No se pudo verificar el servicio. Intente nuevamente.");
     }
   })();
 
@@ -44,13 +35,12 @@
       return;
     }
     if (!usuario.value.trim() || !claveWeb) {
-      mostrarMensaje(msg, "error", "Ingrese el usuario y la clave del banco.");
+      mostrarMensaje(msg, "error", "Ingrese su usuario y clave.");
       return;
     }
 
     cargando(btn, true, "Validando");
     try {
-      // Usa Bus.autenticar (POST /api/core/coredb/auth/login)
       const r = await Bus.autenticar(usuario.value.trim(), claveWeb, codCliente);
 
       Sesion.guardar({

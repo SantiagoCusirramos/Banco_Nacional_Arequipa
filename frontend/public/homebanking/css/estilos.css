@@ -1,6 +1,6 @@
 /* =========================================================
    BNA - Banco Nacional de Arequipa
-   Home Banking | Prototipo de interfaz (Fase I / Fase II)
+   Home Banking
    ========================================================= */
 
 :root {
@@ -36,8 +36,6 @@ body {
   font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 15px;
   line-height: 1.5;
-  padding-bottom: 70px;
-  transition: padding-bottom .15s ease;
 }
 
 a { color: var(--azul-3); }
@@ -294,7 +292,7 @@ tbody tr:hover { background: #f7f9fc; }
 .resumen .dato b { font-size: 19px; color: var(--azul); display: block; margin-top: 4px; }
 .resumen .dato small { color: var(--texto-suave); font-size: 12px; }
 
-/* ---------- Notas técnicas ---------- */
+/* ---------- Notas informativas ---------- */
 .nota {
   background: #f7f9fc;
   border-left: 3px solid var(--azul-3);
@@ -305,60 +303,6 @@ tbody tr:hover { background: #f7f9fc; }
   margin-top: 16px;
 }
 .nota code { font-family: var(--mono); background: #e9eef6; padding: 1px 5px; border-radius: 4px; color: var(--azul); }
-.lista-demo { margin: 8px 0 8px 18px; padding: 0; }
-.lista-demo li { margin-bottom: 5px; }
-
-/* ---------- Consola del Bus de Servicios ---------- */
-.consola {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  background: #0d1520;
-  color: #cfe3ff;
-  font-family: var(--mono);
-  font-size: 12px;
-  z-index: 60;
-  box-shadow: 0 -6px 20px rgba(0,0,0,.35);
-  max-height: 32vh;
-  display: flex;
-  flex-direction: column;
-}
-.consola-cab { flex: 0 0 auto; }
-.consola-cuerpo { flex: 1 1 auto; }
-.consola-cab {
-  display: flex; align-items: center; gap: 14px;
-  padding: 8px 16px;
-  background: #111c2b;
-  border-bottom: 1px solid #1f2c40;
-  flex-wrap: wrap;
-}
-.consola-cab b { color: #7fe0a8; letter-spacing: .4px; }
-.consola-cab .etq { color: #8aa4c8; }
-.consola-cab button {
-  background: #1c2b40; color: #cfe3ff;
-  border: 1px solid #2b3d57; border-radius: 7px;
-  padding: 4px 10px; font-family: var(--mono); font-size: 11.5px;
-  cursor: pointer;
-}
-.consola-cab button:hover { background: #24374f; }
-.consola-cab label { display: flex; align-items: center; gap: 6px; color: #8aa4c8; cursor: pointer; }
-.consola-cuerpo { overflow-y: auto; padding: 10px 16px 16px; }
-.consola-vacia { color: #5f7fa3; }
-.consola-item { border-bottom: 1px dashed #1f2c40; padding: 8px 0; }
-.consola-item .linea1 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.consola-item .hora { color: #6f87a8; }
-.consola-item .ruta { color: #ffd479; }
-.consola-item .metodo { color: #7fe0a8; font-weight: 700; }
-.consola-item .interfaz { color: #9ecbff; }
-.consola-item .lat { color: #8aa4c8; }
-.consola-item pre { margin: 6px 0 4px; white-space: pre-wrap; word-break: break-word; color: #a9c3e6; }
-.consola-item pre.req { border-left: 3px solid #3b5d8a; padding-left: 8px; }
-.consola-item pre.res { border-left: 3px solid #2f8f5b; padding-left: 8px; }
-.consola-item .estado-ok { color: #7fe0a8; }
-.consola-item .estado-err { color: #ff8b9b; }
-
-.consola-oculta .consola-cuerpo { display: none; }
-.consola-oculta .ocultable { display: none; }
-.consola-oculta { max-height: none; }
 
 /* ---------- Utilidades ---------- */
 .tono-suave { color: var(--texto-suave); font-size: 13px; }
@@ -383,12 +327,10 @@ tbody tr:hover { background: #f7f9fc; }
 @media (max-width: 640px) {
   .sesion .quien { display: none; }
   .panel { padding: 18px; }
-  body { padding-bottom: 78px; }
 }
 
 /* =========================================================
-   FASE III · Navegación, transferencias, Token Matriz,
-   créditos, auditoría y constancias
+   Navegación, transferencias, créditos y auditoría
    ========================================================= */
 
 .nav-canal {
@@ -480,73 +422,6 @@ tbody tr:hover { background: #f7f9fc; }
 .constancia-acciones { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .constancia-acciones a { text-decoration: none; }
 
-/* ---------- Token Matriz ---------- */
-.token-overlay {
-  position: fixed; inset: 0;
-  background: rgba(7, 18, 34, .62);
-  backdrop-filter: blur(3px);
-  z-index: 90;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-}
-.token-caja {
-  width: 100%;
-  max-width: 560px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 22px 60px rgba(0,0,0,.35);
-  overflow: hidden;
-}
-.token-cab {
-  background: linear-gradient(135deg, var(--azul), var(--azul-3));
-  color: #fff;
-  padding: 18px 22px;
-}
-.token-cab h3 { margin: 0 0 4px; font-size: 18px; }
-.token-cab p { margin: 0; font-size: 12.5px; opacity: .85; }
-.token-cuerpo { padding: 20px 22px 22px; }
-.token-coordenada {
-  background: var(--info-fondo);
-  border: 1px solid #c6d8f2;
-  color: var(--azul-2);
-  border-radius: 10px;
-  padding: 12px 14px;
-  font-size: 13.5px;
-  margin-bottom: 14px;
-}
-.token-coordenada b { font-size: 20px; font-family: var(--mono); color: var(--azul); }
-.token-grid {
-  display: grid;
-  grid-template-columns: 34px repeat(4, 1fr);
-  gap: 5px;
-  margin: 12px 0 16px;
-  font-family: var(--mono);
-  font-size: 12px;
-}
-.token-grid .esq, .token-grid .cab {
-  color: var(--texto-suave);
-  display: grid; place-items: center;
-  font-weight: 700;
-}
-.token-celda {
-  border: 1px solid var(--borde);
-  border-radius: 7px;
-  padding: 6px 4px;
-  text-align: center;
-  background: #fbfcfe;
-  color: var(--texto-suave);
-}
-.token-celda.pedida {
-  background: var(--warn-fondo);
-  border-color: #e8c877;
-  color: var(--warn);
-  font-weight: 800;
-  box-shadow: 0 0 0 2px rgba(232,200,119,.35);
-}
-.token-acciones { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
-.token-error { margin: 10px 0 0; }
-
 /* ---------- Auditoría ---------- */
 .auditoria-filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
 .auditoria-filtros .campo { flex: 1 1 180px; margin-bottom: 0; }
@@ -578,7 +453,5 @@ tbody tr:hover { background: #f7f9fc; }
 .credito-card button { margin-top: auto; }
 
 @media (max-width: 640px) {
-  .token-grid { font-size: 10.5px; }
-  .token-celda { padding: 5px 2px; }
   .nav-canal { padding: 0 12px; }
 }

@@ -13,7 +13,7 @@
     <div class="marca-logo">BNA</div>
     <div class="marca-txt">
       <strong>Banco Nacional de Arequipa</strong>
-      <span>Home Banking · Consulta de posición consolidada</span>
+      <span>Home Banking · Mis cuentas</span>
     </div>
   </div>
   <div class="sesion">
@@ -50,8 +50,7 @@
     <section class="panel">
       <h1>Obtener mis cuentas con la tarjeta</h1>
       <p class="sub">
-        Selecciona o ingresa el número de tu tarjeta BNA. El canal verifica la titularidad
-        y luego solicita tu posición consolidada al Bus de Servicios.
+        Seleccione o ingrese el número de su tarjeta BNA para consultar sus cuentas asociadas.
       </p>
 
       <div class="plastico" id="plastico">
@@ -72,22 +71,13 @@
       <div class="chips" id="chipsTarjetas"></div>
       <div class="msg" id="msgBloqueo" role="status"></div>
 
-      <div class="nota" id="verifBloqueo" hidden>
-        <b>Verificación del bloqueo</b>
-        <div class="fila-flex" style="margin-top:8px">
-          <button type="button" class="btn btn-sec btn-sm" id="btnVerificarBloqueo">Consultar estado en TARJETAS</button>
-          <span class="tono-suave">Después compruebe en el cajero que el PIN ya no es aceptado.</span>
-        </div>
-        <div class="msg" id="msgVerificacion" role="status"></div>
-      </div>
-
       <form id="formTarjeta" autocomplete="off" novalidate>
         <div class="fila-flex">
           <div class="campo">
             <label for="numTarjeta">Número de tarjeta</label>
             <input type="text" id="numTarjeta" class="mono" inputmode="numeric"
                    placeholder="0000 0000 0000 0000" maxlength="19">
-            <div class="pista">16 dígitos, sin espacios en la solicitud al Bus.</div>
+            <div class="pista">Ingrese los 16 dígitos de su tarjeta.</div>
           </div>
           <button type="submit" class="btn" id="btnObtener">Obtener cuentas</button>
         </div>
@@ -96,16 +86,7 @@
       <div class="msg" id="msgCuentas"></div>
 
       <div class="nota">
-        Flujo del prototipo (usando puentes del frontend Next.js):<br>
-        1) <code>GET /api/tarjeta/cliente/{codCliente}</code> → módulo <b>Tarjetas</b>
-        lista las tarjetas del cliente.<br>
-        2) <code>GET /api/cuenta/consolidada/{codCliente}</code> → interfaz <b>INT-08</b> del módulo
-        <b>Cuentas</b> devuelve las cuentas activas con saldos.<br>
-        3) «Bloquear», tras confirmar: <code>POST /api/tarjeta/{id}/bloqueo</code> → módulo <b>Tarjetas</b>
-        (por el Bus) deja la tarjeta BLOQUEADA.<br>
-        4) «Consultar estado en TARJETAS» repite <code>GET /api/tarjeta/cliente/{codCliente}</code> para confirmar
-        el bloqueo; la comprobación final se hace en el cajero.<br>
-        <i>Nota: Verificar titularidad no disponible en esta versión (requiere endpoint /api/tarjeta/{id}/verificar-titularidad).</i>
+        Solo se muestran las cuentas activas de su titularidad. La información de saldos se actualiza en cada consulta.
       </div>
     </section>
 
@@ -157,11 +138,6 @@
 
       <div class="msg" id="msgOmitidas"></div>
 
-      <div class="nota">
-        <b>INT-08</b> · Origen: Home Banking → Destino: Módulo Cuentas (vía Bus).<br>
-        Entrada: <code>codCliente</code> · Salida: <code>numCuenta, tipoCuenta, moneda,
-        saldoContable, saldoDisponible</code>. RF-HB-002 / RF-HB-003.
-      </div>
     </section>
 
   </div>

@@ -13,13 +13,13 @@
     <div class="marca-logo">BNA</div>
     <div class="marca-txt">
       <strong>Banco Nacional de Arequipa</strong>
-      <span>Home Banking · canal web integrado</span>
+      <span>Home Banking · acceso seguro</span>
     </div>
   </div>
   <div class="sesion">
     <div class="quien">
       <b>Canal web seguro</b>
-      <span id="estadoCanal">Conectando con COREDB…</span>
+        <span id="estadoCanal">Verificando el servicio…</span>
     </div>
   </div>
 </header>
@@ -29,45 +29,31 @@
     <div class="login-cab">
       <div class="marca-logo">BNA</div>
       <h1>Ingresa al Home Banking</h1>
-      <p>Acceso del personal del banco · atiende a un cliente</p>
+      <p>Acceso seguro a su banca en línea</p>
     </div>
 
     <div class="login-cuerpo-int">
       <form id="formLogin" autocomplete="off" novalidate>
         <div class="campo">
-          <label for="usuario">Usuario del banco (COREDB)</label>
+          <label for="usuario">Usuario</label>
           <input type="text" id="usuario" name="usuario" maxlength="60" required>
         </div>
 
         <div class="campo">
-          <label for="claveWeb">Clave de COREDB</label>
+          <label for="claveWeb">Clave</label>
           <input type="password" id="claveWeb" name="claveWeb" maxlength="200" required>
-          <div class="pista">Ingresa con tu usuario del banco; después indicas el código del cliente que atiendes.</div>
+          <div class="pista">Ingrese sus credenciales para continuar.</div>
         </div>
 
         <div class="campo">
           <label for="codCliente">Código del cliente atendido</label>
-          <input type="text" id="codCliente" name="codCliente" placeholder="CLI000000001" maxlength="12" required>
+          <input type="text" id="codCliente" name="codCliente" placeholder="Código de cliente" maxlength="12" required>
         </div>
 
         <button type="submit" class="btn ancho-total" id="btnIngresar">Ingresar</button>
       </form>
 
       <div class="msg" id="msgLogin"></div>
-
-      <div class="separador"></div>
-
-      <div class="nota mb-0">
-        <b>Para la prueba del sistema</b>
-        <ol class="lista-demo">
-          <li>Entra con <code>admin</code> y la clave de COREDB, y escribe el código del cliente
-              creado en Captación (por ejemplo <code>CLI000000002</code>).</li>
-          <li>En «Cuentas por tarjeta» → «Mis tarjetas», pulsa <b>Bloquear</b> en la tarjeta ACTIVA
-              y confirma. La operación va por el Bus a TARJETAS.</li>
-          <li>Verifica el estado de la tarjeta y comprueba en el cajero que su PIN ya no es aceptado.</li>
-        </ol>
-        El desbloqueo no se hace aquí: lo realiza el módulo Seguridad.
-      </div>
     </div>
   </div>
 </main>

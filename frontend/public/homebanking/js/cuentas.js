@@ -1,11 +1,8 @@
-/* RF-HB-002 – Consultar saldos de cuentas a partir de la tarjeta (INT-08) */
-
 (function () {
   const sesion = Sesion.exigir();
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const form = document.getElementById("formTarjeta");
   const inp = document.getElementById("numTarjeta");
@@ -15,16 +12,15 @@
   const pNum = document.getElementById("plasticoNumero");
   const pTit = document.getElementById("plasticoTitular");
   const pVen = document.getElementById("plasticoVenc");
-  const panelVerif = document.getElementById("verifBloqueo");
-  const btnVerificar = document.getElementById("btnVerificarBloqueo");
-  let idVerificacion = null;
+  let tarjetas = [];
 
   /* ---------- Tarjetas del cliente ---------- */
   (async function cargarTarjetas() {
     try {
       const r = await Bus.obtenerTarjetasAsociadas(sesion.codCliente);
+      tarjetas = r.tarjetas || [];
       chips.innerHTML = "";
-      r.tarjetas.forEach(t => {
+      tarjetas.forEach(t => {
         const grupo = document.createElement("span");
         grupo.className = "chip-grupo";
         const b = document.createElement("button");
@@ -63,7 +59,7 @@
   async function bloquear(t, chip, boton) {
     const fin = t.numTarjeta.slice(-4);
     const pregunta = `¿Bloquear la tarjeta terminada en ${fin}?\n\n` +
-      "Dejará de aceptarse en el cajero. El desbloqueo no se hace en el Home Banking: lo hace el banco.";
+      "La tarjeta dejará de estar disponible para realizar operaciones.";
     if (!window.confirm(pregunta)) return;
     ocultarMensaje("msgBloqueo");
     cargando(boton, true, "Bloqueando");
@@ -73,46 +69,13 @@
       chip.querySelector(".tipo").textContent = `${t.tipo} · ${t.estado}`;
       chip.style.opacity = ".6";
       boton.remove();
-      mostrarMensaje("msgBloqueo", "ok", `Tarjeta terminada en ${fin} bloqueada. Ya no se acepta en el cajero.`);
-      idVerificacion = t.idTarjeta;
-      ocultarMensaje("msgVerificacion");
-      if (panelVerif) panelVerif.hidden = false;
+      mostrarMensaje("msgBloqueo", "ok", `La tarjeta terminada en ${fin} fue bloqueada correctamente.`);
     } catch (err) {
       cargando(boton, false);
       mostrarMensaje("msgBloqueo", "error",
         `No se pudo bloquear la tarjeta terminada en ${fin}: ${err.mensaje || "servicio no disponible"}.`);
     }
   }
-
-  /* ---------- Verificación del bloqueo contra TARJETAS ---------- */
-  async function verificarBloqueo() {
-    if (!idVerificacion) return;
-    ocultarMensaje("msgVerificacion");
-    cargando(btnVerificar, true, "Consultando");
-    try {
-      const r = await Bus.obtenerTarjetasAsociadas(sesion.codCliente);
-      const tarjeta = (r.tarjetas || []).find(t => t.idTarjeta === idVerificacion);
-      if (!tarjeta) {
-        mostrarMensaje("msgVerificacion", "error", "La tarjeta ya no aparece en la lista del cliente.");
-        return;
-      }
-      const fin = tarjeta.numTarjeta.slice(-4);
-      if (tarjeta.estado === "BLOQUEADA") {
-        mostrarMensaje("msgVerificacion", "ok",
-          `TARJETAS confirma BLOQUEADA la tarjeta terminada en ${fin}. Falta la comprobación en el cajero.`);
-      } else {
-        mostrarMensaje("msgVerificacion", "warn",
-          `TARJETAS todavía reporta ${tarjeta.estado} la tarjeta terminada en ${fin}. Repita el bloqueo o avise al equipo de Tarjetas.`);
-      }
-    } catch (err) {
-      mostrarMensaje("msgVerificacion", "error",
-        `No se pudo consultar el estado: ${err.mensaje || "servicio no disponible"}.`);
-    } finally {
-      cargando(btnVerificar, false);
-    }
-  }
-
-  if (btnVerificar) btnVerificar.addEventListener("click", verificarBloqueo);
 
   /* ---------- Utilidades de interfaz ---------- */
   const formatear = v => (v.match(/.{1,4}/g) || []).join(" ");
@@ -165,26 +128,13 @@
 
     cargando(btn, true, "Consultando");
     try {
-      /* 1. Módulo Tarjetas: verificar titularidad - NO DISPONIBLE EN ESTA VERSIÓN */
-      try {
-        await Bus.verificarTitularidad(sesion.codCliente, num);
-      } catch (err) {
-        if (err.codigo === "NO_DISPONIBLE") {
-          mostrarMensaje(msg, "warn", "Verificar titularidad: No disponible en esta versión. Se omite esta validación.");
-        } else {
-          throw err;
-        }
-      }
+      const pos = await Bus.consultarPosicion(sesion.codCliente);
 
-      /* 2. Módulo Cuentas: posición consolidada (INT-08) */
-      const pos = await Bus.consultarPosicion(sesion.codCliente, null);
-
-      // Crear objeto tarjeta simulado para pintarResultado (sin verificar titularidad)
-      const tarjeta = {
+      const tarjeta = tarjetas.find(t => t.numTarjeta.replace(/\s/g, "") === num) || {
         numTarjeta: num,
-        marca: "Tarjeta",
+        marca: "BNA",
         vencimiento: "--/--",
-        estado: "DESCONOCIDA"
+        estado: "ACTIVA"
       };
       pintarResultado(tarjeta, pos);
       pintarPasos(true);
@@ -194,7 +144,7 @@
       pintarPasos(false);
       if (err.codigo === "BUS_TIMEOUT") {
         mostrarMensaje(msg, "warn",
-          "El Bus de Servicios no respondió. La consulta queda PENDIENTE / NO CONFIRMADA; no se muestra información parcial. Intente nuevamente.");
+          "El servicio no respondió. Intente nuevamente.");
       } else {
         mostrarMensaje(msg, "error", err.mensaje || "La consulta no pudo procesarse. Intente nuevamente.");
       }
@@ -262,7 +212,7 @@
     const omitidas = pos.cuentasIgnoradas;
     if (omitidas > 0) {
       mostrarMensaje("msgOmitidas", "info",
-        `Se omitieron ${omitidas} cuenta(s) que no se encuentran activas. RF-HB-002: el canal muestra únicamente cuentas ACTIVAS.`);
+        `Se omitieron ${omitidas} cuenta(s) que no se encuentran activas.`);
     }
   }
 })();

@@ -1,11 +1,8 @@
-/* RF-HB-003 – Consultar movimientos históricos (INT-08) */
-
 (function () {
   const sesion = Sesion.exigir();
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const params = new URLSearchParams(window.location.search);
   const numCuenta = (params.get("cuenta") || "").trim();
@@ -19,7 +16,7 @@
 
   if (!numCuenta) {
     titulo.textContent = "Cuenta no especificada";
-    sub.textContent = "Selecciona una cuenta desde la consulta de posición consolidada.";
+    sub.textContent = "Seleccione una cuenta desde la consulta de cuentas.";
     mostrarMensaje(msg, "error", "No se recibió el número de cuenta. Vuelve a tus cuentas y vuelve a intentarlo.");
     form.style.display = "none";
     return;
@@ -41,7 +38,7 @@
       }
     } catch (err) {
       if (err.codigo === "BUS_TIMEOUT") {
-        mostrarMensaje(msg, "warn", "El Bus de Servicios no respondió. La consulta quedó PENDIENTE / NO CONFIRMADA (RN-BUS-002). Intente nuevamente.");
+        mostrarMensaje(msg, "warn", "El servicio no respondió. Intente nuevamente.");
       } else if (err.status === 403) {
         mostrarMensaje(msg, "error", "La cuenta consultada no pertenece a su titularidad.");
       } else {

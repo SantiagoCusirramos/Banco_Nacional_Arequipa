@@ -1,14 +1,8 @@
-/* RF-HB-004 / 005 / 006 / 008 / 009 – Transferencias con Token Matriz, riesgo y topes
-   Usa puentes: /api/cuenta/consolidada, /api/cuenta/transferencia
-   NOTA: Evaluar riesgo (INT-12), validar topes (INT-17) y Token Matriz (INT-03) NO DISPONIBLES en esta versión
-*/
-
 (function () {
   const sesion = Sesion.exigir();
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const form = document.getElementById("formTrans");
   const msg = document.getElementById("msgTrans");
@@ -32,16 +26,9 @@
   let tipo = "PROPIA";
   let idemActual = null;
 
-  // Límites diarios (hardcoded)
   const LIMITE_DIARIO_PEN = 10000;
   const LIMITE_DIARIO_USD = 3000;
   const CANAL = "HB_WEB";
-
-  if (!Bus.esApi) {
-    avisoModoLocal(msg);
-    btn.disabled = true;
-    btn.title = "Transferencias requieren backend COREDB y CUENTAS";
-  }
 
   const cuentaActual = () => cuentas.find(c => c.numCuenta === selOrigen.value);
   const monedaActual = () => cuentaActual() ? cuentaActual().moneda : "PEN";
@@ -182,7 +169,7 @@
       <div class="resumen-operacion">
         <h3>Transferencia procesada</h3>
         <div class="operacion-id">${r.idTransferencia}</div>
-        ${r.idempotente ? '<span class="badge warn">Reintento idempotente</span>' : ""}
+        ${r.idempotente ? '<span class="badge warn">Operación ya registrada</span>' : ""}
         <div class="detalle-lista">
           <div><span>Tipo</span><b>${r.tipo}</b></div>
           <div><span>Monto</span><b>${fmt.moneda(r.monto, r.moneda)}</b></div>
@@ -192,8 +179,8 @@
           <div><span>Titular destino</span><b>${r.titularDestino || "—"}</b></div>
           <div><span>Estado</span><b>${r.estado}</b></div>
           <div><span>Saldo disponible</span><b>${fmt.moneda(r.saldoActualizado?.saldoDisponible || 0, r.moneda)}</b></div>
-          <div><span>Asiento Core</span><b class="num">${r.idAsientoCore || "N/D"}</b></div>
-          <div><span>UUID</span><b class="num">${r.uuidTransaccion || "N/D"}</b></div>
+          <div><span>Comprobante</span><b class="num">${r.idAsientoCore || "N/D"}</b></div>
+          <div><span>Identificador de operación</span><b class="num">${r.uuidTransaccion || "N/D"}</b></div>
         </div>
         <div class="constancia-acciones">
           ${constancia ? `<a class="btn" href="${constancia}" target="_blank" rel="noopener">Descargar constancia PDF</a>` : ""}
@@ -215,19 +202,12 @@
   form.addEventListener("submit", async e => {
     e.preventDefault();
     ocultarMensaje(msg);
-    if (!Bus.esApi) {
-      avisoModoLocal(msg);
-      return;
-    }
     const v = validar();
     if (!v) return;
     if (!idemActual) idemActual = Bus.nuevoIdempotencyKey();
     const payload = construirPayload(v);
     cargando(btn, true, "Procesando");
     try {
-      // Token Matriz, evaluación de riesgo y topes no tienen ruta en el producto: no se piden.
-      // Los topes del canal los aplica COREDB al registrar la transferencia.
-      // Transferencia (INT-09) - usa /api/cuenta/transferencia
       const r = await Bus.transferencia({
         ...payload,
         uuidTransaccion: idemActual,
@@ -243,12 +223,11 @@
         mostrarMensaje(msg, "info", err.mensaje);
       } else if (err.codigo === "BUS_TIMEOUT") {
         mostrarMensaje(msg, "warn",
-          "El Bus no respondió. La transferencia queda PENDIENTE / NO CONFIRMADA. No se reintentó automáticamente; conserve el identificador y verifique antes de repetir.");
+          "El servicio no respondió. No se reintentó automáticamente; conserve el identificador y verifique antes de repetir.");
       } else {
         mostrarMensaje(msg, "error", err.mensaje || "La transferencia no pudo procesarse.");
       }
-      // La llave se conserva: si la respuesta se perdió, reintentar con los mismos datos no
-      // transfiere dos veces (CUENTAS devuelve la operación original). Cambia al editar un dato.
+      // Conservar la llave evita duplicar la operación si la respuesta se perdió.
     } finally {
       cargando(btn, false);
     }

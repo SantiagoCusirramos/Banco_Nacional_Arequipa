@@ -1,11 +1,8 @@
-/* INT-13 – Consulta de auditoría centralizada y exportación de evidencia */
-
 (function () {
   const sesion = Sesion.exigir();
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const msg = document.getElementById("msgAuditoria");
   const tabla = document.getElementById("tablaAuditoria");
@@ -16,12 +13,6 @@
   const btnCsv = document.getElementById("btnCsv");
 
   let eventosActuales = [];
-
-  if (!Bus.esApi) {
-    avisoModoLocal(msg);
-    btnActualizar.disabled = true;
-    btnCsv.disabled = true;
-  }
 
   async function consultar(limit, filtros = {}) {
     return Bus.consultarAuditoria(limit, filtros);
@@ -77,7 +68,6 @@
 
   async function cargar() {
     ocultarMensaje(msg);
-    if (!Bus.esApi) { avisoModoLocal(msg); return; }
     try {
       const todos = await consultar(500);
       opciones(filtroModulo, todos.modulos || [], "Todos");
@@ -89,18 +79,14 @@
       });
       pintarKpis(todos.eventos || [], todos.total || 0);
       pintarTabla(filtrados.eventos || []);
-      if (!todos.total) mostrarMensaje(msg, "info", "Aún no hay eventos. Realice una operación para generar trazabilidad.");
+      if (!todos.total) mostrarMensaje(msg, "info", "Aún no hay eventos. Realice una operación para generar registros.");
     } catch (e) {
       if (e.codigo === "SESION_EXPIRADA" || e.codigo === "SESION_INVALIDA") {
         Sesion.cerrar();
         window.location.href = "index.html";
         return;
       }
-      if (e.codigo === "NO_DISPONIBLE") {
-        mostrarMensaje(msg, "error", "Auditoría: No disponible en esta versión (requiere endpoint /api/core/coredb/auditoria).");
-      } else {
-        mostrarMensaje(msg, "error", e.mensaje || "No se pudo consultar la auditoría.");
-      }
+      mostrarMensaje(msg, "error", e.mensaje || "No se pudo consultar la auditoría.");
     }
   }
 
