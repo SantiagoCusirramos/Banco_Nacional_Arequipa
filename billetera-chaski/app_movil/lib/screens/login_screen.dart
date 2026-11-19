@@ -69,9 +69,9 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (ctx, setD) => AlertDialog(
             title: const Text('Servidor de Chaski'),
             content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Emulador: http://10.0.2.2:3000\nCelular real: http://IP-de-tu-PC:3000', style: TextStyle(color: C.muted, fontSize: 13)),
+              const Text('Emulador: http://10.0.2.2:8020\nCelular real: http://IP-del-servidor:8020', style: TextStyle(color: C.muted, fontSize: 13)),
               const SizedBox(height: 12),
-              TextField(controller: ctrl, keyboardType: TextInputType.url, decoration: const InputDecoration(hintText: 'http://10.0.2.2:3000')),
+              TextField(controller: ctrl, keyboardType: TextInputType.url, decoration: const InputDecoration(hintText: 'http://IP-del-servidor:8020')),
               const SizedBox(height: 8),
               Text(estado, style: TextStyle(color: estado.startsWith('✓') ? C.ok : C.danger, fontWeight: FontWeight.w600)),
             ]),

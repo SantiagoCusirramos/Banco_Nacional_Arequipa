@@ -31,6 +31,7 @@ const pestanas: { id: Tab; label: string; icon: string }[] = [
 export const PANTALLAS: { href: string; label: string; icon: string; descripcion: string }[] = [
   { href: "/cuenta", label: "Cuentas", icon: "▤", descripcion: "Abrir y consultar cuentas, depósitos, retiros, transferencias y movimientos" },
   { href: "/tarjetas", label: "Tarjetas", icon: "▭", descripcion: "Emitir, activar, bloquear tarjetas y autorizar débitos" },
+  { href: "/billetera", label: "Billetera Chaski", icon: "◎", descripcion: "Afiliar clientes y comercios a la billetera digital" },
   { href: "/captacion", label: "Captación", icon: "📋", descripcion: "Registrar solicitantes y habilitarlos como clientes" },
   { href: "/solicitud-credito", label: "Solicitud de crédito", icon: "📝", descripcion: "El asesor arma y envía la solicitud (SOL)" },
   { href: "/evaluacion", label: "Evaluación", icon: "⚖", descripcion: "El analista evalúa y decide las solicitudes" },

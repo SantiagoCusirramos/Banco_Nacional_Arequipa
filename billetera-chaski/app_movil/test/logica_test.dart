@@ -41,8 +41,36 @@ void main() {
   });
 
   test('trama QR', () {
-    expect(qrRe.firstMatch(tramaQr(7))!.group(1), '7');
+    const id = 'a5db6a6f-6de7-4e6f-9c7b-af6e43a06fcc'; // el id del QR es el UUID que da COREDB
+    expect(qrRe.firstMatch(tramaQr(id))!.group(1), id);
+    expect(uuidRe.hasMatch(id), isTrue);
+    expect(qrRe.hasMatch('CHASKI|7'), isFalse);
     expect(qrRe.hasMatch('https://otro.qr'), isFalse);
+  });
+
+  test('modelos con la respuesta real de la API sobre COREDB', () {
+    final me = Me.fromJson({
+      'cliente': {'id_cliente': 'CLI000000016', 'nombres': 'Rosa H.', 'apellidos': '', 'nombre_corto': 'Rosa H.'},
+      'cuenta': {'id_cuenta': 'CTA-0017950647181350', 'numero_cuenta_virtual': 'CTA-0017950647181350', 'saldo_actual': 1000, 'moneda': 'PEN'},
+      'no_leidas': 0, 'pendientes': 0, 'limite': 500, 'tope_diario': 500, 'disponible_hoy': 500,
+    });
+    expect(me.cliente.idCliente, 'CLI000000016');
+    expect(me.cuenta.saldoActual, 1000);
+    final m = Movimiento.fromJson({
+      'id_movimiento': 'a1afe391-77cd-4b1d-94e8-37e25a881560', 'tipo_movimiento': 'deposito', 'monto': -25,
+      'fecha_hora': '2026-11-19T05:05:18.227835', 'descripcion': 'Pasaje', 'canal': 'BD',
+    });
+    expect(m.saldoResultante, isNull);
+    expect(m.monto, -25);
+    expect(m.tipoLegible, 'Depósito');
+    expect(Movimiento.fromRow(m.toRow(me.cliente.idCliente)).idMovimiento, m.idMovimiento);
+    final s = Solicitud.fromJson({'id_solicitud': '6c1f0c1e-5a0b-4f8e-9a63-0f6a9c1b2d3e', 'monto': 10, 'estado': 'pendiente',
+      'nombre': 'Alberto Q.', 'fecha': '2026-11-19T05:05:18'});
+    expect(s.id, '6c1f0c1e-5a0b-4f8e-9a63-0f6a9c1b2d3e');
+    final q = QrInfo.fromJson({'id_qr': 'a5db6a6f-6de7-4e6f-9c7b-af6e43a06fcc', 'tipo': 'estatico', 'nombre': 'Bodega Don Beto',
+      'monto': null, 'es_comercio': true});
+    expect(q.dinamico, isFalse);
+    expect(q.esComercio, isTrue);
   });
 
   test('carrito: la oferta gana a la promo y cubre solo sus cupos', () {

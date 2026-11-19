@@ -13,7 +13,7 @@ import '../widgets/comunes.dart';
 import 'operacion.dart';
 
 /// Abre el flujo de pago de un QR por su id (escaneado, digitado o elegido de la lista).
-Future<void> abrirPagoQr(BuildContext context, int idQr, {bool reemplazar = false}) async {
+Future<void> abrirPagoQr(BuildContext context, String idQr, {bool reemplazar = false}) async {
   final st = context.read<AppState>();
   try {
     final q = QrInfo.fromJson(Map<String, dynamic>.from(await st.api.get('/qr/$idQr')));
@@ -93,7 +93,7 @@ class _QrScreenState extends State<QrScreen> {
       if (m != null) {
         _procesando = true;
         HapticFeedback.mediumImpact();
-        await abrirPagoQr(context, int.parse(m.group(1)!), reemplazar: true);
+        await abrirPagoQr(context, m.group(1)!.toLowerCase(), reemplazar: true);
         _procesando = false;
         return;
       }
@@ -142,15 +142,17 @@ class _QrScreenState extends State<QrScreen> {
           const SizedBox(height: 6),
           TextField(
               controller: _codigo,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(hintText: 'Código del QR')),
+              keyboardType: TextInputType.text,
+              autocorrect: false,
+              decoration: const InputDecoration(hintText: 'Código del QR (xxxxxxxx-xxxx-…)')),
           const SizedBox(height: 12),
           FilledButton(
             onPressed: () {
-              final c = int.tryParse(_codigo.text.trim());
-              if (c == null) return toast(context, 'Ingresa el código numérico');
-              abrirPagoQr(context, c, reemplazar: true);
+              // El código es el UUID del QR (se acepta también la trama CHASKI|<uuid>).
+              final texto = _codigo.text.trim();
+              final c = qrRe.firstMatch(texto)?.group(1) ?? texto;
+              if (!uuidRe.hasMatch(c)) return toast(context, 'Ingresa el código completo del QR');
+              abrirPagoQr(context, c.toLowerCase(), reemplazar: true);
             },
             child: const Text('Continuar'),
           ),
@@ -164,7 +166,7 @@ class _QrScreenState extends State<QrScreen> {
               leading: Avatar(inicial(c['nombre'])),
               title: Text(c['nombre'], style: const TextStyle(fontWeight: FontWeight.w600)),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => abrirPagoQr(context, c['id_qr'], reemplazar: true),
+              onTap: c['id_qr'] == null ? null : () => abrirPagoQr(context, '${c['id_qr']}', reemplazar: true),
             ),
         ]),
         const SizedBox(height: 30),
@@ -184,7 +186,7 @@ class _QrScreenState extends State<QrScreen> {
             ? SizedBox(height: 260, child: Center(child: _errorQr != null ? Text(_errorQr!, textAlign: TextAlign.center) : const CircularProgressIndicator()))
             : Column(children: [
                 QrImageView(
-                    data: tramaQr(q['id_qr']),
+                    data: tramaQr('${q['id_qr']}'),
                     size: 240,
                     eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: C.ink),
                     dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: C.ink)),

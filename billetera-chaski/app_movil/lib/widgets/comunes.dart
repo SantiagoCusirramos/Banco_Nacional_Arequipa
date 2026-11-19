@@ -147,7 +147,7 @@ void detalleMovimiento(BuildContext context, Movimiento m) {
             ('Tipo', m.tipoLegible),
             ('Fecha y hora', fecha(m.fechaHora)),
             if (m.idOperacion != null) ('N.º de operación', nroOperacion(m.idOperacion)),
-            ('Saldo resultante', soles(m.saldoResultante)),
+            if (m.saldoResultante != null) ('Saldo resultante', soles(m.saldoResultante!)),
           ], margin: EdgeInsets.zero),
         ]),
       ),

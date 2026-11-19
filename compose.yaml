@@ -378,7 +378,7 @@ services:
         condition: service_healthy
     networks: [default, canales]
     ports:
-      - "127.0.0.1:${BNA_PUERTO_ATM:-8019}:8019"
+      - "${BNA_IP_RED:-127.0.0.1}:${BNA_PUERTO_ATM:-8019}:8019"
     healthcheck:
       <<: *sonda
       test:
@@ -412,7 +412,7 @@ services:
         condition: service_completed_successfully
     networks: [default, canales]
     ports:
-      - "127.0.0.1:${BNA_PUERTO_BILLETERA:-8020}:3000"
+      - "${BNA_IP_RED:-127.0.0.1}:${BNA_PUERTO_BILLETERA:-8020}:3000"
     healthcheck:
       <<: *sonda
       test:
@@ -544,7 +544,7 @@ services:
       atm:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${BNA_PUERTO_FRONTEND:-3000}:3000"
+      - "${BNA_IP_RED:-127.0.0.1}:${BNA_PUERTO_FRONTEND:-3000}:3000"
     healthcheck:
       <<: *sonda
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]

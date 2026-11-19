@@ -224,7 +224,10 @@ const OPERADOR = 'bna_atm_operador';
 const tokenOperador = () => { try { return sessionStorage.getItem(OPERADOR); } catch(e){ return null; } };
 let entrada = null;         // captura de digitos: {max, valor, cambio, enter}
 
-const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+const uuid = () => { if (crypto.randomUUID) return crypto.randomUUID(); // fuera de localhost o HTTPS no existe: UUID v4 con getRandomValues
+  const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+  return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20); };
 let tarjeta = null;         // id (UUID) de la tarjeta insertada
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ultimos = id => (id || '----').slice(-4);
@@ -510,7 +513,7 @@ async function autenticar(pin){
     }
     linea('API -> ATM      ' + r.status + '  ' + (datos.error_code || ''), 'no');
     evento('AUTENTICACION', datos.error_code || 'ERROR', corr2, {ms, codigo:datos.error_code});
-    if(datos.error_code === 'ERR-ATM-TARJETA-NO-OPERATIVA' || datos.error_code === 'ERR-TAR-003') return pantallaError('Tarjeta bloqueada', 'Superaste los 3 intentos. Acude a tu banco para desbloquearla.', 'Retirar tarjeta', expulsar);
+    if(datos.error_code === 'ERR-ATM-TARJETA-NO-OPERATIVA' || datos.error_code === 'ERR-TAR-003') return pantallaError('Tarjeta bloqueada', 'Esta tarjeta no está habilitada para operar (bloqueada, cancelada o vencida). Acude a tu banco.', 'Retirar tarjeta', expulsar);
     if(datos.error_code === 'ERR-ATM-TARJETA-NO-ENCONTRADA' || datos.error_code === 'ERR-TAR-NO-ENCONTRADA') return pantallaError('Tarjeta no reconocida', 'No pudimos leer esta tarjeta. Retírala e inténtalo con otra.', 'Retirar tarjeta', expulsar);
     if(datos.error_code && datos.error_code.includes('FALLIDO') || datos.data?.resultado === 'FALLIDO') return pantallaClave('Clave incorrecta. Intentos restantes: ' + (datos.data?.intentos_restantes ?? '?'));
     return pantallaError('Servicio no disponible', 'Intenta nuevamente en unos minutos.');

@@ -20,6 +20,7 @@ Uso: ./bna <orden>
   ps              Estado de los servicios
   logs [servicio] Registros, en vivo
   smoke           Flujo de extremo a extremo contra el producto levantado
+  demo            Flujo de la demo del profesor (cliente, cuenta, tarjeta, ATM, Chaski, bloqueo); deja los datos
   test            Todas las suites de pruebas, en contenedores, y el flujo. Si el
                   producto no estaba levantado, al terminar elimina lo que creó
   help            Esta ayuda
@@ -177,6 +178,18 @@ revisar_registros() {
   echo "  ok  registros: ninguno de los $revisados documentos, celulares, PIN, claves y tokens de la corrida"
 }
 
+# Flujo de la demo pedido por el profesor (scripts/flujo_profesor.py). A diferencia de `smoke`, deja
+# los datos en la base y los muestra (incluidos PIN y celulares de prueba) para repetir la demo a mano.
+demo() {
+  [ -f .env ] || { echo "No hay .env: ejecute primero ./bna up" >&2; exit 1; }
+  MSYS_NO_PATHCONV=1 compose exec -T \
+    -e E2E_BUS=http://127.0.0.1:8018 \
+    -e BUS_TOKEN="$(valor BUS_TOKEN_PRUEBAS)" \
+    -e BNA_ADMIN_USUARIO="$(valor BNA_ADMIN_USUARIO)" \
+    -e BNA_ADMIN_PASSWORD="$(valor BNA_ADMIN_PASSWORD)" \
+    bus python - < scripts/flujo_profesor.py
+}
+
 orden="${1:-help}"
 [ $# -gt 0 ] && shift
 case "$orden" in
@@ -189,6 +202,7 @@ case "$orden" in
   ps) compose ps -a ;;
   logs) compose logs -f --tail=100 "$@" ;;
   smoke) humo ;;
+  demo) demo ;;
   test) exec scripts/pruebas.sh "$@" ;;
   k8s-up|k8s-smoke|k8s-ps|k8s-down) exec scripts/k8s.sh "${orden#k8s-}" ;;
   help|-h|--help) ayuda ;;

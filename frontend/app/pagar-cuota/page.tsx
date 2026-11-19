@@ -1,4 +1,5 @@
 "use client";
+import { nuevoUuid } from "@/lib/uuid";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -48,7 +49,7 @@ export default function PagarCuotaPage() {
   const [montoPago, setMontoPago] = useState("");
   // Un intento de pago conserva su referencia mientras no se edite; así un reintento (tras un
   // error de red, por ejemplo) no cobra dos veces (CR-INT-08, idempotencia por referencia).
-  const [referencia, setReferencia] = useState(() => crypto.randomUUID());
+  const [referencia, setReferencia] = useState(() => nuevoUuid());
   const [resultado, setResultado] = useState<ResultadoPago | null>(null);
   const [comprobante, setComprobante] = useState<Comprobante | null>(null);
 
@@ -84,7 +85,7 @@ export default function PagarCuotaPage() {
       setCuentas(cuentasCliente);
       setCuentaOrigen(cuentasCliente[0]?.num_cuenta ?? "");
       setMontoPago(montoHoy.totalAPagar);
-      setReferencia(crypto.randomUUID());
+      setReferencia(nuevoUuid());
       setResultado(null);
       setComprobante(null);
       setTab("pago");
@@ -94,11 +95,11 @@ export default function PagarCuotaPage() {
   // Editar un dato del pago cambia la referencia: ya no es el mismo intento.
   function editarCuenta(valor: string) {
     setCuentaOrigen(valor);
-    setReferencia(crypto.randomUUID());
+    setReferencia(nuevoUuid());
   }
   function editarMonto(valor: string) {
     setMontoPago(valor);
-    setReferencia(crypto.randomUUID());
+    setReferencia(nuevoUuid());
   }
 
   function pagar(e: React.FormEvent) {

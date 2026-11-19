@@ -1,3 +1,4 @@
+import { nuevoUuid } from "@/lib/uuid";
 import axios, { AxiosError } from "axios";
 
 // El navegador solo habla con el frontend: /api/desembolso reenvía a la API de Desembolso con el token de
@@ -17,7 +18,7 @@ export class ErrorApi extends Error {
 }
 
 api.interceptors.request.use((config) => {
-  config.headers.set("X-Correlation-ID", crypto.randomUUID());
+  config.headers.set("X-Correlation-ID", nuevoUuid());
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("bna_access_token");
     if (token) config.headers.set("Authorization", `Bearer ${token}`);
@@ -47,5 +48,5 @@ api.interceptors.response.use(
 );
 
 export function nuevaClave(): string {
-  return crypto.randomUUID();
+  return nuevoUuid();
 }

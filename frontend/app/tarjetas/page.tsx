@@ -1,4 +1,5 @@
 "use client";
+import { nuevoUuid } from "@/lib/uuid";
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -201,10 +202,10 @@ export default function TarjetasPage() {
   const [vencimiento, setVencimiento] = useState(enCuatroAnios);
   // Llave de idempotencia de esta emisión: se mantiene si se repite el mismo envío (doble
   // clic, reintento tras un error) y cambia al editar un dato o al emitir con éxito.
-  const [llaveEmision, setLlaveEmision] = useState(() => crypto.randomUUID());
+  const [llaveEmision, setLlaveEmision] = useState(() => nuevoUuid());
   const editarEmision = (cambiar: (valor: string) => void) => (valor: string) => {
     cambiar(valor);
-    setLlaveEmision(crypto.randomUUID());
+    setLlaveEmision(nuevoUuid());
   };
 
   // Cambio de estado
@@ -221,10 +222,10 @@ export default function TarjetasPage() {
   const [autorizacion, setAutorizacion] = useState<Autorizacion | null>(null);
   const [motivoExtorno, setMotivoExtorno] = useState("");
   // Como en la emisión: la llave se mantiene al repetir el mismo envío y cambia al editar.
-  const [llaveOperacion, setLlaveOperacion] = useState(() => crypto.randomUUID());
+  const [llaveOperacion, setLlaveOperacion] = useState(() => nuevoUuid());
   const editarOperacion = <T,>(cambiar: (valor: T) => void) => (valor: T) => {
     cambiar(valor);
-    setLlaveOperacion(crypto.randomUUID());
+    setLlaveOperacion(nuevoUuid());
   };
 
   // Claves de la tarjeta. El valor solo vive en el campo y se borra al enviarlo.
@@ -264,7 +265,7 @@ export default function TarjetasPage() {
     setIdOperacion(tarjeta.id_tarjeta);
     setCuentaOperacion(tarjeta.num_cuenta ?? "");
     setAutorizacion(null);
-    setLlaveOperacion(crypto.randomUUID());
+    setLlaveOperacion(nuevoUuid());
     irA("operacion");
   }
 
@@ -303,7 +304,7 @@ export default function TarjetasPage() {
         bin,
         fecha_vencimiento: vencimiento,
       }, llaveEmision);
-      setLlaveEmision(crypto.randomUUID());
+      setLlaveEmision(nuevoUuid());
       setNotice({ text: `Tarjeta ${tarjeta.numero_enmascarado} emitida (${tarjeta.estado_tarjeta}).`, error: false });
       mostrar(tarjeta);
     });
@@ -331,7 +332,7 @@ export default function TarjetasPage() {
       }, llaveOperacion);
       setAutorizacion(resultado);
       setMotivoExtorno("");
-      setLlaveOperacion(crypto.randomUUID());
+      setLlaveOperacion(nuevoUuid());
     }, () => setAutorizacion(null));
   }
 
