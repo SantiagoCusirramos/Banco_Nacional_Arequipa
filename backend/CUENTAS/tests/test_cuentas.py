@@ -72,6 +72,21 @@ def test_ver_cuenta(client, core):
     assert core.llamadas[0]["ruta"] == f"/coredb/cuentas/{NUM}"
 
 
+def test_cambiar_estado_cuenta(client, core):
+    core.respuesta = httpx.Response(200, json={**CUENTA_CORE, "estado_cuenta": "EMBARGO"})
+    r = client.patch(
+        f"{BASE}/{NUM}/estado",
+        json={"estado": "EMBARGO", "motivo": "Resolución judicial"},
+        headers=AUTH,
+    )
+    assert r.status_code == 200
+    assert r.json()["data"]["estado_cuenta"] == "EMBARGO"
+    llamada = core.llamadas[0]
+    assert llamada["metodo"] == "PATCH"
+    assert llamada["ruta"] == f"/coredb/cuentas/{NUM}/estado"
+    assert llamada["json"] == {"estado": "EMBARGO", "motivo": "Resolución judicial"}
+
+
 def test_consolidada_pide_a_coredb_las_cuentas_del_cliente(client, core):
     core.respuesta = httpx.Response(200, json=[{**CUENTA_CORE, "titulares": ["CLI000000001"]}])
     r = client.get(f"{BASE}/consolidada/CLI000000001", headers=AUTH)

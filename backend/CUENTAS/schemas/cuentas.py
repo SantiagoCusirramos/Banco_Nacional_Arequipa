@@ -74,3 +74,10 @@ class TransferenciaOut(BaseModel):
     uuid_debito: str
     uuid_abono: str
     replay: bool = False
+
+
+class CuentaEstadoCambiarIn(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    estado: Literal["ACTIVA", "BLOQUEADA", "BLOQUEADA_PREVENTIVA", "INACTIVA", "EMBARGO", "CANCELADA"]
+    motivo: str | None = Field(default=None, min_length=1, max_length=255)

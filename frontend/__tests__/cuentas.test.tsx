@@ -8,13 +8,14 @@ import { BancaPersonal } from "../app/components/BancaPersonal";
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
   apiCore: { get: vi.fn(), post: vi.fn() },
-  apiCuentas: { get: vi.fn(), post: vi.fn() },
+  apiCuentas: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
 }));
 import { apiCore, apiCuentas } from "@/lib/api";
 
 const core = vi.mocked(apiCore.get);
 const post = vi.mocked(apiCuentas.post);
 const get = vi.mocked(apiCuentas.get);
+const patch = vi.mocked(apiCuentas.patch);
 
 const cuentaBase = {
   num_cuenta: "20261025123456",
@@ -53,6 +54,7 @@ beforeEach(() => {
   core.mockReset();
   post.mockReset();
   get.mockReset();
+  patch.mockReset();
   core.mockImplementation((url) => {
     const ruta = String(url);
     if (ruta === "/coredb/catalogos/agencias") {
@@ -277,16 +279,25 @@ describe("Modificar cuenta", () => {
     expect(screen.queryByRole("article")).not.toBeInTheDocument();
   });
 
-  it("MC-05 Muestra el estado de la cuenta y avisa que aún no se puede cambiar", async () => {
+  it("MC-05 Muestra y permite cambiar el estado de la cuenta", async () => {
     get.mockResolvedValue(sobre({ ...cuentaBase, estado_cuenta: "BLOQUEADA" }));
+    patch.mockResolvedValue(sobre({ ...cuentaBase, estado_cuenta: "ACTIVA" }));
     await abrir();
     await buscar("20261025123456");
     await screen.findByRole("article");
     const estados = screen.getAllByRole("radio");
-    expect(estados.map((e) => (e as HTMLInputElement).value)).toEqual(["ACTIVA", "BLOQUEADA", "BLOQUEADA_PREVENTIVA", "CANCELADA"]);
+    expect(estados.map((e) => (e as HTMLInputElement).value)).toEqual([
+      "ACTIVA", "BLOQUEADA", "BLOQUEADA_PREVENTIVA", "INACTIVA", "EMBARGO", "CANCELADA",
+    ]);
     expect(screen.getByRole("radio", { name: /^BLOQUEADA\s*No origina/ })).toBeChecked();
-    for (const estado of estados) expect(estado).toBeDisabled();
-    expect(screen.getByRole("note")).toHaveTextContent("todavía no está disponible");
+    await userEvent.click(screen.getByRole("radio", { name: /^ACTIVA\s*Cuenta operativa/ }));
+    await userEvent.type(screen.getByLabelText("Motivo"), "Desbloqueo autorizado");
+    await userEvent.click(screen.getByRole("button", { name: "Cambiar estado" }));
+    await screen.findByRole("radio", { name: /^ACTIVA\s*Cuenta operativa/ });
+    expect(patch).toHaveBeenCalledWith("/20261025123456/estado", {
+      estado: "ACTIVA",
+      motivo: "Desbloqueo autorizado",
+    });
   });
 
   it("MC-06 Desde una cuenta recién creada se llega a su estado sin volver a buscarla", async () => {

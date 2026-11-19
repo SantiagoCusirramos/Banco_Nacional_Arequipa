@@ -534,6 +534,83 @@ BEGIN
     END;
 END //
 
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE cuentas.cambiar_estado_cuenta(
+    IN p_num_cuenta VARCHAR(20), IN p_estado VARCHAR(25), IN p_motivo VARCHAR(255),
+    IN p_actor VARCHAR(40))
+    COMMENT 'Cambia el estado de una cuenta y aplica el efecto acordado a sus tarjetas.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_anterior VARCHAR(25);
+    DECLARE v_contable DECIMAL(15,2);
+    DECLARE v_disponible DECIMAL(15,2);
+    DECLARE v_tarjeta BINARY(16);
+    DECLARE v_estado_tarjeta VARCHAR(25);
+    DECLARE v_fin BOOLEAN DEFAULT FALSE;
+    DECLARE tarjetas CURSOR FOR
+        SELECT tc.id_tarjeta, t.estado_tarjeta
+          FROM tarjetas.tarjeta_cuenta tc
+          JOIN tarjetas.tarjeta t ON t.id_tarjeta = tc.id_tarjeta
+         WHERE tc.num_cuenta = p_num_cuenta;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_fin = TRUE;
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT estado_cuenta, saldo_contable, saldo_disponible
+          INTO v_anterior, v_contable, v_disponible
+          FROM cuentas.cuenta_ahorro
+         WHERE num_cuenta = p_num_cuenta
+         FOR UPDATE;
+        IF v_anterior IS NULL THEN
+            CALL core.fallar(CONCAT('CUENTA_NO_ENCONTRADA: la cuenta ', p_num_cuenta, ' no existe'));
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM cuentas.estado_cuenta WHERE cod_estado = p_estado) THEN
+            CALL core.fallar(CONCAT('BNA-ESTADO-CUENTA: estado desconocido ', p_estado));
+        END IF;
+        IF v_anterior = 'CANCELADA' AND p_estado <> 'CANCELADA' THEN
+            CALL core.fallar('BNA-ESTADO-CUENTA: una cuenta CANCELADA es final');
+        END IF;
+        IF p_estado = 'CANCELADA' AND (v_contable <> 0 OR v_disponible <> 0) THEN
+            CALL core.fallar('BNA-ESTADO-CUENTA: solo se puede cancelar una cuenta con saldo cero');
+        END IF;
+        IF v_anterior <> p_estado THEN
+            UPDATE cuentas.cuenta_ahorro
+               SET estado_cuenta = p_estado
+             WHERE num_cuenta = p_num_cuenta;
+            OPEN tarjetas;
+            bna_tarjetas: LOOP
+                FETCH tarjetas INTO v_tarjeta, v_estado_tarjeta;
+                IF v_fin THEN LEAVE bna_tarjetas; END IF;
+                IF p_estado = 'CANCELADA' AND v_estado_tarjeta <> 'CANCELADA' THEN
+                    CALL tarjetas.cambiar_estado_tarjeta(v_tarjeta, 'CANCELADA', p_motivo,
+                                                         'OPERADOR', p_actor, @bna_historial_tarjeta);
+                ELSEIF p_estado IN ('BLOQUEADA', 'BLOQUEADA_PREVENTIVA', 'EMBARGO')
+                       AND v_estado_tarjeta NOT IN ('CANCELADA', 'VENCIDA', 'BLOQUEADA') THEN
+                    CALL tarjetas.cambiar_estado_tarjeta(v_tarjeta, 'BLOQUEADA', p_motivo,
+                                                         'OPERADOR', p_actor, @bna_historial_tarjeta);
+                END IF;
+            END LOOP;
+            CLOSE tarjetas;
+            CALL core.registrar_evento('CUENTAS', 'cuenta_ahorro', p_num_cuenta,
+                                       'CAMBIAR_ESTADO_CUENTA', p_actor, NULL,
+                                       JSON_OBJECT('estado_anterior', v_anterior, 'estado_nuevo', p_estado,
+                                                   'motivo', p_motivo));
+        END IF;
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
 CREATE DEFINER = 'bna_owner'@'%' PROCEDURE cuentas.abrir_cuenta(
     IN p_num_cuenta VARCHAR(20), IN p_cci CHAR(20), IN p_moneda CHAR(3), IN p_regimen VARCHAR(25),
     IN p_id_agencia VARCHAR(10), IN p_titulares JSON, IN p_actor VARCHAR(40))
@@ -1172,6 +1249,7 @@ GRANT EXECUTE ON PROCEDURE core.asignar_rol TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE core.migrar_hash_usuario TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE cuentas.registrar_movimiento TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE cuentas.registrar_transferencia TO bna_api, bna_app, bna_admin;
+GRANT EXECUTE ON PROCEDURE cuentas.cambiar_estado_cuenta TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE cuentas.abrir_cuenta TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.emitir_tarjeta TO bna_api, bna_app, bna_admin;
 GRANT EXECUTE ON PROCEDURE tarjetas.cambiar_estado_tarjeta TO bna_api, bna_app, bna_admin;

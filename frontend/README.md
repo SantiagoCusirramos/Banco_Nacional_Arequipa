@@ -17,7 +17,7 @@ Banca personal del BNA en [Next.js](https://nextjs.org) 16 (App Router) con Reac
 | `/pagar-cuota` | Pago de cuotas de crédito (CR-INT-08): créditos de un cliente, monto a pagar hoy, pago desde una cuenta de ahorros y su resultado | COBRANZA, con las cuentas del cliente desde CUENTAS |
 | `/homebanking/index.html` | Home Banking estático (prototipo HTML+JS) | Servido por Next.js desde `public/`. Usa puentes `/api/*`. |
 
-El cambio de estado de una cuenta se muestra deshabilitado: falta decidir los estados y quién los cambia, y COREDB no ofrece esa operación (`MODIFICAR_CUENTA`, issue #116).
+La pantalla «Modificar cuenta» permite cambiar entre `ACTIVA`, `BLOQUEADA`, `BLOQUEADA_PREVENTIVA`, `INACTIVA`, `EMBARGO` y `CANCELADA`. Solo se puede cancelar una cuenta con saldo cero; `CANCELADA` es final.
 
 ## Cómo llega a los servicios
 

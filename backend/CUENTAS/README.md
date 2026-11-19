@@ -9,6 +9,7 @@ Sigue el estandar del Comite de Ahorros (DOC-ITIL-01 y DOC-ITIL-02).
 |---|---|---|
 | POST | /api/v1/cuentas/apertura | POST /coredb/cuentas |
 | GET | /api/v1/cuentas/{num_cuenta} | GET /coredb/cuentas/{num} |
+| PATCH | /api/v1/cuentas/{num_cuenta}/estado | PATCH /coredb/cuentas/{num}/estado |
 | GET | /api/v1/cuentas/consolidada/{id_cliente} | GET /coredb/cuentas?cod_cliente= |
 | POST | /api/v1/cuentas/deposito | POST /coredb/movimientos |
 | POST | /api/v1/cuentas/retiro | POST /coredb/movimientos |
