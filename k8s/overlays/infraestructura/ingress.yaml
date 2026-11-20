@@ -1,6 +1,6 @@
 # Publicación por Traefik (el Ingress del clúster), por nombre de host con sslip.io, que
 # resuelve <nombre>.172.16.10.31.sslip.io a 172.16.10.31. Solo HTTP.
-#   bna.…           el frontend (portal, /homebanking/ y los puentes /api/…)
+#   bna.…           el frontend (portal, /homebanking/index.html y los puentes /api/…)
 #   bna-cajero.…    la pantalla del cajero (ATM)
 #   bna-billetera.… la API de la billetera (Chaski)
 #   bna-bus.…       el Bus de Servicios: cada ruta /bus/… exige X-Bus-Token

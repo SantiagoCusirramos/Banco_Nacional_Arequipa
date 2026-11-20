@@ -11,9 +11,9 @@ Este documento no tiene ninguna clave. El kubeconfig y el acceso al clúster los
 | Kubernetes | k3s 1.34. Use un `kubectl` 1.34 |
 | Ingress | Traefik, en 172.16.10.31, solo HTTP |
 | Almacenamiento | StorageClass `local-path` (un solo nodo; los datos quedan en su disco) |
-| Cuota | Ninguna de CPU ni de memoria (comprobado el 2026-11-20). Si aparece una cuota por número de objetos, ver «Si hay cuota de objetos» |
+| Cuota | La cuenta no puede listar cuotas ni ver el uso (`kubectl top`); el 2026-11-20 los 14 pods arrancaron con sus pedidos sin problema. Si aparece una cuota por número de objetos, ver «Si hay cuota de objetos» |
 | Permisos de la cuenta | En su namespace: ConfigMap, Deployment, Service, Ingress, Job, PVC y Pod (con `exec`, `logs` y `port-forward`). **No** puede leer ni crear Secrets, ni ver eventos, ni crear namespaces |
-| Ya existen en el namespace | `backend` y `mysql` (Deployment, Service, PVC `mysql-data` e Ingress `backend`). El producto no los toca: todos sus objetos se llaman `bna-*` |
+| Ya existen en el namespace | `backend` y `mysql` (Deployment, Service, PVC `mysql-data` e Ingress `backend`) y el ConfigMap `bna-config`, que es de ese despliegue aunque empiece con `bna-` (no lleva la etiqueta del producto). El producto no los toca: todos sus objetos se llaman `bna-*`, llevan la etiqueta `app.kubernetes.io/instance=bna` y ninguno se llama `bna-config` |
 
 ## Qué se despliega
 
@@ -37,12 +37,14 @@ Imágenes: `ghcr.io/miguelpro324/bna-core-db`, `bna-coredb`, `bna-backend`, `bna
 
 | Dirección | Qué |
 |---|---|
-| http://bna.172.16.10.31.sslip.io | Portal (frontend), con `/login`, las pantallas de cada módulo y el Home Banking en `/homebanking/` |
+| http://bna.172.16.10.31.sslip.io | Portal (frontend), con `/login`, las pantallas de cada módulo y el Home Banking en `/homebanking/index.html` (con `/homebanking/` Next.js redirige a `/homebanking` y da 404, también en local) |
 | http://bna-cajero.172.16.10.31.sslip.io | Pantalla del cajero (ATM) |
 | http://bna-billetera.172.16.10.31.sslip.io | API de la billetera (Chaski), en `/api` |
 | http://bna-bus.172.16.10.31.sslip.io | Bus de Servicios (`/docs`). Cada ruta `/bus/…` exige la cabecera `X-Bus-Token` |
 
 sslip.io resuelve `<nombre>.172.16.10.31.sslip.io` a 172.16.10.31, así que no hace falta un DNS propio. Hace falta llegar a esa dirección (la red de Infraestructura).
+
+**Convivencia con el Ingress `backend`.** El Ingress `backend` no tiene host: manda todo `/` de 172.16.10.31 a `backend`. Traefik prefiere la regla más específica, así que solo los cuatro hosts de arriba llegan al producto; la IP sola y cualquier otro nombre siguen yendo a `backend`. Comprobado el 2026-11-20 antes y después de aplicar: `/`, `/docs`, `/health` y `/api/` responden igual por la IP y por otro host de sslip.io. Lo único que cambió es `bna.172.16.10.31.sslip.io`, que antes caía en `backend` por la regla sin host y ahora es el portal.
 
 ## Claves sin Secrets
 
@@ -158,7 +160,7 @@ Borra todos los objetos con la etiqueta del producto, después de comprobar que 
 
 ## Si hay cuota de objetos
 
-Hoy no hay cuota. Si Infraestructura pone una por número de objetos, lo primero que se puede agrupar:
+No se conoce ninguna cuota (la cuenta no puede verlas). Si Infraestructura pone una por número de objetos, lo primero que se puede agrupar:
 
 - Los 14 Service: el Ingress solo necesita 4 (frontend, cajero, billetera, Bus); los demás se usan dentro del clúster y se podrían reemplazar por un Service con varios puertos, a costa de cambiar las direcciones de `bna-bus`.
 - Los dos ConfigMap de scripts (`bna-scripts-secretos` y `bna-generar-env`) pueden ser uno.
@@ -168,4 +170,25 @@ Hoy no hay cuota. Si Infraestructura pone una por número de objetos, lo primero
 
 [`scripts/prueba_k8s_infra_kind.sh`](../scripts/prueba_k8s_infra_kind.sh) prueba el mismo overlay en un clúster de kind v0.30.0 (Kubernetes 1.34): carga las imágenes con `kind load` en vez de descargarlas, crea un namespace numérico y una StorageClass `local-path`, aplica con `k8s-infra.sh`, comprueba que no haya Secrets, que cada pod tenga solo sus claves (0440, también los que corren con otro usuario) y que el Job no cambie un `.env` existente, carga los datos dos veces, corre `flujo_demo.py` por `kubectl port-forward` y borra todo. Al terminar elimina el clúster. La CI lo corre en el flujo «Kubernetes» (trabajo «Overlay de Infraestructura en kind»), junto con `kubectl kustomize`, `kubeconform` para Kubernetes 1.34 y `overlay_infraestructura.py comprobar` y `revisar`.
 
-Lo que la prueba en kind no cubre: el Ingress de Traefik (en kind no hay Traefik; el Ingress solo se valida con `kubeconform`) y la descarga desde ghcr.io.
+Lo que la prueba en kind no cubre: el Ingress de Traefik (en kind no hay Traefik; el Ingress solo se valida con `kubeconform`) y la descarga desde ghcr.io. Las dos cosas se comprobaron en el clúster real (ver abajo).
+
+## Despliegue real (2026-11-20)
+
+Primer despliegue en el clúster, con las imágenes de `a14d8f35c571` ya públicas y `kubectl` 1.34.
+
+- **Aplicar.** `scripts/k8s-infra.sh aplicar` sin cambios en el overlay: el Job `bna-arranque` terminó en 11 s (`.env` con 45 claves) y los 14 pods quedaron listos sin reinicios en menos de 90 s, con la descarga de las imágenes desde ghcr.io incluida (sin credenciales). Los módulos que esperan a COREDB tardan unos 80 s; mientras tanto `/ready` de TARJETAS responde 503 y lo registra como ERROR, y es normal.
+- **Datos.** `scripts/k8s-infra.sh datos` no tuvo que agregar nada: la imagen de la base ya los carga (periodo del mes abierto, BIN 004499, agencia `AQP01`, 5 terminales `DEV-*`, `DEV-ATM-01` activo).
+- **Flujo.** `scripts/k8s-infra.sh flujo` por el Ingress: sale con 0, saldo final 1500.00; en COREDB, solicitud DESEMBOLSADA, crédito AL_DIA con 6 cuotas y tarjeta BLOQUEADA. El texto del paso 4 dice `http://127.0.0.1:8019` (es la dirección del cajero en local); en el clúster la pantalla es http://bna-cajero.172.16.10.31.sslip.io.
+- **Direcciones.** Dan 200 el portal, `/login`, `/homebanking/index.html`, la pantalla del cajero, su `/api/health` y `/docs` del Bus. La billetera responde 401 en `/api/…` sin sesión y el Bus, 401 en `/bus/…` sin `X-Bus-Token`.
+- **Registros.** Sin datos personales ni claves: solo códigos internos (CLI…, número de cuenta, UUID) en las rutas. Se comprobó que ningún valor del `.env` aparece en los registros ni en los ConfigMap.
+- **Claves.** `kubectl auth can-i list secrets` y `create secrets` dan `no`; los Deployment, Job y pods no tienen `secretKeyRef`, `secretRef`, volúmenes de Secret ni `imagePullSecrets`. El PVC `bna-secretos` lo escribe solo el Job; los contenedores `secretos` lo montan en solo lectura y en cada contenedor queda un archivo 0440 en un tmpfs (`/secretos`).
+
+Revisión después de cada despliegue:
+
+```bash
+scripts/k8s-infra.sh estado                       # 14 pods 1/1 y 0 reinicios; Job Complete
+kubectl -n "$BNA_NAMESPACE" auth can-i list secrets   # no
+for p in $(kubectl -n "$BNA_NAMESPACE" get pod -l app.kubernetes.io/instance=bna -o name); do
+  kubectl -n "$BNA_NAMESPACE" logs "$p" --all-containers --prefix
+done > registros.txt                              # revisar y borrar; no se versiona
+```
