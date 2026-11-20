@@ -494,6 +494,20 @@ def flujo():
     sesion_atm = {"X-ATM-Sesion": respuesta["data"]["token_sesion"]}
     paso("ATM: PIN validado por TARJETAS a través del Bus; abre la sesión de la tarjeta")
 
+    def saldo_atm():
+        estado, respuesta = pedir("GET", f"{atm_base}/saldo?id_tarjeta={tarjeta}", token=token,
+                                  cabeceras=sesion_atm)
+        exigir(estado == 200 and respuesta["success"] is True, f"ATM consultar saldo: {estado} {respuesta}")
+        return [(c["id_cuenta"], c["num_cuenta_enmascarado"], c["saldo_disponible"])
+                for c in respuesta["data"]["lista_cuentas"]]
+
+    # La consulta de saldo de la pantalla: TARJETAS (la cuenta de la tarjeta) y CUENTAS /consolidada.
+    # El titular tiene otra cuenta, pero el cajero solo muestra la vinculada a la tarjeta.
+    mostrado = saldo_atm()
+    exigir(mostrado == [(cuenta_tarjeta, "****" + cuenta_tarjeta[-4:], "60.00")],
+           f"El cajero debía mostrar solo la cuenta de la tarjeta con 60.00: {mostrado}")
+    paso("ATM: consulta de saldo por la pantalla, solo la cuenta de la tarjeta (60.00)")
+
     # Autorizar retención
     retiro_atm = {"id_tarjeta": tarjeta, "num_cuenta": cuenta_tarjeta, "moneda": "PEN",
                   "monto": "30.00", "id_terminal": "DEV-ATM-01",
@@ -530,7 +544,10 @@ def flujo():
     saldo_despues = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     # 60.00 tras el retiro de TARJETAS, menos los 30.00 del cajero.
     exigir(float(saldo_despues) == 30.0, f"El saldo debía bajar 30.00 una sola vez: disponible {saldo_despues}")
-    paso(f"ATM: retiro de 30.00 en el cajero DEV-ATM-01 confirmado, saldo final {saldo_despues}")
+    mostrado = saldo_atm()
+    exigir(mostrado == [(cuenta_tarjeta, "****" + cuenta_tarjeta[-4:], "30.00")],
+           f"El cajero debía mostrar 30.00 tras el retiro: {mostrado}")
+    paso(f"ATM: retiro de 30.00 en el cajero DEV-ATM-01 confirmado, saldo final {saldo_despues} (también en el cajero)")
 
     # Repetir confirmación con misma llave → sin segundo débito (idempotencia)
     estado, respuesta = pedir("POST", f"{atm_base}/confirmar", confirmar_atm, token, cabeceras={**llave_conf, **sesion_atm})
@@ -552,9 +569,25 @@ def flujo():
     disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
     exigir(float(disponible) == 20.0, f"La retención sin confirmar debía retener 10.00: disponible {disponible}")
 
-    estado, respuesta = pedir("POST", f"{base}/{tarjeta}/bloqueo", {"motivo": "Prueba del flujo"}, token)
+    # Bloqueo desde el Home Banking: la misma petición que el botón «Bloquear» de /homebanking/cuentas.html,
+    # por el puente del frontend → Bus → TARJETAS.
+    estado, respuesta = pedir("POST", f"{FRONTEND}/api/tarjeta/{tarjeta}/bloqueo",
+                              {"motivo": "Bloqueo solicitado por el cliente en Home Banking"}, token)
     exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
-           f"Bloqueo por TARJETAS: {estado} {respuesta}")
+           f"Bloqueo desde el Home Banking: {estado} {respuesta}")
+    # El cajero deja de aceptarla: ni el PIN correcto abre sesión, ni la sesión abierta antes retira.
+    estado, respuesta = pedir("POST", f"{atm_base}/validar-pin",
+                              {"id_tarjeta": tarjeta, "pin": "4821", "id_terminal": "DEV-ATM-01"}, token)
+    exigir(estado != 200 or respuesta["data"].get("resultado") != "EXITOSO",
+           f"El cajero no debía aceptar la tarjeta bloqueada: {estado} {respuesta}")
+    estado, respuesta = pedir("POST", f"{atm_base}/autorizar", {**retiro_atm, "uuid_transaccion": str(uuid.uuid4())},
+                              token, cabeceras={"X-Idempotency-Key": str(uuid.uuid4()), **sesion_atm})
+    exigir(not (estado == 201 and respuesta["data"].get("aprobada")),
+           f"La sesión abierta antes del bloqueo no debía retirar: {estado} {respuesta}")
+    disponible = coredb("GET", f"/coredb/cuentas/{cuenta_tarjeta}", 200, token=token)["saldo_disponible"]
+    exigir(float(disponible) == 20.0, f"Con la tarjeta bloqueada no debía retenerse nada: disponible {disponible}")
+    paso("Home Banking: «Bloquear» deja la tarjeta BLOQUEADA (puente del frontend → Bus → TARJETAS) y el cajero "
+         "ya no la acepta (PIN rechazado; la sesión abierta antes no retira; saldo intacto)")
     estado, respuesta = pedir("POST", f"{base}/{tarjeta}/estado", {"estado": "ACTIVA"}, token)
     exigir(estado == 403 and respuesta["error_code"] == "ERR-TAR-DESBLOQUEO-NO-PERMITIDO",
            f"El desbloqueo por TARJETAS debía responder 403: {estado} {respuesta}")

@@ -72,6 +72,9 @@ correr "Bus de Servicios" en_backend BUS_SERVICIOS/tests
 # .env.example, valores por omisión); solo el Bus, COREDB y su arranque.
 correr "Bus de Servicios, rutas a COREDB" \
   docker_montado run --rm -v "$RAIZ_HOST:/repo:ro" -e REPO=/repo bna/backend:local $PYTEST /repo/scripts/test_comprobar_rutas_coredb.py
+# k8s/overlays/infraestructura: claves sin Secrets, generado al día con k8s/base.
+correr "Overlay de Infraestructura" \
+  docker_montado run --rm -v "$RAIZ_HOST:/repo:ro" -e REPO=/repo bna/backend:local $PYTEST /repo/scripts/test_overlay_infraestructura.py
 correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests
 correr "EVALUACION contra COREDB y MySQL" \
   env EVALUACION_IMAGEN_PRUEBAS=bna/backend:local EVALUACION_IMAGEN_COREDB=bna/coredb:local \

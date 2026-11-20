@@ -48,11 +48,11 @@ El prototipo de Home Banking de Tamara-Martinez (commit c73fa20, issue #100) est
 - **Rutas que usa** (`js/bus.js`, solo puentes de `app/api/`):
   - `POST /api/core/coredb/auth/login`, `GET /api/core/coredb/auth/me`; auditoría: `GET /api/core/coredb/auditoria` (administrador).
   - Cuentas: `GET /api/cuenta/consolidada/{codCliente}`, `GET /api/cuenta/{numCuenta}`, `GET /api/cuenta/{numCuenta}/movimientos`, `POST /api/cuenta/transferencia`.
-  - Tarjetas: `GET /api/tarjeta/cliente/{codCliente}`.
+  - Tarjetas: `GET /api/tarjeta/cliente/{codCliente}`; «Bloquear» en `cuentas.html` (solo tarjetas ACTIVA, tras confirmar): `POST /api/tarjeta/{idTarjeta}/bloqueo` con un motivo. El desbloqueo no se hace en el Home Banking (TARJETAS responde 403; lo hace Seguridad).
   - Créditos: `GET /api/cobranza/clientes/{codCliente}/creditos`, `GET /api/cobranza/creditos/{codCredito}/monto-a-pagar`, `POST /api/cobranza/cr-int-08/pagos`.
 - **Dinero:** la transferencia y el pago de cuota llevan una llave por operación (`X-Idempotency-Key`; en el pago, `referenciaTransaccion`). Se conserva si se reintenta tras un error o un timeout y cambia al editar los datos o cuando la operación se registra.
 - **Fuera de esta versión** (no hacen ninguna petición): Token Matriz, verificar titularidad, evaluación de riesgo, validación de topes (los aplica COREDB al registrar), transferencias interbancarias, constancias PDF y el reinicio de la demo.
-- Pruebas: `__tests__/homebanking.test.ts`; el flujo de extremo a extremo pide `/homebanking/index.html`.
+- Pruebas: `__tests__/homebanking.test.ts` y `__tests__/homebanking-bloqueo.test.ts` (la página de cuentas en jsdom); el flujo de extremo a extremo pide `/homebanking/index.html` y bloquea una tarjeta con la misma petición que el botón.
 
 ## Ejecutar
 

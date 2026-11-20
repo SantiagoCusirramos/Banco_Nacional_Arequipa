@@ -165,16 +165,21 @@ Libera el saldo retenido y el tope del día (RN-ATM-003). Repetirlo responde lo 
 
 ### 3.5 Consultar saldo: `GET /api/saldo?id_tarjeta=...`
 
-Obtiene el `cod_cliente` de la tarjeta (TARJETAS) y consulta las cuentas consolidadas (CUENTAS).
+Obtiene de TARJETAS el `cod_cliente` y la cuenta de la tarjeta (`num_cuenta`), y de CUENTAS
+(`GET /api/v1/cuentas/consolidada/{cod_cliente}`) la lista de cuentas del cliente. Devuelve solo la
+cuenta vinculada a la tarjeta: es la única que el cajero puede operar (la base rechaza las demás con
+ERR-TAR-008). `id_cuenta` es el `num_cuenta`, que se usa en `/api/autorizar` y `/api/movimientos`;
+`uuid_consulta` es nuevo en cada consulta.
 
 **Respuesta 200:**
 
 ```json
 {"lista_cuentas": [
-  {"id_cuenta": "10100000000001", "num_cuenta_enmascarado": "****0001", "moneda": "PEN", "saldo_disponible": "500.00"},
-  {"id_cuenta": "10100000000002", "num_cuenta_enmascarado": "****0002", "moneda": "USD", "saldo_disponible": "100.00"}
-], "uuid_consulta": "...", "simulado": false}
+  {"id_cuenta": "59144088949989", "num_cuenta_enmascarado": "****9989", "moneda": "PEN", "saldo_disponible": "1000.00"}
+], "uuid_consulta": "6f0c2a4e-…", "simulado": false}
 ```
+
+Si CUENTAS no devuelve una lista: 502 `ERR-ATM-RESPUESTA_INVALIDA`.
 
 ### 3.6 Consultar movimientos: `GET /api/movimientos?num_cuenta=...`
 

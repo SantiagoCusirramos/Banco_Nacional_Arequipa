@@ -224,10 +224,9 @@ const OPERADOR = 'bna_atm_operador';
 const tokenOperador = () => { try { return sessionStorage.getItem(OPERADOR); } catch(e){ return null; } };
 let entrada = null;         // captura de digitos: {max, valor, cambio, enter}
 
-const uuid = () => { if (crypto.randomUUID) return crypto.randomUUID(); // fuera de localhost o HTTPS no existe: UUID v4 con getRandomValues
-  const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
-  const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
-  return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20); };
+// UUIDv4. Fuera de localhost por http no hay crypto.randomUUID; getRandomValues sí está.
+const uuid = () => crypto.randomUUID ? crypto.randomUUID()
+  : ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
 let tarjeta = null;         // id (UUID) de la tarjeta insertada
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ultimos = id => (id || '----').slice(-4);
@@ -321,7 +320,7 @@ function validarMonto(cuenta, monto){
   const [pre] = dinero(0, cuenta.moneda);
   if(!(monto > 0)) return 'Escribe un monto.';
   if(monto % 10 !== 0) return 'El monto debe ser múltiplo de 10.';
-  if(monto > cuenta.saldoDisponible) return 'Supera tu saldo disponible.';
+  if(monto > Number(cuenta.saldo_disponible)) return 'Supera tu saldo disponible.';
   if(monto > TOPE[cuenta.moneda]) return 'Tope diario: ' + pre + ' ' + TOPE[cuenta.moneda].toLocaleString('en-US') + '.';
   return null;
 }
@@ -426,7 +425,7 @@ function recibo(titulo, filas, pie){
   const r = $('recibo'); r.replaceChildren();
   const fila = (a,b) => { const x = el('div','r'); x.append(el('span',null,a), el('span',null,b)); return x; };
   r.append(el('div','tit','BANCO NACIONAL DE AREQUIPA'), el('div','tit',titulo), el('hr'),
-    fila('FECHA', fecha), fila('CAJERO', ID_CAJERO), fila('TARJETA', '****' + (tarjeta || '----')));
+    fila('FECHA', fecha), fila('CAJERO', ID_CAJERO), fila('TARJETA', '****' + ultimos(tarjeta)));
   filas.forEach(x => r.append(x === '-' ? el('hr') : fila(x[0], x[1])));
   r.append(el('hr'));
   if(pie) r.append(el('div','fin',pie));
@@ -513,7 +512,7 @@ async function autenticar(pin){
     }
     linea('API -> ATM      ' + r.status + '  ' + (datos.error_code || ''), 'no');
     evento('AUTENTICACION', datos.error_code || 'ERROR', corr2, {ms, codigo:datos.error_code});
-    if(datos.error_code === 'ERR-ATM-TARJETA-NO-OPERATIVA' || datos.error_code === 'ERR-TAR-003') return pantallaError('Tarjeta bloqueada', 'Esta tarjeta no está habilitada para operar (bloqueada, cancelada o vencida). Acude a tu banco.', 'Retirar tarjeta', expulsar);
+    if(datos.error_code === 'ERR-ATM-TARJETA-NO-OPERATIVA' || datos.error_code === 'ERR-TAR-003') return pantallaError('Tarjeta bloqueada', 'Superaste los 3 intentos. Acude a tu banco para desbloquearla.', 'Retirar tarjeta', expulsar);
     if(datos.error_code === 'ERR-ATM-TARJETA-NO-ENCONTRADA' || datos.error_code === 'ERR-TAR-NO-ENCONTRADA') return pantallaError('Tarjeta no reconocida', 'No pudimos leer esta tarjeta. Retírala e inténtalo con otra.', 'Retirar tarjeta', expulsar);
     if(datos.error_code && datos.error_code.includes('FALLIDO') || datos.data?.resultado === 'FALLIDO') return pantallaClave('Clave incorrecta. Intentos restantes: ' + (datos.data?.intentos_restantes ?? '?'));
     return pantallaError('Servicio no disponible', 'Intenta nuevamente en unos minutos.');
@@ -527,7 +526,7 @@ async function autenticar(pin){
 /* ---- menu ---- */
 function menu(){
   const c = nueva();
-  c.append(el('div','peque','Tarjeta •••• ' + (tarjeta || '----')), el('h2',null,'¿Qué deseas hacer?'));
+  c.append(el('div','peque','Tarjeta •••• ' + ultimos(tarjeta)), el('h2',null,'¿Qué deseas hacer?'));
   etiqueta('izq', 2, 'Retirar efectivo', iniciarRetiro);
   etiqueta('izq', 3, 'Consultar saldo', consultar);
   etiqueta('der', 4, 'Terminar', terminar);
@@ -659,7 +658,8 @@ function pantallaOtroMonto(cuenta){
 async function ejecutarRetiro(cuenta, monto){
   if(ocupado) return; ocupado = true;
   pantallaCarga('Procesando retiro');
-  const uuidT = uuid(), corr = uuid();
+  // Una llave por retiro: TARJETAS no retiene dos veces con la misma.
+  const uuidT = uuid(), corr = uuid(), llaveAutorizar = uuid();
   const solicitud = {
     id_tarjeta: sesion.id_tarjeta,
     num_cuenta: cuenta.id_cuenta,
@@ -672,7 +672,7 @@ async function ejecutarRetiro(cuenta, monto){
   linea('corr ' + corr.slice(0,8)); linea('ATM -> API      /autorizar  ' + dinero(monto, cuenta.moneda).join(' '));
   const t0 = performance.now();
   try{
-    const {r, datos, corr: corr2} = await apiPost('/api/autorizar', solicitud);
+    const {r, datos, corr: corr2} = await apiPost('/api/autorizar', solicitud, 30000, {'X-Idempotency-Key': llaveAutorizar});
     const ms = Math.round(performance.now() - t0);
     anexar('RESPUESTA ' + r.status, datos);
     if(!r.ok || !datos.success){
@@ -713,10 +713,11 @@ async function confirmarDispensacion(uuid_aut, cuenta, monto, corr){
     id_terminal: ID_CAJERO,
     resultado: 'DISPENSADO',
   };
+  const llaveConfirmar = uuid();  // repetir la confirmación con la misma llave no debita dos veces
   mensajes('SOLICITUD /api/confirmar', solicitud);
   linea('ATM -> API      /confirmar  ' + uuid_aut.slice(0,8));
   try{
-    const {r, datos, corr: corr2} = await apiPost('/api/confirmar', solicitud);
+    const {r, datos, corr: corr2} = await apiPost('/api/confirmar', solicitud, 30000, {'X-Idempotency-Key': llaveConfirmar});
     if(!r.ok || !datos.success){
       linea('API -> ATM      ' + r.status + '  ' + (datos.error_code || ''), 'no');
       // Si falla la confirmación, intentar extorno
