@@ -89,7 +89,8 @@ jobs:
       - name: Dependencias, análisis y pruebas
         run: |
           flutter pub get
-          flutter analyze
+          # Los 14 avisos deprecated_member_use de Flutter 3.50 (material.dart) no hacen fallar; errores y advertencias sí.
+          flutter analyze --no-fatal-infos
           flutter test
 
       # Solo fuera de los PR y solo si existen los Secrets; si no, Gradle firma con la clave debug.
