@@ -13,6 +13,7 @@ billetera-chaski/
 │   ├── server.js        endpoints /api/* (las mismas rutas que usa la app)
 │   ├── coredb.js        cliente de COREDB a través del Bus de Servicios
 │   └── test/            pruebas de la API contra un COREDB falso (npm test)
+├── proxy_vpn.py      proxy local para usar la app contra el clúster sin VPN en el celular
 └── app_movil/        app Flutter (Android Studio)
     └── lib/              pantallas, estado, caché SQLite local y autorización con huella/PIN
 ```
@@ -64,6 +65,54 @@ App Flutter ──REST/JSON──► API Chaski (Express, puerto 8020) ──►
 ofertas, órdenes (RF-BD-007, RF-BD-008), recargas y pago de servicios (RF-BD-006). Las rutas
 existen para que la app cargue: las listas vienen vacías y las acciones responden 501.
 
+## Descargar el APK (compilado por GitHub)
+
+El flujo **APK de Chaski** (`.github/workflows/chaski-apk.yml`) compila el APK release con Flutter 3.50.1
+y lo publica. No hace falta instalar Flutter.
+
+**Dónde está.** En GitHub → **Releases**: cada ejecución a mano deja un pre-release `chaski-build-<n>` y
+cada etiqueta `chaski-v*` un release con ese nombre; el archivo es `chaski-<commit>.apk` (12 caracteres
+del commit) y las notas dicen la URL que lleva y su SHA-256. También queda como artifact de la
+ejecución (Actions → la ejecución → *Artifacts*, 30 días, hay que entrar a GitHub; viene en un `.zip`).
+
+**Qué URL lleva.** Por omisión `http://bna-billetera.172.16.10.31.sslip.io`: la API de Chaski en el
+Ingress del clúster de Infraestructura (solo HTTP). Se cambia en la app desde el engranaje ⚙ de la
+pantalla de ingreso, sin recompilar.
+
+**Instalarlo.**
+- Por USB: `adb install chaski-<commit>.apk` (con la depuración USB activada).
+- Sin PC: copia el `.apk` al celular (descarga, Drive, WhatsApp) y ábrelo desde Archivos; Android
+  pide permitir «instalar apps de origen desconocido» y Play Protect puede advertir que no la conoce.
+- **Firma.** Va firmado con la clave debug que el runner de GitHub genera en cada ejecución: sirve para
+  instalar a mano, **no para Google Play**, y dos builds distintos no se actualizan uno sobre otro
+  («conflicto con un paquete existente»). Desinstala antes la versión anterior
+  (`adb uninstall pe.chaski.chaski_app`). Si el repositorio define los Secrets
+  `CHASKI_KEYSTORE_BASE64` (el `.jks` en base64), `CHASKI_KEYSTORE_PASSWORD`, `CHASKI_KEY_ALIAS` y
+  `CHASKI_KEY_PASSWORD`, el flujo firma con ese keystore (escribe `android/key.properties`, que no se
+  versiona, y lo borra al terminar); en los PR siempre usa la clave debug.
+
+**Llegar al clúster.** `172.16.10.31` solo se alcanza por la VPN de Infraestructura. Dos formas:
+1. **VPN en el celular** con un peer propio (pídelo a Infraestructura; no copies el de tu PC). Con la
+   VPN activa, la app funciona con la URL por omisión.
+2. **Proxy local con `adb reverse`**, con la PC conectada a la VPN y el celular por USB:
+   ```bash
+   python3 billetera-chaski/proxy_vpn.py    # 127.0.0.1:8020 → Ingress bna-billetera (pone el Host que Traefik espera)
+   adb reverse tcp:8020 tcp:8020
+   ```
+   y en ⚙ el servidor `http://localhost:8020`. `kubectl port-forward` no sirve: el clúster lo rechaza.
+
+**Otra URL.** Actions → **APK de Chaski** → *Run workflow* → `api_base_url`, o
+`gh workflow run chaski-apk.yml -f api_base_url=https://….trycloudflare.com`. Acepta
+`http(s)://host[:puerto]` sin ruta. HTTP sin cifrar solo hacia `localhost`, `127.0.0.1` y hosts `bna-…`
+(si es un host `bna-…` nuevo, el flujo lo agrega a la configuración de red de ese build); cualquier
+otro host tiene que ir por `https://`. Para un release con la URL por omisión:
+`git tag -a chaski-vX.Y -m … && git push <url del repo> chaski-vX.Y`.
+
+**Revisión en cada build.** El flujo corre `flutter analyze` y `flutter test`, comprueba que la URL está
+en el APK y busca en su contenido claves privadas, tokens JWT, `BUS_TOKEN`, `X-Bus-Token`,
+`CHASKI_COREDB_SECRETO`, `SECRET_KEY`, tokens de GitHub, `KUBECONFIG` y archivos de keystore; si
+encuentra algo, falla. La app no lleva ninguna clave: el token de sesión lo da COREDB al ingresar.
+
 ## Cómo correrlo
 
 ### 1. Backend (en el producto)
@@ -106,9 +155,10 @@ flutter build apk --release --dart-define=SERVIDOR=http://localhost:8020 --targe
 adb reverse tcp:8020 tcp:8020   # con el celular conectado por USB
 ```
 
-**HTTP sin cifrar.** El build release solo permite HTTP sin cifrar hacia `localhost` y `127.0.0.1`
-(`android/app/src/main/res/xml/network_security_config.xml`): con `adb reverse` el celular llega a la API
-de la PC por su propio `localhost`, y cualquier otro servidor tiene que ir por HTTPS. El build debug
+**HTTP sin cifrar.** El build release solo permite HTTP sin cifrar hacia `localhost`, `127.0.0.1` y
+`bna-billetera.172.16.10.31.sslip.io` (`android/app/src/main/res/xml/network_security_config.xml`): con
+`adb reverse` el celular llega a la API de la PC por su propio `localhost`, el Ingress del clúster solo
+publica HTTP, y cualquier otro servidor tiene que ir por HTTPS. El build debug
 (`src/debug/res/xml/network_security_config.xml`) lo permite a cualquier host, para el emulador y la red
 local. Antes la app lo permitía a todos en todos los builds (`usesCleartextTraffic="true"`), y un APK
 release mandaba el PIN y el token sin cifrar por la red.
@@ -152,7 +202,8 @@ el APK release compilado. La prueba en un celular contra `./bna up` se registra 
   Un APK del prototipo original (ids numéricos, puerto 3000) no sirve con esta API.
 - Desde cualquier lugar: `npx cloudflared tunnel --url http://localhost:8020` y que cada uno ponga en ⚙ la URL `https://….trycloudflare.com` (sirve con el APK release).
 
-**Android** — el APK no está en el repositorio (`entregables/` solo tiene su README: los instaladores van a GitHub → Releases). Genéralo y envíalo (WhatsApp, Drive…). Al abrirlo, Android pide permitir
+**Android** — el APK no está en el repositorio (`entregables/` solo tiene su README): descárgalo de GitHub → Releases
+(ver «Descargar el APK») o genéralo y envíalo (WhatsApp, Drive…). Al abrirlo, Android pide permitir
 "instalar apps de origen desconocido". Para generarlo:
 
 ```bash

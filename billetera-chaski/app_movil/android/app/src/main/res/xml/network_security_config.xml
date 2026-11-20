@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Release y profile: HTTP sin cifrar solo hacia el propio celular (localhost), que es la API de
-     Chaski en el puerto 8020 reenviada por `adb reverse tcp:8020 tcp:8020`. Cualquier otro servidor
-     va por HTTPS (por ejemplo, un túnel). El build debug lo permite a cualquier host
-     (src/debug/res/xml/network_security_config.xml) para el emulador (10.0.2.2) y la red local. -->
+<!-- Release y profile: HTTP sin cifrar solo hacia
+     - el propio celular (localhost), que es la API de Chaski en el puerto 8020 reenviada por
+       `adb reverse tcp:8020 tcp:8020`;
+     - los hosts bna-… del Ingress del clúster de Infraestructura (solo HTTP, se llega por la VPN).
+       El flujo .github/workflows/chaski-apk.yml agrega aquí el host bna-… que reciba si no está.
+     Cualquier otro servidor va por HTTPS (por ejemplo, un túnel). El build debug lo permite a
+     cualquier host (src/debug/res/xml/network_security_config.xml) para el emulador (10.0.2.2) y
+     la red local. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">localhost</domain>
         <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">bna-billetera.172.16.10.31.sslip.io</domain>
     </domain-config>
 </network-security-config>

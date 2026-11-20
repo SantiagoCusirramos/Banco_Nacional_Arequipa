@@ -1,0 +1,176 @@
+# Compila el APK release de Chaski (billetera-chaski/app_movil) listo para instalar.
+# - A mano (Actions → «APK de Chaski» → Run workflow): con la URL de la API que se pida; publica un
+#   pre-release chaski-build-<n> con chaski-<commit>.apk y lo deja también como artifact.
+# - Al publicar una etiqueta chaski-v*: lo mismo, con la URL por omisión, en un release con ese nombre.
+# - En un PR que toca la app o este archivo: solo compila, prueba y deja el artifact (no publica).
+# Firma: con la clave debug que genera el runner (sin Secrets). Sirve para instalar a mano, no para
+# Google Play. Si el repositorio define los Secrets CHASKI_KEYSTORE_BASE64, CHASKI_KEYSTORE_PASSWORD,
+# CHASKI_KEY_ALIAS y CHASKI_KEY_PASSWORD, firma con ese keystore (ver billetera-chaski/README.md).
+name: APK de Chaski
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "URL de la API de Chaski que lleva el APK (HTTP solo a hosts bna-… o localhost)"
+        required: true
+        default: http://bna-billetera.172.16.10.31.sslip.io
+  push:
+    tags: ["chaski-v*"]
+  pull_request:
+    paths:
+      - billetera-chaski/app_movil/**
+      - .github/workflows/chaski-apk.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaski-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  URL_POR_OMISION: http://bna-billetera.172.16.10.31.sslip.io
+
+jobs:
+  apk:
+    name: Compilar el APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: billetera-chaski/app_movil
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Validar la URL de la API
+        id: url
+        env:
+          URL_PEDIDA: ${{ inputs.api_base_url }}
+        run: |
+          url="${URL_PEDIDA:-$URL_POR_OMISION}"
+          url="${url%/}"
+          if ! [[ "$url" =~ ^(https?)://([A-Za-z0-9.-]+)(:[0-9]{1,5})?$ ]]; then
+            echo "::error::URL no válida: debe ser http(s)://host[:puerto], sin ruta."
+            exit 1
+          fi
+          esquema="${BASH_REMATCH[1]}"
+          host="${BASH_REMATCH[2],,}"
+          config=android/app/src/main/res/xml/network_security_config.xml
+          if [ "$esquema" = http ] && ! grep -qF ">${host}</domain>" "$config"; then
+            if [[ "$host" =~ ^bna-[a-z0-9-]+(\.[a-z0-9-]+)+$ ]]; then
+              # Un host bna-… nuevo: se permite solo ese, sin subdominios.
+              sed -i "s|^\(\s*\)<domain includeSubdomains=\"false\">127.0.0.1</domain>|&\n\1<domain includeSubdomains=\"false\">${host}</domain>|" "$config"
+              grep -qF ">${host}</domain>" "$config"
+              echo "Texto plano permitido también hacia ${host} en este build."
+            else
+              echo "::error::HTTP sin cifrar solo hacia hosts bna-… o localhost; para ${host} usa https://."
+              exit 1
+            fi
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "commit=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.50.1
+          cache: true
+
+      - name: Dependencias, análisis y pruebas
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      # Solo fuera de los PR y solo si existen los Secrets; si no, Gradle firma con la clave debug.
+      - name: Keystore del repositorio (opcional)
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CHASKI_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.CHASKI_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.CHASKI_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.CHASKI_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Sin keystore en Secrets: se firma con la clave debug (no vale para Google Play)."
+            exit 0
+          fi
+          umask 077
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/chaski.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/chaski.jks" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
+          echo "Se firma con el keystore de los Secrets."
+
+      - name: Compilar el APK release
+        env:
+          URL_API: ${{ steps.url.outputs.url }}
+          COMMIT: ${{ steps.url.outputs.commit }}
+        run: |
+          flutter build apk --release --dart-define=SERVIDOR="$URL_API" --build-number="$GITHUB_RUN_NUMBER"
+          rm -f android/key.properties
+          mkdir -p "$RUNNER_TEMP/salida"
+          cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/salida/chaski-$COMMIT.apk"
+
+      - name: Revisar el APK (URL incluida, sin claves ni tokens)
+        env:
+          URL_API: ${{ steps.url.outputs.url }}
+          COMMIT: ${{ steps.url.outputs.commit }}
+        run: |
+          apk="$RUNNER_TEMP/salida/chaski-$COMMIT.apk"
+          dir="$RUNNER_TEMP/apk"
+          mkdir -p "$dir" && unzip -q "$apk" -d "$dir"
+          grep -raqF "$URL_API" "$dir" || { echo "::error::La URL no está en el APK."; exit 1; }
+          if unzip -l "$apk" | grep -Ei '\.(jks|keystore|env|pem|p12)$|key\.properties'; then
+            echo "::error::El APK contiene un archivo de claves."; exit 1
+          fi
+          patron='BEGIN [A-Z ]*PRIVATE KEY|eyJhbGciOi|BUS_TOKEN|X-Bus-Token|CHASKI_COREDB_SECRETO|SECRET_KEY|ghp_[A-Za-z0-9]{20}|github_pat_|KUBECONFIG|storePassword'
+          if grep -raoE "$patron" "$dir" | sort -u | grep .; then
+            echo "::error::El APK contiene algo que parece una clave o un token (arriba)."; exit 1
+          fi
+          echo "URL: $URL_API"
+          echo "SHA-256: $(sha256sum "$apk" | cut -d' ' -f1)"
+          keytool -printcert -jarfile "$apk" | grep -E 'Owner|SHA256:' || true
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chaski-${{ steps.url.outputs.commit }}
+          path: ${{ runner.temp }}/salida/chaski-${{ steps.url.outputs.commit }}.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publicar en un release de GitHub
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL_API: ${{ steps.url.outputs.url }}
+          COMMIT: ${{ steps.url.outputs.commit }}
+        run: |
+          apk="$RUNNER_TEMP/salida/chaski-$COMMIT.apk"
+          notas="APK release de Chaski (commit $COMMIT, Flutter 3.50.1).
+          API: $URL_API
+          SHA-256: $(sha256sum "$apk" | cut -d' ' -f1)
+          Instalación y requisitos (VPN o adb reverse): billetera-chaski/README.md, «Descargar el APK».
+          Firmado con la clave debug salvo que el repositorio tenga un keystore en Secrets: no sirve para Google Play."
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            etiqueta="$GITHUB_REF_NAME"
+            if gh release view "$etiqueta" >/dev/null 2>&1; then
+              gh release upload "$etiqueta" "$apk" --clobber
+            else
+              gh release create "$etiqueta" "$apk" --verify-tag --title "Chaski $etiqueta" --notes "$notas"
+            fi
+          else
+            etiqueta="chaski-build-$GITHUB_RUN_NUMBER"
+            gh release create "$etiqueta" "$apk" --target "$GITHUB_SHA" --prerelease \
+              --title "Chaski $COMMIT (build $GITHUB_RUN_NUMBER)" --notes "$notas"
+          fi
+          echo "Release: $(gh release view "$etiqueta" --json url --jq .url)"
