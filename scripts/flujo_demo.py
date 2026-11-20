@@ -8,7 +8,9 @@ Corre en la máquina que levantó el producto (`./bna up`), con Python 3.9+ y so
 biblioteca estándar: `python3 scripts/flujo_demo.py`. Hace las mismas peticiones que las
 pantallas (por los puentes del frontend, http://localhost:3000/api/...) y, donde no hay
 pantalla, va al Bus de Servicios (http://127.0.0.1:8018/bus/...) con la credencial del flujo.
-Las claves salen de `.env` (la genera `./bna up`); ninguna se imprime. Cada corrida crea datos
+Las claves salen de `.env` (la genera `./bna up`); ninguna se imprime. Contra el clúster de
+Infraestructura (scripts/k8s-infra.sh flujo), con BNA_K8S_NAMESPACE, las lee de los pods con
+`kubectl exec`. Cada corrida crea datos
 nuevos (documentos, celulares y RUC al azar), así que se puede repetir sobre la misma base.
 
 Al final comprueba en COREDB los saldos, el crédito y su calendario, el estado de la tarjeta y
@@ -20,6 +22,8 @@ import argparse
 import json
 import os
 import random
+import shlex
+import subprocess
 import sys
 import time
 import urllib.error
@@ -51,7 +55,42 @@ def leer_env(ruta):
     return valores
 
 
-ENV = leer_env(RAIZ / ".env")
+def leer_env_k8s(namespace):
+    """Las claves del flujo, de los pods del clúster (k8s/overlays/infraestructura).
+
+    Allí no hay .env local ni Secrets: cada pod tiene en /secretos solo las claves que usa. Se
+    leen con `kubectl exec` (KUBECONFIG y KUBECTL del entorno): BUS_TOKEN_PRUEBAS del Bus y el
+    administrador de COREDB del archivo de su contenedor de inicio primer-administrador.
+    """
+    kubectl = os.environ.get("KUBECTL", "kubectl")
+    prefijo = os.environ.get("BNA_K8S_PREFIJO", "bna-")
+
+    def archivo(despliegue, contenedor, nombre):
+        orden = [kubectl, "-n", namespace, "exec", f"deployment/{prefijo}{despliegue}", "-c", contenedor,
+                 "--", "cat", f"/secretos/{nombre}"]
+        resultado = subprocess.run(orden, capture_output=True, text=True, timeout=60)
+        if resultado.returncode != 0:
+            sys.exit(f"No se pudieron leer las claves de {prefijo}{despliegue} con kubectl exec: "
+                     f"{resultado.stderr.strip()[:300]}")
+        valores = {}
+        for linea in resultado.stdout.splitlines():
+            if "=" in linea:
+                clave, valor = linea.split("=", 1)
+                palabras = shlex.split(valor)
+                valores[clave] = palabras[0] if palabras else ""
+        return valores
+
+    bus = archivo("bus", "bus", "env")
+    admin = archivo("coredb", "coredb", "primer-administrador")
+    return {
+        "BUS_TOKEN_PRUEBAS": bus.get("BUS_TOKEN_PRUEBAS", ""),
+        "BNA_ADMIN_USUARIO": admin.get("BNA_ADMIN_USUARIO", ""),
+        "BNA_ADMIN_PASSWORD": admin.get("CORE_DB_ADMIN_INICIAL_PASSWORD", ""),
+    }
+
+
+K8S_NAMESPACE = os.environ.get("BNA_K8S_NAMESPACE", "")
+ENV = leer_env_k8s(K8S_NAMESPACE) if K8S_NAMESPACE else leer_env(RAIZ / ".env")
 
 
 def config(nombre, defecto=""):

@@ -125,6 +125,7 @@ CONFIG_MODULO = 'core_base_url: str = "http://localhost:8018/bus/coredb"\n'
 
 def _repo(tmp_path, *, compose=COMPOSE_BUENO, configmaps=CONFIGMAPS_BUENOS, modulo=DEPLOYMENT_MODULO,
           env_ejemplo="BUS_TOKEN_CUENTAS=\nBNA_PUERTO_COREDB=8012\n", config_modulo=CONFIG_MODULO):
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "compose.yaml").write_text(textwrap.dedent(compose))
     base = tmp_path / "k8s" / "base"
     base.mkdir(parents=True)
@@ -181,6 +182,15 @@ def test_coredb_alcanzable_fuera_de_su_red(tmp_path):
 def test_la_direccion_directa_en_el_configmap_compartido(tmp_path):
     configmaps = CONFIGMAPS_BUENOS.replace("  COREDB_URL: http://bus:8018/bus/coredb", "  COREDB_URL: http://coredb:8012")
     hallados = problemas(_repo(tmp_path, configmaps=configmaps))
+    assert any("bna-configuracion" in p and "COREDB_URL" in p for p in hallados), hallados
+
+
+def test_el_bus_con_el_prefijo_del_overlay_de_infraestructura(tmp_path):
+    # k8s/overlays/infraestructura llama bna-<servicio> a cada Service.
+    configmaps = CONFIGMAPS_BUENOS.replace("http://bus:8018/bus/coredb", "http://bna-bus:8018/bus/coredb")
+    assert problemas(_repo(tmp_path / "bien", configmaps=configmaps)) == []
+    configmaps = CONFIGMAPS_BUENOS.replace("  COREDB_URL: http://bus:8018/bus/coredb", "  COREDB_URL: http://bna-coredb:8012")
+    hallados = problemas(_repo(tmp_path / "mal", configmaps=configmaps))
     assert any("bna-configuracion" in p and "COREDB_URL" in p for p in hallados), hallados
 
 

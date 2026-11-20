@@ -1,0 +1,47 @@
+# Clúster de Infraestructura (k3s 1.34, Traefik, local-path).
+# Guía: Documents/despliegue-infraestructura.md. Se aplica con scripts/k8s-infra.sh, que fija
+# el namespace asignado (BNA_NAMESPACE: no está en el repositorio), la etiqueta de las imágenes
+# (el commit) y el ConfigMap bna-generar-env.
+#
+# Sin objetos Secret: secretos.yaml (generado por scripts/overlay_infraestructura.py) quita
+# los secretKeyRef de k8s/base y carga las claves desde el PVC bna-secretos (arranque.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - arranque.yaml
+  - ingress.yaml
+transformers:
+  - prefijo.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/instance: bna
+    includeSelectors: true
+images:
+  - { name: bna/core-db, newName: ghcr.io/miguelpro324/bna-core-db, newTag: sin-etiqueta }
+  - { name: bna/coredb, newName: ghcr.io/miguelpro324/bna-coredb, newTag: sin-etiqueta }
+  - { name: bna/backend, newName: ghcr.io/miguelpro324/bna-backend, newTag: sin-etiqueta }
+  - { name: bna/sol, newName: ghcr.io/miguelpro324/bna-sol, newTag: sin-etiqueta }
+  - { name: bna/seguridad, newName: ghcr.io/miguelpro324/bna-seguridad, newTag: sin-etiqueta }
+  - { name: bna/billetera, newName: ghcr.io/miguelpro324/bna-billetera, newTag: sin-etiqueta }
+  - { name: bna/frontend, newName: ghcr.io/miguelpro324/bna-frontend, newTag: sin-etiqueta }
+patches:
+  # El namespace ya existe y la cuenta no puede crear namespaces.
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: bna
+  # direcciones.yaml antes que secretos.yaml: el último parche que nombra los contenedores de
+  # inicio decide su orden, y `secretos` tiene que ir primero.
+  - path: direcciones.yaml
+  - path: secretos.yaml
+  # Pedidos modestos: el clúster no tiene cuota, pero lo comparten otros grupos. La base de
+  # datos, aparte (recursos.yaml).
+  - target: { kind: Deployment }
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value: { cpu: 50m, memory: 128Mi }
+  - path: recursos.yaml

@@ -254,42 +254,11 @@ Ningún paso falló por un dato de referencia que falte: la agencia `AQP01`, los
 
 ## Kubernetes
 
-Qué cambia al desplegar este flujo en el clúster de Infraestructura. La referencia es `k8s/` del repositorio y `./bna k8s-up` sobre kind (detalles en [`k8s/README.md`](../k8s/README.md)). Los datos del clúster quedan **pendientes de recibir el kubeconfig** de Infraestructura; aquí no se supone ninguno.
+Hay dos despliegues en Kubernetes, con los mismos manifiestos de `k8s/base`:
 
-### Qué hay hoy
+- **kind, local:** `./bna k8s-up` (`k8s/overlays/local`, detalles en [`k8s/README.md`](../k8s/README.md)). Publica el frontend en http://localhost:13000 y el Bus en http://127.0.0.1:18018; el script se corre con `BNA_FRONTEND=http://localhost:13000 BNA_BUS=http://127.0.0.1:18018 python3 scripts/flujo_demo.py`, con el mismo `.env` con el que se creó el Secret. El cajero y la billetera no tienen NodePort: el script llega a ellos por el Bus.
+- **Clúster de Infraestructura (k3s):** `k8s/overlays/infraestructura` y `scripts/k8s-infra.sh`, guía en [`despliegue-infraestructura.md`](despliegue-infraestructura.md). Publica por Ingress el portal (http://bna.172.16.10.31.sslip.io, también `/homebanking/`), el cajero (http://bna-cajero.172.16.10.31.sslip.io), la API de la billetera (http://bna-billetera.172.16.10.31.sslip.io) y el Bus (http://bna-bus.172.16.10.31.sslip.io). Allí no hay Secrets ni `.env` local: `scripts/k8s-infra.sh flujo` corre este script, que lee sus tres claves de los pods con `kubectl exec`. Los datos de referencia (agencia, terminales, BIN, periodos) los carga la imagen de la base y los completa `scripts/k8s-infra.sh datos`.
 
-- `k8s/base/`: namespace `bna`; por servicio un Deployment y un Service (`db`, `coredb`, `cuentas`, `tarjetas`, `sol`, `evaluacion`, `desembolso`, `cobranza`, `captacion`, `seguridad`, `atm`, `billetera`, `bus`, `frontend`); dos ConfigMap (`bna-configuracion`, con las direcciones hacia el Bus, y `bna-bus`, con las directas de los módulos, que solo lee el Bus).
-- `k8s/overlays/local/`: el overlay de kind. Pone `imagePullPolicy: Never` (las imágenes se cargan con `kind load`, nunca se descargan) y publica como NodePort el frontend (30000), CUENTAS, TARJETAS, SOL, COREDB, Seguridad, EVALUACION, DESEMBOLSO, CAPTACION y el Bus (30018). ATM, BILLETERA y COBRANZA quedan solo dentro del clúster.
-- `./bna k8s-up` (`scripts/k8s.sh`): construye las imágenes con compose, crea el clúster `bna` si falta, carga las imágenes, crea el Secret desde `.env` y aplica `k8s/overlays/local`. Solo usa el contexto `kind-bna`.
+Para la demostración en el clúster, en la tabla de pasos cambian las direcciones: el portal es http://bna.172.16.10.31.sslip.io en vez de http://localhost:3000, el cajero http://bna-cajero.172.16.10.31.sslip.io en vez de http://127.0.0.1:8019 y el Bus http://bna-bus.172.16.10.31.sslip.io en vez de http://127.0.0.1:8018. La clave del administrador se lee como dice la guía (sección «Flujo de demostración»).
 
-### Qué cambia en el clúster de Infraestructura
-
-| Tema | En kind | En el clúster de Infraestructura |
-|---|---|---|
-| Imágenes | `bna/*:local` construidas en la máquina y cargadas con `kind load` (`bna/core-db`, `bna/coredb`, `bna/backend`, `bna/sol`, `bna/seguridad`, `bna/billetera`, `bna/frontend`) | Construir con `docker compose build`, etiquetar con una versión (nunca `latest`) y subirlas a un registro al que llegue el clúster. Registro: **pendiente de recibir kubeconfig** (y sus credenciales) |
-| De dónde las descarga | `imagePullPolicy: Never` | Un overlay propio (por ejemplo `k8s/overlays/infraestructura/`) con `images:` de kustomize (`newName`/`newTag` por imagen) y, si el registro es privado, un `imagePullSecret` creado en el clúster, no en el repositorio |
-| Namespace | `bna` | El que asigne Infraestructura: **pendiente de recibir kubeconfig**. Se cambia con `namespace:` en el overlay |
-| Secrets | `bna-secretos`, creado por `scripts/k8s.sh` desde `.env`, sin escribirlo en disco | Igual, a mano: `kubectl -n <namespace> create secret generic bna-secretos --from-env-file=.env`, con un `.env` propio del clúster generado por `scripts/generar_env.sh` y guardado fuera del repositorio. La CI falla si aparece un `kind: Secret` en `k8s/` |
-| Publicación | NodePort en `127.0.0.1` (`k8s/kind-config.yaml`) | NodePort o Ingress, según el clúster: **pendiente de recibir kubeconfig** (clase de Ingress, dominio, certificados). Para este flujo hacen falta, como mínimo, el frontend y el Bus. La pantalla del cajero y la API de la billetera necesitan su propia publicación (ver abajo) |
-| Base de datos | Deployment `db` con PVC `db-datos` de 1Gi, `ReadWriteOnce`, estrategia `Recreate` (no StatefulSet, para clústeres donde la cuenta no puede crearlos) | El mismo PVC con la StorageClass del clúster (o la de omisión): **pendiente de recibir kubeconfig**. Tamaño a revisar con Infraestructura. Las claves de la base solo se aplican al crear el volumen: borrar el PVC borra los datos |
-| Orden de arranque | Lo resuelven los contenedores de inicio | Igual: `db` → `coredb` (espera a la base; crea el primer administrador y los usuarios de servicio `svc-evaluacion`, `svc-desembolso`, `svc-captacion`, `svc-cobranza`, `svc-billetera`, `svc-seguridad` y `svc-sol` con su secreto del Secret) → `bus` → CAPTACION, EVALUACION, DESEMBOLSO, COBRANZA, BILLETERA y Seguridad (esperan a COREDB por el Bus) → los demás. No hace falta aplicar en orden: cada pod espera |
-| Datos de desarrollo | `bna_datos_dev.sql` (agencia, terminales, BIN, periodos, topes, cliente DEV001) se carga con la base | Lo mismo, porque la imagen `bna/core-db` los incluye. Para una demostración sirve; para producción no (lo dice el propio archivo) |
-
-### Lo que el flujo necesita y kind no publica
-
-- **Pantalla del cajero:** el ATM no tiene NodePort y el Bus exige `X-Bus-Token` en sus rutas `/bus/…` (sin ella responde 401), así que un navegador no puede abrir `/bus/atm/`. Para la demostración en el clúster hace falta publicar el Service `atm` (puerto 8019) con un NodePort o un Ingress. Tipo: configuración (un parche en el overlay).
-- **API de la billetera:** igual, el Service `billetera` (puerto 3000) para la app Chaski. Tipo: configuración.
-- El script no necesita ninguna de las dos: llega al cajero y a la billetera por el Bus, con `BUS_TOKEN_PRUEBAS`. Para correrlo contra el clúster:
-  ```bash
-  BNA_FRONTEND=http://<frontend publicado> BNA_BUS=http://<bus publicado> python3 scripts/flujo_demo.py
-  ```
-  con el mismo `.env` con el que se creó `bna-secretos` (de ahí lee `BNA_ADMIN_PASSWORD` y `BUS_TOKEN_PRUEBAS`). Direcciones: **pendiente de recibir kubeconfig**.
-- Comprobado en kind el 2026-11-19 (`./bna k8s-up`, kind v0.27.0): `BNA_FRONTEND=http://localhost:13000 BNA_BUS=http://127.0.0.1:18018 python3 scripts/flujo_demo.py` dio el mismo resultado que con compose en ese momento, antes de #128 (salida 2 por el paso 4, saldo final 1500.00), usando solo el frontend y el Bus publicados. No se volvió a correr en kind después de #128 y #129.
-
-### Pasos, cuando llegue el kubeconfig
-
-1. `kubectl --kubeconfig <archivo> get ns` para confirmar el acceso y el namespace asignado.
-2. Subir las imágenes al registro y crear el overlay de Infraestructura (imágenes, namespace, publicación del frontend, el Bus, el cajero y la billetera; StorageClass si no es la de omisión).
-3. Crear `bna-secretos` desde el `.env` del clúster.
-4. `kubectl apply -k k8s/overlays/infraestructura` y esperar a que todos los pods estén listos (`kubectl -n <namespace> get pods -w`).
-5. Correr el flujo: `./bna k8s-smoke` usa el contexto de kind; en el clúster, el script de este documento con `BNA_FRONTEND` y `BNA_BUS`.
+En kind lo comprueba `scripts/prueba_k8s_infra_kind.sh` (kind v0.30.0, Kubernetes 1.34) con el overlay de Infraestructura: corre este script por `kubectl port-forward` al frontend y al Bus y exige que termine con 0. La CI lo corre en cada PR que toca el despliegue (flujo «Kubernetes»).

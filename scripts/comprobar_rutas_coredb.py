@@ -26,6 +26,8 @@ import yaml
 # coredb:<puerto> en cualquier forma, o el puerto de COREDB en la propia máquina.
 DIRECTA = re.compile(r"\bcoredb:\d+|\b(?:localhost|127\.0\.0\.1):8012\b", re.IGNORECASE)
 BUS_COREDB = "http://bus:8018/bus/coredb"
+# En k8s también el Bus con el prefijo de k8s/overlays/infraestructura (Service bna-bus).
+BUS_COREDB_K8S = (BUS_COREDB, "http://bna-bus:8018/bus/coredb")
 VARIABLES_COREDB = ("CORE_BASE_URL", "COREDB_URL")
 
 COMPOSE_PERMITIDOS = {"db", "coredb", "coredb-init", "bus"}
@@ -108,7 +110,7 @@ def _k8s(raiz):
                 if DIRECTA.search(str(valor)):
                     hallados.append(f"{ruta}: ConfigMap {nombre}.{clave} tiene la dirección directa de COREDB "
                                     f"(solo en el ConfigMap {CONFIGMAP_BUS}, que lee el Bus).")
-                if clave in VARIABLES_COREDB and not str(valor).startswith(BUS_COREDB):
+                if clave in VARIABLES_COREDB and not str(valor).startswith(BUS_COREDB_K8S):
                     hallados.append(f"{ruta}: ConfigMap {nombre}.{clave} debe ser {BUS_COREDB}.")
         elif tipo in {"Deployment", "StatefulSet", "Job", "DaemonSet"}:
             if nombre in K8S_PERMITIDOS:

@@ -1,0 +1,20 @@
+# La base: en local-path, como el resto del namespace. MySQL pide 256Mi y no pasa de 512Mi.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-datos
+spec:
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+spec:
+  template:
+    spec:
+      containers:
+        - name: mysql
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
