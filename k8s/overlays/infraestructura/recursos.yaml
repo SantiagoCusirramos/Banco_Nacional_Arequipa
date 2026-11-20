@@ -1,4 +1,6 @@
-# La base: en local-path, como el resto del namespace. MySQL pide 256Mi y no pasa de 512Mi.
+# La base: en local-path, como el resto del namespace. MySQL pide 512Mi; su máximo sigue en
+# 1Gi, como en k8s/base: con 512Mi lo mata el OOM durante la primera carga del esquema y el
+# volumen queda a medio inicializar (sin los usuarios de la aplicación).
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -16,5 +18,5 @@ spec:
       containers:
         - name: mysql
           resources:
-            requests: { cpu: 50m, memory: 256Mi }
-            limits: { cpu: "1", memory: 512Mi }
+            requests: { cpu: 50m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1Gi }

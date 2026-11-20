@@ -121,12 +121,14 @@ manifiestos() {
   "$KUBECTL" kustomize "$dir"
 }
 
+# De cada pod que no está listo o que se reinició: estado de sus contenedores, motivo del último
+# reinicio (por ejemplo OOMKilled) y el final de sus registros. La cuenta no ve eventos.
 diagnostico() {
   echo "── Estado" >&2
   k get pods,jobs -l "$SELECTOR" -o wide >&2 || true
   local pod
   for pod in $(k get pods -l "$SELECTOR" --no-headers 2>/dev/null \
-                 | awk '{ split($2, listos, "/"); if (listos[1] != listos[2] && $3 != "Completed") print $1 }'); do
+                 | awk '{ split($2, listos, "/"); if ((listos[1] != listos[2] && $3 != "Completed") || $4 != "0") print $1 }'); do
     echo "── $pod" >&2
     k get pod "$pod" -o jsonpath='{range .status.initContainerStatuses[*]}{.name}: reinicios={.restartCount} estado={.state} anterior={.lastState.terminated.reason}{"\n"}{end}{range .status.containerStatuses[*]}{.name}: reinicios={.restartCount} estado={.state} anterior={.lastState.terminated.reason}{"\n"}{end}' >&2 || true
     echo "· registros de la ejecución anterior" >&2

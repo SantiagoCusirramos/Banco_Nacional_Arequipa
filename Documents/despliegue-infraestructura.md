@@ -29,7 +29,7 @@ Este documento no tiene ninguna clave. El kubeconfig y el acceso al clúster los
 
 Todos llevan la etiqueta `app.kubernetes.io/instance=bna` (también en los selectores), que es la que usan `estado` y `borrar`.
 
-Recursos: cada servicio pide 50m de CPU y 128Mi de memoria; la base, 50m y 256Mi, con un máximo de 512Mi. Los máximos de los demás son los de `k8s/base`.
+Recursos: cada servicio pide 50m de CPU y 128Mi de memoria; la base, 50m y 512Mi. Los máximos son los de `k8s/base` (la base, 1Gi: con 512Mi MySQL muere durante la primera carga del esquema).
 
 Imágenes: `ghcr.io/miguelpro324/bna-core-db`, `bna-coredb`, `bna-backend`, `bna-sol`, `bna-seguridad`, `bna-billetera` y `bna-frontend`, etiquetadas con el commit (12 caracteres), públicas. Son las mismas que construye `docker compose build`; ninguna lleva `.env`. La de la base incluye los datos de desarrollo (`DATOS_DEV=1`): sirve para demostraciones, no para producción.
 
@@ -146,7 +146,7 @@ La cuenta no ve eventos: lo que diría un evento (una imagen que no se descarga,
 | `ImagePullBackOff` | Las imágenes no están publicadas con esa etiqueta, o son privadas | `scripts/k8s-infra.sh publicar` con el mismo commit; marcarlas públicas |
 | `Init:Error` en `secretos`, «Falta X en el .env» | Se agregó una clave a `.env.example` y el Job no corrió después | `scripts/k8s-infra.sh aplicar` (el Job la agrega) |
 | `Init:Error` en `secretos`, «No apareció el .env» | El Job falló | `kubectl logs job/bna-arranque` |
-| COREDB no entra a la base | Se borró `bna-secretos` pero no `bna-db-datos` | `scripts/k8s-infra.sh borrar --si` y aplicar de nuevo (se pierden los datos) |
+| COREDB no entra a la base («Access denied for user 'bna_app_user'») | Se borró `bna-secretos` pero no `bna-db-datos`, o `bna-db` se reinició durante su primera carga y el volumen quedó sin los usuarios (`diagnostico` muestra el motivo del reinicio) | `scripts/k8s-infra.sh borrar --si` y aplicar de nuevo (se pierden los datos) |
 
 ### 6. Borrar
 
