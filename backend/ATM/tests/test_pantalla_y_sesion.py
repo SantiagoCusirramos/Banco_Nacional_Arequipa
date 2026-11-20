@@ -188,3 +188,14 @@ def test_la_pantalla_no_muestra_el_id_completo_de_la_tarjeta():
     # El menú y el comprobante muestran solo los últimos 4 caracteres, como la pantalla de la clave.
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     assert "(tarjeta || '----')" not in html
+
+
+def test_la_pantalla_distingue_tarjeta_no_operativa_de_intentos_agotados():
+    # ERR-ATM-TARJETA-NO-OPERATIVA cubre cualquier causa (bloqueo en Home Banking, vencida, cancelada):
+    # no puede afirmar que se superaron los intentos. Eso solo vale con FALLIDO e intentos_restantes 0.
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    linea = next(l for l in html.splitlines() if "ERR-ATM-TARJETA-NO-OPERATIVA" in l)
+    assert "Superaste" not in linea
+    assert "Tarjeta no operativa" in linea
+    agotado = next(l for l in html.splitlines() if "intentos_restantes === 0" in l)
+    assert "Superaste los 3 intentos" in agotado

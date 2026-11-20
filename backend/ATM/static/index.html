@@ -512,8 +512,9 @@ async function autenticar(pin){
     }
     linea('API -> ATM      ' + r.status + '  ' + (datos.error_code || ''), 'no');
     evento('AUTENTICACION', datos.error_code || 'ERROR', corr2, {ms, codigo:datos.error_code});
-    if(datos.error_code === 'ERR-ATM-TARJETA-NO-OPERATIVA' || datos.error_code === 'ERR-TAR-003') return pantallaError('Tarjeta bloqueada', 'Superaste los 3 intentos. Acude a tu banco para desbloquearla.', 'Retirar tarjeta', expulsar);
+    if(datos.error_code === 'ERR-ATM-TARJETA-NO-OPERATIVA' || datos.error_code === 'ERR-TAR-003') return pantallaError('Tarjeta no operativa', 'Tu tarjeta está bloqueada, vencida o cancelada. Acude a tu banco.', 'Retirar tarjeta', expulsar);
     if(datos.error_code === 'ERR-ATM-TARJETA-NO-ENCONTRADA' || datos.error_code === 'ERR-TAR-NO-ENCONTRADA') return pantallaError('Tarjeta no reconocida', 'No pudimos leer esta tarjeta. Retírala e inténtalo con otra.', 'Retirar tarjeta', expulsar);
+    if(datos.data?.resultado === 'FALLIDO' && datos.data?.intentos_restantes === 0) return pantallaError('Tarjeta bloqueada', 'Superaste los 3 intentos. Acude a tu banco para desbloquearla.', 'Retirar tarjeta', expulsar);
     if(datos.error_code && datos.error_code.includes('FALLIDO') || datos.data?.resultado === 'FALLIDO') return pantallaClave('Clave incorrecta. Intentos restantes: ' + (datos.data?.intentos_restantes ?? '?'));
     return pantallaError('Servicio no disponible', 'Intenta nuevamente en unos minutos.');
   }catch(e){

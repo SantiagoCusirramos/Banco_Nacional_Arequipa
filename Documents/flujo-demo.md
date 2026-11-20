@@ -17,8 +17,8 @@ Comprobado el 2026-11-19 con `./bna up`, recorriendo cada paso con las mismas pe
 | 3 | Desembolsar | `/desembolso` | Funciona |
 | 4 | Consultar el saldo en el cajero | Cajero, `http://127.0.0.1:8019` | Funciona |
 | 5 | Depositar 1000.00 en ventanilla | `/cuenta` | Funciona |
-| 6a | Afiliar la billetera y registrar el comercio | Sin pantalla: curl al Bus | Funciona por la API |
-| 6b | Pagar 500.00 con la billetera | App Chaski sin compilar: curl al Bus | Funciona por la API |
+| 6a | Afiliar la billetera y registrar el comercio | `/billetera` | Funciona |
+| 6b | Pagar 500.00 con la billetera | App Chaski (Flutter) contra la API integrada, o curl al Bus | Funciona |
 | 7 | Bloquear la tarjeta | Home Banking, `/homebanking/cuentas.html` (también `/tarjetas`) | Funciona |
 
 Saldo de la cuenta del cliente después de cada paso: 0.00 → 1000.00 (desembolso) → 1000.00 (consulta) → 2000.00 (depósito) → 1500.00 (pago).
@@ -91,7 +91,7 @@ Los datos de ejemplo son los de la corrida del script. Use otros en cada demostr
 
 ### 1b. Abrir la cuenta de ahorros
 
-- **Pantalla:** http://localhost:3000/cuenta, pestaña de apertura («Crear cuenta de ahorros»): titular `<cod_cliente>`, PEN, INDIVIDUAL, agencia `AQP01`. La pantalla genera el número de cuenta y el CCI.
+- **Pantalla:** http://localhost:3000/cuenta, pestaña de apertura («Crear cuenta de ahorros»): titular `<cod_cliente>`, PEN, INDIVIDUAL, agencia `AQP01`. La pantalla no genera nada: el empleado escribe el número de cuenta (14 dígitos) y el CCI (20 dígitos). Quién asigna esos números es una pregunta abierta del equipo.
 - **Petición:** `POST /api/cuenta/apertura` (CUENTAS → COREDB).
 - **Resultado:** cuenta de 14 dígitos, saldo **0.00**.
 
@@ -120,10 +120,11 @@ Los datos de ejemplo son los de la corrida del script. Use otros en cada demostr
 ### 3. Desembolsar
 
 - **Pantalla:** http://localhost:3000/desembolso, con el usuario OPERADOR.
-  1. Verificar la identidad del cliente (DNI, identidad verificada).
-  2. Elegir la aprobación y la cuenta de abono (la del paso 1b) y preparar la orden.
-  3. Registrar la validación de identidad de la orden.
-  4. Confirmar.
+  1. «Verificar identidad» del cliente (DNI, identidad verificada).
+  2. Elegir la aprobación y la cuenta de abono (la del paso 1b) y pulsar «Preparar desembolso». La pantalla crea la orden y le registra sola la validación de identidad: la orden queda **VALIDADA**.
+  3. En la página de la orden, «Confirmar desembolso».
+
+  El operador hace tres acciones; no hay un paso aparte para validar la orden.
 - **Peticiones:** `/api/desembolso/identidad`, `aprobaciones?codCliente=`, `clientes/{cod}/cuentas?moneda=PEN`, `ordenes` (con `X-Idempotency-Key`), `ordenes/{id}/validaciones`, `ordenes/{id}/confirmacion` (DESEMBOLSO → COREDB).
 - **Resultado:** orden CONFIRMADA (`DES-2026-…`), crédito `CRE-2026-…` **AL_DIA** con 6 cuotas, solicitud DESEMBOLSADA con calendario OFICIAL. Saldo **1000.00**.
 - **Calendario obtenido** (1000.00, 6 meses, TEA 22 %, francés): cuotas de 176.55 (la última 176.54), total 1059.29; capital 159.84, 162.51, 165.23, 167.99, 170.79 y 173.64.
@@ -143,9 +144,10 @@ Los datos de ejemplo son los de la corrida del script. Use otros en cada demostr
 - **Petición:** `POST /api/cuenta/deposito` con `X-Channel-ID: VEN` (la pantalla opera como ventanilla), `X-Idempotency-Key` y `X-Request-Timestamp` (CUENTAS → COREDB). Ventanilla no tiene tope diario.
 - **Resultado:** depósito registrado; repetirlo con la misma llave devuelve el mismo movimiento (`replay: true`) y no deposita otra vez. Saldo **2000.00**.
 
-### 6a. Afiliar la billetera y registrar el comercio (sin pantalla)
+### 6a. Afiliar la billetera y registrar el comercio
 
-No hay pantalla para afiliar una billetera ni para registrar un comercio: se hace con curl al Bus, con el token del administrador.
+- **Pantalla:** http://localhost:3000/billetera (#134), con dos pestañas: «Afiliar cliente» (código de cliente, cuenta en soles y PIN de 6 dígitos) y «Registrar comercio» (RUC, razón social y cuenta del comercio).
+- **Por curl**, con el token del administrador (es lo que hace `scripts/flujo_demo.py`):
 
 1. Afiliar al cliente, con su cuenta y un PIN de 6 dígitos:
    ```bash
@@ -162,7 +164,7 @@ No hay pantalla para afiliar una billetera ni para registrar un comercio: se hac
 
 ### 6b. Pagar 500.00 con la billetera
 
-La app Chaski (Flutter, `billetera-chaski/app_movil`) no está compilada en el producto; su API sí está levantada y se usa con curl, por el Bus (`/bus/billetera/api`) o directo en http://127.0.0.1:8020/api.
+La app Chaski (Flutter, `billetera-chaski/app_movil`) funciona contra la API integrada desde #135: se compila con `--dart-define=SERVIDOR=http://localhost:8020` y, con el celular por USB, `adb reverse tcp:8020 tcp:8020` (ver `billetera-chaski/README.md`). Sin celular, la misma API se usa con curl, por el Bus (`/bus/billetera/api`) o directo en http://127.0.0.1:8020/api.
 
 ```bash
 SES=$(curl -s -X POST $BUS/bus/billetera/api/login -H "X-Bus-Token: $BT" -H 'Content-Type: application/json' \
@@ -244,11 +246,7 @@ Corrido dos veces seguidas el 2026-11-19 sobre la misma base (`main` `aa500a6`, 
 
 ## Lo que sigue sin pantalla
 
-Ningún paso está bloqueado. Sin pantalla quedan:
-
-| Paso | Qué falta | Tipo | ¿Mueve dinero? |
-|---|---|---|---|
-| 6 | Afiliar la billetera y registrar comercios no tienen pantalla; la app Chaski no se compila. Opcional: un formulario de afiliación en el frontend. La app la documenta `billetera-chaski/README.md` (#116) | Pantalla que falta | La afiliación, no |
+Ningún paso está bloqueado y todos tienen pantalla: afiliar la billetera y registrar comercios en `/billetera` (#134) y el pago en la app Chaski (#135, `billetera-chaski/README.md`). Queda por curl, sin pantalla, lo que el script hace por el Bus (por ejemplo, crear usuarios internos con `POST /coredb/usuarios`).
 
 Ningún paso falló por un dato de referencia que falte: la agencia `AQP01`, los terminales `DEV-*`, el BIN `004499`, los periodos contables y los topes por canal los carga `database/sql/bna_datos_dev.sql` al crear el volumen.
 
@@ -259,6 +257,8 @@ Hay dos despliegues en Kubernetes, con los mismos manifiestos de `k8s/base`:
 - **kind, local:** `./bna k8s-up` (`k8s/overlays/local`, detalles en [`k8s/README.md`](../k8s/README.md)). Publica el frontend en http://localhost:13000 y el Bus en http://127.0.0.1:18018; el script se corre con `BNA_FRONTEND=http://localhost:13000 BNA_BUS=http://127.0.0.1:18018 python3 scripts/flujo_demo.py`, con el mismo `.env` con el que se creó el Secret. El cajero y la billetera no tienen NodePort: el script llega a ellos por el Bus.
 - **Clúster de Infraestructura (k3s):** `k8s/overlays/infraestructura` y `scripts/k8s-infra.sh`, guía en [`despliegue-infraestructura.md`](despliegue-infraestructura.md). Publica por Ingress el portal (http://bna.172.16.10.31.sslip.io, también `/homebanking/index.html`), el cajero (http://bna-cajero.172.16.10.31.sslip.io), la API de la billetera (http://bna-billetera.172.16.10.31.sslip.io) y el Bus (http://bna-bus.172.16.10.31.sslip.io). Allí no hay Secrets ni `.env` local: `scripts/k8s-infra.sh flujo` corre este script, que lee sus tres claves de los pods con `kubectl exec`. Los datos de referencia (agencia, terminales, BIN, periodos) los carga la imagen de la base y los completa `scripts/k8s-infra.sh datos`.
 
+En el clúster de Infraestructura `kubectl port-forward` no sirve: la API lo rechaza («cannot create resource pods/portforward»), aunque `kubectl auth can-i create pods/portforward` diga que sí (comprobado el 2026-11-20 con kubectl 1.37, por WebSocket y por SPDY). Se llega a los servicios por los hosts de los Ingress de arriba.
+
 Para la demostración en el clúster, en la tabla de pasos cambian las direcciones: el portal es http://bna.172.16.10.31.sslip.io en vez de http://localhost:3000, el cajero http://bna-cajero.172.16.10.31.sslip.io en vez de http://127.0.0.1:8019 y el Bus http://bna-bus.172.16.10.31.sslip.io en vez de http://127.0.0.1:8018. La clave del administrador se lee como dice la guía (sección «Flujo de demostración»).
 
-En kind lo comprueba `scripts/prueba_k8s_infra_kind.sh` (kind v0.30.0, Kubernetes 1.34) con el overlay de Infraestructura: corre este script por `kubectl port-forward` al frontend y al Bus y exige que termine con 0. La CI lo corre en cada PR que toca el despliegue (flujo «Kubernetes»).
+En kind (donde `kubectl port-forward` funciona) lo comprueba `scripts/prueba_k8s_infra_kind.sh` (kind v0.30.0, Kubernetes 1.34) con el overlay de Infraestructura: corre este script por `kubectl port-forward` al frontend y al Bus y exige que termine con 0. La CI lo corre en cada PR que toca el despliegue (flujo «Kubernetes»).

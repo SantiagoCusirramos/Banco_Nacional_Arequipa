@@ -12,8 +12,8 @@ Este documento no tiene ninguna clave. El kubeconfig y el acceso al clúster los
 | Ingress | Traefik, en 172.16.10.31, solo HTTP |
 | Almacenamiento | StorageClass `local-path` (un solo nodo; los datos quedan en su disco) |
 | Cuota | La cuenta no puede listar cuotas ni ver el uso (`kubectl top`); el 2026-11-20 los 14 pods arrancaron con sus pedidos sin problema. Si aparece una cuota por número de objetos, ver «Si hay cuota de objetos» |
-| Permisos de la cuenta | En su namespace: ConfigMap, Deployment, Service, Ingress, Job, PVC y Pod (con `exec`, `logs` y `port-forward`). **No** puede leer ni crear Secrets, ni ver eventos, ni crear namespaces |
-| Ya existen en el namespace | `backend` y `mysql` (Deployment, Service, PVC `mysql-data` e Ingress `backend`) y el ConfigMap `bna-config`, que es de ese despliegue aunque empiece con `bna-` (no lleva la etiqueta del producto). El producto no los toca: todos sus objetos se llaman `bna-*`, llevan la etiqueta `app.kubernetes.io/instance=bna` y ninguno se llama `bna-config` |
+| Permisos de la cuenta | En su namespace: ConfigMap, Deployment, Service, Ingress, Job, PVC y Pod (con `exec` y `logs`; `port-forward` lo rechaza la API: «cannot create resource pods/portforward», aunque `kubectl auth can-i create pods/portforward` diga que sí, comprobado el 2026-11-20 con kubectl 1.37). **No** puede leer ni crear Secrets, ni ver eventos, ni crear namespaces |
+| Objetos anteriores | El `backend` y el `mysql` de un despliegue anterior (Deployment, Service, PVC `mysql-data`, Ingress `backend` y ConfigMap `bna-config`) se borraron el 2026-11-20 a pedido del dueño: ya no existen. El producto solo usa objetos `bna-*` con la etiqueta `app.kubernetes.io/instance=bna` |
 
 ## Qué se despliega
 
@@ -44,7 +44,7 @@ Imágenes: `ghcr.io/miguelpro324/bna-core-db`, `bna-coredb`, `bna-backend`, `bna
 
 sslip.io resuelve `<nombre>.172.16.10.31.sslip.io` a 172.16.10.31, así que no hace falta un DNS propio. Hace falta llegar a esa dirección (la red de Infraestructura).
 
-**Convivencia con el Ingress `backend`.** El Ingress `backend` no tiene host: manda todo `/` de 172.16.10.31 a `backend`. Traefik prefiere la regla más específica, así que solo los cuatro hosts de arriba llegan al producto; la IP sola y cualquier otro nombre siguen yendo a `backend`. Comprobado el 2026-11-20 antes y después de aplicar: `/`, `/docs`, `/health` y `/api/` responden igual por la IP y por otro host de sslip.io. Lo único que cambió es `bna.172.16.10.31.sslip.io`, que antes caía en `backend` por la regla sin host y ahora es el portal.
+Históricamente la IP sola iba a un Ingress `backend` sin host; ese Ingress ya no existe y la IP sola responde 404 de Traefik. Solo los cuatro hosts de arriba llegan al producto.
 
 ## Claves sin Secrets
 
@@ -125,7 +125,7 @@ La imagen de la base ya los carga al crear su volumen (`database/sql/bna_datos_d
 scripts/k8s-infra.sh flujo        # scripts/flujo_demo.py contra http://bna… y http://bna-bus…
 ```
 
-Es el flujo de [`flujo-demo.md`](flujo-demo.md), con las mismas comprobaciones. Sin `.env` local: `flujo_demo.py` lee con `kubectl exec` las tres claves que necesita (`BUS_TOKEN_PRUEBAS` del pod del Bus; el usuario y la clave del administrador, del archivo `primer-administrador` del pod de COREDB) y no imprime ninguna. Sale con 0 si todo pasó. Para usar otras direcciones (por ejemplo, un `kubectl port-forward`): `BNA_FRONTEND` y `BNA_BUS`.
+Es el flujo de [`flujo-demo.md`](flujo-demo.md), con las mismas comprobaciones. Sin `.env` local: `flujo_demo.py` lee con `kubectl exec` las tres claves que necesita (`BUS_TOKEN_PRUEBAS` del pod del Bus; el usuario y la clave del administrador, del archivo `primer-administrador` del pod de COREDB) y no imprime ninguna. Sale con 0 si todo pasó. Para usar otras direcciones (por ejemplo, las de otro clúster donde `kubectl port-forward` sí funcione): `BNA_FRONTEND` y `BNA_BUS`.
 
 Para entrar al portal como administrador hace falta su clave:
 
@@ -156,7 +156,7 @@ La cuenta no ve eventos: lo que diría un evento (una imagen que no se descarga,
 scripts/k8s-infra.sh borrar --si
 ```
 
-Borra todos los objetos con la etiqueta del producto, después de comprobar que todos se llaman `bna-*`; si alguno no, no borra nada. Incluye los dos PVC: la base y el `.env` se pierden. No toca `backend`, `mysql` ni nada más del namespace.
+Borra todos los objetos con la etiqueta del producto, después de comprobar que todos se llaman `bna-*`; si alguno no, no borra nada. Incluye los dos PVC: la base y el `.env` se pierden. No toca nada más del namespace.
 
 ## Si hay cuota de objetos
 

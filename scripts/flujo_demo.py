@@ -225,7 +225,7 @@ def captar(token, nombres, apellido_paterno, apellido_materno):
 
 
 def abrir_cuenta(token, cod_cliente):
-    """Pantalla /cuenta, «Abrir cuenta»: CUENTAS /apertura (la pantalla genera número y CCI)."""
+    """Pantalla /cuenta, «Abrir cuenta»: CUENTAS /apertura (el empleado escribe el número de 14 dígitos y el CCI de 20; el script los genera al azar)."""
     return datos_de(llamar("POST", api("cuenta/apertura"), 201, {
         "num_cuenta": digitos(14), "cci": digitos(20), "moneda": "PEN", "regimen": "INDIVIDUAL",
         "id_agencia": AGENCIA, "titulares": [{"id_cliente": cod_cliente}]}, token))["num_cuenta"]
