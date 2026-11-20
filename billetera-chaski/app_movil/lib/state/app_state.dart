@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../funciones.dart';
 import '../models.dart';
 import '../services/api.dart';
 import '../services/cache_db.dart';
+import '../services/operaciones.dart';
 import '../util/format.dart';
 
 /// Servidor por defecto: el emulador de Android ve la PC en 10.0.2.2.
@@ -37,8 +39,12 @@ class ResumenCarrito {
 /// Estado global de la app (sesión, saldo, movimientos, avisos y carrito).
 class AppState extends ChangeNotifier {
   late SharedPreferences _prefs;
-  late final Api api;
+  Api? _api;
+  Api get api => _api!;
   final cache = CacheDb();
+
+  /// [api] permite inyectar un cliente (pruebas); si no, se crea en [init] con el servidor guardado.
+  AppState({Api? api}) : _api = api;
 
   bool iniciando = true;
   String? token;
@@ -55,6 +61,9 @@ class AppState extends ChangeNotifier {
   bool usarBiometria = true;
 
   final Map<int, LineaCarrito> carrito = {};
+
+  /// Operaciones sin terminar (p. ej. rechazar una solicitud), con su uuid de idempotencia.
+  final Map<String, IntentoOperacion> intentos = {};
   Timer? _poll;
 
   String get servidor => api.baseUrl;
@@ -62,7 +71,12 @@ class AppState extends ChangeNotifier {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
-    api = Api(_prefs.getString('servidor') ?? servidorPorDefecto);
+    final url = _prefs.getString('servidor') ?? servidorPorDefecto;
+    if (_api == null) {
+      _api = Api(url);
+    } else {
+      _api!.baseUrl = url;
+    }
     api.onUnauthorized = () => logout(expirada: true);
     ocultarSaldo = _prefs.getBool('ocultar') ?? false;
     usarBiometria = _prefs.getBool('biometria') ?? true;
@@ -118,6 +132,7 @@ class AppState extends ChangeNotifier {
     sol = Solicitudes.vacio();
     notifs = [];
     carrito.clear();
+    intentos.clear();
     offline = false;
     await _prefs.remove('token');
     await _prefs.remove('id_cliente'); // clave de la versión con ids numéricos
@@ -133,7 +148,8 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  /// Trae saldo, movimientos, solicitudes, avisos y promos. Si el servidor no responde, usa la caché local.
+  /// Trae saldo, movimientos, solicitudes y avisos (y promos solo si están en esta versión). Si el
+  /// servidor no responde, usa la caché local.
   Future<void> refrescar({bool lanzar = false}) async {
     try {
       final r = await Future.wait([
@@ -141,13 +157,13 @@ class AppState extends ChangeNotifier {
         api.get('/movimientos'),
         api.get('/solicitudes'),
         api.get('/notificaciones'),
-        api.get('/promos').catchError((_) => <dynamic>[]),
+        if (Funciones.promociones) api.get('/promos').catchError((_) => <dynamic>[]),
       ]);
       me = Me.fromJson(r[0]);
       movs = (r[1] as List).map((e) => Movimiento.fromJson(e)).toList();
       sol = Solicitudes.fromJson(r[2]);
       notifs = (r[3] as List).map((e) => Notificacion.fromJson(e)).toList();
-      promos = (r[4] as List).map((e) => Promo.fromJson(e)).toList();
+      promos = r.length > 4 ? (r[4] as List).map((e) => Promo.fromJson(e)).toList() : [];
       offline = false;
       await _prefs.setString('cliente', me!.cliente.idCliente);
       cache.guardar(me!, movs).catchError((_) {});

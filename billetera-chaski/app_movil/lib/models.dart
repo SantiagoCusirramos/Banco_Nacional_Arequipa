@@ -28,13 +28,13 @@ class Cliente {
         email: j['email'],
       );
 
+  /// Lo que se guarda en la caché local: sin el celular (nunca se persiste en claro).
   Map<String, dynamic> toJson() => {
         'id_cliente': idCliente,
         'tipo_documento': tipoDocumento,
         'numero_documento': numeroDocumento,
         'nombres': nombres,
         'apellidos': apellidos,
-        'celular': celular,
         'email': email,
       };
 

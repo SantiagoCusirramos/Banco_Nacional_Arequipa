@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../services/api.dart';
+import '../services/operaciones.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../util/format.dart';
@@ -22,15 +23,6 @@ class _DestinoScreenState extends State<DestinoScreen> {
   final _cel = TextEditingController();
   String _error = '';
   bool _buscando = false;
-  List<Map<String, dynamic>> _recientes = [];
-
-  @override
-  void initState() {
-    super.initState();
-    context.read<AppState>().api.get('/recientes').then((r) {
-      if (mounted) setState(() => _recientes = List<Map<String, dynamic>>.from(r));
-    }).catchError((_) {});
-  }
 
   Future<void> _buscar() async {
     final cel = _cel.text.trim();
@@ -38,7 +30,7 @@ class _DestinoScreenState extends State<DestinoScreen> {
     if (!celularRe.hasMatch(cel)) return setState(() => _error = 'Ingresa un celular de 9 dígitos que empiece con 9');
     setState(() => _buscando = true);
     try {
-      final r = await context.read<AppState>().api.get('/clientes/buscar?celular=$cel');
+      final r = await buscarContacto(context.read<AppState>().api, cel);
       if (!mounted) return;
       Navigator.push(context, MaterialPageRoute(builder: (_) => MontoScreen(enviar: widget.enviar, celular: r['celular'], nombre: r['nombre'])));
     } on ApiException catch (e) {
@@ -76,33 +68,8 @@ class _DestinoScreenState extends State<DestinoScreen> {
             FilledButton(onPressed: _buscando ? null : _buscar, child: Text(_buscando ? 'Buscando…' : 'Continuar')),
           ]),
         ),
-        if (_recientes.isNotEmpty) ...[
-          const Seccion('Recientes', padding: EdgeInsets.fromLTRB(20, 6, 20, 8)),
-          SizedBox(
-            height: 90,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                for (final r in _recientes)
-                  GestureDetector(
-                    onTap: () {
-                      _cel.text = r['celular'];
-                      _buscar();
-                    },
-                    child: SizedBox(
-                      width: 76,
-                      child: Column(children: [
-                        Avatar(inicial(r['nombre']), size: 52, fondo: Colors.white),
-                        const SizedBox(height: 6),
-                        Text(r['nombre'], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-                      ]),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+        // Sin «Recientes»: la API no devuelve celulares de otros clientes (GET /api/recientes da []) y la
+        // app no guarda celulares en el teléfono.
       ]),
     );
   }

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../funciones.dart';
 import '../models.dart';
 import '../services/api.dart';
+import '../services/operaciones.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../util/format.dart';
@@ -203,17 +205,20 @@ class _InicioTab extends StatelessWidget {
                   accion(Icons.qr_code_scanner, 'Pagar QR', () => _push(context, const QrScreen())),
                   accion(Icons.qr_code_2, 'Mi QR', () => _push(context, const QrScreen(mio: true))),
                 ]),
-                const SizedBox(height: 10),
-                Row(children: [
-                  accion(Icons.local_offer_outlined, 'Promos', () => _push(context, const PromosScreen())),
-                  accion(Icons.flash_on_outlined, 'Ofertas', () => _push(context, const OfertasScreen())),
-                  accion(Icons.storefront_outlined, 'Tienda', () => _push(context, const TiendaScreen())),
-                  accion(Icons.receipt_outlined, 'Servicios', () => _push(context, const ServiciosScreen())),
-                ]),
+                // Promociones, ofertas, tienda y servicios no están en esta versión de la API (ver Funciones).
+                if (Funciones.promociones || Funciones.tienda || Funciones.servicios) ...[
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    if (Funciones.promociones) accion(Icons.local_offer_outlined, 'Promos', () => _push(context, const PromosScreen())),
+                    if (Funciones.promociones) accion(Icons.flash_on_outlined, 'Ofertas', () => _push(context, const OfertasScreen())),
+                    if (Funciones.tienda) accion(Icons.storefront_outlined, 'Tienda', () => _push(context, const TiendaScreen())),
+                    if (Funciones.servicios) accion(Icons.receipt_outlined, 'Servicios', () => _push(context, const ServiciosScreen())),
+                  ]),
+                ],
               ]),
             ),
           ),
-          if (st.promos.isNotEmpty) ...[
+          if (Funciones.promociones && st.promos.isNotEmpty) ...[
             Seccion('Promos para ti',
                 accion: 'Ver todas', onAccion: () => _push(context, const PromosScreen()), padding: const EdgeInsets.fromLTRB(20, 0, 20, 8)),
             SizedBox(
@@ -275,7 +280,8 @@ class _AvisosTab extends StatelessWidget {
   Future<void> _responder(BuildContext context, Solicitud s, String accion) async {
     final st = context.read<AppState>();
     try {
-      await st.api.post('/solicitudes/${s.id}/responder', {'accion': accion});
+      // Con Idempotency-Key, la misma si se reintenta (como aceptar).
+      await responderSolicitud(st, s.id, accion);
       if (context.mounted) toast(context, accion == 'rechazar' ? 'Solicitud rechazada' : 'Solicitud cancelada');
     } on ApiException catch (e) {
       if (context.mounted) toast(context, e.message);
@@ -292,7 +298,11 @@ class _AvisosTab extends StatelessWidget {
           para: s.nombre,
           monto: s.monto,
           boton: 'Pagar',
-          lineas: [('Para', s.nombre), ('Celular', s.celular), if ((s.concepto ?? '').isNotEmpty) ('Concepto', s.concepto!)],
+          lineas: [
+            ('Para', s.nombre),
+            if (s.celular.isNotEmpty) ('Celular', s.celular),
+            if ((s.concepto ?? '').isNotEmpty) ('Concepto', s.concepto!),
+          ],
           ejecutar: (api, uuid) async => Map<String, dynamic>.from(await api.post('/solicitudes/${s.id}/responder', {'accion': 'aceptar'}, uuid)),
         )),
       ),
@@ -395,9 +405,10 @@ class _PerfilTab extends StatelessWidget {
       appBar: AppBar(title: const Text('Perfil')),
       body: ListView(padding: const EdgeInsets.only(bottom: 30), children: [
         Lista(children: [
-          fila('Nombre', c.nombreCompleto),
-          fila(c.tipoDocumento, c.numeroDocumento),
-          fila('Celular', c.celular),
+          fila('Nombre', c.nombreCompleto.trim()),
+          // La API integrada no entrega el documento ni el celular: solo se muestran si llegan.
+          if (c.numeroDocumento.isNotEmpty) fila(c.tipoDocumento, c.numeroDocumento),
+          if (c.celular.isNotEmpty) fila('Celular', c.celular),
           if ((c.email ?? '').isNotEmpty) fila('Correo', c.email!),
           fila('Cuenta virtual', st.me!.cuenta.numeroCuentaVirtual),
           fila('Límite por operación', soles(st.me!.limite)),
@@ -413,13 +424,14 @@ class _PerfilTab extends StatelessWidget {
           ),
           ListTile(title: const Text('Servidor', style: TextStyle(fontWeight: FontWeight.w600)), subtitle: Text(st.servidor)),
         ]),
+        if (Funciones.ordenes)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            child: OutlinedButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PedidosScreen())), child: const Text('Mis pedidos')),
+          ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-          child: OutlinedButton(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PedidosScreen())), child: const Text('Mis pedidos')),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
           child: OutlinedButton(
             onPressed: () async {
               final ok = await showDialog<bool>(

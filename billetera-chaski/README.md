@@ -85,79 +85,80 @@ celular y un pago con QR contra el producto real.
 Fuera de compose: `cp .env.example .env`, completar `BUS_TOKEN` y `CHASKI_COREDB_SECRETO` (los
 del `.env` del producto), `npm install` y `npm start`.
 
-### 2. App (Android Studio)
+### 2. App (Flutter)
 
-1. Instala Flutter (https://docs.flutter.dev/get-started/install/windows) y en Android Studio el plugin **Flutter**.
-2. Abre la carpeta `app_movil` en Android Studio.
-3. `flutter pub get` (o el botón *Pub get*).
-4. Elige el emulador o tu celular y pulsa ▶ Run. Para el APK: `flutter build apk --release`.
+1. Instala Flutter (https://docs.flutter.dev/get-started/install) y, si usas Android Studio, su plugin **Flutter**.
+2. En `app_movil`: `flutter pub get`.
+3. Pruebas: `flutter analyze` y `flutter test` (la API va simulada; no hace falta el producto).
+4. Con el producto levantado (`./bna up`), elige el servidor al compilar con `--dart-define=SERVIDOR=...`
+   o cámbialo en la pantalla de ingreso (engranaje ⚙). La API de Chaski está en el puerto **8020**.
 
-En la pantalla de ingreso, el engranaje ⚙ permite cambiar el servidor:
-
-- Emulador de Android: `http://10.0.2.2:8020` con el producto levantado (`./bna up`).
-- Celular real por Wi-Fi: `http://IP-de-tu-PC:8020`. El producto publica el puerto solo en `127.0.0.1`: para un celular real hay que exponerlo (por ejemplo, un túnel) bajo tu responsabilidad.
-
-## La app móvil frente a la API integrada (estado al 2026-11-18)
-
-**La app Flutter de `app_movil/` no funciona todavía con esta API** (pendiente en el issue #116). La API (`backend/server.js`) sí: el
-flujo de extremo a extremo del producto entra, consulta, envía por celular, cobra con QR y responde
-solicitudes por ella. La app no se pudo compilar ni probar en la integración (no hay Flutter en el
-equipo que la hizo); lo que sigue sale de leer su código contra la API. Nada de esto está probado en un
-emulador.
-
-### Qué se rompe y dónde
-
-| Pantalla o pieza | Archivo | Qué pasa con la API nueva |
+| Dónde corre la app | Servidor | Build |
 |---|---|---|
-| Ingreso → inicio | `state/app_state.dart:138-150`, `models.dart:8, 46, 99, 104, 179, 196` | Cae justo después del login. `/api/me`, `/api/movimientos`, `/api/solicitudes` y `/api/notificaciones` devuelven ids de texto (`id_cliente` = código `CLI…`, `id_cuenta` = número de cuenta, UUID en movimientos, operaciones, solicitudes y avisos) y los modelos los declaran `int`: `TypeError` al leer `/api/me`. Además se guarda `setInt('id_cliente')`. |
-| Caché local | `services/cache_db.dart`, `models.dart:132` (`toRow(int idCliente)`) | Las tablas y `toRow` asumen ids enteros. |
-| Servidor por omisión | `state/app_state.dart:13`, `screens/login_screen.dart:72-74` | Apunta a `:3000`, que en el producto es el frontend web. La API de Chaski está en `8020`. |
-| Enviar por celular | `screens/enviar_screens.dart:41` | Llama `GET /clientes/buscar?celular=…`; la API solo tiene `POST /api/clientes/buscar` con `{"celular": …}` en el cuerpo (en la URL el celular quedaba en los registros del Bus) → 404 "Ruta no encontrada". El envío no puede empezar. |
-| Contactos recientes | `screens/enviar_screens.dart:30` | `/api/recientes` devuelve `[]`: COREDB ya no entrega celulares. `Solicitud.celular` llega vacío por lo mismo. |
-| Cobrar y pagar con QR | `models.dart:247, 372, 392-394`, `screens/qr_screens.dart:96, 151` | La trama es `CHASKI|<int>`, el escáner hace `int.parse` y el código manual `int.tryParse`; `id_qr` ahora es UUID: no se puede leer ni teclear un QR. |
-| Responder solicitudes | `screens/home_shell.dart:278, 296` | La ruta existe, pero `s.id` es `int` (ver la primera fila). Aceptar ya manda `Idempotency-Key`; rechazar (l. 278) no, y sin llave la API genera una nueva en cada intento. |
-| Registro | `state/app_state.dart:107` | `POST /api/registro` responde 403: la billetera se activa en una agencia (R-01). |
-| Promociones, ofertas, tienda, órdenes, cupones, recargas, servicios | `screens/tienda_screens.dart`, `screens/servicios_screen.dart`, `state/app_state.dart:142` | Promos y ofertas devuelven listas vacías; tienda, órdenes, cupones, recargas y servicios responden 501 "No disponible en esta versión". Las pantallas siguen visibles. |
-| Nombre y celular en el perfil | `models.dart:9-37` | `/api/me` trae el nombre corto (`apellidos` vacío) y no trae el celular. |
-| Celular real | `compose.yaml` (`127.0.0.1:${BNA_PUERTO_BILLETERA}`) | La API solo escucha en `127.0.0.1`: hoy solo llega el emulador de Android en la misma máquina (`http://10.0.2.2:8020`). Por el Bus exige `X-Bus-Token`, que una app no puede guardar en secreto. El Bus ya admite módulos públicos (`BUS_MODULOS_PUBLICOS=BILLETERA`, integrado en #115), pero en el producto la variable está vacía. |
+| Celular por USB | `http://localhost:8020`, con `adb reverse tcp:8020 tcp:8020` en la PC | release o debug |
+| Emulador de Android | `http://10.0.2.2:8020` (el valor por omisión) | debug |
+| Celular por Wi-Fi | `http://IP-del-servidor:8020` (hay que exponer el puerto, ver abajo) | debug |
+| Cualquier lugar | `https://…` (por ejemplo, un túnel) | release o debug |
 
-### Cómo adaptarla
+```bash
+cd app_movil
+flutter build apk --release --dart-define=SERVIDOR=http://localhost:8020 --target-platform android-arm64
+adb reverse tcp:8020 tcp:8020   # con el celular conectado por USB
+```
 
-1. `models.dart`: todos los ids (`idCliente`, `idCuenta`, `idMovimiento`, `idTransferencia`, `idPago`,
-   `Notificacion.id`, `Solicitud.id`, `idQr`, `idComercio`…) a `String`; `fromJson` sin conversiones a
-   número. `tramaQr(String idQr)`.
-2. `state/app_state.dart`: `servidorPorDefecto = 'http://10.0.2.2:8020'`; `setString('id_cliente', …)`;
-   no pedir `/api/promos` al iniciar. `login_screen.dart`: la pista con `:8020`.
-3. `services/cache_db.dart`: columnas de id como `TEXT` y una migración que borre la caché anterior.
-4. `screens/enviar_screens.dart`: `api.post('/clientes/buscar', {'celular': cel})`; ocultar "recientes"
-   mientras devuelva `[]`.
-5. `screens/qr_screens.dart`: leer `CHASKI|(<uuid>)` con una expresión regular de UUID y aceptar el
-   código manual como texto.
-6. `screens/home_shell.dart`: rechazar también con `Idempotency-Key` (la misma si se reintenta), como
-   ya hace aceptar.
-7. Esconder registro, tienda, órdenes, cupones, recargas, servicios y promociones (o mostrar "No
-   disponible en esta versión" sin llamar a la API).
-8. `test/logica_test.dart`: actualizar los casos con ids de texto; correr `flutter analyze` y
-   `flutter test`, y probar en el emulador contra `./bna up`: ingreso, saldo, envío por celular, QR,
-   solicitudes y avisos.
+**HTTP sin cifrar.** El build release solo permite HTTP sin cifrar hacia `localhost` y `127.0.0.1`
+(`android/app/src/main/res/xml/network_security_config.xml`): con `adb reverse` el celular llega a la API
+de la PC por su propio `localhost`, y cualquier otro servidor tiene que ir por HTTPS. El build debug
+(`src/debug/res/xml/network_security_config.xml`) lo permite a cualquier host, para el emulador y la red
+local. Antes la app lo permitía a todos en todos los builds (`usesCleartextTraffic="true"`), y un APK
+release mandaba el PIN y el token sin cifrar por la red.
 
-Fuera de esto, `LEEME_Chaski.txt`, los PDF de `docs/`, `iniciar_backend.bat` y
-`.github/workflows/ios.yml` describen el prototipo (PostgreSQL propio, puerto 3000) y el flujo de
-GitHub de esta subcarpeta no corre (GitHub solo lee `.github/` en la raíz del repositorio).
+## La app móvil frente a la API integrada
+
+La app de `app_movil/` está adaptada a esta API (PR #132 de Gabriel Tapia y la rama `fix/chaski-app-api-integrada`). Lo
+verificado: `flutter analyze` sin errores ni advertencias, `flutter test` en verde con la API simulada y
+el APK release compilado. La prueba en un celular contra `./bna up` se registra en el PR.
+
+### Qué se adaptó
+
+| Pieza | Qué hace ahora |
+|---|---|
+| Ids (`models.dart`) y caché local (`services/cache_db.dart`) | Ids de texto (código `CLI…`, número de cuenta, UUID); la caché pasa a la versión 2 y borra la anterior (#132). |
+| Servidor por omisión (`state/app_state.dart`) | `http://10.0.2.2:8020`; `--dart-define=SERVIDOR=...` lo cambia al compilar (#132). |
+| QR (`screens/qr_screens.dart`) | Trama `CHASKI|<uuid>` y código manual como texto (#132). |
+| Enviar y solicitar (`screens/enviar_screens.dart`, `services/operaciones.dart`) | `POST /api/clientes/buscar` con `{"celular": …}` en el cuerpo, nunca en la URL. Sin «Recientes»: la API no devuelve celulares de otros clientes y la app no los guarda. |
+| Idempotencia (`screens/operacion.dart`, `services/operaciones.dart`) | Cada operación de dinero (envío, pago con QR, pago de un cobro) tiene un uuid que se manda en `Idempotency-Key` y se repite en el reintento automático tras un corte de red y si el usuario vuelve a tocar el botón en la misma pantalla. Rechazar y cancelar un cobro también lo mandan, el mismo mientras no se sepa el resultado. |
+| Rechazos de la API | La app muestra el mensaje de la API (por ejemplo, «El límite por operación es S/ 500» para un QR de más de S/ 500). |
+| Fuera de esta versión (`funciones.dart`) | Registro, promociones, ofertas, cupones, tienda, órdenes, recargas y servicios no se muestran ni se llaman (tampoco `/api/promos` al iniciar). El ingreso explica que la billetera se activa en una agencia. Para reactivarlas, cambiar la constante en `funciones.dart`. |
+| Perfil | Muestra el nombre corto que da `/api/me`; el documento y el celular, que la API no entrega, no aparecen. |
+| Celular y PIN | La app no los escribe en registros ni los guarda: `shared_preferences` solo tiene servidor, token, código de cliente y preferencias; la caché SQLite no guarda el celular. |
+
+### Lo que sigue abierto
+
+- **Celular real por Wi-Fi.** La API solo escucha en `127.0.0.1` (`compose.yaml`) salvo que se use
+  `BNA_IP_RED`. Por el Bus exige `X-Bus-Token`, que una app no puede guardar en secreto (`BUS_MODULOS_PUBLICOS`
+  está vacío en el producto).
+- **Registro por la app con OTP (RF-BD-005)** y las funciones de «Fuera de esta versión»: decisión del equipo.
+- `LEEME_Chaski.txt`, los PDF de `docs/`, `iniciar_backend.bat` y `.github/workflows/ios.yml` describen el
+  prototipo (PostgreSQL propio, puerto 3000), y el flujo de GitHub de esta subcarpeta no corre (GitHub solo
+  lee `.github/` en la raíz del repositorio).
 
 ## Compartir la app con compañeros
 
 **El producto tiene que estar levantado y accesible** (`./bna up`): la app no funciona sola, necesita la API de Chaski y COREDB.
-- Misma red Wi-Fi: con el producto levantado (`./bna up`), expón el puerto 8020 y permítelo en el Firewall.
-  Un APK del prototipo original (ids numéricos, puerto 3000) no sirve con esta API hasta adaptar la app.
-- Desde cualquier lugar: `npx cloudflared tunnel --url http://localhost:8020` y que cada uno ponga en ⚙ la URL `https://….trycloudflare.com`.
+- Por USB: APK release con `SERVIDOR=http://localhost:8020` y `adb reverse tcp:8020 tcp:8020` (ver «2. App»).
+- Misma red Wi-Fi: con el producto levantado con `BNA_IP_RED` (por ejemplo `0.0.0.0`) para publicar el puerto
+  8020 en la red, permitido en el Firewall, y un APK **debug** (el release no permite HTTP sin cifrar a otra IP).
+  Un APK del prototipo original (ids numéricos, puerto 3000) no sirve con esta API.
+- Desde cualquier lugar: `npx cloudflared tunnel --url http://localhost:8020` y que cada uno ponga en ⚙ la URL `https://….trycloudflare.com` (sirve con el APK release).
 
 **Android** — el APK no está en el repositorio (`entregables/` solo tiene su README: los instaladores van a GitHub → Releases). Genéralo y envíalo (WhatsApp, Drive…). Al abrirlo, Android pide permitir
 "instalar apps de origen desconocido". Para generarlo:
 
 ```bash
 cd app_movil
-flutter build apk --release --dart-define=SERVIDOR=http://TU-IP:8020
+flutter build apk --release --dart-define=SERVIDOR=https://TU-TUNEL   # o http://localhost:8020 con adb reverse
+flutter build apk --debug --dart-define=SERVIDOR=http://TU-IP:8020    # red local
 ```
 
 **iPhone** — Apple no permite instalar un archivo como un APK, y en Windows no se compila iOS. Opciones:
@@ -172,8 +173,9 @@ flutter build apk --release --dart-define=SERVIDOR=http://TU-IP:8020
 - Integración (PR que cierra #94): `npm test` 16/16 contra un COREDB falso; COREDB contra MySQL
   real (acceso, envíos, QR, solicitudes, concurrencia con la misma llave y con llaves distintas);
   `./bna test` y el flujo de extremo a extremo con dos clientes de CAPTACION.
-- **La app móvil no se adaptó ni se compiló en la integración** (no había Flutter en el equipo): ver
-  "La app móvil frente a la API integrada".
+- App adaptada a la API integrada (#132 y la rama `fix/chaski-app-api-integrada`), con Flutter 3.50.1: `flutter analyze` sin
+  errores ni advertencias, `flutter test` 17/17 con la API simulada y
+  `flutter build apk --release --target-platform android-arm64`. La prueba en el celular se registra en el PR.
 - Prototipo original (PostgreSQL propio): `npm test` 12/12, `flutter analyze`, `flutter test` 6/6
   y `flutter build apk --debug` (Flutter 3.47.7).
 
