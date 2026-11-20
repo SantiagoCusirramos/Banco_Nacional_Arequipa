@@ -2,6 +2,8 @@
 # extremo. En un PR corre solo si cambia algo de lo que depende el despliegue o el
 # flujo (k8s-smoke ejecuta scripts/flujo_e2e.py; k8s-up genera .env con
 # scripts/generar_env.sh desde .env.example); en cada push a main, siempre.
+# El segundo trabajo prueba en kind el overlay del clúster de Infraestructura
+# (k8s/overlays/infraestructura, claves sin Secrets) con scripts/flujo_demo.py.
 name: Kubernetes
 
 on:
@@ -17,6 +19,10 @@ on:
       - scripts/k8s.sh
       - scripts/flujo_e2e.py
       - scripts/generar_env.sh
+      - scripts/k8s-infra.sh
+      - scripts/overlay_infraestructura.py
+      - scripts/prueba_k8s_infra_kind.sh
+      - scripts/flujo_demo.py
       - .env.example
       - .github/workflows/k8s.yml
   push:
@@ -76,5 +82,68 @@ jobs:
         run: |
           if docker network inspect kind >/dev/null 2>&1; then
             echo "::error::./bna k8s-down dejó la red de Docker kind."
+            exit 1
+          fi
+
+  infraestructura:
+    name: Overlay de Infraestructura en kind
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # Las versiones del clúster de Infraestructura (k3s 1.34). kind v0.30.0 crea Kubernetes 1.34.
+      KUBECTL_VERSION: v1.34.13
+      KUBECTL_SHA256: b4bb494e9466a7a94bb851414548bc0d3e2f8da90757e6eccc3371e648648591
+      KIND_VERSION: v0.30.0
+      KIND_SHA256: 517ab7fc89ddeed5fa65abf71530d90648d9638ef0c4cde22c2c11f8097b8889
+      KUBECONFORM_VERSION: v0.7.0
+      KUBECONFORM_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: kubectl, kind y kubeconform (con suma de verificación)
+        run: |
+          bin="$RUNNER_TEMP/bin"
+          mkdir -p "$bin"
+          curl -fsSL -o "$bin/kubectl" "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+          curl -fsSL -o "$bin/kind" "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64"
+          curl -fsSL -o "$RUNNER_TEMP/kubeconform.tar.gz" \
+            "https://github.com/yannh/kubeconform/releases/download/$KUBECONFORM_VERSION/kubeconform-linux-amd64.tar.gz"
+          printf '%s  %s\n' "$KUBECTL_SHA256" "$bin/kubectl" "$KIND_SHA256" "$bin/kind" \
+            "$KUBECONFORM_SHA256" "$RUNNER_TEMP/kubeconform.tar.gz" | sha256sum -c
+          tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" -C "$bin" kubeconform
+          chmod +x "$bin/kubectl" "$bin/kind"
+          echo "$bin" >> "$GITHUB_PATH"
+          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -q python3-yaml
+
+      - name: Manifiestos sin Secrets, al día con k8s/base y válidos para Kubernetes 1.34
+        run: |
+          python3 scripts/overlay_infraestructura.py comprobar
+          kubectl kustomize k8s/overlays/infraestructura > "$RUNNER_TEMP/overlay.yaml"
+          BNA_NAMESPACE=1234567890 scripts/k8s-infra.sh manifiestos > "$RUNNER_TEMP/aplicar.yaml"
+          python3 scripts/overlay_infraestructura.py revisar "$RUNNER_TEMP/aplicar.yaml"
+          if grep -nE '^kind:[[:space:]]*Secret' "$RUNNER_TEMP/overlay.yaml" "$RUNNER_TEMP/aplicar.yaml"; then
+            echo "::error::El overlay de Infraestructura genera un Secret."
+            exit 1
+          fi
+          kubeconform -strict -summary -kubernetes-version 1.34.0 "$RUNNER_TEMP/overlay.yaml" "$RUNNER_TEMP/aplicar.yaml"
+
+      # El mismo motivo que en el trabajo de arriba.
+      - name: Quitar del runner el perfil de AppArmor de mysqld
+        run: |
+          if [ -e /etc/apparmor.d/usr.sbin.mysqld ]; then
+            sudo ln -sf /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          fi
+
+      - name: Desplegar el overlay en kind, comprobar las claves, cargar los datos y correr el flujo
+        run: scripts/prueba_k8s_infra_kind.sh
+
+      - name: No queda la red de Docker de kind
+        if: always()
+        run: |
+          if docker network inspect kind >/dev/null 2>&1; then
+            echo "::error::scripts/prueba_k8s_infra_kind.sh dejó la red de Docker kind."
             exit 1
           fi

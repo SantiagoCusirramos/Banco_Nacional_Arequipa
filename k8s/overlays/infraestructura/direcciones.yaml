@@ -1,0 +1,110 @@
+# Con el prefijo bna-, cada Service se llama bna-<servicio>: las direcciones internas de
+# k8s/base cambian igual. `python3 scripts/overlay_infraestructura.py revisar` falla si queda
+# alguna sin prefijo.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bna-configuracion
+data:
+  CORE_DB_HOST: bna-db
+  CORE_BASE_URL: http://bna-bus:8018/bus/coredb
+  COREDB_URL: http://bna-bus:8018/bus/coredb
+  CUENTAS_GATEWAY_URL: http://bna-bus:8018/bus/cuentas/api/v1/cuentas
+  TARJETAS_GATEWAY_URL: http://bna-bus:8018/bus/tarjetas/api/v1/tarjetas
+  SOL_GATEWAY_URL: http://bna-bus:8018/bus/sol/sol
+  EVALUACION_GATEWAY_URL: http://bna-bus:8018/bus/evaluacion/eva/v1
+  DESEMBOLSO_GATEWAY_URL: http://bna-bus:8018/bus/desembolso/api/v1
+  CAPTACION_GATEWAY_URL: http://bna-bus:8018/bus/captacion/api/v1/captacion
+  COBRANZA_GATEWAY_URL: http://bna-bus:8018/bus/cobranza
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bna-bus
+data:
+  BUS_URL_COREDB: http://bna-coredb:8012
+  BUS_URL_CUENTAS: http://bna-cuentas:8001
+  BUS_URL_TARJETAS: http://bna-tarjetas:8002
+  BUS_URL_CAPTACION: http://bna-captacion:8017
+  BUS_URL_SOL: http://bna-sol:8011
+  BUS_URL_EVALUACION: http://bna-evaluacion:8015
+  BUS_URL_DESEMBOLSO: http://bna-desembolso:8016
+  BUS_URL_COBRANZA: http://bna-cobranza:8014
+  BUS_URL_SEGURIDAD: http://bna-seguridad:8013
+  BUS_URL_ATM: http://bna-atm:8019
+  BUS_URL_BILLETERA: http://bna-billetera:3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atm
+spec:
+  template:
+    spec:
+      containers:
+        - name: atm
+          env:
+            - { name: BUS_BASE_URL, value: "http://bna-bus:8018" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billetera
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: esperar-coredb
+          env:
+            - { name: COREDB_URL, value: "http://bna-bus:8018/bus/coredb" }
+      containers:
+        - name: billetera
+          env:
+            - { name: COREDB_URL, value: "http://bna-bus:8018/bus/coredb" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evaluacion
+spec:
+  template:
+    spec:
+      containers:
+        - name: evaluacion
+          env:
+            - { name: EVALUACION_SOL_URL, value: "http://bna-bus:8018/bus/sol" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sol
+spec:
+  template:
+    spec:
+      containers:
+        - name: sol
+          env:
+            - { name: SOL_BUS_URL, value: "http://bna-bus:8018/bus" }
+---
+# La misma espera de k8s/base/coredb.yaml, hacia bna-db.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredb
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: esperar-db
+          command:
+            - python
+            - -c
+            - |
+              import socket, sys, time
+              for _ in range(150):
+                  try:
+                      socket.create_connection(("bna-db", 3306), 2).close()
+                      sys.exit(0)
+                  except OSError:
+                      time.sleep(2)
+              sys.exit("La base integrada no respondió a tiempo.")

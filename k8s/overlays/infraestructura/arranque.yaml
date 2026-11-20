@@ -1,0 +1,119 @@
+# Claves sin objetos Secret (ver Documents/despliegue-infraestructura.md).
+#
+# - PVC bna-secretos: guarda el .env del clúster (un archivo 0600 del usuario 10001).
+# - Job bna-arranque: crea ese .env con scripts/generar_env.sh si no existe. Si ya existe,
+#   solo agrega las claves nuevas de .env.example; nunca cambia un valor.
+#   scripts/generar_env.sh y .env.example le llegan en el ConfigMap bna-generar-env, que crea
+#   scripts/k8s-infra.sh al aplicar (kustomize no lee archivos fuera de esta carpeta).
+# - ConfigMap bna-scripts-secretos: el script del Job y el del contenedor de inicio
+#   `secretos` de cada Deployment (secretos.yaml), que copia a un emptyDir en memoria solo
+#   las claves de su pod. Ningún valor pasa por un ConfigMap, un manifiesto o Git.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: secretos
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Mi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bna-scripts-secretos
+data:
+  arranque.sh: |
+    # Job bna-arranque. No imprime ningún valor.
+    set -euo pipefail
+    destino=/bna-secretos/env
+    cp /entrada/env.example /trabajo/.env.example
+    if [ -f "$destino" ]; then
+      cp "$destino" /trabajo/.env
+    fi
+    bash /entrada/generar_env.sh /trabajo
+    if [ -f "$destino" ] && [ "$(sha256sum < /trabajo/.env)" = "$(sha256sum < "$destino")" ]; then
+      echo "bna-secretos: el .env ya existe y tiene todas las claves; no cambia."
+      exit 0
+    fi
+    umask 077
+    cp /trabajo/.env "$destino.nuevo"
+    chmod 600 "$destino.nuevo"
+    mv -f "$destino.nuevo" "$destino"
+    echo "bna-secretos: .env escrito, $(grep -c '=' "$destino") claves (los valores no se muestran)."
+  copiar.sh: |
+    # Contenedor de inicio `secretos`: copia del .env del PVC a /secretos solo las claves de
+    # este pod. BNA_CLAVES tiene una línea por clave: archivo, variable y clave del .env.
+    # Cada archivo queda 0440 (el usuario del pod lo lee por su grupo, fsGroup). No imprime
+    # ningún valor.
+    set -eu
+    origen=/bna-secretos/env
+    espera=${BNA_ESPERA_SECRETOS:-300}
+    inicio=$(date +%s)
+    until [ -s "$origen" ]; do
+      if [ $(( $(date +%s) - inicio )) -ge "$espera" ]; then
+        echo "No apareció el .env en el PVC bna-secretos en $espera s: revise el Job bna-arranque." >&2
+        exit 1
+      fi
+      sleep 2
+    done
+    rm -f /secretos/*.nuevo
+    printf '%s\n' "$BNA_CLAVES" | while read -r archivo variable clave; do
+      [ -n "$archivo" ] || continue
+      linea=$(grep "^$clave=" "$origen" | tail -n 1)
+      if [ -z "$linea" ]; then
+        echo "Falta $clave en el .env del PVC bna-secretos: vuelva a correr el Job bna-arranque." >&2
+        exit 1
+      fi
+      valor=${linea#*=}
+      case "$valor" in *"'"*) valor=$(printf '%s' "$valor" | sed "s/'/'\\\\''/g") ;; esac
+      printf "%s='%s'\n" "$variable" "$valor" >> "/secretos/$archivo.nuevo"
+    done
+    for nuevo in /secretos/*.nuevo; do
+      chmod 0440 "$nuevo"
+      mv -f "$nuevo" "${nuevo%.nuevo}"
+    done
+    echo "Claves copiadas a /secretos: $(ls /secretos | tr '\n' ' ')"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: arranque
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: arranque }
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: generar-env
+          image: bna/backend:local
+          command: [bash, /scripts/arranque.sh]
+          volumeMounts:
+            - { name: bna-secretos, mountPath: /bna-secretos }
+            - { name: entrada, mountPath: /entrada, readOnly: true }
+            - { name: scripts-secretos, mountPath: /scripts, readOnly: true }
+            - { name: trabajo, mountPath: /trabajo }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: bna-secretos
+          persistentVolumeClaim: { claimName: secretos }
+        - name: entrada
+          configMap: { name: bna-generar-env }
+        - name: scripts-secretos
+          configMap: { name: bna-scripts-secretos }
+        - name: trabajo
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }

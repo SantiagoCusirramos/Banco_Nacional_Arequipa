@@ -190,7 +190,7 @@ Si el producto no estaba levantado, `./bna test` elimina al terminar los contene
 
 El flujo corre en el contenedor del Bus y solo conoce la dirección del Bus y la del frontend. Cada ejecución crea clientes, cuentas, tarjetas y un crédito nuevos.
 
-La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue o del flujo de extremo a extremo (`scripts/flujo_e2e.py`). Un tercero (`aviso-push-directo.yml`) abre un issue para el autor de cada commit que llega a `main` sin un PR fusionado.
+La CI (`.github/workflows/ci.yml`) ejecuta `./bna test` en cada PR y en cada push a `main`. Un segundo flujo (`k8s.yml`) despliega el producto en un clúster de kind cuando cambia algo del despliegue o del flujo de extremo a extremo (`scripts/flujo_e2e.py`), y en otro clúster de kind el overlay de Infraestructura, con el flujo de demostración (`scripts/prueba_k8s_infra_kind.sh`). Un tercero (`aviso-push-directo.yml`) abre un issue para el autor de cada commit que llega a `main` sin un PR fusionado.
 
 ## Kubernetes
 
@@ -202,7 +202,7 @@ Con Docker, `kind` y `kubectl` instalados:
 ./bna k8s-down     # elimina el clúster
 ```
 
-Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000). COBRANZA, ATM y BILLETERA no se publican fuera del clúster: se llega a ellos por el Bus (http://127.0.0.1:18018) y, a COBRANZA, también por la pantalla `/pagar-cuota` del frontend. Los manifiestos, las claves y los problemas conocidos están en [`k8s/README.md`](k8s/README.md).
+Usa puertos distintos de los de `./bna up` (frontend en http://localhost:13000). COBRANZA, ATM y BILLETERA no se publican fuera del clúster: se llega a ellos por el Bus (http://127.0.0.1:18018) y, a COBRANZA, también por la pantalla `/pagar-cuota` del frontend. Los manifiestos, las claves y los problemas conocidos están en [`k8s/README.md`](k8s/README.md). El despliegue en el clúster de Infraestructura (k3s, sin objetos Secret, `scripts/k8s-infra.sh`) está en [`Documents/despliegue-infraestructura.md`](Documents/despliegue-infraestructura.md).
 
 ## Si algo falla
 

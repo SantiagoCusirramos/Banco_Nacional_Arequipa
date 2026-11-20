@@ -1,0 +1,13 @@
+# Prefijo bna- en los objetos que crea el overlay, para convivir con lo que ya hay en el
+# namespace. Los ConfigMap de k8s/base ya se llaman bna-*: no se tocan.
+apiVersion: builtin
+kind: PrefixSuffixTransformer
+metadata:
+  name: prefijo
+prefix: bna-
+fieldSpecs:
+  - { kind: Deployment, path: metadata/name }
+  - { kind: Service, path: metadata/name }
+  - { kind: PersistentVolumeClaim, path: metadata/name }
+  - { kind: Job, path: metadata/name }
+  - { kind: Ingress, path: metadata/name }

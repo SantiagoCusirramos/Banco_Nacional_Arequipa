@@ -6,6 +6,7 @@ Manifiestos del producto integrado, con [kustomize](https://kustomize.io/).
 |---|---|
 | `base/` | Namespace `bna`, y por cada servicio su Deployment y su Service: `db`, `coredb`, `cuentas`, `tarjetas`, `sol`, `evaluacion`, `desembolso`, `cobranza`, `captacion`, `seguridad`, `atm`, `billetera`, `bus` (Bus de Servicios) y `frontend`. Dos ConfigMap: `bna-configuracion` (las direcciones que usan los módulos, todas hacia el Bus) y `bna-bus` (las direcciones directas de los módulos, que solo lee el Bus) |
 | `overlays/local/` | Ajustes para un clúster local de [kind](https://kind.sigs.k8s.io/): las imágenes cargadas en el clúster y, como NodePort, el frontend, el Bus, COREDB, CUENTAS, TARJETAS, SOL, Evaluación, Desembolso, CAPTACION y Seguridad. Las bases, COBRANZA, ATM y BILLETERA quedan solo dentro del clúster |
+| `overlays/infraestructura/` | El clúster de Infraestructura (k3s): imágenes de ghcr.io, prefijo `bna-`, Ingress de Traefik y las claves sin objetos Secret (un PVC con el `.env` y un contenedor de inicio por pod). Guía: [`Documents/despliegue-infraestructura.md`](../Documents/despliegue-infraestructura.md) |
 | `kind-config.yaml` | El clúster local, que publica esos NodePort en `127.0.0.1` |
 
 ## Desplegar en un clúster local
@@ -70,7 +71,11 @@ La CI hace lo mismo antes de desplegar. Con Docker Compose (`./bna up`) no ocurr
 
 ## Otro clúster
 
-Para un clúster que no sea kind hace falta un overlay propio sobre `base/` con tres cosas: de dónde descarga las imágenes (un registro al que el clúster llegue), cómo se publican los servicios (por ejemplo un Ingress) y el namespace. El Secret se crea igual, desde un `.env` que no se versiona:
+El clúster de Infraestructura tiene su overlay, `overlays/infraestructura/`, y su script, `scripts/k8s-infra.sh` (publicar las imágenes, aplicar, cargar los datos de referencia, correr el flujo de demostración y borrar). Allí la cuenta no puede crear Secrets: el `.env` vive en un PVC y cada pod copia a memoria solo sus claves. Todo está en [`Documents/despliegue-infraestructura.md`](../Documents/despliegue-infraestructura.md).
+
+`overlays/infraestructura/secretos.yaml` se genera desde `base/` con `scripts/overlay_infraestructura.py`. Si cambia una clave (un `secretKeyRef`) en `base/`, hay que regenerarlo (`python3 scripts/overlay_infraestructura.py generar`); `./bna test` y la CI fallan mientras no esté al día. Una dirección interna nueva en `base/` también necesita su versión con prefijo en `overlays/infraestructura/direcciones.yaml`: `overlay_infraestructura.py revisar` lo detecta.
+
+Para otro clúster donde sí se puedan crear Secrets basta un overlay sobre `base/` con de dónde descarga las imágenes, cómo se publican los servicios y el namespace, y el Secret creado desde un `.env` que no se versiona:
 
 ```bash
 kubectl -n <namespace> create secret generic bna-secretos --from-env-file=.env
