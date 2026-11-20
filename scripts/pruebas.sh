@@ -27,6 +27,13 @@ correr() {
 
 en_backend() { docker run --rm bna/backend:local $PYTEST "$@"; }
 
+# Git Bash (Windows) convierte en rutas de Windows los argumentos que empiezan con /,
+# también las rutas de dentro del contenedor (/repo, /aviso). Para los montajes se
+# desactiva esa conversión y la carpeta del host se pasa ya en forma de Windows.
+RAIZ_HOST="$RAIZ"
+case "$(uname -s)" in MINGW*|MSYS*) RAIZ_HOST="$(cd "$RAIZ" && pwd -W)" ;; esac
+docker_montado() { MSYS_NO_PATHCONV=1 docker "$@"; }
+
 # compose.yaml exige las variables de .env incluso para construir.
 scripts/generar_env.sh "$RAIZ" || exit 1
 
@@ -64,10 +71,10 @@ correr "Bus de Servicios" en_backend BUS_SERVICIOS/tests
 # Fase 2: ningún módulo tiene configurada la dirección directa de COREDB (compose, k8s,
 # .env.example, valores por omisión); solo el Bus, COREDB y su arranque.
 correr "Bus de Servicios, rutas a COREDB" \
-  docker run --rm -v "$RAIZ:/repo:ro" -e REPO=/repo bna/backend:local $PYTEST /repo/scripts/test_comprobar_rutas_coredb.py
+  docker_montado run --rm -v "$RAIZ_HOST:/repo:ro" -e REPO=/repo bna/backend:local $PYTEST /repo/scripts/test_comprobar_rutas_coredb.py
 # k8s/overlays/infraestructura: claves sin Secrets, generado al día con k8s/base.
 correr "Overlay de Infraestructura" \
-  docker run --rm -v "$RAIZ:/repo:ro" -e REPO=/repo bna/backend:local $PYTEST /repo/scripts/test_overlay_infraestructura.py
+  docker_montado run --rm -v "$RAIZ_HOST:/repo:ro" -e REPO=/repo bna/backend:local $PYTEST /repo/scripts/test_overlay_infraestructura.py
 correr "SOL" docker run --rm bna/sol:local $PYTEST SOL/tests
 correr "EVALUACION contra COREDB y MySQL" \
   env EVALUACION_IMAGEN_PRUEBAS=bna/backend:local EVALUACION_IMAGEN_COREDB=bna/coredb:local \
@@ -98,7 +105,7 @@ correr "COREDB contra MySQL" \
   env COREDB_IMAGEN_PRUEBAS=bna/coredb:local backend/COREDB/scripts/pruebas_integracion.sh
 correr "Base integrada, despliegue" database/pruebas/mysql/prueba_despliegue.sh
 correr "Aviso de push directo" \
-  docker run --rm -v "$RAIZ/.github/scripts:/aviso:ro" bna/backend:local $PYTEST /aviso
+  docker_montado run --rm -v "$RAIZ_HOST/.github/scripts:/aviso:ro" bna/backend:local $PYTEST /aviso
 correr "Frontend, imagen de pruebas" \
   docker build -q --target pruebas -f docker/frontend/Dockerfile -t bna/frontend-pruebas:local frontend
 correr "Frontend, lint" docker run --rm bna/frontend-pruebas:local npm run lint

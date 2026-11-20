@@ -11,7 +11,7 @@ const Home = () => <BancaPersonal usuario={USUARIO} onSalir={alSalir} />;
 
 const nav = () => screen.getByRole("navigation", { name: "Navegación principal" });
 const irA = (nombre: RegExp) => userEvent.click(within(nav()).getByRole("button", { name: nombre }));
-const PANTALLAS = ["/cuenta", "/tarjetas", "/evaluacion", "/desembolso", "/captacion", "/solicitud-credito",
+const PANTALLAS = ["/cuenta", "/tarjetas", "/evaluacion", "/desembolso", "/captacion", "/billetera", "/solicitud-credito",
   "/pagar-cuota", "/homebanking/index.html"];
 
 describe("Portada (K-6)", () => {
@@ -20,7 +20,7 @@ describe("Portada (K-6)", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("¡Hola, María López!");
   });
 
-  it("CP-02 Enlaza las siete pantallas reales y el Home Banking, en el menú y en el resumen", () => {
+  it("CP-02 Enlaza las ocho pantallas reales y el Home Banking, en el menú y en el resumen", () => {
     const { container } = render(<Home />);
     const enMenu = within(nav()).getAllByRole("link").map((a) => a.getAttribute("href"));
     expect([...enMenu].sort()).toEqual([...PANTALLAS].sort());

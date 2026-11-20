@@ -9,8 +9,9 @@ import '../services/cache_db.dart';
 import '../util/format.dart';
 
 /// Servidor por defecto: el emulador de Android ve la PC en 10.0.2.2.
-/// Se puede cambiar al compilar: --dart-define=SERVIDOR=http://localhost:3000 (celular por USB con `adb reverse`).
-const servidorPorDefecto = String.fromEnvironment('SERVIDOR', defaultValue: 'http://10.0.2.2:3000');
+/// La API de Chaski se publica en el puerto 8020 (BNA_PUERTO_BILLETERA). Para un celular real se compila con
+/// --dart-define=SERVIDOR=http://IP-del-servidor:8020; también se cambia desde la pantalla de ingreso.
+const servidorPorDefecto = String.fromEnvironment('SERVIDOR', defaultValue: 'http://10.0.2.2:8020');
 
 class LineaCarrito {
   Producto p;
@@ -119,7 +120,8 @@ class AppState extends ChangeNotifier {
     carrito.clear();
     offline = false;
     await _prefs.remove('token');
-    await _prefs.remove('id_cliente');
+    await _prefs.remove('id_cliente'); // clave de la versión con ids numéricos
+    await _prefs.remove('cliente');
     await cache.limpiar().catchError((_) {});
     notifyListeners();
   }
@@ -147,7 +149,7 @@ class AppState extends ChangeNotifier {
       notifs = (r[3] as List).map((e) => Notificacion.fromJson(e)).toList();
       promos = (r[4] as List).map((e) => Promo.fromJson(e)).toList();
       offline = false;
-      await _prefs.setInt('id_cliente', me!.cliente.idCliente);
+      await _prefs.setString('cliente', me!.cliente.idCliente);
       cache.guardar(me!, movs).catchError((_) {});
     } on ApiException catch (e) {
       if (e.red) {
@@ -165,7 +167,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _cargarCache() async {
-    final id = _prefs.getInt('id_cliente');
+    final id = _prefs.getString('cliente');
     if (id == null) return;
     final c = await cache.leer(id).catchError((_) => null);
     if (c == null) return;

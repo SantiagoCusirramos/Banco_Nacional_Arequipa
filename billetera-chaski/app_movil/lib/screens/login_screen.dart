@@ -69,9 +69,9 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (ctx, setD) => AlertDialog(
             title: const Text('Servidor de Chaski'),
             content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Emulador: http://10.0.2.2:3000\nCelular real: http://IP-de-tu-PC:3000', style: TextStyle(color: C.muted, fontSize: 13)),
+              const Text('Emulador: http://10.0.2.2:8020\nCelular real: http://IP-del-servidor:8020', style: TextStyle(color: C.muted, fontSize: 13)),
               const SizedBox(height: 12),
-              TextField(controller: ctrl, keyboardType: TextInputType.url, decoration: const InputDecoration(hintText: 'http://10.0.2.2:3000')),
+              TextField(controller: ctrl, keyboardType: TextInputType.url, decoration: const InputDecoration(hintText: 'http://IP-del-servidor:8020')),
               const SizedBox(height: 8),
               Text(estado, style: TextStyle(color: estado.startsWith('✓') ? C.ok : C.danger, fontWeight: FontWeight.w600)),
             ]),
@@ -195,7 +195,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? 'Crear mi cuenta'
                                 : 'Ingresar')),
                     const SizedBox(height: 10),
-                    Text(_registro ? 'Recibirás S/ 100 de saldo de prueba.' : 'Demo: 900000001 · PIN 123456',
+                    // El banco afilia al cliente (pantalla Billetera Chaski del frontend): no hay usuario de demostración fijo.
+                    Text(_registro ? 'La billetera se activa en una agencia del BNA con tu DNI.' : 'Usa el celular que registraste en el banco y tu PIN de Chaski.',
                         style: const TextStyle(fontSize: 13, color: C.muted)),
                   ],
                 ),

@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'util/format.dart';
 
 class Cliente {
-  final int idCliente;
+  final String idCliente; // código del cliente en el CORE (CLI000000016)
   final String tipoDocumento, numeroDocumento, nombres, apellidos, celular;
   final String? email;
 
@@ -19,7 +19,7 @@ class Cliente {
       this.email});
 
   factory Cliente.fromJson(Map<String, dynamic> j) => Cliente(
-        idCliente: j['id_cliente'],
+        idCliente: '${j['id_cliente'] ?? ''}',
         tipoDocumento: j['tipo_documento'] ?? 'DNI',
         numeroDocumento: j['numero_documento'] ?? '',
         nombres: j['nombres'] ?? '',
@@ -43,14 +43,14 @@ class Cliente {
 }
 
 class Cuenta {
-  final int idCuenta;
+  final String idCuenta; // número de cuenta en el CORE (CTA-…)
   final String numeroCuentaVirtual, moneda;
   final double saldoActual;
 
   Cuenta({required this.idCuenta, required this.numeroCuentaVirtual, required this.saldoActual, required this.moneda});
 
   factory Cuenta.fromJson(Map<String, dynamic> j) => Cuenta(
-      idCuenta: j['id_cuenta'] ?? 0, numeroCuentaVirtual: j['numero_cuenta_virtual'] ?? '', saldoActual: toD(j['saldo_actual']), moneda: j['moneda'] ?? 'PEN');
+      idCuenta: '${j['id_cuenta'] ?? ''}', numeroCuentaVirtual: j['numero_cuenta_virtual'] ?? '', saldoActual: toD(j['saldo_actual']), moneda: j['moneda'] ?? 'PEN');
 
   Map<String, dynamic> toJson() => {'id_cuenta': idCuenta, 'numero_cuenta_virtual': numeroCuentaVirtual, 'saldo_actual': saldoActual, 'moneda': moneda};
 }
@@ -95,19 +95,22 @@ class Me {
   double get maxDebito => math.min(cuenta.saldoActual, math.min(limite, disponibleHoy));
 }
 
+/// Un movimiento de la cuenta como lo da la API sobre COREDB: `id_movimiento` es el UUID de la
+/// transacción, `monto` viene con signo (negativo si es un débito) y no trae saldo resultante.
 class Movimiento {
-  final int idMovimiento;
+  final String idMovimiento;
   final String tipoMovimiento;
-  final double monto, saldoResultante;
+  final double monto;
+  final double? saldoResultante;
   final DateTime fechaHora;
   final String descripcion;
-  final int? idTransferencia, idPago, idOrden, idPagoServicio;
+  final String? idTransferencia, idPago, idOrden, idPagoServicio;
 
   Movimiento(
       {required this.idMovimiento,
       required this.tipoMovimiento,
       required this.monto,
-      required this.saldoResultante,
+      this.saldoResultante,
       required this.fechaHora,
       required this.descripcion,
       this.idTransferencia,
@@ -116,20 +119,20 @@ class Movimiento {
       this.idPagoServicio});
 
   factory Movimiento.fromJson(Map<String, dynamic> j) => Movimiento(
-        idMovimiento: j['id_movimiento'],
-        tipoMovimiento: j['tipo_movimiento'],
+        idMovimiento: '${j['id_movimiento']}',
+        tipoMovimiento: '${j['tipo_movimiento'] ?? ''}'.toLowerCase(),
         monto: toD(j['monto']),
-        saldoResultante: toD(j['saldo_resultante']),
+        saldoResultante: j['saldo_resultante'] == null ? null : toD(j['saldo_resultante']),
         fechaHora: parseFecha(j['fecha_hora']),
         descripcion: j['descripcion'] ?? '',
-        idTransferencia: j['id_transferencia'],
-        idPago: j['id_pago'],
-        idOrden: j['id_orden'],
-        idPagoServicio: j['id_pago_servicio'],
+        idTransferencia: j['id_transferencia']?.toString(),
+        idPago: j['id_pago']?.toString(),
+        idOrden: j['id_orden']?.toString(),
+        idPagoServicio: j['id_pago_servicio']?.toString(),
       );
 
   /// Fila para la caché local SQLite (columnas REAL ↔ double).
-  Map<String, Object?> toRow(int idCliente) => {
+  Map<String, Object?> toRow(String idCliente) => {
         'id_movimiento': idMovimiento,
         'id_cliente': idCliente,
         'tipo_movimiento': tipoMovimiento,
@@ -140,15 +143,15 @@ class Movimiento {
       };
 
   factory Movimiento.fromRow(Map<String, Object?> r) => Movimiento(
-        idMovimiento: r['id_movimiento'] as int,
+        idMovimiento: '${r['id_movimiento']}',
         tipoMovimiento: r['tipo_movimiento'] as String,
         monto: (r['monto'] as num).toDouble(),
-        saldoResultante: (r['saldo_resultante'] as num).toDouble(),
+        saldoResultante: (r['saldo_resultante'] as num?)?.toDouble(),
         fechaHora: DateTime.parse(r['fecha_hora'] as String),
         descripcion: (r['descripcion'] as String?) ?? '',
       );
 
-  int? get idOperacion => idTransferencia ?? idPago ?? idOrden ?? idPagoServicio;
+  String? get idOperacion => idTransferencia ?? idPago ?? idOrden ?? idPagoServicio;
 
   String get emoji =>
       const {
@@ -162,6 +165,9 @@ class Movimiento {
 
   String get tipoLegible =>
       const {
+        'deposito': 'Depósito',
+        'retiro': 'Retiro',
+        'fondeo_billetera': 'Recarga de la billetera',
         'transferencia_enviada': 'Transferencia enviada',
         'transferencia_recibida': 'Transferencia recibida',
         'pago_qr': 'Pago con QR',
@@ -193,7 +199,7 @@ class Notificacion {
 }
 
 class Solicitud {
-  final int id;
+  final String id; // UUID de la solicitud en COREDB
   final double monto;
   final String? concepto;
   final String estado, nombre, celular;
@@ -202,7 +208,7 @@ class Solicitud {
   Solicitud({required this.id, required this.monto, this.concepto, required this.estado, required this.nombre, required this.celular, required this.fecha});
 
   factory Solicitud.fromJson(Map<String, dynamic> j) => Solicitud(
-        id: j['id_solicitud'],
+        id: '${j['id_solicitud']}',
         monto: toD(j['monto']),
         concepto: j['concepto'],
         estado: j['estado'] ?? 'pendiente',
@@ -244,7 +250,7 @@ class Promo {
   final double porcentaje;
   final double? tope;
   final DateTime fechaFin;
-  final int? idQr;
+  final String? idQr;
   final bool tieneTienda;
 
   Promo(
@@ -272,7 +278,7 @@ class Promo {
         porcentaje: toD(j['porcentaje']),
         tope: j['tope'] == null ? null : toD(j['tope']),
         fechaFin: parseFecha(j['fecha_fin']),
-        idQr: j['id_qr'],
+        idQr: j['id_qr']?.toString(),
         tieneTienda: j['tiene_tienda'] == true,
       );
 
@@ -369,7 +375,7 @@ class Orden {
 
 /// Datos de un codigo_qr listo para pagar.
 class QrInfo {
-  final int idQr;
+  final String idQr; // UUID del QR en COREDB
   final String tipo, nombre;
   final double? monto;
   final bool esComercio;
@@ -378,8 +384,8 @@ class QrInfo {
   QrInfo({required this.idQr, required this.tipo, required this.nombre, this.monto, required this.esComercio, this.promo});
 
   factory QrInfo.fromJson(Map<String, dynamic> j) => QrInfo(
-        idQr: j['id_qr'],
-        tipo: j['tipo'],
+        idQr: '${j['id_qr']}',
+        tipo: '${j['tipo']}'.toLowerCase(),
         nombre: j['nombre'] ?? '',
         monto: j['monto'] == null ? null : toD(j['monto']),
         esComercio: j['es_comercio'] == true,
@@ -389,6 +395,7 @@ class QrInfo {
   bool get dinamico => tipo == 'dinamico';
 }
 
-/// Trama del QR de Chaski: `CHASKI|<id_qr>`.
-final qrRe = RegExp(r'^CHASKI\|(\d+)$');
-String tramaQr(int idQr) => 'CHASKI|$idQr';
+/// Trama del QR de Chaski: `CHASKI|<id_qr>`, con el UUID del QR que da COREDB.
+final uuidRe = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+final qrRe = RegExp(r'^CHASKI\|([0-9a-fA-F-]{36})$');
+String tramaQr(String idQr) => 'CHASKI|$idQr';

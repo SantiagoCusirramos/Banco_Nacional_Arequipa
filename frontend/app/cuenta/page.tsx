@@ -1,4 +1,5 @@
 "use client";
+import { nuevoUuid } from "@/lib/uuid";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -32,10 +33,10 @@ export default function CuentaPage() {
   const [tipoOp, setTipoOp] = useState<Operacion>("deposito");
   // Llave de idempotencia de la operación: se mantiene si se repite el mismo envío (doble
   // clic, reintento tras un error o un timeout) y cambia al editar un dato o al registrarse.
-  const [llaveOp, setLlaveOp] = useState(() => crypto.randomUUID());
+  const [llaveOp, setLlaveOp] = useState(() => nuevoUuid());
   const editarOperacion = <T,>(cambiar: (valor: T) => void) => (valor: T) => {
     cambiar(valor);
-    setLlaveOp(crypto.randomUUID());
+    setLlaveOp(nuevoUuid());
   };
 
   // Movimientos
@@ -96,7 +97,7 @@ export default function CuentaPage() {
         const resultado = await operar(cuentaOrigen.trim(), monto, llave);
         setNotice({ text: `Operación registrada: ${resultado.uuid_transaccion}.`, error: false });
       }
-      setLlaveOp(crypto.randomUUID());
+      setLlaveOp(nuevoUuid());
     });
   }
 

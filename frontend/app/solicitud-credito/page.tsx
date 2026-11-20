@@ -1,4 +1,5 @@
 "use client";
+import { nuevoUuid } from "@/lib/uuid";
 
 /** Interfaz de agencia del MVP SOL. Todas las validaciones de negocio y los
  * cálculos financieros se ejecutan de nuevo en el servidor con Decimal.
@@ -451,7 +452,7 @@ export default function SolicitudPage() {
     if (pending) return pending.id_operacion;
     const id = `${d.id}:${d.revision}`;
     if (!sendKeys.current.has(id))
-      sendKeys.current.set(id, crypto.randomUUID());
+      sendKeys.current.set(id, nuevoUuid());
     return sendKeys.current.get(id)!;
   }
 
