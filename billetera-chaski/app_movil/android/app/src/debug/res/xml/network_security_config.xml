@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo el build debug: HTTP sin cifrar a cualquier host, para el emulador (http://10.0.2.2:8020)
+     y un servidor en la red local (http://IP-del-servidor:8020). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:uuid/uuid.dart';
 
 import '../services/api.dart';
 import '../services/autorizacion.dart';
+import '../services/operaciones.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../util/format.dart';
@@ -46,6 +46,10 @@ class ConfirmScreen extends StatefulWidget {
 class _ConfirmScreenState extends State<ConfirmScreen> {
   bool _procesando = false;
 
+  /// Un uuid de idempotencia por operación: se repite si el usuario vuelve a tocar el botón tras un
+  /// fallo, así el servidor no cobra dos veces (RN-BUS-002).
+  final _intento = IntentoOperacion();
+
   Future<void> _ejecutar() async {
     final st = context.read<AppState>();
     final op = widget.op;
@@ -54,18 +58,10 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
       if (!ok || !mounted) return;
     }
     setState(() => _procesando = true);
-    final uuid = const Uuid().v4();
     final t0 = DateTime.now();
     try {
-      Map<String, dynamic> res;
-      try {
-        res = await op.ejecutar(st.api, uuid);
-      } on ApiException catch (e) {
-        // Reintento seguro: con el mismo uuid el servidor no cobra dos veces (RN-BUS-002)
-        if (!e.red) rethrow;
-        await Future.delayed(const Duration(seconds: 1));
-        res = await op.ejecutar(st.api, uuid);
-      }
+      // Ante un corte de red reintenta una vez con el mismo uuid.
+      final res = await _intento.ejecutar((uuid) => op.ejecutar(st.api, uuid));
       final espera = 1400 - DateTime.now().difference(t0).inMilliseconds;
       if (espera > 0) await Future.delayed(Duration(milliseconds: espera));
       op.alTerminar?.call(st);

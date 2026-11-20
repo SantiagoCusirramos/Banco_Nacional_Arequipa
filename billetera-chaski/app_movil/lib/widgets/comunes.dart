@@ -23,11 +23,15 @@ class Lista extends StatelessWidget {
       items.add(children[i]);
       if (i < children.length - 1) items.add(const Divider(height: 1, thickness: 1, color: C.line));
     }
-    return Container(
-      margin: margin,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: items),
+    // Material (no un Container con color): los ListTile pintan su fondo y sus toques en él.
+    return Padding(
+      padding: margin,
+      child: Material(
+        color: Colors.white,
+        clipBehavior: Clip.antiAlias,
+        borderRadius: BorderRadius.circular(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: items),
+      ),
     );
   }
 }

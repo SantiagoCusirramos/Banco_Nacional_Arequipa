@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../funciones.dart';
 import '../services/api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -155,15 +156,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: ListView(
                   padding: EdgeInsets.fromLTRB(20, 22, 20, MediaQuery.of(context).padding.bottom + 24),
                   children: [
-                    DosTabs(
-                        a: 'Ingresar',
-                        b: 'Crear cuenta',
-                        enA: !_registro,
-                        onChange: (a) => setState(() {
-                              _registro = !a;
-                              _error = '';
-                            })),
-                    const SizedBox(height: 14),
+                    // Sin registro por la app en esta versión: la billetera se activa en una agencia (R-01).
+                    if (Funciones.registro) ...[
+                      DosTabs(
+                          a: 'Ingresar',
+                          b: 'Crear cuenta',
+                          enA: !_registro,
+                          onChange: (a) => setState(() {
+                                _registro = !a;
+                                _error = '';
+                              })),
+                      const SizedBox(height: 14),
+                    ],
                     if (_registro) ...[
                       Row(children: [
                         Expanded(child: _campo('Nombres', _nombres)),
@@ -198,6 +202,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     // El banco afilia al cliente (pantalla Billetera Chaski del frontend): no hay usuario de demostración fijo.
                     Text(_registro ? 'La billetera se activa en una agencia del BNA con tu DNI.' : 'Usa el celular que registraste en el banco y tu PIN de Chaski.',
                         style: const TextStyle(fontSize: 13, color: C.muted)),
+                    if (!Funciones.registro)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text('¿Aún no tienes Chaski? La billetera se activa en una agencia del BNA con tu DNI.',
+                            style: TextStyle(fontSize: 13, color: C.muted)),
+                      ),
                   ],
                 ),
               ),

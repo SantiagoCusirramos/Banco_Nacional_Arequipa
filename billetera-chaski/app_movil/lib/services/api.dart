@@ -25,9 +25,10 @@ class Api {
   String baseUrl;
   String? token;
   void Function()? onUnauthorized;
-  final http.Client _http = http.Client();
+  final http.Client _http;
 
-  Api(this.baseUrl);
+  /// [cliente] permite simular el HTTP en las pruebas.
+  Api(this.baseUrl, {http.Client? cliente}) : _http = cliente ?? http.Client();
 
   Uri _uri(String path) => Uri.parse('${baseUrl.replaceAll(RegExp(r'/+$'), '')}/api$path');
 
