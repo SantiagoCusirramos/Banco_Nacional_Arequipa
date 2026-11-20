@@ -28,16 +28,28 @@ trap cleanup EXIT
 cp "$ROOT/conf/mysql/bna.cnf" "$TMP/bna.cnf"
 chmod 666 "$TMP/bna.cnf"
 
+# Git Bash (Windows) convierte en rutas de Windows los argumentos que empiezan con /,
+# también las de dentro del contenedor (/bna/bna.cnf). Se desactiva esa conversión y
+# las carpetas del host se pasan ya en forma de Windows.
+ROOT_HOST="$ROOT"
+TMP_HOST="$TMP"
+case "$(uname -s)" in
+  MINGW*|MSYS*)
+    export MSYS_NO_PATHCONV=1
+    ROOT_HOST="$(cd "$ROOT" && pwd -W)"
+    TMP_HOST="$(cd "$TMP" && pwd -W)" ;;
+esac
+
 docker run -d --name "$C" \
   -e MYSQL_ROOT_PASSWORD="$PW_ROOT" \
   -e CORE_DB_APP_PASSWORD="$PW_APP" \
   -e CORE_DB_ADMIN_PASSWORD="$PW_ADMIN" \
   -e CORE_DB_SEGURIDAD_PASSWORD="$PW_SEGURIDAD" \
-  -v "$TMP/bna.cnf:/bna/bna.cnf:ro" \
-  -v "$ROOT/sql/bna_core.sql:/docker-entrypoint-initdb.d/01_bna_core.sql:ro" \
-  -v "$ROOT/sql/bna_extension.sql:/docker-entrypoint-initdb.d/02_bna_extension.sql:ro" \
-  -v "$ROOT/conf/mysql/crear_usuarios.sh:/docker-entrypoint-initdb.d/03_crear_usuarios.sh:ro" \
-  -v "$ROOT/sql/bna_datos_dev.sql:/docker-entrypoint-initdb.d/04_bna_datos_dev.sql:ro" \
+  -v "$TMP_HOST/bna.cnf:/bna/bna.cnf:ro" \
+  -v "$ROOT_HOST/sql/bna_core.sql:/docker-entrypoint-initdb.d/01_bna_core.sql:ro" \
+  -v "$ROOT_HOST/sql/bna_extension.sql:/docker-entrypoint-initdb.d/02_bna_extension.sql:ro" \
+  -v "$ROOT_HOST/conf/mysql/crear_usuarios.sh:/docker-entrypoint-initdb.d/03_crear_usuarios.sh:ro" \
+  -v "$ROOT_HOST/sql/bna_datos_dev.sql:/docker-entrypoint-initdb.d/04_bna_datos_dev.sql:ro" \
   --entrypoint sh "$MYSQL_IMAGE" \
   -c 'install -m 644 /bna/bna.cnf /etc/mysql/conf.d/bna.cnf && exec docker-entrypoint.sh mysqld' >/dev/null
 

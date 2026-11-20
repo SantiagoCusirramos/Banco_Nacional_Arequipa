@@ -2,7 +2,7 @@
 
 Generada por `trazabilidad/matriz.py` a partir de `trazabilidad/catalogo.py`,
 `trazabilidad/referencias_mysql.csv`, `resultados/mysql/` y los resultados de PostgreSQL
-de la rama main (commit a39c3fc). Las páginas son las del archivo PDF de cada documento; las
+de la rama main (commit ca54b9c). Las páginas son las del archivo PDF de cada documento; las
 fallas MySQL se citan como `ab6a6ec:<ruta>:<línea>`, con la ruta relativa a `backend/Trabajo_hecho/`.
 
 | ID | Afirmación o regla | Fuente | Script | Mecanismo | Esperado | Obtenido | MySQL 8.4 | PG 16 | PG 17 |
