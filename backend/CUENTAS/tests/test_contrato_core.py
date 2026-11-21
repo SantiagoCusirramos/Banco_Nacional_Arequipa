@@ -27,6 +27,9 @@ class Captura:
         self.payload = payload
         return {"uuid_debito": "d", "uuid_abono": "a"}
 
+    def ver_movimiento(self, uuid_transaccion, cid, authorization=None):
+        return {}  # Las lecturas del comprobante no forman parte de este contrato.
+
 
 def test_apertura_cumple_esquema_de_coredb():
     c = Captura()

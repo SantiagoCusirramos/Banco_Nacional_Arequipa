@@ -50,7 +50,9 @@ def test_humo_flujo_completo(client, core):
     tr = client.post(f"{BASE}/transferencia", headers=HEADERS_OP,
                      json={"num_cuenta_origen": "111", "num_cuenta_destino": "222", "monto": "10"})
     assert tr.status_code == 201
-    assert len(core.llamadas) == 6
+    # Seis llamadas que escriben o consultan; tras la transferencia, solo lecturas para el comprobante.
+    assert core.llamadas[5]["ruta"] == "/coredb/movimientos/transferencias"
+    assert {ll["metodo"] for ll in core.llamadas[6:]} == {"GET"}
 
 
 def test_humo_todas_las_respuestas_traen_envelope(client, core):

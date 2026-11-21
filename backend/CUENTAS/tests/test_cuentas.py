@@ -223,8 +223,99 @@ def test_transferencia_ok(client, core):
     assert enviado["ruta"] == "/coredb/movimientos/transferencias"
     assert enviado["json"]["origen"] == "111"
     assert enviado["json"]["destino"] == "222"
-    assert r.json()["data"] == {"uuid_debito": "d1", "uuid_abono": "a1", "replay": False}
+    datos = r.json()["data"]
+    assert (datos["uuid_debito"], datos["uuid_abono"], datos["replay"]) == ("d1", "a1", False)
     assert enviado["json"]["id_canal"] == "HB"
+
+
+# Lo que COREDB tiene tras una transferencia de 25.50 de 111 (CLI-1) a 222 (CLI-2).
+MOV_DEBITO = {"uuid_transaccion": "d1", "num_cuenta": "111", "tipo_operacion": "TRANSFERENCIA_ENVIADA",
+              "naturaleza": "D", "monto": "25.50", "moneda": "PEN", "glosa": "Alquiler", "id_canal": "HB",
+              "estado_transaccion": "APROBADO", "fecha_hora": "2026-11-21T15:04:05Z"}
+MOV_ABONO = {**MOV_DEBITO, "uuid_transaccion": "a1", "num_cuenta": "222",
+             "tipo_operacion": "TRANSFERENCIA_RECIBIDA", "naturaleza": "C"}
+CUENTA_111 = {**CUENTA_CORE, "num_cuenta": "111", "saldo_contable": "74.50", "saldo_disponible": "74.50",
+              "titulares": ["CLI-1"]}
+CUENTA_222 = {**CUENTA_CORE, "num_cuenta": "222", "saldo_contable": "9876.54", "saldo_disponible": "9876.54",
+              "titulares": ["CLI-2"]}
+CLIENTE_2 = {"cod_cliente": "CLI-2", "tipo_documento": "DNI", "numero_documento": "45678912",
+             "nombres": "Lucía", "apellido_paterno": "Ramos", "apellido_materno": "Ticona",
+             "correo": "lucia@example.com", "celular": "987654321", "estado_cliente": "ACTIVO"}
+CLIENTE_3 = {**CLIENTE_2, "cod_cliente": "CLI-3", "nombres": "Pedro José", "apellido_paterno": "Quispe",
+             "apellido_materno": None}
+
+
+def coredb_tras_transferir(core):
+    core.rutas = {
+        "POST /coredb/movimientos/transferencias": httpx.Response(201, json=TRANSF_CORE),
+        "GET /coredb/movimientos/d1": httpx.Response(200, json=MOV_DEBITO),
+        "GET /coredb/movimientos/a1": httpx.Response(200, json=MOV_ABONO),
+        "GET /coredb/cuentas/111": httpx.Response(200, json=CUENTA_111),
+        "GET /coredb/cuentas/222": httpx.Response(200, json=CUENTA_222),
+        "GET /coredb/clientes/CLI-2": httpx.Response(200, json=CLIENTE_2),
+        "GET /coredb/clientes/CLI-3": httpx.Response(200, json=CLIENTE_3),
+    }
+
+
+def test_transferencia_devuelve_lo_que_quedo_en_coredb(client, core):
+    """El comprobante del Home Banking: cuentas, monto, fecha, saldo de origen y titular de destino
+    leídos de COREDB tras transferir. La llamada que mueve el dinero no cambia."""
+    coredb_tras_transferir(core)
+    r = client.post(f"{BASE}/transferencia", headers=HEADERS_OP,
+                    json={"num_cuenta_origen": "111", "num_cuenta_destino": "222", "monto": "25.50",
+                          "glosa": "Alquiler"})
+    assert r.status_code == 201
+    assert r.json()["data"] == {
+        "uuid_debito": "d1", "uuid_abono": "a1", "replay": False,
+        "num_cuenta_origen": "111", "num_cuenta_destino": "222", "monto": "25.50", "moneda": "PEN",
+        "fecha_hora": "2026-11-21T15:04:05Z", "estado": "APROBADO", "saldo_disponible_origen": "74.50",
+        "titular_destino": "Lu*** Ra*** Ti***",
+    }
+    # Del destino solo el nombre enmascarado: ni su saldo ni sus datos personales.
+    for privado in ["9876.54", "45678912", "Lucía", "Ramos", "987654321", "lucia@"]:
+        assert privado not in r.text
+    primera = core.llamadas[0]
+    assert (primera["metodo"], primera["ruta"]) == ("POST", "/coredb/movimientos/transferencias")
+    assert primera["json"]["idempotency_key"] == KEY and primera["json"]["glosa"] == "Alquiler"
+    assert [ll["metodo"] for ll in core.llamadas[1:]] == ["GET"] * (len(core.llamadas) - 1)
+
+
+def test_transferencia_registrada_aunque_falle_una_lectura_posterior(client, core):
+    """Si la lectura para el comprobante falla, el dinero ya se movió: 201 con la operación y sin
+    inventar los demás datos (la pantalla avisa con el número de operación)."""
+    coredb_tras_transferir(core)
+    core.rutas["GET /coredb/cuentas/111"] = httpx.ConnectError("sin conexion")
+    core.rutas["GET /coredb/clientes/CLI-2"] = error_core(403, "PERMISO_DENEGADO")
+    r = client.post(f"{BASE}/transferencia", headers=HEADERS_OP,
+                    json={"num_cuenta_origen": "111", "num_cuenta_destino": "222", "monto": "25.50"})
+    assert r.status_code == 201
+    datos = r.json()["data"]
+    assert (datos["uuid_debito"], datos["monto"], datos["num_cuenta_destino"]) == ("d1", "25.50", "222")
+    assert datos["saldo_disponible_origen"] is None and datos["titular_destino"] is None
+
+
+def test_destino_de_una_transferencia_muestra_solo_el_titular_enmascarado(client, core):
+    coredb_tras_transferir(core)
+    r = client.get(f"{BASE}/222/destino", headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["data"] == {"num_cuenta": "222", "moneda": "PEN", "estado_cuenta": "ACTIVA",
+                                "titular": "Lu*** Ra*** Ti***"}
+    for privado in ["9876.54", "45678912", "Lucía", "CLI-2", "987654321"]:
+        assert privado not in r.text
+
+
+def test_destino_mancomunado_enmascara_cada_titular(client, core):
+    coredb_tras_transferir(core)
+    core.rutas["GET /coredb/cuentas/222"] = httpx.Response(200, json={**CUENTA_222, "titulares": ["CLI-2", "CLI-3"]})
+    r = client.get(f"{BASE}/222/destino", headers=AUTH)
+    assert r.json()["data"]["titular"] == "Lu*** Ra*** Ti*** y Pe*** Jo*** Qu***"
+
+
+def test_destino_inexistente_es_404(client, core):
+    core.respuesta = error_core(404, "CUENTA_NO_ENCONTRADA")
+    r = client.get(f"{BASE}/999/destino", headers=AUTH)
+    assert r.status_code == 404
+    assert r.json()["error_code"] == "ERR-CTA-NO-ENCONTRADA"
 
 
 def test_replay_se_informa_en_el_mensaje(client, core):

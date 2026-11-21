@@ -99,3 +99,8 @@ class CoreClient:
                        authorization: str | None = None):
         return self._request("GET", f"/coredb/movimientos/{uuid_transaccion}",
                              correlation_id=correlation_id, authorization=authorization)
+
+    def ver_cliente(self, cod_cliente: str, correlation_id: str | None = None,
+                    authorization: str | None = None):
+        return self._request("GET", f"/coredb/clientes/{cod_cliente}",
+                             correlation_id=correlation_id, authorization=authorization)

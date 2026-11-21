@@ -13,6 +13,7 @@ Sigue el estandar del Comite de Ahorros (DOC-ITIL-01 y DOC-ITIL-02).
 | POST | /api/v1/cuentas/deposito | POST /coredb/movimientos |
 | POST | /api/v1/cuentas/retiro | POST /coredb/movimientos |
 | POST | /api/v1/cuentas/transferencia | POST /coredb/movimientos/transferencias |
+| GET | /api/v1/cuentas/{num_cuenta}/destino | GET /coredb/cuentas/{num} y GET /coredb/clientes/{cod} de cada titular |
 | GET | /api/v1/cuentas/{num_cuenta}/movimientos | GET /coredb/movimientos/cuenta/{num} |
 | GET | /api/v1/cuentas/movimiento/{uuid_transaccion} | GET /coredb/movimientos/{uuid} |
 | GET | /health | - |
@@ -110,7 +111,8 @@ Sin Python 3.11 en la maquina, `./bna test` desde la raiz corre esta suite en un
 - Abrir cuenta y mover dinero requieren rol ADMINISTRADOR u OPERADOR en COREDB.
 - Apertura: `num_cuenta`, `cci` (20 digitos), `moneda` (PEN/USD), `regimen` (INDIVIDUAL, MANCOMUNADA_INDISTINTA, MANCOMUNADA_CONJUNTA), `id_agencia` y `titulares` (lista de `{id_cliente}`) o `id_cliente` si es un solo titular.
 - Deposito/retiro: `num_cuenta`, `monto`, `glosa` (opcional). Respuesta: `uuid_transaccion` y `replay`.
-- Transferencia: `num_cuenta_origen`, `num_cuenta_destino`, `monto`, `glosa` (opcional). Respuesta: `uuid_debito`, `uuid_abono`, `replay`.
+- Transferencia: `num_cuenta_origen`, `num_cuenta_destino`, `monto`, `glosa` (opcional). Respuesta: `uuid_debito`, `uuid_abono`, `replay` y, para el comprobante, leídos de COREDB después de transferir (solo lecturas; la llamada que mueve el dinero no cambia): `num_cuenta_origen`, `num_cuenta_destino`, `monto`, `moneda`, `fecha_hora`, `estado` (del débito), `saldo_disponible_origen` (saldo actual de la cuenta de origen) y `titular_destino` (enmascarado). Si una de esas lecturas falla, la transferencia sigue registrada (201) y el dato llega en `null`, nunca con un valor por omisión.
+- Destino (`GET /{num_cuenta}/destino`): `num_cuenta`, `moneda`, `estado_cuenta` y `titular`, el nombre de cada titular enmascarado (dos letras por palabra y `***`, unidos con «y»). Sin saldo ni datos personales. Pide `VER_CUENTA` y `VER_CLIENTE` (OPERADOR, ADMINISTRADOR...).
 - PROPUESTA: los codigos ERR-CTA nuevos de esta tabla no estan en ITIL-02, falta aprobarlos.
 - Cada cuenta trae `titulares`, los codigos de sus clientes, como los devuelve COREDB.
 - Un movimiento trae `tipo_operacion`, `naturaleza` (D debito, C credito), `monto`, `moneda`, `glosa`, `id_canal`, `estado_transaccion` y `fecha_hora`. COREDB no guarda el saldo posterior ni la cuenta de contraparte.
