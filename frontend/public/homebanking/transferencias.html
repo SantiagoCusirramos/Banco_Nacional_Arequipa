@@ -13,7 +13,7 @@
     <div class="marca-logo">BNA</div>
     <div class="marca-txt">
       <strong>Banco Nacional de Arequipa</strong>
-      <span>Home Banking · Transferencias y Token Matriz</span>
+      <span>Home Banking · Transferencias</span>
     </div>
   </div>
   <div class="sesion">
@@ -48,8 +48,8 @@
     <section class="panel">
       <h1>Transferir fondos</h1>
       <p class="sub">
-        Operación protegida con Token Matriz, evaluación de riesgo INT-12 y validación del tope diario INT-17.
-        El Bus registra la operación en el Core mediante INT-19 y en auditoría mediante INT-13.
+        Entre sus cuentas o a otra cuenta del Banco Nacional de Arequipa, en la misma moneda.
+        Antes de enviar verá un resumen con el titular de la cuenta de destino.
       </p>
 
       <div class="msg" id="msgTrans"></div>
@@ -57,7 +57,6 @@
       <div class="tabs" id="tabsTipo">
         <button type="button" class="tab activo" data-tipo="PROPIA">Cuentas propias</button>
         <button type="button" class="tab" data-tipo="TERCERO">Terceros BNA</button>
-        <button type="button" class="tab" data-tipo="INTERBANCARIA">Interbancaria</button>
       </div>
 
       <form id="formTrans" autocomplete="off" novalidate>
@@ -76,42 +75,15 @@
           <div class="campo">
             <label for="selDestinoPropia">Cuenta de destino (propia)</label>
             <select id="selDestinoPropia"></select>
-            <div class="pista">Solo se muestran cuentas activas de su titularidad con la misma moneda.</div>
+            <div class="pista" id="pistaPropia">Solo se muestran cuentas activas de su titularidad con la misma moneda.</div>
           </div>
         </div>
 
         <div id="bloqueTercero" hidden>
-          <div class="grid-2">
-            <div class="campo">
-              <label for="ctaTercero">Cuenta destino BNA</label>
-              <input type="text" id="ctaTercero" class="mono" placeholder="0011-0993-01" maxlength="20">
-            </div>
-            <div class="campo">
-              <label for="titularTercero">Titular destino (opcional)</label>
-              <input type="text" id="titularTercero" placeholder="Se valida en el Bus">
-            </div>
-          </div>
-        </div>
-
-        <div id="bloqueInter" hidden>
-          <div class="grid-2">
-            <div class="campo">
-              <label for="entidad">Entidad destino</label>
-              <select id="entidad">
-                <option value="BCP">BCP</option>
-                <option value="Interbank">Interbank</option>
-                <option value="BBVA">BBVA</option>
-                <option value="Scotiabank">Scotiabank</option>
-              </select>
-            </div>
-            <div class="campo">
-              <label for="ctaInter">Cuenta destino interbancaria</label>
-              <input type="text" id="ctaInter" class="mono" placeholder="Número de cuenta" maxlength="30">
-            </div>
-          </div>
           <div class="campo">
-            <label for="titularInter">Titular destino</label>
-            <input type="text" id="titularInter" placeholder="Nombres y apellidos">
+            <label for="ctaTercero">Cuenta de destino BNA</label>
+            <input type="text" id="ctaTercero" class="mono" inputmode="numeric" placeholder="Número de cuenta" maxlength="20">
+            <div class="pista">En el resumen verá el nombre del titular, en parte oculto, para comprobar que es la cuenta correcta.</div>
           </div>
         </div>
 
@@ -132,13 +104,12 @@
         </div>
 
         <div class="nota">
-          <b>RN-TOP-001:</b> tope diario de S/ 10 000 o USD 3 000.
-          <b>RN-BUS-002:</b> cada operación lleva UUID e idempotencia; ante timeout queda PENDIENTE / NO CONFIRMADA.
-          <b>RN-TAR-002:</b> Token Matriz obligatorio para operaciones no presenciales.
+          El banco aplica el tope diario del Home Banking: si la transferencia lo supera, se rechaza y no se mueve dinero.
+          Si se corta la conexión, vuelva a pulsar «Revisar y transferir» sin cambiar los datos: no se transfiere dos veces.
         </div>
 
         <div class="fila-flex" style="margin-top:16px; justify-content:space-between;">
-          <button type="submit" class="btn" id="btnTransferir">Continuar con Token Matriz</button>
+          <button type="submit" class="btn" id="btnTransferir">Revisar y transferir</button>
           <a class="btn btn-sec" href="cuentas.html">‹ Volver a cuentas</a>
         </div>
       </form>
@@ -149,19 +120,13 @@
       <p class="sub" id="subResultado">Aún no se ha procesado ninguna transferencia.</p>
 
       <div id="resultado" hidden></div>
-
-      <div class="nota">
-        <b>Interfaces:</b> INT-03 Token Matriz · INT-09 Transferencias · INT-12 Riesgo ·
-        INT-17 Topes · INT-19 Asiento contable · INT-13 Auditoría.<br>
-        <b>RF:</b> RF-HB-004 (propias), RF-HB-005 (terceros BNA), RF-HB-006 (interbancaria),
-        RF-HB-008 (Token Matriz), RF-HB-009 (tope diario).
-      </div>
     </section>
   </div>
 </main>
 
 <script src="js/bus.js"></script>
 <script src="js/comun.js"></script>
+<script src="js/confirmacion.js"></script>
 <script src="js/transferencias.js"></script>
 </body>
 </html>

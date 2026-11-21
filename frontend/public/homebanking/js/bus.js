@@ -186,35 +186,36 @@ const Bus = (() => {
     };
   }
 
+  // La cuenta de destino antes de confirmar: moneda, estado y titular enmascarado (CUENTAS no
+  // devuelve su saldo ni los datos del titular).
+  async function verDestino(numCuenta) {
+    const d = await invocarAPI(`/api/cuenta/${encodeURIComponent(numCuenta)}/destino`, null, "CUENTAS · destino", { method: "GET" });
+    return { numCuenta: d.num_cuenta, moneda: d.moneda, estado: d.estado_cuenta, titular: d.titular };
+  }
+
   // La llave la pone quien llama: la misma en cada reintento de la misma transferencia
-  // (CUENTAS devuelve la original) y otra cuando cambian los datos o ya se registró.
+  // (COREDB devuelve la original) y otra cuando cambian los datos, se registró o se rechazó.
+  // Canal WEB = Home Banking (HB) en COREDB, que aplica su tope diario. Devuelve lo que contestó
+  // CUENTAS, leído de COREDB tras transferir; la pantalla comprueba que esté completo y no rellena nada.
   async function transferencia(p, idempotencyKey) {
-    if (p.tipo !== "PROPIA" && p.tipo !== "TERCERO") {
-      fallo(501, "NO_DISPONIBLE", "Las transferencias interbancarias no están disponibles en esta versión.");
-    }
-    const r = await invocarAPI("/api/cuenta/transferencia", {
-      num_cuenta_origen: p.cuentaOrigen, num_cuenta_destino: p.cuentaDestino, monto: num(p.monto).toFixed(2)
-    }, "CUENTAS · transferencia", {
+    const cuerpo = { num_cuenta_origen: p.cuentaOrigen, num_cuenta_destino: p.cuentaDestino, monto: num(p.monto).toFixed(2) };
+    if (p.glosa) cuerpo.glosa = p.glosa;
+    const r = await invocarAPI("/api/cuenta/transferencia", cuerpo, "CUENTAS · transferencia", {
       idempotencyKey,
-      headers: { "X-Channel-ID": "VEN", "X-Request-Timestamp": new Date().toISOString() }
+      headers: { "X-Channel-ID": "WEB", "X-Request-Timestamp": new Date().toISOString() }
     });
-    const origen = cuentaUi(await invocarAPI(`/api/cuenta/${encodeURIComponent(p.cuentaOrigen)}`, null, "CUENTAS · cuenta", { method: "GET" }));
     return {
       idTransferencia: r.uuid_debito,
-      uuidTransaccion: r.uuid_debito,
-      idAsientoCore: r.uuid_abono,
-      idempotente: !!r.replay,
-      estado: "REGISTRADA",
-      fechaHora: new Date().toLocaleString("es-PE"),
-      tipo: p.tipo,
-      monto: num(p.monto),
-      moneda: p.moneda,
-      cuentaOrigen: p.cuentaOrigen,
-      cuentaDestino: p.cuentaDestino,
-      entidadDestino: "BNA",
-      titularDestino: p.titularDestino || "",
-      saldoActualizado: { saldoDisponible: origen.saldoDisponible },
-      constanciaPDF: null
+      uuidAbono: r.uuid_abono,
+      idempotente: r.replay === true,
+      cuentaOrigen: r.num_cuenta_origen,
+      cuentaDestino: r.num_cuenta_destino,
+      monto: r.monto,
+      moneda: r.moneda,
+      fechaHora: r.fecha_hora,
+      estado: r.estado,
+      saldoDisponibleOrigen: r.saldo_disponible_origen,
+      titularDestino: r.titular_destino
     };
   }
 
@@ -287,6 +288,7 @@ const Bus = (() => {
     verificarTitularidad,
     consultarPosicion,
     consultarMovimientos,
+    verDestino,
     transferencia,
     obtenerCreditosCliente,
     obtenerMontoAPagar,

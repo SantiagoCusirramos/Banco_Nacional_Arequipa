@@ -850,6 +850,65 @@ def flujo():
          f"reintentada con la misma llave se debitó una sola vez; el comprobante trae el saldo del crédito "
          f"{credito_hb['saldoPendiente']} y {pendientes_hb} cuotas pendientes, como COREDB")
 
+    # ── Home Banking: una transferencia por el puente del frontend (CUENTAS) ─
+    # La misma petición que «Transferir» de /homebanking/transferencias.html (canal WEB = HB),
+    # enviada dos veces a la vez y reintentada con la misma llave: un solo débito y un solo abono,
+    # y el comprobante coincide con COREDB. Antes, la cuenta de destino: titular enmascarado, sin saldo.
+    n = int(time.time() * 1000) % 10**15 * 10 + 7
+    destino_hb = coredb("POST", "/coredb/cuentas", 201, {
+        "num_cuenta": f"CTA-{n:016d}", "cci": f"{n:020d}", "moneda": "PEN", "regimen": "INDIVIDUAL",
+        "id_agencia": AGENCIA, "titulares": [cliente]}, token)["num_cuenta"]
+    estado, vista_destino = pedir("GET", f"{FRONTEND}/api/cuenta/{destino_hb}/destino", token=token_op)
+    exigir(estado == 200 and vista_destino["data"] == {"num_cuenta": destino_hb, "moneda": "PEN",
+                                                       "estado_cuenta": "ACTIVA", "titular": "Cl*** D* Pr***"},
+           f"Destino de la transferencia del Home Banking: {estado} {vista_destino}")
+    monto_hb = "25.00"
+    llave_tr = str(uuid.uuid4())
+    cuerpo_tr = {"num_cuenta_origen": abono, "num_cuenta_destino": destino_hb, "monto": monto_hb,
+                 "glosa": "Transferencia del Home Banking (flujo de extremo a extremo)"}
+    cuentas_tr = (abono, destino_hb)
+    antes_tr = {c: coredb("GET", f"/coredb/cuentas/{c}", 200, token=token)["saldo_disponible"] for c in cuentas_tr}
+    movs_antes_tr = {c: len(coredb("GET", f"/coredb/movimientos/cuenta/{c}", 200, token=token)) for c in cuentas_tr}
+
+    def transferencia_hb():
+        return pedir("POST", f"{FRONTEND}/api/cuenta/transferencia", cuerpo_tr, token_op, {
+            "X-Idempotency-Key": llave_tr, "X-Channel-ID": "WEB",
+            "X-Request-Timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as hilos:
+        simultaneas = [f.result() for f in [hilos.submit(transferencia_hb), hilos.submit(transferencia_hb)]]
+    exigir([e for e, _ in simultaneas] == [201, 201]
+           and sorted(r["data"]["replay"] for _, r in simultaneas) == [False, True]
+           and len({r["data"]["uuid_debito"] for _, r in simultaneas}) == 1,
+           f"Home Banking, la misma transferencia enviada dos veces a la vez: {simultaneas}")
+    estado, reintento_tr = transferencia_hb()
+    exigir(estado == 201 and reintento_tr["data"]["replay"] is True
+           and reintento_tr["data"]["uuid_debito"] == simultaneas[0][1]["data"]["uuid_debito"],
+           f"Home Banking, reintento de la transferencia con la misma llave: {estado} {reintento_tr}")
+    despues_tr = {c: coredb("GET", f"/coredb/cuentas/{c}", 200, token=token)["saldo_disponible"] for c in cuentas_tr}
+    movs_despues_tr = {c: coredb("GET", f"/coredb/movimientos/cuenta/{c}", 200, token=token) for c in cuentas_tr}
+    exigir(Decimal(antes_tr[abono]) - Decimal(despues_tr[abono]) == Decimal(monto_hb)
+           and Decimal(despues_tr[destino_hb]) - Decimal(antes_tr[destino_hb]) == Decimal(monto_hb)
+           and {c: len(m) for c, m in movs_despues_tr.items()} == {c: movs_antes_tr[c] + 1 for c in cuentas_tr},
+           f"Un solo débito y un solo abono de {monto_hb}: saldos {antes_tr} -> {despues_tr}, "
+           f"movimientos {movs_antes_tr} -> {({c: len(m) for c, m in movs_despues_tr.items()})}")
+    debito_tr = coredb("GET", f"/coredb/movimientos/{simultaneas[0][1]['data']['uuid_debito']}", 200, token=token)
+    abono_tr = coredb("GET", f"/coredb/movimientos/{simultaneas[0][1]['data']['uuid_abono']}", 200, token=token)
+    exigir((debito_tr["num_cuenta"], debito_tr["tipo_operacion"], debito_tr["id_canal"]) == (abono, "TRANSFERENCIA_ENVIADA", "HB")
+           and (abono_tr["num_cuenta"], abono_tr["tipo_operacion"]) == (destino_hb, "TRANSFERENCIA_RECIBIDA"),
+           f"Movimientos de la transferencia del Home Banking: {debito_tr} {abono_tr}")
+    for _, comprobante_tr in [*simultaneas, (estado, reintento_tr)]:
+        d = comprobante_tr["data"]
+        exigir((d["num_cuenta_origen"], d["num_cuenta_destino"], d["monto"], d["moneda"], d["estado"])
+               == (abono, destino_hb, monto_hb, "PEN", "APROBADO")
+               and d["fecha_hora"] == debito_tr["fecha_hora"]
+               and d["saldo_disponible_origen"] == despues_tr[abono]
+               and d["titular_destino"] == "Cl*** D* Pr***",
+               f"Comprobante de la transferencia del Home Banking: {d} frente a COREDB {despues_tr} {debito_tr}")
+    paso(f"Home Banking (frontend → CUENTAS → COREDB): la transferencia de {monto_hb} de {abono} a {destino_hb}, "
+         f"enviada dos veces a la vez y reintentada con la misma llave, dejó un solo débito y un solo abono (canal HB); "
+         f"saldos {despues_tr[abono]} y {despues_tr[destino_hb]} como COREDB; el comprobante trae el titular enmascarado")
+
     # ── CAPTACION: un prospecto, de la solicitud a cliente habilitado ──────
     exigir(TOKEN_SOL, "Falta CAP_SOL_TOKEN")
     cap = CAPTACION + "/api/v1/captacion"

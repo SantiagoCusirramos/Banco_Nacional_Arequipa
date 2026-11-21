@@ -1,9 +1,9 @@
 /* =========================================================
-   Confirmación de un pago del Home Banking
-   Muestra lo que se va a cobrar y pide un código de 6 dígitos antes de enviar nada.
+   Confirmación de una operación del Home Banking (pago de cuota, transferencia)
+   Muestra lo que se va a mover y pide un código de 6 dígitos antes de enviar nada.
    El código es una SIMULACIÓN: se genera y se muestra en esta misma pantalla y el servidor
    no lo verifica (todavía no hay proveedor de segundo factor ni acceso propio del cliente).
-   Aun así bloquea: si no coincide, el pago no se envía; al tercer error se cancela.
+   Aun así bloquea: si no coincide, la operación no se envía; al tercer error se cancela.
    ========================================================= */
 
 const ConfirmacionPago = (() => {
@@ -23,7 +23,9 @@ const ConfirmacionPago = (() => {
 
   // filas: [[etiqueta, valor], ...]. Resuelve { confirmado: true } solo con el código correcto;
   // { confirmado: false, motivo: "CANCELADO" | "CODIGO_AGOTADO" } en otro caso.
-  function pedir({ titulo, filas, accion }) {
+  // nota: el texto bajo el título; objeto: lo que se confirma («el pago», «la transferencia»).
+  function pedir({ titulo, filas, accion, nota = "Revisa los datos. No se cobra nada hasta que confirmes.",
+                   objeto = "el pago" }) {
     return new Promise(resolver => {
       const codigo = codigoAlAzar();
       let fallidos = 0;
@@ -39,7 +41,7 @@ const ConfirmacionPago = (() => {
       const cab = nodo("div", "token-cab");
       const h3 = nodo("h3", "", titulo);
       h3.id = "confirmacionTitulo";
-      cab.append(h3, nodo("p", "", "Revisa los datos. No se cobra nada hasta que confirmes."));
+      cab.append(h3, nodo("p", "", nota));
 
       const cuerpo = nodo("div", "token-cuerpo");
       const resumen = nodo("dl", "confirmacion-resumen");
@@ -51,7 +53,7 @@ const ConfirmacionPago = (() => {
         nodo("span", "badge warn", "SIMULACIÓN"),
         nodo("p", "confirmacion-aviso",
           "Este código no es un segundo factor real: se muestra aquí mismo y el servidor no lo verifica. " +
-          "Escríbelo para confirmar el pago."),
+          `Escríbelo para confirmar ${objeto}.`),
       );
       const muestra = nodo("b", "", codigo);
       muestra.id = "codigoSimulado";
