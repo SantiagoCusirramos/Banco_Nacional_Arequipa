@@ -16,12 +16,15 @@ from CUENTAS.main import app  # noqa: E402
 
 
 class CoreFalso:
-    """Registra lo que Cuentas le manda a CORE y responde lo que se le configure."""
+    """Registra lo que Cuentas le manda a CORE y responde lo que se le configure.
+
+    `rutas` responde por "METODO /ruta" (una respuesta o una excepción); lo demás, `respuesta`."""
 
     def __init__(self):
         self.llamadas = []
         self.respuesta = httpx.Response(200, json={})
         self.excepcion = None
+        self.rutas = {}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         cuerpo = json.loads(request.content) if request.content else None
@@ -34,7 +37,10 @@ class CoreFalso:
         })
         if self.excepcion:
             raise self.excepcion
-        return self.respuesta
+        propia = self.rutas.get(f"{request.method} {request.url.path}")
+        if isinstance(propia, Exception):
+            raise propia
+        return propia if propia is not None else self.respuesta
 
 
 @pytest.fixture

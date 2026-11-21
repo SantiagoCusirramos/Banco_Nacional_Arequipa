@@ -74,3 +74,21 @@ class TransferenciaOut(BaseModel):
     uuid_debito: str
     uuid_abono: str
     replay: bool = False
+    # Para el comprobante: lo que quedó en COREDB, leído tras transferir. None si esa lectura
+    # falló (la transferencia ya está registrada); nunca un valor por omisión.
+    num_cuenta_origen: str | None = None
+    num_cuenta_destino: str | None = None
+    monto: Decimal | None = None
+    moneda: str | None = None
+    fecha_hora: str | None = None
+    estado: str | None = None
+    saldo_disponible_origen: Decimal | None = None
+    titular_destino: str | None = None
+
+
+class DestinoOut(BaseModel):
+    """La cuenta de destino antes de transferir: sin saldo ni datos personales del titular."""
+    num_cuenta: str
+    moneda: str
+    estado_cuenta: str
+    titular: str

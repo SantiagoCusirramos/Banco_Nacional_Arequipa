@@ -295,3 +295,13 @@ def test_num_cuenta_maximo_20():
 def test_regimen_invalido():
     with pytest.raises(ValidationError):
         AbrirCuentaIn(id_cliente="C", regimen="OTRO", **_BASE)
+
+
+@pytest.mark.parametrize("nombres, paterno, materno, esperado", [
+    ("Lucía", "Ramos", "Ticona", "Lu*** Ra*** Ti***"),
+    ("Cliente", "De Prueba", None, "Cl*** D* Pr***"),
+    ("Ñuflo", "Y", "", "Ñu*** Y*"),
+])
+def test_nombre_enmascarado(nombres, paterno, materno, esperado):
+    # Dos letras por palabra y siempre tres asteriscos: no deja ver el largo del nombre.
+    assert svc.enmascarar_nombre(nombres, paterno, materno) == esperado

@@ -6,7 +6,7 @@ from CUENTAS.dependencies import (
 )
 from CUENTAS.respuestas import exito
 from CUENTAS.schemas.cuentas import (
-    AbrirCuentaIn, CuentaOut, MovimientoOut, OperacionIn, TransferenciaIn, TransferenciaOut,
+    AbrirCuentaIn, CuentaOut, DestinoOut, MovimientoOut, OperacionIn, TransferenciaIn, TransferenciaOut,
 )
 from CUENTAS.services import cuentas as svc
 
@@ -62,6 +62,14 @@ def transferir(request: Request, datos: TransferenciaIn, core: CoreClient = Depe
     res = TransferenciaOut(**svc.transferir(core, datos, ctx.id_canal, ctx.idempotency_key,
                                             ctx.cid, ctx.authorization))
     return exito(request, res.model_dump(mode="json"), 201, _msg_replay(res.replay))
+
+
+@router.get("/{num_cuenta}/destino")
+def ver_destino(request: Request, num_cuenta: str, core: CoreClient = Depends(get_core_client),
+                cid: str = Depends(correlation_id), token: str = Depends(autorizacion)):
+    """Para confirmar una transferencia: moneda, estado y titular enmascarado de la cuenta de
+    destino, sin su saldo ni los datos del titular."""
+    return exito(request, DestinoOut(**svc.destino(core, num_cuenta, cid, token)).model_dump(mode="json"))
 
 
 @router.get("/{num_cuenta}/movimientos")
