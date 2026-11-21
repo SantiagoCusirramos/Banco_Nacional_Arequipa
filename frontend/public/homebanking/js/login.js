@@ -1,7 +1,6 @@
 /* RF-HB-001 – Autenticación del cliente en Home Banking */
 
 (function () {
-  crearConsola();
 
   const form = document.getElementById("formLogin");
   const btn = document.getElementById("btnIngresar");
@@ -12,11 +11,6 @@
 
   (async function verificarCanal() {
     const etiqueta = document.getElementById("estadoCanal");
-    if (!Bus.esApi) {
-      if (etiqueta) etiqueta.textContent = "MOCK local · sin servidor";
-      mostrarMensaje(msg, "warn", "Modo local limitado. Ejecute ./iniciar.sh para habilitar transferencias, Token Matriz, créditos y auditoría.");
-      return;
-    }
     try {
       const r = await fetch("/api/core/coredb/salud");
       if (etiqueta && r.ok) etiqueta.textContent = "COREDB · en línea";

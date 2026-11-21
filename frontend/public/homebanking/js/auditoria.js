@@ -5,7 +5,6 @@
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const msg = document.getElementById("msgAuditoria");
   const tabla = document.getElementById("tablaAuditoria");
@@ -16,12 +15,6 @@
   const btnCsv = document.getElementById("btnCsv");
 
   let eventosActuales = [];
-
-  if (!Bus.esApi) {
-    avisoModoLocal(msg);
-    btnActualizar.disabled = true;
-    btnCsv.disabled = true;
-  }
 
   async function consultar(limit, filtros = {}) {
     return Bus.consultarAuditoria(limit, filtros);
@@ -77,7 +70,6 @@
 
   async function cargar() {
     ocultarMensaje(msg);
-    if (!Bus.esApi) { avisoModoLocal(msg); return; }
     try {
       const todos = await consultar(500);
       opciones(filtroModulo, todos.modulos || [], "Todos");

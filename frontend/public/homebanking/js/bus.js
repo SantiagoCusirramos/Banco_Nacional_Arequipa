@@ -10,41 +10,20 @@
 
 const Bus = (() => {
 
-  let nSecuencia = 0;
-  let simulacionTimeout = false;
-  const consola = [];
-
-  const uuid = () =>
-    "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === "x" ? r : ((r & 0x3) | 0x8);
-      return v.toString(16);
-    });
-
-  const espera = ms => new Promise(r => setTimeout(r, ms));
-
-  function registrar(reg) {
-    consola.push(reg);
-    if (typeof window !== "undefined" && typeof pintarConsola === "function") pintarConsola();
-  }
-
-  function uuidTransaccion() {
-    nSecuencia += 1;
-    return { uuid: uuid(), correlacion: `HB-${String(nSecuencia).padStart(4, "0")}` };
-  }
-
-  function leerToken() {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("bna_access_token");
-  }
+  // Llave de idempotencia. crypto.randomUUID no existe por HTTP fuera de localhost (el clúster
+  // se sirve por HTTP); crypto.getRandomValues sí.
+  const uuid = () => {
+    const b = crypto.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  };
 
   function cabeceras(idempotencyKey) {
-    const s = Sesion.leer();
-    const h = {
-      "Content-Type": "application/json",
-    };
+    const h = { "Content-Type": "application/json" };
     // Token de COREDB para autenticación en los puentes
-    const token = leerToken();
+    const token = localStorage.getItem("bna_access_token");
     if (token) h.Authorization = `Bearer ${token}`;
     if (idempotencyKey) h["X-Idempotency-Key"] = idempotencyKey;
     return h;
@@ -52,38 +31,18 @@ const Bus = (() => {
 
   /* ---------------- Invocación a puentes del frontend ---------------- */
   async function invocarAPI(ruta, cuerpo, interfaz, opciones = {}) {
-    const tr = uuidTransaccion();
-    const idem = opciones.idempotencyKey || tr.uuid;
-    const inicio = performance.now();
-    const solicitud = {
-      metodo: opciones.method || "POST",
-      ruta,
-      interfaz,
-      canal: "HB_WEB",
-      uuidTransaccion: idem,
-      correlacion: tr.correlacion,
-      fechaHora: new Date().toISOString(),
-      payload: cuerpo
-    };
-
+    const metodo = opciones.method || "POST";
+    const idem = opciones.idempotencyKey || uuid();
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), opciones.timeoutMs || 10000);
     try {
       const resp = await fetch(ruta, {
-        method: solicitud.metodo,
+        method: metodo,
         headers: { ...cabeceras(idem), ...(opciones.headers || {}) },
-        body: solicitud.metodo !== "GET" ? JSON.stringify(cuerpo || {}) : undefined,
+        body: metodo !== "GET" ? JSON.stringify(cuerpo || {}) : undefined,
         signal: ctrl.signal
       });
       const json = await resp.json();
-      const ms = Math.round(performance.now() - inicio);
-      registrar({
-        ...solicitud,
-        status: resp.status,
-        estado: resp.ok && json.ok !== false ? "OK" : "ERROR",
-        respuesta: json,
-        ms
-      });
       if (!resp.ok || json.ok === false) {
         const err = (typeof json.error === "object" && json.error) || {};
         const texto = err.message || json.message || (typeof json.detail === "string" ? json.detail : "") ||
@@ -96,40 +55,19 @@ const Bus = (() => {
       }
       return json.data !== undefined ? json.data : json;
     } catch (e) {
-      const ms = Math.round(performance.now() - inicio);
       if (e.name === "AbortError") {
-        const reg = {
-          ...solicitud,
-          status: 504,
-          estado: "TIMEOUT",
-          respuesta: {
-            ok: false,
-            error: {
-              codigo: "BUS_TIMEOUT",
-              mensaje: "El servicio no respondió en el tiempo esperado. La operación queda PENDIENTE / NO CONFIRMADA (RN-BUS-002)."
-            }
-          },
-          ms
-        };
-        registrar(reg);
         throw Object.assign(new Error("timeout"), {
           codigo: "BUS_TIMEOUT",
-          mensaje: reg.respuesta.error.mensaje,
+          mensaje: "El servicio no respondió a tiempo: la operación queda sin confirmar.",
           status: 504
         });
       }
       if (e.codigo) throw e;
-      const reg = {
-        ...solicitud,
-        status: 0,
-        estado: "SIN_CONEXION",
-        respuesta: { ok: false, error: { codigo: "BUS_NO_DISPONIBLE", mensaje: "No se pudo conectar con el frontend." } },
-        ms
-      };
-      registrar(reg);
+      // Sin respuesta (red caída) o respuesta que no es JSON (un proxy intermedio): no se sabe
+      // si la operación llegó.
       throw Object.assign(new Error("sin conexión"), {
         codigo: "BUS_NO_DISPONIBLE",
-        mensaje: "No se pudo conectar con el frontend. Verifique que el servidor esté iniciado.",
+        mensaje: "No hubo respuesta del servidor. Revisa tu conexión.",
         status: 0
       });
     } finally {
@@ -293,8 +231,11 @@ const Bus = (() => {
           saldo: num(c.saldoTotalPendiente),
           cuota: pendientes.length ? num(pendientes[0].totalAdeudado) : 0,
           cuotasPendientes: pendientes.length,
-          estado: c.estadoCredito,
-          cuentaAsociada: null
+          // La cuota más antigua con saldo: COREDB aplica el pago desde ella.
+          proximaCuota: pendientes.length
+            ? { numero: pendientes[0].numeroCuota, vence: pendientes[0].fechaVencimiento }
+            : null,
+          estado: c.estadoCredito
         };
       })
     };
@@ -305,29 +246,14 @@ const Bus = (() => {
   }
 
   // CR-INT-08: referenciaTransaccion es la llave; la misma en un reintento no cobra dos veces.
+  // Devuelve la respuesta de COBRANZA tal cual (estado, saldo del crédito, cuotas pendientes...):
+  // la pantalla comprueba que esté completa y no rellena nada.
   async function pagarCuota(codCredito, p, idempotencyKey) {
     const s = sesion();
-    const r = await invocarAPI("/api/cobranza/cr-int-08/pagos", {
+    return invocarAPI("/api/cobranza/cr-int-08/pagos", {
       codCliente: s.codCliente, codCredito, montoPago: num(p.montoPago).toFixed(2),
       cuentaOrigen: p.numCuentaOrigen, referenciaTransaccion: idempotencyKey
     }, "COBRANZA · CR-INT-08", { idempotencyKey });
-    if (r.estado && r.estado !== "CONFIRMADO") fallo(422, "PAGO_" + r.estado, r.motivo || "El pago no se confirmó.");
-    return {
-      idPago: r.idPago,
-      uuidTransaccion: r.referenciaTransaccion,
-      codCredito: r.codCredito,
-      producto: "Crédito " + r.codCredito,
-      estadoPago: r.estado,
-      idempotente: !!r.idempotente,
-      montoPagado: num(p.montoPago),
-      moneda: p.moneda,
-      fechaHora: new Date().toLocaleString("es-PE"),
-      idAsientoCore: r.idPago,
-      saldoCredito: null,
-      cuotasPendientes: null,
-      saldoActualizado: null,
-      constanciaPDF: null
-    };
   }
 
   // Bitácora de COREDB (solo el administrador). No hay "resultado": cada evento es una acción hecha.
@@ -349,12 +275,6 @@ const Bus = (() => {
     };
   }
 
-  async function reiniciarDemo() {
-    // No hay reinicio de demo en esta versión: solo se limpia la consola local.
-    consola.length = 0;
-    if (typeof pintarConsola === "function") pintarConsola();
-  }
-
   function constanciaUrl() {
     return null;  // No hay constancia PDF en el producto.
   }
@@ -372,13 +292,7 @@ const Bus = (() => {
     obtenerMontoAPagar,
     pagarCuota,
     consultarAuditoria,
-    reiniciarDemo,
     constanciaUrl,
-    nuevoIdempotencyKey: uuid,
-    get consola() { return consola; },
-    get timeout() { return simulacionTimeout; },
-    set timeout(v) { simulacionTimeout = !!v; },
-    get modo() { return "API"; },
-    get esApi() { return true; }
+    nuevoIdempotencyKey: uuid
   };
 })();

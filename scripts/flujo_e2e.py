@@ -23,6 +23,7 @@ puente del frontend llegaron a los módulos a través de él, y que cada módulo
 (CUENTAS, TARJETAS, CAPTACION, EVALUACION, DESEMBOLSO) llegó a COREDB por el Bus (fase 2).
 """
 
+import concurrent.futures
 import datetime
 import json
 import os
@@ -806,6 +807,48 @@ def flujo():
     exigir(credito["cuotas"][0]["estado"] == "PAGADA" and credito["cuotasPagadas"] == 1,
            f"El crédito debía tener la cuota 1 PAGADA: {credito}")
     paso(f"COREDB: el crédito {confirmada['codCredito']} tiene la cuota 1 PAGADA y cuotasPagadas = 1")
+
+    # ── Home Banking: la cuota 2 por el puente del frontend (CR-INT-08) ────
+    # Doble clic o respuesta perdida: dos envíos simultáneos con la misma llave cobran una vez, y
+    # el comprobante trae el saldo y las cuotas reales del crédito (antes: 0.00 y null).
+    monto_cuota_2 = credito["cuotas"][1]["saldoPendiente"]
+    llave_hb = str(uuid.uuid4())
+    cuerpo_hb = {"codCliente": cliente, "codCredito": confirmada["codCredito"], "montoPago": monto_cuota_2,
+                 "cuentaOrigen": abono, "referenciaTransaccion": llave_hb}
+    saldo_antes_hb = coredb("GET", f"/coredb/cuentas/{abono}", 200, token=token)["saldo_disponible"]
+    movimientos_antes_hb = len(coredb("GET", f"/coredb/movimientos/cuenta/{abono}", 200, token=token))
+
+    def pago_hb():
+        return pedir("POST", f"{FRONTEND}/api/cobranza/cr-int-08/pagos", cuerpo_hb, token_op,
+                     {"X-Idempotency-Key": llave_hb})
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as hilos:
+        simultaneos = [f.result() for f in [hilos.submit(pago_hb), hilos.submit(pago_hb)]]
+    estados_hb = sorted(estado for estado, _ in simultaneos)
+    exigir(estados_hb == [200, 201], f"Home Banking, dos envíos con la misma llave: {simultaneos}")
+    exigir(len({r["idPago"] for _, r in simultaneos}) == 1, f"Debía ser el mismo pago: {simultaneos}")
+    estado, reintento = pago_hb()
+    exigir(estado == 200 and reintento["idempotente"] is True and reintento["idPago"] == simultaneos[0][1]["idPago"],
+           f"Home Banking, reintento con la misma llave: {estado} {reintento}")
+    saldo_despues_hb = coredb("GET", f"/coredb/cuentas/{abono}", 200, token=token)["saldo_disponible"]
+    movimientos_despues_hb = len(coredb("GET", f"/coredb/movimientos/cuenta/{abono}", 200, token=token))
+    exigir(Decimal(saldo_antes_hb) - Decimal(saldo_despues_hb) == Decimal(monto_cuota_2)
+           and movimientos_despues_hb == movimientos_antes_hb + 1,
+           f"Un solo débito de {monto_cuota_2}: saldo {saldo_antes_hb} -> {saldo_despues_hb}, "
+           f"movimientos {movimientos_antes_hb} -> {movimientos_despues_hb}")
+    credito_hb = coredb("GET", f"/coredb/creditos/{confirmada['codCredito']}", 200, token=token)
+    pendientes_hb = sum(1 for c in credito_hb["cuotas"] if Decimal(c["saldoPendiente"]) > 0)
+    for _, comprobante_hb in [*simultaneos, (estado, reintento)]:
+        exigir(comprobante_hb["estado"] == "CONFIRMADO" and comprobante_hb["montoPago"] == monto_cuota_2
+               and comprobante_hb["saldoCredito"] == credito_hb["saldoPendiente"]
+               and comprobante_hb["cuotasPendientes"] == pendientes_hb == 10
+               and comprobante_hb["cuotasPagadas"] == [2] and comprobante_hb["numCuenta"] == abono
+               and comprobante_hb["moneda"] == credito_hb["moneda"],
+               f"Comprobante del Home Banking: {comprobante_hb} frente a COREDB {credito_hb['saldoPendiente']}, "
+               f"{pendientes_hb} cuotas pendientes")
+    paso(f"Home Banking (frontend → COBRANZA → COREDB): la cuota 2 ({monto_cuota_2}) enviada dos veces a la vez y "
+         f"reintentada con la misma llave se debitó una sola vez; el comprobante trae el saldo del crédito "
+         f"{credito_hb['saldoPendiente']} y {pendientes_hb} cuotas pendientes, como COREDB")
 
     # ── CAPTACION: un prospecto, de la solicitud a cliente habilitado ──────
     exigir(TOKEN_SOL, "Falta CAP_SOL_TOKEN")

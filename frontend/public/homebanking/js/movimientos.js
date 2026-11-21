@@ -5,7 +5,6 @@
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const params = new URLSearchParams(window.location.search);
   const numCuenta = (params.get("cuenta") || "").trim();
