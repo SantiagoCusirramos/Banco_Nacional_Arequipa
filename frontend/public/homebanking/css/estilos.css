@@ -306,58 +306,6 @@ tbody tr:hover { background: #f7f9fc; }
 }
 .nota code { font-family: var(--mono); background: #e9eef6; padding: 1px 5px; border-radius: 4px; color: var(--azul); }
 
-/* ---------- Consola del Bus de Servicios ---------- */
-.consola {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  background: #0d1520;
-  color: #cfe3ff;
-  font-family: var(--mono);
-  font-size: 12px;
-  z-index: 60;
-  box-shadow: 0 -6px 20px rgba(0,0,0,.35);
-  max-height: 32vh;
-  display: flex;
-  flex-direction: column;
-}
-.consola-cab { flex: 0 0 auto; }
-.consola-cuerpo { flex: 1 1 auto; }
-.consola-cab {
-  display: flex; align-items: center; gap: 14px;
-  padding: 8px 16px;
-  background: #111c2b;
-  border-bottom: 1px solid #1f2c40;
-  flex-wrap: wrap;
-}
-.consola-cab b { color: #7fe0a8; letter-spacing: .4px; }
-.consola-cab .etq { color: #8aa4c8; }
-.consola-cab button {
-  background: #1c2b40; color: #cfe3ff;
-  border: 1px solid #2b3d57; border-radius: 7px;
-  padding: 4px 10px; font-family: var(--mono); font-size: 11.5px;
-  cursor: pointer;
-}
-.consola-cab button:hover { background: #24374f; }
-.consola-cab label { display: flex; align-items: center; gap: 6px; color: #8aa4c8; cursor: pointer; }
-.consola-cuerpo { overflow-y: auto; padding: 10px 16px 16px; }
-.consola-vacia { color: #5f7fa3; }
-.consola-item { border-bottom: 1px dashed #1f2c40; padding: 8px 0; }
-.consola-item .linea1 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.consola-item .hora { color: #6f87a8; }
-.consola-item .ruta { color: #ffd479; }
-.consola-item .metodo { color: #7fe0a8; font-weight: 700; }
-.consola-item .interfaz { color: #9ecbff; }
-.consola-item .lat { color: #8aa4c8; }
-.consola-item pre { margin: 6px 0 4px; white-space: pre-wrap; word-break: break-word; color: #a9c3e6; }
-.consola-item pre.req { border-left: 3px solid #3b5d8a; padding-left: 8px; }
-.consola-item pre.res { border-left: 3px solid #2f8f5b; padding-left: 8px; }
-.consola-item .estado-ok { color: #7fe0a8; }
-.consola-item .estado-err { color: #ff8b9b; }
-
-.consola-oculta .consola-cuerpo { display: none; }
-.consola-oculta .ocultable { display: none; }
-.consola-oculta { max-height: none; }
-
 /* ---------- Utilidades ---------- */
 .tono-suave { color: var(--texto-suave); font-size: 13px; }
 .mt-0 { margin-top: 0; }
@@ -478,7 +426,7 @@ tbody tr:hover { background: #f7f9fc; }
 .constancia-acciones { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .constancia-acciones a { text-decoration: none; }
 
-/* ---------- Token Matriz ---------- */
+/* ---------- Confirmación de pago (confirmacion.js) ---------- */
 .token-overlay {
   position: fixed; inset: 0;
   background: rgba(7, 18, 34, .62);
@@ -514,36 +462,15 @@ tbody tr:hover { background: #f7f9fc; }
   margin-bottom: 14px;
 }
 .token-coordenada b { font-size: 20px; font-family: var(--mono); color: var(--azul); }
-.token-grid {
-  display: grid;
-  grid-template-columns: 34px repeat(4, 1fr);
-  gap: 5px;
-  margin: 12px 0 16px;
-  font-family: var(--mono);
-  font-size: 12px;
-}
-.token-grid .esq, .token-grid .cab {
-  color: var(--texto-suave);
-  display: grid; place-items: center;
-  font-weight: 700;
-}
-.token-celda {
-  border: 1px solid var(--borde);
-  border-radius: 7px;
-  padding: 6px 4px;
-  text-align: center;
-  background: #fbfcfe;
-  color: var(--texto-suave);
-}
-.token-celda.pedida {
-  background: var(--warn-fondo);
-  border-color: #e8c877;
-  color: var(--warn);
-  font-weight: 800;
-  box-shadow: 0 0 0 2px rgba(232,200,119,.35);
-}
 .token-acciones { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
 .token-error { margin: 10px 0 0; }
+.token-caja { max-height: calc(100vh - 40px); overflow-y: auto; }
+.confirmacion-resumen { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0 0 14px; font-size: 14px; }
+.confirmacion-resumen dt { color: var(--texto-suave); }
+.confirmacion-resumen dd { margin: 0; font-weight: 700; word-break: break-word; }
+.confirmacion-aviso { margin: 8px 0; font-size: 13px; }
+#codigoSimulado { display: block; letter-spacing: 4px; }
+@media (max-width: 480px) { .confirmacion-resumen { grid-template-columns: 1fr; } .confirmacion-resumen dd { margin-bottom: 6px; } }
 
 /* ---------- Auditoría ---------- */
 .auditoria-filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
@@ -576,7 +503,5 @@ tbody tr:hover { background: #f7f9fc; }
 .credito-card button { margin-top: auto; }
 
 @media (max-width: 640px) {
-  .token-grid { font-size: 10.5px; }
-  .token-celda { padding: 5px 2px; }
   .nav-canal { padding: 0 12px; }
 }

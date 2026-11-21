@@ -140,6 +140,14 @@ def pago_legacy(pago: dict, detalle: dict | None = None, *, idempotente: bool = 
         "idCanal": pago["canal"], "montoPago": _d(pago["monto"]), "fechaHora": pago["fecha"],
         "aplicacion": aplicacion,
         "estadoCredito": pago.get("estadoCredito") or (detalle.get("estado") if detalle else None),
+        # Para el comprobante del Home Banking: lo que quedó en COREDB, nunca un valor por omisión.
+        "numCuenta": pago.get("numCuenta"), "montoAplicado": _d(pago.get("montoAplicado")),
+        "uuidTransaccion": pago.get("uuidTransaccion"),
+        "cuotasPagadas": [a["numeroCuota"] for a in pago.get("aplicaciones") or []],
+        "moneda": detalle.get("moneda") if detalle else None,
+        "saldoCredito": _d(detalle.get("saldoPendiente")) if detalle else None,
+        "cuotasPendientes": (sum(1 for c in detalle.get("cuotas", []) if Decimal(str(c["saldoPendiente"])) > 0)
+                             if detalle else None),
     }
 
 

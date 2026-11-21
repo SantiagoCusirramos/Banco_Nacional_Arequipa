@@ -5,7 +5,6 @@
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const form = document.getElementById("formTarjeta");
   const inp = document.getElementById("numTarjeta");

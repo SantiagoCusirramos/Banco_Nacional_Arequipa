@@ -13,13 +13,13 @@
     <div class="marca-logo">BNA</div>
     <div class="marca-txt">
       <strong>Banco Nacional de Arequipa</strong>
-      <span>Home Banking · Prototipo de interfaz</span>
+      <span>Home Banking · Atención a clientes</span>
     </div>
   </div>
   <div class="sesion">
     <div class="quien">
-      <b>Canal web seguro</b>
-      <span id="estadoCanal">Bus local REST/JSON · simulación</span>
+      <b>Estado del servicio</b>
+      <span id="estadoCanal">Comprobando conexión…</span>
     </div>
   </div>
 </header>
@@ -29,7 +29,7 @@
     <div class="login-cab">
       <div class="marca-logo">BNA</div>
       <h1>Ingresa a tu Home Banking</h1>
-      <p>RF-HB-001 · Clave de 6 dígitos numéricos</p>
+      <p>Entra con tu usuario del banco y el código del cliente que atiendes.</p>
     </div>
 
     <div class="login-cuerpo-int">
@@ -55,30 +55,6 @@
 
       <div class="msg" id="msgLogin"></div>
 
-      <div class="separador"></div>
-
-      <p class="tono-suave mb-0">
-        <b>Datos de prueba del prototipo</b> (Bus de Servicios local):
-      </p>
-      <div class="tabla-env" style="margin-top:10px">
-        <table>
-          <thead>
-            <tr><th>Código</th><th>Clave</th><th>Estado</th></tr>
-          </thead>
-          <tbody>
-            <tr><td class="num">CL-0004821</td><td class="num">246810</td><td><span class="badge ok">Activo</span></td></tr>
-            <tr><td class="num">CL-0009930</td><td class="num">777777</td><td><span class="badge ok">Activo</span></td></tr>
-            <tr><td class="num">CL-0007712</td><td class="num">—</td><td><span class="badge err">Bloqueado</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="tono-suave" style="margin-top:10px">
-        Ingresa 3 claves incorrectas para ver el bloqueo preventivo (RN-TAR-004).
-      </p>
-      <p class="tono-suave" style="margin-top:10px">
-        <b>Fase III:</b> transferencias, Token Matriz, pago de créditos y auditoría están disponibles
-        al ejecutar <code>./iniciar.sh</code> y abrir <code>http://127.0.0.1:8080/</code>.
-      </p>
     </div>
   </div>
 </main>

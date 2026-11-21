@@ -104,6 +104,18 @@ def test_la_respuesta_de_pago_se_traduce_con_la_cuota_actualizada():
     assert repetido["motivo"] == "SALDO_INSUFICIENTE"
 
 
+def test_la_respuesta_de_pago_trae_el_saldo_y_las_cuotas_del_credito():
+    """El comprobante del Home Banking muestra lo que devuelve el servidor, nunca un valor por omisión."""
+    resultado = pago_legacy(PAGO, DETALLE)
+    assert (resultado["saldoCredito"], resultado["cuotasPendientes"], resultado["cuotasPagadas"]) == (
+        "750.00", 2, [2])
+    assert (resultado["numCuenta"], resultado["moneda"], resultado["montoAplicado"]) == ("CTA-1", "PEN", "400.00")
+    assert resultado["uuidTransaccion"] == "transaccion-1"
+    rechazado = pago_legacy({**PAGO, "estado": "RECHAZADO", "motivo": "SALDO_INSUFICIENTE", "aplicaciones": [],
+                             "montoAplicado": "0.00", "uuidTransaccion": None}, DETALLE)
+    assert (rechazado["cuotasPagadas"], rechazado["uuidTransaccion"], rechazado["montoAplicado"]) == ([], None, "0.00")
+
+
 def test_el_comprobante_exige_un_pago_confirmado():
     comprobante = comprobante_legacy(PAGO, DETALLE)
     assert (comprobante["numeroOperacion"], comprobante["cuotaNumero"]) == ("REF-1", 2)

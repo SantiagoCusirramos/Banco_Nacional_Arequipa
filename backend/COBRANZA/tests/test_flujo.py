@@ -107,11 +107,21 @@ def test_el_pago_de_la_pantalla_usa_la_ruta_anterior(api, admin, operador, credi
         1, monto, monto)
     assert aplicacion["montoAplicadoMora"] == "0.00"
     assert saldo(admin, credito["numCuenta"]) == f"{float(antes) - float(monto):.2f}"
+    # El comprobante del Home Banking: saldo y cuotas del crédito tal como quedaron en COREDB.
+    detalle = api.get(f"/api/v1/creditos/{credito['codCredito']}", headers=cabeceras(token)).json()
+    pendientes = sum(1 for c in detalle["cuotas"] if float(c["saldoPendiente"]) > 0)
+    assert (resultado["saldoCredito"], resultado["cuotasPendientes"]) == (detalle["saldoPendiente"], pendientes)
+    assert pendientes == len(detalle["cuotas"]) - 1 and float(resultado["saldoCredito"]) > 0
+    assert (resultado["cuotasPagadas"], resultado["numCuenta"], resultado["moneda"]) == (
+        [1], credito["numCuenta"], detalle["moneda"])
+    assert resultado["montoAplicado"] == monto and resultado["uuidTransaccion"]
 
     repetida = pago_legacy(api, token, {"codCliente": credito["codCliente"], "codCredito": credito["codCredito"],
                                         "montoPago": monto, "numCuenta": credito["numCuenta"]}, referencia)
     assert repetida.status_code == 200
     assert repetida.json()["idPago"] == resultado["idPago"] and repetida.json()["idempotente"] is True
+    assert (repetida.json()["saldoCredito"], repetida.json()["cuotasPendientes"]) == (
+        resultado["saldoCredito"], resultado["cuotasPendientes"])
     assert saldo(admin, credito["numCuenta"]) == f"{float(antes) - float(monto):.2f}"
 
 

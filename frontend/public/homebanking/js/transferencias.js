@@ -8,7 +8,6 @@
   if (!sesion) return;
 
   pintarCabecera();
-  crearConsola();
 
   const form = document.getElementById("formTrans");
   const msg = document.getElementById("msgTrans");
@@ -36,12 +35,6 @@
   const LIMITE_DIARIO_PEN = 10000;
   const LIMITE_DIARIO_USD = 3000;
   const CANAL = "HB_WEB";
-
-  if (!Bus.esApi) {
-    avisoModoLocal(msg);
-    btn.disabled = true;
-    btn.title = "Transferencias requieren backend COREDB y CUENTAS";
-  }
 
   const cuentaActual = () => cuentas.find(c => c.numCuenta === selOrigen.value);
   const monedaActual = () => cuentaActual() ? cuentaActual().moneda : "PEN";
@@ -215,10 +208,6 @@
   form.addEventListener("submit", async e => {
     e.preventDefault();
     ocultarMensaje(msg);
-    if (!Bus.esApi) {
-      avisoModoLocal(msg);
-      return;
-    }
     const v = validar();
     if (!v) return;
     if (!idemActual) idemActual = Bus.nuevoIdempotencyKey();
