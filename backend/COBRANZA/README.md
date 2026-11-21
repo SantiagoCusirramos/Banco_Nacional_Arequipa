@@ -54,7 +54,7 @@ La mora se **registra y muestra**, pero **no se cobra** (decisión T5 de [`Docum
 | `GET /clientes/{idCliente}/creditos` | Créditos con su cronograma (RF-COB-002 / RF-COB-012) |
 | `GET /creditos/{codCredito}/monto-a-pagar` | Monto a pagar de la próxima cuota (RF-COB-003) |
 | `GET /pagos/{referencia}/comprobante` | Comprobante de un pago confirmado (RN-COB-012) |
-| `POST /cr-int-08/pagos` | CR-INT-08: pago desde Home Banking (misma idempotencia por `referenciaTransaccion`) |
+| `POST /cr-int-08/pagos` | CR-INT-08: pago desde Home Banking (misma idempotencia por `referenciaTransaccion`). Para el comprobante devuelve además, leídos de COREDB tras el pago: `saldoCredito`, `cuotasPendientes`, `cuotasPagadas`, `numCuenta`, `moneda`, `montoAplicado` y `uuidTransaccion` |
 
 ## Configuración
 
