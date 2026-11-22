@@ -47,7 +47,7 @@ def test_solo_cuenta_el_documento_exacto(client, core):
     core.respuesta = [httpx.Response(200, json=[solicitante("458712360")])]
     r = client.post("/api/identificar-tarjeta", json={"documento": "45871236", "ultimos4": "3886"}, headers=AUTH)
     assert r.status_code == 404
-    assert r.json()["error"]["code"] == "ERR-ATM-TARJETA-NO-RECONOCIDA"
+    assert r.json()["error_code"] == "ERR-ATM-TARJETA-NO-RECONOCIDA"
 
 
 def test_mismo_error_si_el_documento_existe_pero_los_digitos_no(client, core):
@@ -57,7 +57,7 @@ def test_mismo_error_si_el_documento_existe_pero_los_digitos_no(client, core):
     core.respuesta = [httpx.Response(200, json=[])]
     r2 = client.post("/api/identificar-tarjeta", json={"documento": "11111111", "ultimos4": "3886"}, headers=AUTH)
     assert r1.status_code == r2.status_code == 404
-    assert r1.json()["error"] == r2.json()["error"]
+    assert (r1.json()["error_code"], r1.json()["message"]) == (r2.json()["error_code"], r2.json()["message"])
 
 
 def test_prefiere_la_tarjeta_activa_si_hay_dos_con_los_mismos_digitos(client, core):
