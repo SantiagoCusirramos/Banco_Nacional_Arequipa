@@ -131,6 +131,8 @@ SELECT COUNT(*) FROM information_schema.columns
 SQL
 )"
 
+comprobar 'la API lee el historial de estados de las tarjetas por la vista' '^0$' "$(app -e 'SELECT COUNT(*) FROM tarjetas.v_historial_estado_tarjeta_api WHERE id_historial < 0' 2>&1 || true)"
+
 seguridad() { docker exec -i -e MYSQL_PWD="$PW_SEGURIDAD" "$C" mysql -ubna_seguridad_user -h127.0.0.1 --protocol=TCP -N "$@"; }
 comprobar 'rol de bna_seguridad_user' 'bna_seguridad' "$(seguridad -e 'SELECT CURRENT_ROLE()' 2>&1 || true)"
 comprobar 'bna_app_user no desbloquea' 'denied' \

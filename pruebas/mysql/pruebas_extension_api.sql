@@ -1943,3 +1943,24 @@ CALL prueba.rechaza('X835', 'Extensión', 'bna_api', 'bna_api no escribe core.ev
 
 CALL prueba.rechaza('X836', 'Extensión', 'Auditoría', 'Un evento sin actor se rechaza',
   JSON_ARRAY(REPLACE(@aud, "'svc-sol'", "NULL")), '^BNA-AUDITORIA:', 'procedimiento');
+
+-- ---------------------------------------------------------------------
+-- v1.16: el historial de estados de una tarjeta, para la pantalla de desbloqueo
+-- ---------------------------------------------------------------------
+CALL prueba.verifica('X837', 'Extensión', 'Consultas', 'La vista del historial de tarjetas tiene exactamente las columnas acordadas',
+  JSON_ARRAY("SET @columnas = (SELECT GROUP_CONCAT(column_name ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema = 'tarjetas' AND table_name = 'v_historial_estado_tarjeta_api')"),
+  "SELECT @columnas = 'id_historial,id_tarjeta,estado_nuevo,motivo,origen,fecha_hora'",
+  'id_historial,id_tarjeta,estado_nuevo,motivo,origen,fecha_hora', "SELECT IFNULL(@columnas, 'sin vista')", 'vista');
+
+CALL prueba.verifica('X838', 'Extensión', 'Consultas', 'bna_api lee el motivo y el origen de un bloqueo en el historial de la tarjeta',
+  JSON_ARRAY("CALL tarjetas.cambiar_estado_tarjeta(UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'BLOQUEADA', 'Bloqueo solicitado por el cliente', 'CLIENTE', 'pruebas', @h)",
+             "SET @fila = (SELECT CONCAT_WS(' | ', estado_nuevo, motivo, origen, fecha_hora IS NOT NULL) FROM tarjetas.v_historial_estado_tarjeta_api WHERE id_historial = @h AND id_tarjeta = UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'))"),
+  "SELECT @fila = 'BLOQUEADA | Bloqueo solicitado por el cliente | CLIENTE | 1'",
+  'BLOQUEADA | Bloqueo solicitado por el cliente | CLIENTE | 1', "SELECT IFNULL(@fila, 'NULL')", 'privilegio');
+
+CALL prueba.rechaza('X839', 'Extensión', 'bna_api', 'bna_api no puede: escribir en el historial de la tarjeta por la vista',
+  JSON_ARRAY("INSERT INTO tarjetas.v_historial_estado_tarjeta_api (id_tarjeta, estado_nuevo, motivo, origen) VALUES (UUID_TO_BIN('a0000000-0000-4000-8000-000000000001'), 'ACTIVA', 'x', 'SEGURIDAD')"),
+  'denied', 'privilegio');
+
+CALL prueba.rechaza('X840', 'Extensión', 'bna_api', 'bna_api no puede: SELECT tarjetas.historial_estado_tarjeta (solo la vista)',
+  JSON_ARRAY("SELECT * FROM tarjetas.historial_estado_tarjeta"), 'denied', 'privilegio');
