@@ -25,7 +25,7 @@ const AUDITOR = { id_usuario: "u-2", username: "aldo.auditor", nombre: "Aldo Aud
   acciones: ["VER_AUDITORIA", "VER_CREDITO"] };
 
 const SOLICITUD = {
-  idSolicitud: ID, versionSolicitud: 1, ronda: 1, codCliente: "CLI0000001", montoSolicitado: "15000.00",
+  idSolicitud: ID, codigo: "SOL-2611-ABCDEF12", versionSolicitud: 1, ronda: 1, codCliente: "CLI0000001", montoSolicitado: "15000.00",
   moneda: "PEN", plazoMeses: 2, condicionPagoDoble: false, estado: "EN_EVALUACION",
   fechaCreacion: "2026-11-15T15:00:00Z", numeroCuotas: 2, totalCuotas: "15377.11", primerVencimiento: "2026-12-15",
 };
@@ -157,5 +157,16 @@ describe("Página del módulo Evaluación", () => {
     escribir(screen.getByLabelText("Comentario"), "Sustento revisado con el cliente.");
     await userEvent.click(screen.getByRole("button", { name: "Registrar decisión" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("El usuario no es un analista registrado.");
+  });
+
+  it("EV-07 La bandeja y el detalle muestran el código SOL, no el UUID", async () => {
+    servidor(DETALLE);
+    render(<EvaluacionPage />);
+    expect(await screen.findByText("SOL-2611-ABCDEF12")).toBeInTheDocument();
+    expect(screen.queryByText(ID)).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: `Abrir ${ID}` }));
+    await screen.findByRole("table", { name: "Calendario de pagos" });
+    expect(screen.getAllByText("SOL-2611-ABCDEF12").length).toBeGreaterThan(0);
+    expect(screen.queryByText(ID)).not.toBeInTheDocument();
   });
 });

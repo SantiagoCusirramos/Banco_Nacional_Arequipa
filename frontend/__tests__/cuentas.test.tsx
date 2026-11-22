@@ -7,12 +7,14 @@ import { BancaPersonal } from "../app/components/BancaPersonal";
 // El frontend no llama a ningún servicio real en las pruebas.
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
+  api: { get: vi.fn(), post: vi.fn() },
   apiCore: { get: vi.fn(), post: vi.fn() },
   apiCuentas: { get: vi.fn(), post: vi.fn() },
 }));
-import { apiCore, apiCuentas } from "@/lib/api";
+import { api, apiCore, apiCuentas } from "@/lib/api";
 
 const core = vi.mocked(apiCore.get);
+const buscar = vi.mocked(api.post);
 const post = vi.mocked(apiCuentas.post);
 const get = vi.mocked(apiCuentas.get);
 
@@ -51,6 +53,7 @@ function errorHttp(status: number, data: unknown) {
 
 beforeEach(() => {
   core.mockReset();
+  buscar.mockReset();
   post.mockReset();
   get.mockReset();
   core.mockImplementation((url) => {
@@ -229,6 +232,31 @@ describe("Crear cuenta", () => {
     await screen.findByRole("option", { name: /Agencia Arequipa Centro/ });
     expect(screen.getByLabelText("Cliente titular")).toHaveValue("");
     expect(screen.getByLabelText("Agencia")).toHaveValue("");
+  });
+
+  it("CC-15 Busca al titular por documento o nombre sin poner el texto en la URL", async () => {
+    await abrir();
+    buscar.mockResolvedValue({ data: [{
+      id_solicitante: "s-1", tipo_documento: "DNI", numero_documento: "70000001",
+      nombres: "Ana", apellido_paterno: "Pérez", apellido_materno: "Quispe",
+      celular: "987654321", correo: "ana@example.com", cod_cliente: "CLI000000001",
+      creado_por: "asesor.uno", fecha_registro: "2026-01-15T10:00:00Z",
+    }] });
+    await userEvent.type(screen.getByLabelText("Cliente titular"), "Ana Pérez");
+    await userEvent.click(screen.getByRole("button", { name: "Buscar cod_cliente" }));
+
+    expect(buscar).toHaveBeenCalledWith("/coredb/captacion/solicitantes/busqueda", {
+      texto: "Ana Pérez", con_cliente: true, limite: 20,
+    });
+    const opcion = await screen.findByRole("button", { name: /Ana Pérez Quispe/ });
+    expect(opcion).toHaveTextContent("••••0001");
+    await userEvent.click(opcion);
+    expect(await screen.findByText(/Cliente seleccionado: Ana Pérez Quispe/)).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Agencia"), "AQP01");
+    await enviar();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect((post.mock.calls[0][1] as { titulares: { id_cliente: string }[] }).titulares)
+      .toEqual([{ id_cliente: "CLI000000001" }]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import SolicitudPage from "../app/solicitud-credito/page";
@@ -24,7 +24,7 @@ const api = vi.fn(async (input: string, init?: RequestInit) => {
 });
 beforeEach(() => {
   detail = { ...summary, versiones: [{ numero: 1, congelada: false, expediente: snapshot }], eventos: [], resultados: [], envios: [] };
-  profile = user; policy.integracion = "REAL"; override = () => undefined; api.mockClear(); vi.stubGlobal("fetch", api);
+  profile = user; policy.integracion = "REAL"; override = () => undefined; api.mockClear(); sessionStorage.clear(); vi.stubGlobal("fetch", api);
 });
 afterEach(() => vi.unstubAllGlobals());
 async function open() {
@@ -125,4 +125,29 @@ it("las garantías se eligen del catálogo de la base", async () => {
   const opciones = Array.from(document.querySelectorAll("select option")).map((o) => o.textContent);
   expect(opciones).toEqual(expect.arrayContaining(["HIPOTECARIA", "MOBILIARIA", "PRENDARIA"]));
   expect(opciones).not.toContain("PERSONAL");
+});
+
+it("el borrador sobrevive a una sesión vencida y vuelve al entrar", async () => {
+  render(<SolicitudPage />);
+  await userEvent.click(await screen.findByRole("button", { name: "Nueva solicitud" }));
+  await userEvent.click(screen.getByRole("radio"));
+  await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+  fireEvent.change(screen.getByLabelText("Monto solicitado"), { target: { value: "12345" } });
+  fireEvent.change(screen.getByLabelText("Destino del crédito"), { target: { value: "Compra de un local" } });
+  expect(sessionStorage.getItem("bna_borrador_solicitud")).toContain("Compra de un local");
+
+  // La sesión caduca: al volver a cargar, la pantalla pide acceso y no pierde lo escrito.
+  cleanup();
+  override = () => Response.json({ detail: "Sesión vencida" }, { status: 401 });
+  render(<SolicitudPage />);
+  await screen.findByRole("heading", { name: "Bienvenido a BNA" });
+  override = () => undefined;
+  fireEvent.change(screen.getByLabelText("Usuario"), { target: { value: "asesora" } });
+  fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "clave-sintetica" } });
+  await userEvent.click(screen.getByRole("button", { name: "Ingresar al portal" }));
+
+  expect(await screen.findByLabelText("Monto solicitado")).toHaveValue("12345");
+  expect(screen.getByLabelText("Destino del crédito")).toHaveValue("Compra de un local");
+  await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+  expect(sessionStorage.getItem("bna_borrador_solicitud")).toBeNull();
 });
