@@ -1964,3 +1964,53 @@ CALL prueba.rechaza('X839', 'Extensión', 'bna_api', 'bna_api no puede: escribir
 
 CALL prueba.rechaza('X840', 'Extensión', 'bna_api', 'bna_api no puede: SELECT tarjetas.historial_estado_tarjeta (solo la vista)',
   JSON_ARRAY("SELECT * FROM tarjetas.historial_estado_tarjeta"), 'denied', 'privilegio');
+
+-- ---------------------------------------------------------------------
+-- v1.17: contraseña inicial y cambio obligatorio en el primer ingreso
+-- ---------------------------------------------------------------------
+SET @ana_x84 = "CALL core.crear_usuario(UUID_TO_BIN('17000000-0000-4000-8000-000000000001'), 'ana-x84', 'Ana', 'ASESOR', 'h-inicial', 'BCRYPT', 'v2', NULL, TRUE, 'admin')";
+SET @svc_x84 = "CALL core.crear_usuario_servicio(UUID_TO_BIN('17000000-0000-4000-8000-000000000002'), 'svc-x84', 'S', 'CLIENTES', 'h', 'BCRYPT', 'v2', 'pruebas')";
+
+CALL prueba.verifica('X841', 'Extensión', 'Usuarios', 'Un usuario nuevo no debe cambiar su contraseña salvo que se le exija',
+  JSON_ARRAY(@ana_x84),
+  "SELECT (SELECT debe_cambiar_clave FROM core.usuario_sistema WHERE username = 'ana-x84') = 0",
+  '0', "SELECT IFNULL((SELECT debe_cambiar_clave FROM core.usuario_sistema WHERE username = 'ana-x84'), 'sin columna')", 'declarativo');
+
+CALL prueba.verifica('X842', 'Extensión', 'Usuarios', 'Exigir el cambio de contraseña marca a la persona y queda en la bitácora',
+  JSON_ARRAY(@ana_x84, "CALL core.exigir_cambio_clave(UUID_TO_BIN('17000000-0000-4000-8000-000000000001'), 'admin', @f)"),
+  "SELECT @f = 1 AND (SELECT debe_cambiar_clave FROM core.usuario_sistema WHERE username = 'ana-x84') = 1 AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'EXIGIR_CAMBIO_CLAVE' AND id_entidad = '17000000-0000-4000-8000-000000000001' AND actor = 'admin') = 1",
+  '1, marca y un evento', "SELECT CONCAT_WS(' ', @f, (SELECT debe_cambiar_clave FROM core.usuario_sistema WHERE username = 'ana-x84'))", 'procedimiento');
+
+CALL prueba.rechaza('X843', 'Extensión', 'Usuarios', 'A un usuario de servicio no se le exige cambiar la contraseña',
+  JSON_ARRAY(@svc_x84, "CALL core.exigir_cambio_clave(UUID_TO_BIN('17000000-0000-4000-8000-000000000002'), 'admin', @f)"),
+  '^BNA-USUARIO-SERVICIO:', 'procedimiento');
+
+CALL prueba.verifica('X844', 'Extensión', 'Usuarios', 'Restablecer la contraseña de una persona la reemplaza, exige cambiarla y queda en la bitácora',
+  JSON_ARRAY(@ana_x84, "CALL core.restablecer_clave(UUID_TO_BIN('17000000-0000-4000-8000-000000000001'), 'h-temporal', 'BCRYPT', 'v2', 'admin', @f)"),
+  "SELECT @f = 1 AND (SELECT CONCAT(hash_password, ' ', debe_cambiar_clave) FROM core.usuario_sistema WHERE username = 'ana-x84') = 'h-temporal 1' AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'RESTABLECER_CLAVE' AND id_entidad = '17000000-0000-4000-8000-000000000001' AND actor = 'admin' AND detalle NOT LIKE '%h-temporal%') = 1",
+  '1, hash nuevo, marca y un evento sin el hash', "SELECT CONCAT_WS(' ', @f, (SELECT CONCAT(hash_password, ' ', debe_cambiar_clave) FROM core.usuario_sistema WHERE username = 'ana-x84'))", 'procedimiento');
+
+CALL prueba.rechaza('X845', 'Extensión', 'Usuarios', 'La contraseña de un usuario de servicio no se restablece por esta vía',
+  JSON_ARRAY(@svc_x84, "CALL core.restablecer_clave(UUID_TO_BIN('17000000-0000-4000-8000-000000000002'), 'h', 'BCRYPT', 'v2', 'admin', @f)"),
+  '^BNA-USUARIO-SERVICIO:', 'procedimiento');
+
+CALL prueba.rechaza('X846', 'Extensión', 'Usuarios', 'No se restablece la contraseña de un usuario inexistente',
+  JSON_ARRAY("CALL core.restablecer_clave(UUID_TO_BIN(UUID()), 'h', 'BCRYPT', 'v2', 'admin', @f)"),
+  '^BNA-USUARIO:', 'procedimiento');
+
+CALL prueba.verifica('X847', 'Extensión', 'Usuarios', 'La persona cambia su contraseña: se reemplaza, ya no debe cambiarla y queda en la bitácora a su nombre',
+  JSON_ARRAY(@ana_x84, "CALL core.restablecer_clave(UUID_TO_BIN('17000000-0000-4000-8000-000000000001'), 'h-temporal', 'BCRYPT', 'v2', 'admin', @f)",
+             "CALL core.cambiar_clave(UUID_TO_BIN('17000000-0000-4000-8000-000000000001'), 'h-propia', 'BCRYPT', 'v2', @f)"),
+  "SELECT @f = 1 AND (SELECT CONCAT(hash_password, ' ', debe_cambiar_clave) FROM core.usuario_sistema WHERE username = 'ana-x84') = 'h-propia 0' AND (SELECT COUNT(*) FROM core.v_evento_auditoria_api WHERE accion = 'CAMBIAR_CLAVE' AND id_entidad = '17000000-0000-4000-8000-000000000001' AND actor = 'ana-x84') = 1",
+  '1, hash propio, sin marca, evento de ana-x84', "SELECT CONCAT_WS(' ', @f, (SELECT CONCAT(hash_password, ' ', debe_cambiar_clave) FROM core.usuario_sistema WHERE username = 'ana-x84'))", 'procedimiento');
+
+CALL prueba.rechaza('X848', 'Extensión', 'Usuarios', 'Un usuario de servicio no cambia su contraseña por esta vía',
+  JSON_ARRAY(@svc_x84, "CALL core.cambiar_clave(UUID_TO_BIN('17000000-0000-4000-8000-000000000002'), 'h', 'BCRYPT', 'v2', @f)"),
+  '^BNA-USUARIO-SERVICIO:', 'procedimiento');
+
+CALL prueba.rechaza('X849', 'Extensión', 'Usuarios', 'No cambia la contraseña un usuario inexistente',
+  JSON_ARRAY("CALL core.cambiar_clave(UUID_TO_BIN(UUID()), 'h', 'BCRYPT', 'v2', @f)"),
+  '^BNA-USUARIO:', 'procedimiento');
+
+CALL prueba.rechaza('X850', 'Extensión', 'bna_api', 'bna_api no puede: quitar la marca de cambio obligatorio directamente',
+  JSON_ARRAY("UPDATE core.usuario_sistema SET debe_cambiar_clave = 0"), 'denied', 'privilegio');
