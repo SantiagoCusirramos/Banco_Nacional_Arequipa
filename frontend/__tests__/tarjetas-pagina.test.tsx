@@ -264,18 +264,32 @@ describe("Página del módulo Tarjetas", () => {
     expect(screen.getByText(/el monto volvió al saldo disponible/)).toBeInTheDocument();
   });
 
-  it("TJ-16 Asigna el PIN y no lo deja en el campo", async () => {
+  it("TJ-16 Asigna el PIN que escribe la clienta y no lo deja en el campo", async () => {
     await abrirDetalle();
     await userEvent.click(enPantalla().getByRole("button", { name: "Claves" }));
-    const campo = screen.getByLabelText("Valor");
+    await userEvent.click(screen.getByLabelText("La clienta lo escribe"));
+    const campo = screen.getByLabelText("PIN del cajero (lo escribe la clienta)");
     expect(campo).toHaveAttribute("type", "password");
     escribir(campo, "48a21");
     expect(campo).toHaveValue("4821");
+    escribir(screen.getByLabelText("Repite el PIN del cajero"), "4821");
     put.mockResolvedValue(sobre(null));
     await userEvent.click(screen.getByRole("button", { name: "Asignar" }));
     await waitFor(() => expect(put).toHaveBeenCalledWith(`/${TARJETA.id_tarjeta}/credenciales/PIN_ATM`, { valor: "4821" }));
     expect(campo).toHaveValue("");
     expect(await screen.findByText(/PIN registrado/)).toBeInTheDocument();
+  });
+
+  it("TJ-16b Genera el PIN, lo asigna a la tarjeta y lo muestra una vez para entregarlo", async () => {
+    await abrirDetalle();
+    await userEvent.click(enPantalla().getByRole("button", { name: "Claves" }));
+    put.mockResolvedValue(sobre(null));
+    await userEvent.click(screen.getByRole("button", { name: "Generar y asignar" }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    const [ruta, cuerpo] = put.mock.calls[0] as [string, { valor: string }];
+    expect(ruta).toBe(`/${TARJETA.id_tarjeta}/credenciales/PIN_ATM`);
+    expect(cuerpo.valor).toMatch(/^\d{4}$/);
+    expect(await screen.findByRole("region", { name: /para entregar/ })).toHaveTextContent(cuerpo.valor);
   });
 
   it("TJ-17 Comprueba un PIN equivocado y muestra los intentos que quedan", async () => {

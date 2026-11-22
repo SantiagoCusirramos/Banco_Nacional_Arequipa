@@ -482,6 +482,20 @@ def flujo():
     estado, registro = pedir("GET", f"{atm_base}/registro", token=token_operador)
     exigir(estado == 200 and isinstance(registro, list), f"Registro del canal con el operador: {estado} {registro}")
     paso("ATM: la pantalla se sirve por el Bus, ninguna ruta lee fuera de static/; el operador abre el cajero y solo él lee el registro")
+    # Insertar la tarjeta con documento + 4 últimos dígitos (en vez del UUID): el cajero busca con el token
+    # del operador en COREDB (búsqueda de Captación, el documento en el cuerpo) y en TARJETAS. Este cliente
+    # se registró directo en COREDB, sin Captación: no se reconoce, con el error genérico (si el Bus no
+    # dejara pasar la búsqueda, el error sería otro). El caso reconocido lo cubren las pruebas del ATM.
+    ultimos4 = coredb("GET", f"/coredb/tarjetas/{tarjeta}", 200, token=token)["ultimos4"]
+    for documento in (sufijo, "99999999"):
+        estado, respuesta = pedir("POST", f"{atm_base}/identificar-tarjeta",
+                                  {"documento": documento, "ultimos4": ultimos4}, token_operador)
+        exigir(estado == 404 and respuesta.get("error_code") == "ERR-ATM-TARJETA-NO-RECONOCIDA",
+               f"Identificar la tarjeta en el cajero: {estado} {respuesta}")
+    estado, respuesta = pedir("POST", f"{atm_base}/identificar-tarjeta", {"documento": sufijo, "ultimos4": ultimos4})
+    exigir(estado == 401, f"Identificar la tarjeta sin operador debía dar 401: {estado} {respuesta}")
+    paso("ATM: insertar la tarjeta con documento y 4 últimos dígitos llega por el Bus a COREDB y TARJETAS con el "
+         "token del operador; sin coincidencia, el mismo error genérico; sin operador, 401")
     estado, respuesta = pedir("PUT", f"{base}/{tarjeta}/credenciales/PIN_ATM", {"valor": "4821"}, token)
     exigir(estado == 200, f"Registrar el PIN por TARJETAS: {estado} {respuesta}")
     # Primero validar PIN (el ATM llama a TARJETAS por el Bus)
