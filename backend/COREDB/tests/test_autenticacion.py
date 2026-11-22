@@ -2,6 +2,7 @@
 
 import time
 import uuid
+from types import SimpleNamespace
 
 import jwt
 import pytest
@@ -9,7 +10,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from COREDB import auth, permisos, tokens
-from COREDB.auth import Actor, actor_actual
+from COREDB.auth import Actor, actor_actual, usuario_de_la_sesion
 from COREDB.config import Settings, get_settings
 from COREDB.errores import ErrorCoreDb
 from COREDB.main import app
@@ -17,6 +18,8 @@ from COREDB.routers import auth as rutas_auth
 from COREDB.services import hashing, usuarios
 
 RUTAS_PUBLICAS = {"/coredb/salud", "/coredb/auth/login"}
+# bd-v1.17: las dos únicas rutas que admiten a quien todavía debe cambiar su contraseña.
+RUTAS_CON_CAMBIO_PENDIENTE = {"/coredb/auth/me", "/coredb/auth/clave"}
 
 
 def _claims(**cambios):
@@ -127,13 +130,16 @@ def test_toda_ruta_exige_autenticacion_salvo_las_publicas():
         llamadas = set(_dependencias(ruta.dependant))
         if ruta.path in RUTAS_PUBLICAS:
             assert actor_actual not in llamadas, ruta.path
+        elif ruta.path in RUTAS_CON_CAMBIO_PENDIENTE:
+            assert usuario_de_la_sesion in llamadas and actor_actual not in llamadas, ruta.path
         else:
             assert actor_actual in llamadas, ruta.path
 
 
 def test_toda_escritura_exige_un_permiso():
     for ruta in _rutas():
-        if ruta.path in RUTAS_PUBLICAS or not (ruta.methods & {"POST", "PUT", "PATCH", "DELETE"}):
+        # /coredb/auth/clave: la persona cambia su propia contraseña tras comprobar la actual.
+        if ruta.path in RUTAS_PUBLICAS | RUTAS_CON_CAMBIO_PENDIENTE or not (ruta.methods & {"POST", "PUT", "PATCH", "DELETE"}):
             continue
         acciones = [getattr(c, "accion", None) for c in _dependencias(ruta.dependant)]
         assert any(acciones), ruta.path
@@ -194,9 +200,27 @@ def test_origen_del_actor(rol, modulo, origen):
 
 def test_dependencia_reemplazable():
     prueba = TestClient(app)
-    app.dependency_overrides[actor_actual] = lambda: Actor(uuid.uuid4(), "doble", "AUDITOR")
+    # /coredb/auth/me usa usuario_de_la_sesion (admite el cambio de contraseña pendiente).
+    app.dependency_overrides[usuario_de_la_sesion] = lambda: SimpleNamespace(
+        id_usuario=uuid.uuid4(), username="doble", rol="AUDITOR", modulo=None, debe_cambiar_clave=False)
     try:
-        assert prueba.get("/coredb/auth/me").json()["username"] == "doble"
+        perfil = prueba.get("/coredb/auth/me").json()
+        assert perfil["username"] == "doble" and perfil["debe_cambiar_clave"] is False
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_con_cambio_de_clave_pendiente_solo_ve_su_perfil_sin_acciones():
+    prueba = TestClient(app)
+    usuario = SimpleNamespace(id_usuario=uuid.uuid4(), username="nueva", rol="ADMINISTRADOR", modulo=None,
+                              debe_cambiar_clave=True)
+    app.dependency_overrides[usuario_de_la_sesion] = lambda: usuario
+    try:
+        perfil = prueba.get("/coredb/auth/me").json()
+        assert perfil["debe_cambiar_clave"] is True and perfil["acciones"] == []
+        respuesta = prueba.get("/coredb/usuarios")
+        assert respuesta.status_code == 403
+        assert respuesta.json()["error"]["code"] == "CAMBIO_CLAVE_OBLIGATORIO"
     finally:
         app.dependency_overrides.clear()
 
