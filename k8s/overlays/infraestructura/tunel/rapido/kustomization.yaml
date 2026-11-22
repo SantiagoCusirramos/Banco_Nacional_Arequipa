@@ -1,0 +1,15 @@
+# Túneles rápidos de Cloudflare (opcional): quick tunnels de trycloudflare.com, sin cuenta, sin
+# token y sin dominio. Uno por servicio: portal y Home Banking, cajero y billetera (API de Chaski).
+# No los incluye el `aplicar` normal ni tunel/: se aplican con scripts/k8s-infra.sh
+# tunel-rapido-aplicar, que imprime las tres URL https://*.trycloudflare.com.
+# Guía y limitaciones: Documents/despliegue-infraestructura.md, «Túneles rápidos (sin dominio)».
+#
+# Los nombres ya llevan el prefijo bna-. El namespace lo pone scripts/k8s-infra.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - tunel-rapido.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/instance: bna
+    includeSelectors: true

@@ -288,16 +288,23 @@ spec:
           command: [cloudflared, tunnel, --no-autoupdate, run, --token-file, /secretos/token]
           env:
             - {{name: TUNNEL_TRANSPORT_PROTOCOL, value: auto}}
+          resources:
+            requests: {{cpu: 10m, memory: 32Mi}}
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {{drop: [ALL]}}
 """
 
 
-def render_tunel():
-    """tunel/ como lo deja kustomize: las imágenes de su kustomization ya reemplazadas."""
-    kustomization = yaml.safe_load((TUNEL / "kustomization.yaml").read_text())
+def render_tunel(carpeta=TUNEL):
+    """tunel/ (o tunel/rapido) como lo deja kustomize: las imágenes de su kustomization ya reemplazadas."""
+    kustomization = yaml.safe_load((carpeta / "kustomization.yaml").read_text())
     imagenes = {i["name"]: f"{i['newName']}:{i['newTag']}" for i in kustomization.get("images") or []}
     documentos = []
     for recurso in kustomization["resources"]:
-        for doc in yaml.safe_load_all((TUNEL / recurso).read_text()):
+        for doc in yaml.safe_load_all((carpeta / recurso).read_text()):
             plantilla = doc["spec"]["template"]["spec"]
             for c in (plantilla.get("initContainers") or []) + plantilla["containers"]:
                 c["image"] = imagenes.get(c["image"], c["image"])
@@ -358,4 +365,111 @@ def test_revisar_acepta_el_tunel_fijado_por_digest():
 def test_revisar_encuentra_en_el_tunel(viejo, nuevo, mensaje):
     assert viejo in RENDER_TUNEL, viejo
     hallados = revisar_tunel(RENDER_TUNEL.replace(viejo, nuevo))
+    assert hallados and any(mensaje in h for h in hallados), hallados
+
+
+# ── Túneles rápidos (k8s/overlays/infraestructura/tunel/rapido, opcional) ──────
+# Quick tunnels de trycloudflare.com: sin cuenta, sin token y sin dominio. Uno por servicio.
+
+RAPIDO = TUNEL / "rapido"
+DESTINOS_RAPIDOS = {
+    "bna-tunel-portal": "http://bna-frontend:3000",
+    "bna-tunel-cajero": "http://bna-atm:8019",
+    "bna-tunel-billetera": "http://bna-billetera:3000",
+}
+
+RENDER_RAPIDO = f"""
+apiVersion: apps/v1
+kind: Deployment
+metadata: {{name: bna-tunel-cajero}}
+spec:
+  template:
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.10.7@{DIGEST}
+          command: [cloudflared, tunnel, --no-autoupdate, --url, "http://bna-atm:8019"]
+          resources:
+            requests: {{cpu: 10m, memory: 32Mi}}
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {{drop: [ALL]}}
+"""
+
+
+def render_rapido():
+    return render_tunel(RAPIDO)
+
+
+def test_el_tunel_rapido_no_entra_en_el_aplicar_normal_ni_en_el_tunel_con_nombre():
+    recursos = yaml.safe_load((TUNEL.parent / "kustomization.yaml").read_text())["resources"]
+    assert not any("tunel" in r for r in recursos)
+    assert not any("rapido" in r for r in yaml.safe_load((TUNEL / "kustomization.yaml").read_text())["resources"])
+
+
+def test_el_render_del_tunel_rapido_pasa_la_revision():
+    documentos = render_rapido()
+    assert [d["metadata"]["name"] for d in documentos] == list(DESTINOS_RAPIDOS)
+    servicios = {"frontend", "atm", "billetera", "bus"}
+    assert oi.revisar(documentos, servicios=servicios, registro="ghcr.io/miguelpro324/") == []
+
+
+def test_cada_tunel_rapido_publica_un_servicio_sin_token_ni_volumenes():
+    for tunel in render_rapido():
+        nombre = tunel["metadata"]["name"]
+        assert tunel["spec"]["replicas"] == 1
+        assert tunel["spec"]["strategy"] == {"type": "Recreate"}, "dos pods darían dos URL"
+        plantilla = tunel["spec"]["template"]["spec"]
+        assert plantilla["automountServiceAccountToken"] is False
+        assert "volumes" not in plantilla and "initContainers" not in plantilla
+        cloudflared, = plantilla["containers"]
+        orden = cloudflared["command"]
+        assert orden[:3] == ["cloudflared", "tunnel", "--no-autoupdate"]
+        assert orden[orden.index("--url") + 1] == DESTINOS_RAPIDOS[nombre]
+        assert "run" not in orden and not any("token" in a for a in orden)
+        assert "volumeMounts" not in cloudflared
+        assert re.search(r"^cloudflare/cloudflared:[0-9.]+@sha256:[0-9a-f]{64}$", cloudflared["image"])
+        seguridad = cloudflared["securityContext"]
+        assert seguridad["runAsNonRoot"] and seguridad["runAsUser"] != 0
+        assert seguridad["readOnlyRootFilesystem"] and seguridad["allowPrivilegeEscalation"] is False
+        assert seguridad["capabilities"] == {"drop": ["ALL"]}
+        assert set(cloudflared["resources"]["requests"]) == {"cpu", "memory"}
+        assert cloudflared["readinessProbe"]["httpGet"]["path"] == "/ready"
+
+
+def test_los_tuneles_usan_la_misma_imagen_fijada():
+    (con_nombre,) = render_tunel()
+    imagen = con_nombre["spec"]["template"]["spec"]["containers"][0]["image"]
+    assert {d["spec"]["template"]["spec"]["containers"][0]["image"] for d in render_rapido()} == {imagen}
+
+
+def revisar_rapido(texto):
+    return oi.revisar(list(yaml.safe_load_all(texto)), servicios={"atm"}, registro="ghcr.io/miguelpro324/")
+
+
+def test_revisar_acepta_el_tunel_rapido():
+    assert revisar_rapido(RENDER_RAPIDO) == []
+
+
+@pytest.mark.parametrize("viejo, nuevo, mensaje", [
+    ("--url, \"http://bna-atm:8019\"]", "--url, \"http://bna-atm:8019\", --token-file, /t]", "token"),
+    ("--url, \"http://bna-atm:8019\"]", "--url, \"http://bna-atm:8019\", --credentials-file, /c]", "token"),
+    ("--url, \"http://bna-atm:8019\"]", "--url, \"http://bna-atm:8019\"]\n          volumeMounts: [{name: v, mountPath: /v}]",
+     "volumen"),
+    ("--url, \"http://bna-atm:8019\"]", "--url, \"http://bna-atm:8019\", --url, \"http://bna-bus:8018\"]",
+     "un servicio"),
+    ("--no-autoupdate, --url", "--url", "--no-autoupdate"),
+    ("http://bna-atm:8019", "http://atm:8019", "atm"),
+    ("readOnlyRootFilesystem: true", "readOnlyRootFilesystem: false", "readOnlyRootFilesystem"),
+    ("runAsNonRoot: true", "runAsNonRoot: false", "runAsNonRoot"),
+    ("allowPrivilegeEscalation: false", "allowPrivilegeEscalation: true", "allowPrivilegeEscalation"),
+    ("capabilities: {drop: [ALL]}", "capabilities: {drop: [NET_RAW]}", "capabilities"),
+    ("          resources:\n            requests: {cpu: 10m, memory: 32Mi}\n", "", "requests"),
+    (f"2026.10.7@{DIGEST}", "latest", "digest"),
+])
+def test_revisar_encuentra_en_el_tunel_rapido(viejo, nuevo, mensaje):
+    assert viejo in RENDER_RAPIDO, viejo
+    hallados = revisar_rapido(RENDER_RAPIDO.replace(viejo, nuevo))
     assert hallados and any(mensaje in h for h in hallados), hallados
