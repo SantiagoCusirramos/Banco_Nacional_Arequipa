@@ -1,0 +1,150 @@
+# Tres Deployments bna-tunel-<servicio>, cada uno con un quick tunnel de cloudflared hacia un
+# Service del producto (nombre corto: el namespace no sale del clúster). Sin token, sin Secret y
+# sin volúmenes: cloudflared pide un nombre aleatorio <palabras>.trycloudflare.com a
+# api.trycloudflare.com y lo escribe en sus registros, de donde lo lee tunel-rapido-urls.
+#
+# - Misma imagen que tunel/ (2026.10.7 por digest; distroless, usuario 65532), raíz de solo
+#   lectura (el modo rápido no escribe en disco) y sin capabilities.
+# - Recreate y una réplica: cada pod nuevo tiene otra URL, así que nunca hay dos a la vez.
+# - /ready (puerto de métricas, solo dentro del pod) responde 200 cuando hay conexión con
+#   Cloudflare. Protocolo: TUNNEL_TRANSPORT_PROTOCOL, que cambia BNA_TUNEL_PROTOCOLO.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bna-tunel-portal
+  labels:
+    app.kubernetes.io/name: tunel-portal
+    app.kubernetes.io/component: tunel-rapido
+    app.kubernetes.io/part-of: bna
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tunel-portal
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tunel-portal
+        app.kubernetes.io/component: tunel-rapido
+        app.kubernetes.io/part-of: bna
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+          command: [cloudflared, tunnel, --no-autoupdate, --metrics, "0.0.0.0:20241", --url, "http://bna-frontend:3000"]
+          env:
+            - { name: TUNNEL_TRANSPORT_PROTOCOL, value: auto }
+          ports:
+            - { name: metricas, containerPort: 20241 }
+          readinessProbe:
+            httpGet: { path: /ready, port: metricas }
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 5m, memory: 24Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bna-tunel-cajero
+  labels:
+    app.kubernetes.io/name: tunel-cajero
+    app.kubernetes.io/component: tunel-rapido
+    app.kubernetes.io/part-of: bna
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tunel-cajero
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tunel-cajero
+        app.kubernetes.io/component: tunel-rapido
+        app.kubernetes.io/part-of: bna
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+          command: [cloudflared, tunnel, --no-autoupdate, --metrics, "0.0.0.0:20241", --url, "http://bna-atm:8019"]
+          env:
+            - { name: TUNNEL_TRANSPORT_PROTOCOL, value: auto }
+          ports:
+            - { name: metricas, containerPort: 20241 }
+          readinessProbe:
+            httpGet: { path: /ready, port: metricas }
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 5m, memory: 24Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bna-tunel-billetera
+  labels:
+    app.kubernetes.io/name: tunel-billetera
+    app.kubernetes.io/component: tunel-rapido
+    app.kubernetes.io/part-of: bna
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tunel-billetera
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tunel-billetera
+        app.kubernetes.io/component: tunel-rapido
+        app.kubernetes.io/part-of: bna
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+          command: [cloudflared, tunnel, --no-autoupdate, --metrics, "0.0.0.0:20241", --url, "http://bna-billetera:3000"]
+          env:
+            - { name: TUNNEL_TRANSPORT_PROTOCOL, value: auto }
+          ports:
+            - { name: metricas, containerPort: 20241 }
+          readinessProbe:
+            httpGet: { path: /ready, port: metricas }
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 5m, memory: 24Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }

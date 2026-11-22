@@ -10,6 +10,9 @@
 # También el túnel opcional de Cloudflare con un token falso: tunel-cargar con la misma tubería
 # que usa el dueño, el contenedor de inicio deja el token 0440 en memoria, cloudflared no monta
 # el PVC (no ve el .env), no conecta (el token es falso) y tunel-quitar lo borra.
+# Y los túneles rápidos contra una API de trycloudflare simulada dentro de kind (no se crea
+# ningún túnel real): cada cloudflared pide su nombre, corre sin root y sin volúmenes,
+# tunel-rapido-urls lee las tres URL de los registros y tunel-rapido-quitar los borra.
 # Al terminar elimina el clúster, aunque algo falle.
 #
 # Uso: scripts/prueba_k8s_infra_kind.sh
@@ -175,6 +178,82 @@ k logs "$pod" -c cloudflared --tail=3 2>/dev/null | cut -c1-160 || true
 scripts/k8s-infra.sh tunel-quitar
 if k get deployment bna-tunel >/dev/null 2>&1; then
   echo "tunel-quitar no borró bna-tunel." >&2
+  exit 1
+fi
+
+paso "Túneles rápidos con una API de trycloudflare simulada"
+# Responde como api.trycloudflare.com con un nombre distinto por pedido y credenciales falsas:
+# cloudflared escribe la URL y no llega a conectar (Cloudflare rechaza las credenciales).
+k apply -f - >/dev/null <<YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bna-trycloudflare-falso
+  labels: { app.kubernetes.io/name: trycloudflare-falso }
+spec:
+  automountServiceAccountToken: false
+  securityContext: { runAsUser: 10001, runAsGroup: 10001, runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: api
+      image: $(scripts/k8s-infra.sh imagenes | grep '/bna-backend:')
+      command:
+        - python3
+        - -c
+        - |
+          import base64, json, secrets, uuid
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          class Api(BaseHTTPRequestHandler):
+              def do_POST(self):
+                  cuerpo = json.dumps({"success": True, "result": {
+                      "id": str(uuid.uuid4()), "name": "prueba", "account_tag": "0" * 32,
+                      "hostname": f"prueba-{secrets.token_hex(4)}.trycloudflare.com",
+                      "secret": base64.b64encode(secrets.token_bytes(32)).decode()}}).encode()
+                  self.send_response(200)
+                  self.send_header("Content-Type", "application/json")
+                  self.send_header("Content-Length", str(len(cuerpo)))
+                  self.end_headers()
+                  self.wfile.write(cuerpo)
+          HTTPServer(("0.0.0.0", 8080), Api).serve_forever()
+      ports: [{ containerPort: 8080 }]
+      resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bna-trycloudflare-falso
+spec:
+  selector: { app.kubernetes.io/name: trycloudflare-falso }
+  ports: [{ port: 8080, targetPort: 8080 }]
+YAML
+k wait --for=condition=Ready pod/bna-trycloudflare-falso --timeout=120s >/dev/null
+export BNA_TUNEL_RAPIDO_API=http://bna-trycloudflare-falso:8080
+if BNA_TUNEL_ESPERA_SEGUNDOS=30 scripts/k8s-infra.sh tunel-rapido-aplicar >"$TRABAJO/rapido.txt" 2>&1; then
+  echo "Un túnel rápido quedó listo con credenciales falsas." >&2
+  exit 1
+fi
+BNA_TUNEL_ESPERA_SEGUNDOS=90 scripts/k8s-infra.sh tunel-rapido-urls >"$TRABAJO/urls.txt"
+unset BNA_TUNEL_RAPIDO_API
+cat "$TRABAJO/urls.txt"
+if [ "$(grep -cE '^(portal|cajero|billetera) +https://prueba-[0-9a-f]{8}\.trycloudflare\.com$' "$TRABAJO/urls.txt")" != 3 ] \
+   || [ "$(awk '{ print $2 }' "$TRABAJO/urls.txt" | sort -u | wc -l)" != 3 ]; then
+  echo "tunel-rapido-urls no imprimió solo tres URL distintas de trycloudflare." >&2
+  exit 1
+fi
+for nombre in portal cajero billetera; do
+  pod="$(k get pod -l "app.kubernetes.io/name=tunel-$nombre" -o name)"
+  usuario="$(k get "$pod" -o jsonpath='{.spec.containers[0].securityContext.runAsUser}')"
+  volumenes="$(k get "$pod" -o jsonpath='{.spec.volumes}')"
+  if [ "$usuario" != 65532 ] || [ -n "$volumenes" ]; then
+    echo "$pod: usuario '$usuario', volúmenes '$volumenes' (se esperaba 65532 y ninguno)." >&2
+    exit 1
+  fi
+done
+echo "Tres túneles rápidos: usuario 65532, sin volúmenes, cada uno con su URL."
+scripts/k8s-infra.sh tunel-rapido-quitar
+k delete pod,service bna-trycloudflare-falso --wait=true >/dev/null
+if [ -n "$(k get deployments,pods -l app.kubernetes.io/component=tunel-rapido -o name)" ]; then
+  echo "tunel-rapido-quitar no borró los túneles rápidos." >&2
   exit 1
 fi
 

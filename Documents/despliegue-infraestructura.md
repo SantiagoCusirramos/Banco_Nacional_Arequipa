@@ -162,6 +162,8 @@ Borra todos los objetos con la etiqueta del producto, después de comprobar que 
 
 Para probar sin la VPN (por ejemplo, Chaski desde un celular con datos móviles), el producto se puede publicar por un túnel de Cloudflare que corre **dentro del clúster**: `cloudflared` abre una conexión de salida hacia Cloudflare y no hace falta abrir ningún puerto de entrada. Es opcional: el `aplicar` normal, kind del producto y la CI de despliegue no lo incluyen. Archivos: [`k8s/overlays/infraestructura/tunel/`](../k8s/overlays/infraestructura/tunel/) y las órdenes `tunel-*` de `scripts/k8s-infra.sh`.
 
+Este túnel «con nombre» necesita un dominio activo en Cloudflare. Sin dominio, ver [Túneles rápidos (sin dominio)](#túneles-rápidos-sin-dominio).
+
 Ni el token, ni el id del túnel, ni el dominio van en el repositorio (es público). Abajo, «tu dominio» es el dominio que tengas en Cloudflare.
 
 | Pieza | Dónde |
@@ -214,6 +216,34 @@ Ni el token, ni el id del túnel, ni el dominio van en el repositorio (es públi
 - Los registros de `cloudflared` (y por eso los de `diagnostico`) incluyen el id del túnel: no pegarlos en PR ni issues.
 - Hace falta el permiso de Infraestructura para exponer el despliegue.
 
+## Túneles rápidos (sin dominio)
+
+Si no hay un dominio en Cloudflare, el portal, el cajero y la billetera se pueden publicar con *quick tunnels* de `trycloudflare.com`: sin cuenta, sin token y sin dominio. Son tres Deployments opcionales en [`k8s/overlays/infraestructura/tunel/rapido/`](../k8s/overlays/infraestructura/tunel/rapido/), con la misma imagen de `cloudflared` que el túnel con nombre (2026.10.7 por digest):
+
+| Deployment | Publica |
+|---|---|
+| `bna-tunel-portal` | portal y Home Banking (`http://bna-frontend:3000`) |
+| `bna-tunel-cajero` | cajero (`http://bna-atm:8019`) |
+| `bna-tunel-billetera` | API de Chaski (`http://bna-billetera:3000`) |
+
+Cada uno corre `cloudflared tunnel --no-autoupdate --url <servicio>`, sin root (usuario 65532), con la raíz de solo lectura, sin capabilities, sin volúmenes ni token de la cuenta de servicio, con requests mínimos y una sola réplica (`Recreate`). `overlay_infraestructura.py revisar` exige todo eso y rechaza un túnel rápido con token, credenciales, volúmenes o más de un `--url`; la CI revisa también la salida de `tunel-rapido-manifiestos`. El Bus no se publica.
+
+| Qué | Cómo |
+|---|---|
+| Publicar | `scripts/k8s-infra.sh tunel-rapido-aplicar`: aplica, espera a que los tres conecten (`/ready`) e imprime solo las tres URL `https://<palabras>.trycloudflare.com`, leídas de los registros de cada pod |
+| Ver las URL otra vez | `scripts/k8s-infra.sh tunel-rapido-urls` |
+| Chaski | ⚙ → la URL de la billetera (sin recompilar) |
+| Quitar (al terminar la demo, siempre) | `scripts/k8s-infra.sh tunel-rapido-quitar`: borra los tres Deployments y las URL dejan de responder |
+| No conecta | Igual que el túnel con nombre: `BNA_TUNEL_PROTOCOLO=http2 scripts/k8s-infra.sh tunel-rapido-aplicar` |
+
+Limitaciones:
+
+- **Sin Access ni ningún control de entrada:** cualquiera que tenga la URL entra. El portal y el cajero piden usuario; la API de la billetera queda abierta en Internet con celular y PIN como única barrera. No dejar la billetera publicada fuera de la demo.
+- **La URL es aleatoria y cambia** cada vez que se crea un pod (al aplicar de nuevo, al reiniciarse o si el nodo cambia). Hay que volver a mirar `tunel-rapido-urls` y volver a poner la de la billetera en Chaski.
+- **Un servicio por túnel:** por eso son tres Deployments y tres URL distintas.
+- **Sin garantías de disponibilidad:** Cloudflare los ofrece para pruebas, sin acuerdo de servicio, con límite de pedidos simultáneos y sin Server-Sent Events, y puede cortarlos en cualquier momento.
+- **Solo para demos vigiladas y cortas.** Las URL no van al repositorio, a PR ni a issues: se comparten por un canal privado y se quitan al terminar.
+
 ## Si hay cuota de objetos
 
 No se conoce ninguna cuota (la cuenta no puede verlas). Si Infraestructura pone una por número de objetos, lo primero que se puede agrupar:
@@ -224,7 +254,7 @@ No se conoce ninguna cuota (la cuenta no puede verlas). Si Infraestructura pone 
 
 ## Prueba en kind
 
-[`scripts/prueba_k8s_infra_kind.sh`](../scripts/prueba_k8s_infra_kind.sh) prueba el mismo overlay en un clúster de kind v0.30.0 (Kubernetes 1.34): carga las imágenes con `kind load` en vez de descargarlas, crea un namespace numérico y una StorageClass `local-path`, aplica con `k8s-infra.sh`, comprueba que no haya Secrets, que cada pod tenga solo sus claves (0440, también los que corren con otro usuario) y que el Job no cambie un `.env` existente, carga los datos dos veces, corre `flujo_demo.py` por `kubectl port-forward` y borra todo. También prueba el túnel opcional con un token falso: `tunel-cargar` con la misma tubería de carga, el token copiado 0440 en memoria, `cloudflared` sin el PVC montado y sin conectar, y `tunel-quitar`. Al terminar elimina el clúster. La CI lo corre en el flujo «Kubernetes» (trabajo «Overlay de Infraestructura en kind»), junto con `kubectl kustomize`, `kubeconform` para Kubernetes 1.34 y `overlay_infraestructura.py comprobar` y `revisar`.
+[`scripts/prueba_k8s_infra_kind.sh`](../scripts/prueba_k8s_infra_kind.sh) prueba el mismo overlay en un clúster de kind v0.30.0 (Kubernetes 1.34): carga las imágenes con `kind load` en vez de descargarlas, crea un namespace numérico y una StorageClass `local-path`, aplica con `k8s-infra.sh`, comprueba que no haya Secrets, que cada pod tenga solo sus claves (0440, también los que corren con otro usuario) y que el Job no cambie un `.env` existente, carga los datos dos veces, corre `flujo_demo.py` por `kubectl port-forward` y borra todo. También prueba el túnel opcional con un token falso: `tunel-cargar` con la misma tubería de carga, el token copiado 0440 en memoria, `cloudflared` sin el PVC montado y sin conectar, y `tunel-quitar`. Y los túneles rápidos contra una API de `trycloudflare.com` simulada dentro de kind (no se crea ningún túnel real; `BNA_TUNEL_RAPIDO_API` solo existe para esto): cada `cloudflared` pide su nombre, corre como 65532 sin volúmenes, `tunel-rapido-urls` imprime tres URL distintas y `tunel-rapido-quitar` los borra. Al terminar elimina el clúster. La CI lo corre en el flujo «Kubernetes» (trabajo «Overlay de Infraestructura en kind»), junto con `kubectl kustomize`, `kubeconform` para Kubernetes 1.34 y `overlay_infraestructura.py comprobar` y `revisar`.
 
 Lo que la prueba en kind no cubre: el Ingress de Traefik (en kind no hay Traefik; el Ingress solo se valida con `kubeconform`) y la descarga desde ghcr.io. Las dos cosas se comprobaron en el clúster real (ver abajo).
 

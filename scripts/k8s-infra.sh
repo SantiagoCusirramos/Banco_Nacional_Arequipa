@@ -21,6 +21,14 @@
 #   tunel-aplicar      aplica el Deployment bna-tunel y espera a que conecte (/ready)
 #   tunel-quitar       borra el Deployment bna-tunel (el token queda en el PVC)
 #
+# Túneles rápidos (opcional; k8s/overlays/infraestructura/tunel/rapido; trycloudflare.com, sin
+# cuenta, token ni dominio; solo para demos vigiladas):
+#   tunel-rapido-manifiestos  imprime lo que aplicaría tunel-rapido-aplicar
+#   tunel-rapido-aplicar      aplica bna-tunel-portal, -cajero y -billetera, espera a que conecten
+#                             e imprime solo sus tres URL https://*.trycloudflare.com
+#   tunel-rapido-urls         vuelve a imprimir las tres URL (de los registros de cada pod)
+#   tunel-rapido-quitar       borra los tres Deployments
+#
 # Variables:
 #   KUBECONFIG      obligatorio para las órdenes que tocan el clúster (nunca ~/.kube/config por omisión)
 #   BNA_NAMESPACE   obligatorio para esas mismas órdenes; solo se usa ese namespace
@@ -29,9 +37,10 @@
 #   KUBECTL         kubectl a usar (kubectl)
 #   BNA_ESPERA_SEGUNDOS  espera máxima por Deployment (600)
 #   BNA_FRONTEND, BNA_BUS  direcciones para `flujo` (por omisión, las del Ingress)
-#   BNA_TUNEL_PROTOCOLO    auto (por omisión), quic o http2, para tunel-aplicar
+#   BNA_TUNEL_PROTOCOLO    auto (por omisión), quic o http2, para tunel-aplicar y tunel-rapido-aplicar
 #   BNA_TUNEL_ESPERA_SEGUNDOS  espera máxima a que el túnel conecte (180)
 #   BNA_TUNEL_ESPERA_CARGA     espera máxima a que se cargue el token (540)
+#   BNA_TUNEL_RAPIDO_API   solo para pruebas: otra API de quick tunnels (--quick-service)
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,6 +48,9 @@ cd "$RAIZ"
 
 OVERLAY=k8s/overlays/infraestructura
 TUNEL="$OVERLAY/tunel"
+TUNEL_RAPIDO="$TUNEL/rapido"
+# Túneles rápidos: nombre corto → Deployment bna-tunel-<nombre> (destino en tunel-rapido.yaml).
+TUNELES_RAPIDOS=(portal cajero billetera)
 TOKEN_TUNEL=/bna-secretos/cloudflared-token
 REGISTRO_OVERLAY=ghcr.io/miguelpro324
 REGISTRO="${BNA_REGISTRO:-$REGISTRO_OVERLAY}"
@@ -105,10 +117,10 @@ k() { "$KUBECTL" --kubeconfig "$KUBECONFIG" -n "$BNA_NAMESPACE" "$@"; }
 
 # Un overlay más lo que depende del momento: namespace, etiqueta de las imágenes y, para el
 # principal, el ConfigMap con scripts/generar_env.sh y .env.example, que kustomize no lee desde
-# el overlay. Uso: kustomizar CARPETA [principal|tunel]
+# el overlay. Uso: kustomizar CARPETA [principal|tunel|rapido]
 kustomizar() {
   : "${BNA_NAMESPACE:?Falta BNA_NAMESPACE (el namespace asignado)}"
-  local carpeta="$1" tipo="$2" dir tag relativo nombre protocolo
+  local carpeta="$1" tipo="$2" dir tag relativo nombre protocolo objetivo
   dir="$(mktemp -d)"
   TEMPORALES+=("$dir")
   tag="$(etiqueta)"
@@ -128,16 +140,23 @@ kustomizar() {
       echo "    files: [generar_env.sh, env.example]"
       echo "    options: { disableNameSuffixHash: true }"
     else
+      if [ "$tipo" = rapido ]; then
+        objetivo="{ kind: Deployment, labelSelector: app.kubernetes.io/component=tunel-rapido }"
+      else
+        objetivo="{ kind: Deployment, name: bna-tunel }"
+      fi
       protocolo="${BNA_TUNEL_PROTOCOLO:-auto}"
       case "$protocolo" in
-        auto) ;;
-        quic|http2)
-          echo "patches:"
-          echo "  - target: { kind: Deployment, name: bna-tunel }"
-          echo "    patch: '[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/env/0\", \"value\": {\"name\": \"TUNNEL_TRANSPORT_PROTOCOL\", \"value\": \"$protocolo\"}}]'"
-          ;;
+        auto|quic|http2) ;;
         *) echo "BNA_TUNEL_PROTOCOLO debe ser auto, quic o http2 (es '$protocolo')." >&2; exit 2 ;;
       esac
+      echo "patches:"
+      echo "  - target: $objetivo"
+      echo "    patch: '[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/env/0\", \"value\": {\"name\": \"TUNNEL_TRANSPORT_PROTOCOL\", \"value\": \"$protocolo\"}}]'"
+      if [ "$tipo" = rapido ] && [ -n "${BNA_TUNEL_RAPIDO_API:-}" ]; then
+        echo "  - target: $objetivo"
+        echo "    patch: '[{\"op\": \"add\", \"path\": \"/spec/template/spec/containers/0/command/-\", \"value\": \"--quick-service=$BNA_TUNEL_RAPIDO_API\"}]'"
+      fi
     fi
     echo "images:"
     for nombre in "${NOMBRES[@]}"; do
@@ -149,6 +168,7 @@ kustomizar() {
 
 manifiestos() { kustomizar "$OVERLAY" principal; }
 tunel_manifiestos() { kustomizar "$TUNEL" tunel; }
+tunel_rapido_manifiestos() { kustomizar "$TUNEL_RAPIDO" rapido; }
 
 # De cada pod que no está listo o que se reinició: estado de sus contenedores, motivo del último
 # reinicio (por ejemplo OOMKilled) y el final de sus registros. La cuenta no ve eventos.
@@ -408,6 +428,76 @@ tunel_quitar() {
   echo "Túnel quitado. El token sigue en el PVC bna-secretos (lo borra borrar --si)."
 }
 
+# ── Túneles rápidos (opcional) ─────────────────────────────────────────────────
+# Guía: Documents/despliegue-infraestructura.md, «Túneles rápidos (sin dominio)».
+
+# La URL del pod actual de bna-tunel-<nombre>, de sus registros (cloudflared la escribe al
+# arrancar). Vacío si todavía no la tiene.
+url_tunel_rapido() {
+  k logs "deployment/bna-tunel-$1" -c cloudflared 2>/dev/null \
+    | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -n 1 || true
+}
+
+# Solo las URL en la salida estándar (los avisos van a la de errores). Espera hasta
+# BNA_TUNEL_ESPERA_SEGUNDOS a que cada pod escriba la suya.
+tunel_rapido_urls() {
+  exigir_cluster
+  local nombre url inicio espera faltan=0
+  espera="${BNA_TUNEL_ESPERA_SEGUNDOS:-180}"
+  for nombre in "${TUNELES_RAPIDOS[@]}"; do
+    if ! k get deployment "bna-tunel-$nombre" >/dev/null 2>&1; then
+      echo "No está bna-tunel-$nombre en $BNA_NAMESPACE: scripts/k8s-infra.sh tunel-rapido-aplicar" >&2
+      faltan=1
+      continue
+    fi
+    inicio="$(date +%s)"
+    until url="$(url_tunel_rapido "$nombre")"; [ -n "$url" ]; do
+      if [ $(( $(date +%s) - inicio )) -ge "$espera" ]; then
+        break
+      fi
+      sleep 2
+    done
+    if [ -z "$url" ]; then
+      echo "bna-tunel-$nombre no escribió su URL en $espera s (scripts/k8s-infra.sh diagnostico)." >&2
+      faltan=1
+      continue
+    fi
+    printf '%-10s %s\n' "$nombre" "$url"
+  done
+  return "$faltan"
+}
+
+tunel_rapido_aplicar() {
+  exigir_cluster
+  local render nombre
+  render="$(mktemp)"
+  TEMPORALES+=("$render")
+  tunel_rapido_manifiestos > "$render"
+  python3 scripts/overlay_infraestructura.py revisar "$render" --registro "$REGISTRO/" >/dev/null
+  echo "Túneles rápidos en $BNA_NAMESPACE (protocolo ${BNA_TUNEL_PROTOCOLO:-auto})..." >&2
+  k apply -f "$render" >&2
+  for nombre in "${TUNELES_RAPIDOS[@]}"; do
+    if ! k rollout status "deployment/bna-tunel-$nombre" --timeout="${BNA_TUNEL_ESPERA_SEGUNDOS:-180}s" >&2; then
+      echo "bna-tunel-$nombre no conectó. Si cloudflared no llega a Cloudflare por QUIC, pruebe BNA_TUNEL_PROTOCOLO=http2." >&2
+      diagnostico
+      exit 1
+    fi
+  done
+  echo "Conectados. URL (cambian con cada pod nuevo; no las pegue en el repo, PR ni issues):" >&2
+  tunel_rapido_urls
+  echo "Al terminar la demo: scripts/k8s-infra.sh tunel-rapido-quitar" >&2
+}
+
+tunel_rapido_quitar() {
+  exigir_cluster
+  local nombre
+  for nombre in "${TUNELES_RAPIDOS[@]}"; do
+    k delete deployment "bna-tunel-$nombre" --ignore-not-found --wait=true
+  done
+  k wait --for=delete pod -l app.kubernetes.io/component=tunel-rapido --timeout=120s 2>/dev/null || true
+  echo "Túneles rápidos quitados: sus URL ya no responden."
+}
+
 case "${1:-}" in
   construir) construir ;;
   publicar) publicar ;;
@@ -423,5 +513,9 @@ case "${1:-}" in
   tunel-cargar) tunel_cargar ;;
   tunel-aplicar) tunel_aplicar ;;
   tunel-quitar) tunel_quitar ;;
-  *) sed -n '2,34p' "$0" >&2; exit 2 ;;
+  tunel-rapido-manifiestos) tunel_rapido_manifiestos ;;
+  tunel-rapido-aplicar) tunel_rapido_aplicar ;;
+  tunel-rapido-urls) tunel_rapido_urls ;;
+  tunel-rapido-quitar) tunel_rapido_quitar ;;
+  *) sed -n '2,43p' "$0" >&2; exit 2 ;;
 esac

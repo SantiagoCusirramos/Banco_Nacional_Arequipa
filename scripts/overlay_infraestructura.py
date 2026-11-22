@@ -22,8 +22,10 @@ k8s/base. Uso:
       # revisa la salida de `kubectl kustomize k8s/overlays/infraestructura` (o de su túnel
       # opcional, `scripts/k8s-infra.sh tunel-manifiestos`): ningún Secret ni secretKeyRef,
       # nombres con el prefijo bna-, direcciones hacia los Services con prefijo e imágenes del
-      # registro. La única imagen externa admitida es la de cloudflared, fijada por digest; el
-      # token del túnel solo puede llegar por --token-file (nunca --token ni TUNNEL_TOKEN).
+      # registro. La única imagen externa admitida es la de cloudflared, fijada por digest, sin
+      # root, con la raíz de solo lectura y con requests; el token del túnel con nombre solo puede
+      # llegar por --token-file (nunca --token ni TUNNEL_TOKEN), y un túnel rápido
+      # (`tunel-rapido-manifiestos`) publica un solo --url sin token, credenciales ni volúmenes.
 
 Requiere PyYAML. Pruebas: scripts/test_overlay_infraestructura.py.
 """
@@ -40,7 +42,7 @@ SALIDA = Path("k8s/overlays/infraestructura/secretos.yaml")
 SECRET = "bna-secretos"
 PREFIJO = "bna-"
 REGISTRO = "ghcr.io/miguelpro324/"
-# Imágenes de fuera del registro que se admiten, siempre fijadas por digest (tunel/).
+# Imágenes de fuera del registro que se admiten, siempre fijadas por digest (tunel/ y tunel/rapido/).
 IMAGENES_EXTERNAS = ("cloudflare/cloudflared",)
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 TOKEN_EN_VARIABLE = re.compile(r"\bTUNNEL_TOKEN\b(?!_)")
@@ -297,6 +299,43 @@ def _revisar_imagen(tipo, nombre, imagen, registro):
     return [f"{tipo} {nombre}: la imagen {imagen} no es de {registro}."]
 
 
+# Banderas de cloudflared que llevan un token o credenciales: un túnel rápido no debe tener ninguna.
+CREDENCIALES_CLOUDFLARED = ("--token", "--token-file", "--cred-file", "--credentials-file", "--credentials-contents")
+
+
+def _bandera(orden, nombre):
+    return [a for a in orden if a == nombre or a.startswith(nombre + "=")]
+
+
+def _revisar_cloudflared(tipo, nombre, c, orden):
+    """cloudflared (con nombre o rápido): no root, raíz de solo lectura, sin privilegios, requests y
+    --no-autoupdate. Un túnel rápido (--url) publica un solo servicio, sin token ni volúmenes."""
+    hallados = []
+    donde = f"{tipo} {nombre}: cloudflared"
+    seguridad = c.get("securityContext") or {}
+    if seguridad.get("runAsNonRoot") is not True or seguridad.get("runAsUser") == 0:
+        hallados.append(f"{donde} debe correr sin root (runAsNonRoot: true).")
+    if seguridad.get("readOnlyRootFilesystem") is not True:
+        hallados.append(f"{donde} necesita readOnlyRootFilesystem: true.")
+    if seguridad.get("allowPrivilegeEscalation") is not False:
+        hallados.append(f"{donde} necesita allowPrivilegeEscalation: false.")
+    if (seguridad.get("capabilities") or {}).get("drop") != ["ALL"]:
+        hallados.append(f"{donde} debe quitar todas las capabilities (drop: [ALL]).")
+    if not {"cpu", "memory"} <= set(((c.get("resources") or {}).get("requests") or {})):
+        hallados.append(f"{donde} necesita requests de cpu y memory.")
+    if "--no-autoupdate" not in orden:
+        hallados.append(f"{donde} necesita --no-autoupdate (la imagen va fijada por digest).")
+    urls = _bandera(orden, "--url")
+    if urls:
+        if len(urls) > 1:
+            hallados.append(f"{donde}: un túnel rápido publica un servicio (tiene {len(urls)} --url).")
+        if "run" in orden or any(_bandera(orden, b) for b in CREDENCIALES_CLOUDFLARED):
+            hallados.append(f"{donde}: un túnel rápido no lleva token ni credenciales (run, --token*, --cred*).")
+        if c.get("volumeMounts"):
+            hallados.append(f"{donde}: un túnel rápido no monta ningún volumen.")
+    return hallados
+
+
 def revisar(documentos, servicios, registro=REGISTRO):
     """Problemas en los manifiestos ya generados del overlay (lista vacía si no hay)."""
     hallados = []
@@ -322,6 +361,8 @@ def revisar(documentos, servicios, registro=REGISTRO):
             textos += orden
             textos += [str(v.get("value", "")) for v in c.get("env") or []]
             hallados += _revisar_imagen(tipo, nombre, str(c.get("image", "")), registro)
+            if str(c.get("image", "")).split("@")[0].rsplit(":", 1)[0] in IMAGENES_EXTERNAS:
+                hallados += _revisar_cloudflared(tipo, nombre, c, orden)
             if any(a == "--token" or a.startswith("--token=") for a in orden):
                 hallados.append(f"{tipo} {nombre}: el token del túnel va en la orden; use --token-file.")
             variables = [str(v.get("name", "")) for v in c.get("env") or []] + orden
