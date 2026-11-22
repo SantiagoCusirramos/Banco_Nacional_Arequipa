@@ -134,6 +134,16 @@ jobs:
           fi
           kubeconform -strict -summary -kubernetes-version 1.34.0 "$RUNNER_TEMP/overlay.yaml" "$RUNNER_TEMP/aplicar.yaml" \
             "$RUNNER_TEMP/tunel.yaml" "$RUNNER_TEMP/tunel-rapido.yaml"
+          # Las URL públicas opcionales (BNA_URL_*) llegan al Deployment frontend; una inválida se rechaza.
+          BNA_NAMESPACE=1234567890 BNA_URL_BILLETERA=https://billetera.example BNA_URL_CAJERO=https://cajero.example \
+            scripts/k8s-infra.sh manifiestos > "$RUNNER_TEMP/urls.yaml"
+          python3 scripts/overlay_infraestructura.py revisar "$RUNNER_TEMP/urls.yaml"
+          grep -A1 'name: BNA_URL_BILLETERA' "$RUNNER_TEMP/urls.yaml" | grep -q 'https://billetera.example'
+          grep -A1 'name: BNA_URL_CAJERO' "$RUNNER_TEMP/urls.yaml" | grep -q 'https://cajero.example'
+          if BNA_NAMESPACE=1234567890 BNA_URL_APK='http://usuario@host' scripts/k8s-infra.sh manifiestos >/dev/null 2>&1; then
+            echo "::error::k8s-infra.sh aceptó una URL pública con credenciales."
+            exit 1
+          fi
 
       # El mismo motivo que en el trabajo de arriba.
       - name: Quitar del runner el perfil de AppArmor de mysqld
