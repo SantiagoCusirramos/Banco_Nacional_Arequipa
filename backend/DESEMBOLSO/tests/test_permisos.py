@@ -31,7 +31,9 @@ def test_el_usuario_de_servicio_no_entra_a_las_rutas_del_personal(api):
 
 @pytest.mark.parametrize(("rol", "perfil", "opera", "concilia"), [
     ("OPERADOR", "OPERADOR", True, False),
-    ("ADMINISTRADOR", "SUPERVISOR", True, True),
+    # El administrador no tiene VALIDAR_IDENTIDAD (la identidad la verifica un operador en ventanilla):
+    # no puede completar un desembolso, así que la pantalla no le ofrece operar (prueba «solo mouse», B7).
+    ("ADMINISTRADOR", "SUPERVISOR", False, True),
     ("AUDITOR", "AUDITOR", False, True),
 ])
 def test_perfil_de_cada_rol(api, admin, rol, perfil, opera, concilia):

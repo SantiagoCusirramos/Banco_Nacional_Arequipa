@@ -28,13 +28,16 @@ export function ConSesion({ children }: { children: React.ReactNode }) {
           {sinSesion ? "Tu sesión no está iniciada o ya venció." : "No se pudo abrir Desembolso."}
         </p>
         {!sinSesion && <p className="mt-2 text-sm text-slate-600">{error.message}</p>}
-        <Link
-          href="/login"
-          onClick={cerrarSesion}
-          className="mt-6 inline-flex rounded-lg bg-marca-700 px-4 py-2 text-sm font-semibold text-white hover:bg-marca-800"
-        >
-          Iniciar sesión
-        </Link>
+        <div className="mt-6 flex justify-center gap-3">
+          <Link href="/" className="inline-flex rounded-lg px-4 py-2 text-sm font-semibold text-marca-700 ring-1 ring-marca-200 hover:bg-marca-50">Volver al portal</Link>
+          <Link
+            href="/login"
+            onClick={cerrarSesion}
+            className="inline-flex rounded-lg bg-marca-700 px-4 py-2 text-sm font-semibold text-white hover:bg-marca-800"
+          >
+            Iniciar sesión
+          </Link>
+        </div>
       </main>
     );
   }

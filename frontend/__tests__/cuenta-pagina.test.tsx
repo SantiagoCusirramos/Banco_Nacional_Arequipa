@@ -6,12 +6,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
   apiCuentas: { get: vi.fn(), post: vi.fn() },
+  api: { get: vi.fn() },
 }));
-import { apiCuentas } from "@/lib/api";
+import { api, apiCuentas } from "@/lib/api";
 import CuentaPage from "../app/cuenta/page";
 
 const get = vi.mocked(apiCuentas.get);
 const post = vi.mocked(apiCuentas.post);
+const perfil = vi.mocked(api.get);
 const sobre = (data: unknown) => ({ data: { success: true, status_code: 200, data } });
 
 const CUENTA = {
@@ -33,6 +35,8 @@ const pestana = (nombre: RegExp) => userEvent.click(screen.getByRole("button", {
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  perfil.mockReset();
+  perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "operador", rol: "OPERADOR", acciones: ["VER_CUENTA","CREAR_CUENTA","REGISTRAR_MOVIMIENTO","VER_TARJETA","CREAR_TARJETA"] } });
 });
 
 describe("Página del módulo Cuentas", () => {

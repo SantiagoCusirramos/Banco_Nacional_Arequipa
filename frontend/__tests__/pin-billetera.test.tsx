@@ -5,6 +5,12 @@ import { beforeEach, expect, it, vi } from "vitest";
 // El PIN de Chaski lo generaba nadie: lo escribía el operador al afiliar (hallazgo C6). Ahora se
 // genera y se muestra una vez para entregarlo, o la clienta lo escribe dos veces.
 vi.mock("qrcode", () => ({ toDataURL: vi.fn(async () => "data:image/png;base64,eA==") }));
+// La pantalla exige el perfil (bloque 3): un operador con los permisos reales de la billetera.
+vi.mock("@/lib/auth", async (original) => ({
+  ...(await original<typeof import("@/lib/auth")>()),
+  obtenerMiPerfil: vi.fn(async () => ({ id_usuario: "u-op", username: "operador.uno", nombre: "Operador Uno", rol: "OPERADOR",
+    acciones: ["AFILIAR_BILLETERA", "REGISTRAR_COMERCIO", "VER_CLIENTE", "VER_CUENTA"], debe_cambiar_clave: false })),
+}));
 vi.mock("@/lib/billetera", async (original) => ({
   ...(await original<typeof import("@/lib/billetera")>()),
   afiliar: vi.fn(),

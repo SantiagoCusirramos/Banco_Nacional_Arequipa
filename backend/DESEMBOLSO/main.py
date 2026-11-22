@@ -30,7 +30,7 @@ from fastapi import Depends, FastAPI, Header, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from .auth import CONCILIAR, DESEMBOLSAR, VER, Sesion, VerificadorCoreDb, persona
+from .auth import CONCILIAR, DESEMBOLSAR, VALIDAR_IDENTIDAD, VER, Sesion, VerificadorCoreDb, persona
 from .comun import ErrorDes, correlacion_valida, fijar_correlacion, restaurar_correlacion
 from .config import Config
 from .contratos import CuentaIn, IdentidadIn, OrdenIn, RechazoIn, ValidacionIn
@@ -185,7 +185,9 @@ def crear_app(config: Config | None = None, *, contexto: Contexto | None = None)
     def sesion(sesion: Sesion = Depends(persona(VER, DESEMBOLSAR))):
         p = sesion.perfil
         return {"usuario": p.usuario, "rol": p.rol, "perfil": perfil_de(p.rol),
-                "puedeOperar": p.puede(DESEMBOLSAR), "puedeConciliar": p.puede(CONCILIAR)}
+                # Operar exige también verificar la identidad en ventanilla (evidencia IDENTIDAD).
+                "puedeOperar": p.puede(DESEMBOLSAR) and p.puede(VALIDAR_IDENTIDAD),
+                "puedeConciliar": p.puede(CONCILIAR)}
 
     @app.post("/api/v1/identidad", tags=[tes], status_code=201,
               summary="Verificar el documento del titular en ventanilla",

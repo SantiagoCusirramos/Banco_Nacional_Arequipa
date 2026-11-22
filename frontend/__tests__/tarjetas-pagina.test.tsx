@@ -176,7 +176,7 @@ describe("Página del módulo Tarjetas", () => {
   it("TJ-08 Muestra en el menú quién tiene la sesión", async () => {
     // /coredb/auth/me no trae el nombre: viene de la sesión guardada al iniciar sesión.
     localStorage.setItem("bna_usuario", JSON.stringify({ id_usuario: "u1", username: "ana", nombre: "Ana Torres", rol: "OPERADOR" }));
-    perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "ana", rol: "OPERADOR" } });
+    perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "ana", rol: "OPERADOR", acciones: ["VER_TARJETA"] } });
     render(<TarjetasPage />);
     expect(await screen.findByText("Ana Torres")).toBeInTheDocument();
     expect(screen.getByText("OPERADOR")).toBeInTheDocument();

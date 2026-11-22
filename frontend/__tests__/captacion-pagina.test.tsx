@@ -42,7 +42,7 @@ beforeEach(() => {
   get.mockReset();
   post.mockReset();
   perfil.mockReset();
-  perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "asesor.demo", rol: "ASESOR", acciones: [] } });
+  perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "asesor.demo", rol: "ASESOR", acciones: ["CREAR_CLIENTE", "MODIFICAR_CLIENTE", "VALIDAR_IDENTIDAD"] } });
 });
 
 describe("Página del módulo Captación", () => {

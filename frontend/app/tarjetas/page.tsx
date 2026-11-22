@@ -1,10 +1,14 @@
 "use client";
 import { nuevoUuid } from "@/lib/uuid";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { isAxiosError } from "axios";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import { ClaveNueva } from "../components/ClaveNueva";
 import {
   BINES, CANALES, CODIGOS_RESPUESTA, DIGITOS_CLAVE, ESTADOS_PEDIBLES, OPERACIONES, TIPOS_CLAVE,
@@ -172,8 +176,12 @@ function Resumen({ tarjetas }: { tarjetas: Tarjeta[] }) {
 
 const esSesionInvalida = (err: unknown) => isAxiosError(err) && err.response?.status === 401;
 
-export default function TarjetasPage() {
-  const [tab, setTab] = useState<Pestana>("cliente");
+function TarjetasPageInner() {
+  const params = useSearchParams();
+  const [tab, setTab] = useState<Pestana>(() => {
+    const destino = params?.get("tab");
+    return destino === "cliente" || destino === "consulta" || destino === "emision" || destino === "estado" || destino === "operacion" || destino === "claves" ? destino : "cliente";
+  });
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   // Sin sesión o con la sesión vencida se pide iniciarla, en vez de mostrar el error técnico.
   const [sinSesion, setSinSesion] = useState(false);
@@ -186,10 +194,11 @@ export default function TarjetasPage() {
       if (esSesionInvalida(err)) setSinSesion(true);
     });
   }, []);
+
   const [notice, setNotice] = useState<Aviso | null>(null);
 
-  // Tarjetas de un cliente
-  const [codCliente, setCodCliente] = useState("");
+  // Tarjetas de un cliente. La ficha del cliente y la emisión llegan precargadas desde la cuenta.
+  const [codCliente, setCodCliente] = useState(() => params?.get("codCliente")?.toUpperCase() ?? "");
   const [tarjetas, setTarjetas] = useState<Tarjeta[] | null>(null);
 
   // Una tarjeta
@@ -197,8 +206,8 @@ export default function TarjetasPage() {
   const [tarjetaActual, setTarjetaActual] = useState<Tarjeta | null>(null);
 
   // Emisión
-  const [clienteEmision, setClienteEmision] = useState("");
-  const [cuentaEmision, setCuentaEmision] = useState("");
+  const [clienteEmision, setClienteEmision] = useState(() => params?.get("codCliente")?.toUpperCase() ?? "");
+  const [cuentaEmision, setCuentaEmision] = useState(() => params?.get("numCuenta") ?? "");
   const [bin, setBin] = useState(BINES[0]);
   const [vencimiento, setVencimiento] = useState(enCuatroAnios);
   // Llave de idempotencia de esta emisión: se mantiene si se repite el mismo envío (doble
@@ -381,6 +390,21 @@ export default function TarjetasPage() {
   const digitos = DIGITOS_CLAVE[tipoClave];
   const vencePrevia = vencimiento ? `${vencimiento.slice(5, 7)}/${vencimiento.slice(2, 4)}` : "MM/AA";
 
+  const pantalla = pantallaPorHref("/tarjetas");
+  const permitido = puedeVerPantalla(usuario?.acciones, "/tarjetas");
+  if (usuario && !permitido) {
+    return (
+      <div className="sol-shell">
+        <div className="sol-work" style={{ width: "100%" }}>
+          <BarraNavegacion titulo="Tarjetas" usuario={usuario} />
+          <main className="sol-main">
+            <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas operar tarjetas, pide a un administrador que revise tus permisos en COREDB." />
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="sol-shell">
       <aside className="sol-sidebar">
@@ -407,33 +431,20 @@ export default function TarjetasPage() {
                 <strong>{usuario.nombre}</strong>
                 <small>{usuario.rol}</small>
               </div>
-              <Link href="/login" onClick={cerrarSesion} title="Cerrar sesión" aria-label="Cerrar sesión"
-                style={{ marginLeft: "auto", color: "#b2c6d6", display: "flex" }}>
-                <Icono nombre="salir" tamano={16} />
-              </Link>
             </div>
           </div>
         )}
       </aside>
 
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div>
-            <span>Tarjetas</span>
-            <b>/</b>{navegacion.find((n) => n.id === tab)?.etiqueta}
-          </div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">Requiere sesión iniciada</span>
-            <Link href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>Volver al Home Banking</Link>
-          </div>
-        </header>
+        <BarraNavegacion titulo="Tarjetas" subtitulo={navegacion.find((n) => n.id === tab)?.etiqueta} usuario={usuario} />
 
         <main className="sol-main">
           <div className="sol-heading">
             <div>
               <h1>Tarjetas de débito</h1>
             </div>
-            {tab !== "emision" && (
+            {tab !== "emision" && puedeVerPantalla(usuario?.acciones, "/tarjetas") && (
               <button className="sol-button primary" onClick={() => irA("emision")}>
                 <Icono nombre="mas" />
                 Nueva tarjeta
@@ -822,4 +833,13 @@ export default function TarjetasPage() {
       </div>
     </div>
   );
+}
+
+function TarjetasConParametros() {
+  const params = useSearchParams();
+  return <TarjetasPageInner key={params?.toString() ?? ""} />;
+}
+
+export default function TarjetasPage() {
+  return <Suspense fallback={<main className="sol-main"><p>Cargando…</p></main>}><TarjetasConParametros /></Suspense>;
 }

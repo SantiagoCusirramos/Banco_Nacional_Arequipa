@@ -27,6 +27,8 @@ from .comun import ErrorDes, correlacion_actual
 VER = "VER_CREDITO"
 DESEMBOLSAR = "DESEMBOLSAR_CREDITO"
 CONCILIAR = "GENERAR_REPORTES"
+# La verificación del documento en ventanilla (COREDB la exige para registrar la identidad).
+VALIDAR_IDENTIDAD = "VALIDAR_IDENTIDAD"
 
 _bearer = HTTPBearer(auto_error=False, scheme_name="Bearer")
 

@@ -4,6 +4,9 @@ import { nuevoUuid } from "@/lib/uuid";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import { cuentasDeCliente, formatoMoneda as formatoMonedaCuenta, type Cuenta } from "@/lib/cuentas";
 import {
   comprobante as obtenerComprobante, creditosDeCliente, esSesionInvalida, formatoMoneda, mensajeDeError,
@@ -146,6 +149,17 @@ export default function PagarCuotaPage() {
     { id: "pago", etiqueta: "2. Pagar cuota" },
   ];
 
+  const pantallaInfo = pantallaPorHref("/pagar-cuota");
+  const permitido = puedeVerPantalla(usuario?.acciones, "/pagar-cuota");
+  if (usuario && !permitido) {
+    return (
+      <main className="sol-main">
+        <BarraNavegacion titulo="Pagar cuota" usuario={usuario} />
+        <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantallaInfo?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas registrar pagos, pide a un administrador que revise tus permisos en COREDB." />
+      </main>
+    );
+  }
+
   return (
     <div className="sol-shell">
       <aside className="sol-sidebar">
@@ -184,16 +198,7 @@ export default function PagarCuotaPage() {
       </aside>
 
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div>
-            <span>Cobranza</span>
-            <b>/</b>{navegacion.find((n) => n.id === tab)?.etiqueta}
-          </div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">Requiere sesión iniciada</span>
-            <Link href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>Volver al Home Banking</Link>
-          </div>
-        </header>
+        <BarraNavegacion titulo="Pagar cuota" subtitulo={navegacion.find((n) => n.id === tab)?.etiqueta} usuario={usuario} />
 
         <main className="sol-main">
           {sinSesion && (

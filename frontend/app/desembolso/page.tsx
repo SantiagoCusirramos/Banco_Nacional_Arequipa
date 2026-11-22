@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { VerificarDocumento } from "@/app/desembolso/_componentes/Identidad";
 import { Alerta, AlertaError, Boton, Encabezado, FilaVacia, Insignia, InsigniaEstado, Tarjeta, estiloEntrada, td, th } from "@/app/desembolso/_componentes/ui";
@@ -16,6 +16,8 @@ import type { Aprobacion, Cuenta, Orden, Verificacion } from "@/lib/desembolso/t
 export default function Desembolsar() {
   const sesion = useSesion();
   const router = useRouter();
+  const params = useSearchParams();
+  const idSolicitudFiltro = params.get("idSolicitud") ?? "";
   const [verificacion, setVerificacion] = useState<Verificacion | null>(null);
   const [aprobaciones, setAprobaciones] = useState<Aprobacion[] | null>(null);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
@@ -74,7 +76,8 @@ export default function Desembolsar() {
       <>
         <Encabezado titulo="Desembolso de créditos" />
         <Alerta tipo="info" titulo="Tu perfil solo consulta">
-          Puedes revisar las órdenes y sus constancias en{" "}
+          El desembolso lo hace un operador: verifica en ventanilla el documento del titular y abona el
+          crédito. Puedes revisar las órdenes y sus constancias en{" "}
           <Link href="/desembolso/ordenes" className="font-semibold underline">
             Órdenes
           </Link>
@@ -112,8 +115,8 @@ export default function Desembolsar() {
           <AlertaError error={error} />
         </div>
       ) : null}
-      {aprobado && aprobaciones && (
-        <Tarjeta titulo={`2 · Aprobaciones vigentes (${aprobaciones.length})`}>
+      {aprobado && aprobaciones && (() => { const filas = idSolicitudFiltro ? aprobaciones.filter((x) => x.idSolicitud === idSolicitudFiltro) : aprobaciones; return (
+        <Tarjeta titulo={`2 · Aprobaciones vigentes (${filas.length})`}>
           <div className="-m-5 overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
@@ -127,8 +130,8 @@ export default function Desembolsar() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {aprobaciones.length === 0 && <FilaVacia columnas={6}>El cliente no tiene aprobaciones pendientes de desembolso.</FilaVacia>}
-                {aprobaciones.map((a) => {
+                {filas.length === 0 && <FilaVacia columnas={6}>El cliente no tiene aprobaciones pendientes de desembolso.</FilaVacia>}
+                {filas.map((a) => {
                   const elegibles = elegiblesPara(a);
                   const otras = cuentas.filter((c) => !elegibles.includes(c));
                   return (
@@ -187,7 +190,7 @@ export default function Desembolsar() {
             </table>
           </div>
         </Tarjeta>
-      )}
+      ); })()}
     </>
   );
 }

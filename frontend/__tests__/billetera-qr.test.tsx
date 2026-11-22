@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const toDataURL = vi.hoisted(() => vi.fn(async (texto: string) => `data:image/png;base64,${btoa(texto)}`));
 vi.mock("qrcode", () => ({ toDataURL }));
 
+// La pantalla exige el perfil (bloque 3): un operador con los permisos reales de la billetera.
+vi.mock("@/lib/auth", async (original) => ({
+  ...(await original<typeof import("@/lib/auth")>()),
+  obtenerMiPerfil: vi.fn(async () => ({ id_usuario: "u-op", username: "operador.uno", nombre: "Operador Uno", rol: "OPERADOR",
+    acciones: ["AFILIAR_BILLETERA", "REGISTRAR_COMERCIO", "VER_CLIENTE", "VER_CUENTA"], debe_cambiar_clave: false })),
+}));
 vi.mock("@/lib/billetera", async (original) => ({
   ...(await original<typeof import("@/lib/billetera")>()),
   afiliar: vi.fn(),
@@ -43,7 +49,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 async function registrar() {
-  await userEvent.click(screen.getByRole("button", { name: "2. Registrar comercio" }));
+  await userEvent.click(await screen.findByRole("button", { name: "2. Registrar comercio" }));
   fireEvent.change(screen.getByLabelText("RUC (11 dígitos)"), { target: { value: COMERCIO.ruc } });
   fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: COMERCIO.razon_social } });
   fireEvent.change(screen.getByLabelText("Cuenta de abono en soles"), { target: { value: COMERCIO.num_cuenta } });
@@ -92,7 +98,7 @@ describe("Instalar Chaski en el celular de la clienta", () => {
   it("ofrece el APK y el QR de configuración con la trama exacta", async () => {
     render(<BilleteraPage />);
 
-    const titulo = screen.getByRole("heading", { name: "Instalar Chaski en el celular de la clienta" });
+    const titulo = await screen.findByRole("heading", { name: "Instalar Chaski en el celular de la clienta" });
     expect(titulo.closest("form")).toBeNull();
     expect(fetchConfig).toHaveBeenCalledWith("/api/config-publica");
     expect(await screen.findByRole("link", { name: "Descargar Chaski (APK)" })).toHaveAttribute("href", CONFIG.urlApk);

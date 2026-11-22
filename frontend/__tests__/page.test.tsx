@@ -6,7 +6,9 @@ import RootLayout, { metadata } from "../app/layout";
 
 // La banca personal con una sesión ya iniciada; la exigencia de sesión se prueba en sesion.test.tsx.
 const alSalir = vi.fn();
-const USUARIO = { id_usuario: "u-1", username: "operador1", nombre: "María López", rol: "OPERADOR" };
+const USUARIO = { id_usuario: "u-1", username: "operador1", nombre: "María López", rol: "OPERADOR",
+  acciones: ["VER_CUENTA", "VER_TARJETA", "BLOQUEAR_TARJETA", "AFILIAR_BILLETERA", "CREAR_CLIENTE",
+    "CREAR_SOLICITUD_CREDITO", "EVALUAR_CREDITO", "DESEMBOLSAR_CREDITO", "REGISTRAR_PAGO"] };
 const Home = () => <BancaPersonal usuario={USUARIO} onSalir={alSalir} />;
 
 const nav = () => screen.getByRole("navigation", { name: "Navegación principal" });
