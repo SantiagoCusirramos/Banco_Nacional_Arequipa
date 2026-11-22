@@ -1,4 +1,5 @@
-/* INT-13 – Consulta de auditoría centralizada y exportación de evidencia */
+/* Registro de actividad: las acciones de la bitácora del banco (COREDB), para administradores y
+   auditores. Todo lo que llega del servidor se muestra como texto (textContent), nunca como HTML. */
 
 (function () {
   const sesion = Sesion.exigir();
@@ -7,119 +8,151 @@
   pintarCabecera();
 
   const msg = document.getElementById("msgAuditoria");
+  const contenido = document.getElementById("contenidoAuditoria");
   const tabla = document.getElementById("tablaAuditoria");
+  const resumen = document.getElementById("resumenAuditoria");
   const filtroModulo = document.getElementById("filtroModulo");
-  const filtroTipo = document.getElementById("filtroTipo");
-  const filtroResultado = document.getElementById("filtroResultado");
+  const filtroAccion = document.getElementById("filtroTipo");
   const btnActualizar = document.getElementById("btnActualizar");
   const btnCsv = document.getElementById("btnCsv");
 
-  let eventosActuales = [];
-
-  async function consultar(limit, filtros = {}) {
-    return Bus.consultarAuditoria(limit, filtros);
+  const SIN_PERMISO = "Esta sección es solo para administradores y auditores del banco. Tu usuario no tiene " +
+    "permiso para ver el registro de actividad.";
+  const MODULOS = {
+    CORE: "Núcleo del banco", "SOLICITUD DE CREDITO": "Solicitud de crédito", CAPTACION: "Captación",
+    EVALUACION: "Evaluación", DESEMBOLSO: "Desembolso", COBRANZA: "Cobranza", SEGURIDAD: "Seguridad",
+    BILLETERA: "Billetera", CLIENTES: "Clientes", CUENTAS: "Cuentas", TARJETAS: "Tarjetas"
+  };
+  const legible = codigo => {
+    const t = String(codigo || "").replace(/_/g, " ").toLowerCase();
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+  const nombreModulo = m => MODULOS[m] || legible(m);
+  const nombreAccion = legible;
+  const ID_LARGO = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const sobreQue = e => {
+    const id = String(e.idEntidad || "");
+    return `${legible(e.entidad)} ${ID_LARGO.test(id) ? id.slice(0, 8) + "…" : id}`.trim();
+  };
+  // Hora de Arequipa (UTC−5): dd/mm/aaaa hh:mm:ss.
+  function fecha(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const p = new Intl.DateTimeFormat("es-PE", {
+      timeZone: "America/Lima", day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+    }).formatToParts(d);
+    const v = t => (p.find(x => x.type === t) || {}).value || "";
+    return `${v("day")}/${v("month")}/${v("year")} ${v("hour")}:${v("minute")}:${v("second")}`;
   }
 
-  function opciones(select, valores, etiquetaTodos) {
+  let eventosActuales = [];
+
+  function opciones(select, valores, etiquetaTodos, nombre) {
     const actual = select.value;
-    select.innerHTML = `<option value="">${etiquetaTodos}</option>` +
-      valores.map(v => `<option value="${v}">${v}</option>`).join("");
+    select.replaceChildren(new Option(etiquetaTodos, ""), ...valores.map(v => new Option(nombre(v), v)));
     if (valores.includes(actual)) select.value = actual;
   }
 
-  function pintarKpis(eventos, total) {
-    const ok = eventos.filter(e => e.resultado === "OK").length;
-    const error = eventos.filter(e => e.resultado === "ERROR").length;
-    const pend = eventos.filter(e => e.resultado === "PENDIENTE").length;
-    const trans = eventos.filter(e => e.tipoEvento === "TRANSFERENCIA").length;
-    const pagos = eventos.filter(e => e.tipoEvento === "PAGO_CREDITO").length;
-    document.getElementById("kpiTotal").textContent = total;
-    document.getElementById("kpiOk").textContent = ok;
-    document.getElementById("kpiError").textContent = error;
-    document.getElementById("kpiPendiente").textContent = pend;
-    document.getElementById("kpiTrans").textContent = trans;
-    document.getElementById("kpiPagos").textContent = pagos;
-  }
-
-  function claseResultado(r) {
-    if (r === "OK") return "ok";
-    if (r === "PENDIENTE") return "pendiente";
-    return "error";
+  function celda(texto) {
+    const td = document.createElement("td");
+    td.textContent = texto;
+    return td;
   }
 
   function pintarTabla(eventos) {
     eventosActuales = eventos;
     if (!eventos.length) {
-      tabla.innerHTML = `<tr><td colspan="10" class="vacio">Sin eventos para los filtros seleccionados.</td></tr>`;
+      const td = celda("No hay acciones para los filtros elegidos.");
+      td.colSpan = 5;
+      td.className = "vacio";
+      const tr = document.createElement("tr");
+      tr.append(td);
+      tabla.replaceChildren(tr);
+    } else {
+      tabla.replaceChildren(...eventos.map(e => {
+        const tr = document.createElement("tr");
+        tr.append(celda(fecha(e.fechaHora)), celda(nombreAccion(e.accion)), celda(nombreModulo(e.modulo)),
+          celda(e.usuario || ""), celda(sobreQue(e)));
+        return tr;
+      }));
+    }
+    resumen.textContent = eventos.length === 1 ? "Se muestra 1 acción." : `Se muestran ${eventos.length} acciones.`;
+  }
+
+  function mostrarError(e) {
+    if (e.codigo === "SESION_EXPIRADA" || e.codigo === "SESION_INVALIDA" || e.status === 401) {
+      Sesion.cerrar();
+      window.location.href = "index.html";
       return;
     }
-    tabla.innerHTML = eventos.map(e => `
-      <tr>
-        <td class="num">${e.fechaHora}</td>
-        <td class="num">${e.idEvento}</td>
-        <td>${e.modulo}</td>
-        <td>${e.tipoEvento}</td>
-        <td class="num">${e.usuario}</td>
-        <td>${e.canal}</td>
-        <td class="num">${e.ip}</td>
-        <td class="num">${(e.uuid || "").slice(0, 18)}${(e.uuid || "").length > 18 ? "…" : ""}</td>
-        <td><span class="badge ${claseResultado(e.resultado)}">${e.resultado}</span></td>
-        <td class="detalle">${e.detalle || ""}</td>
-      </tr>`).join("");
+    if (e.status === 403) {
+      contenido.hidden = true;
+      mostrarMensaje(msg, "warn", SIN_PERMISO);
+    } else if (e.status === 0) {
+      mostrarMensaje(msg, "error", "No hubo respuesta del servidor. Revisa tu conexión e intenta de nuevo.");
+    } else {
+      mostrarMensaje(msg, "error", "El registro de actividad no está disponible en este momento. Intenta de nuevo más tarde.");
+    }
   }
 
   async function cargar() {
     ocultarMensaje(msg);
     try {
-      const todos = await consultar(500);
-      opciones(filtroModulo, todos.modulos || [], "Todos");
-      opciones(filtroTipo, todos.tipos || [], "Todos");
-      const filtrados = await consultar(250, {
-        modulo: filtroModulo.value,
-        tipo: filtroTipo.value,
-        resultado: filtroResultado.value
-      });
-      pintarKpis(todos.eventos || [], todos.total || 0);
-      pintarTabla(filtrados.eventos || []);
-      if (!todos.total) mostrarMensaje(msg, "info", "Aún no hay eventos. Realice una operación para generar trazabilidad.");
+      const todos = await Bus.consultarAuditoria(200);
+      opciones(filtroModulo, todos.modulos || [], "Todos", nombreModulo);
+      opciones(filtroAccion, todos.acciones || [], "Todas", nombreAccion);
+      const elegidos = filtroModulo.value || filtroAccion.value
+        ? await Bus.consultarAuditoria(200, { modulo: filtroModulo.value, tipo: filtroAccion.value })
+        : todos;
+      pintarTabla(elegidos.eventos || []);
+      if (!todos.total) mostrarMensaje(msg, "info", "Todavía no hay acciones registradas.");
     } catch (e) {
-      if (e.codigo === "SESION_EXPIRADA" || e.codigo === "SESION_INVALIDA") {
-        Sesion.cerrar();
-        window.location.href = "index.html";
-        return;
-      }
-      if (e.codigo === "NO_DISPONIBLE") {
-        mostrarMensaje(msg, "error", "Auditoría: No disponible en esta versión (requiere endpoint /api/core/coredb/auditoria).");
-      } else {
-        mostrarMensaje(msg, "error", e.mensaje || "No se pudo consultar la auditoría.");
-      }
+      mostrarError(e);
     }
   }
 
   function descargarCsv() {
     if (!eventosActuales.length) {
-      mostrarMensaje(msg, "warn", "No hay eventos para exportar con los filtros actuales.");
+      mostrarMensaje(msg, "warn", "No hay acciones para descargar con los filtros elegidos.");
       return;
     }
-    const cols = ["idEvento", "fechaHora", "modulo", "tipoEvento", "usuario", "canal", "ip", "uuid", "resultado", "detalle"];
+    const cabecera = ["Fecha y hora", "Acción", "Módulo", "Usuario", "Entidad", "Identificador", "N.º de registro"];
     const esc = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
-    const filas = [cols.join(",")].concat(eventosActuales.map(e => cols.map(c => esc(e[c])).join(",")));
-    const blob = new Blob(["\uFEFF" + filas.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const filas = [cabecera.map(esc).join(",")].concat(eventosActuales.map(e => [
+      fecha(e.fechaHora), nombreAccion(e.accion), nombreModulo(e.modulo), e.usuario, legible(e.entidad), e.idEntidad,
+      e.idEvento
+    ].map(esc).join(",")));
+    const blob = new Blob(["﻿" + filas.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `auditoria_homebanking_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    a.download = `registro_actividad_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    mostrarMensaje(msg, "ok", `Se exportaron ${eventosActuales.length} evento(s) de auditoría.`);
+    mostrarMensaje(msg, "ok", `Se descargaron ${eventosActuales.length} acciones.`);
   }
 
-  btnActualizar.addEventListener("click", cargar);
-  filtroModulo.addEventListener("change", cargar);
-  filtroTipo.addEventListener("change", cargar);
-  filtroResultado.addEventListener("change", cargar);
-  btnCsv.addEventListener("click", descargarCsv);
-  cargar();
+  async function iniciar() {
+    try {
+      const permisos = await Bus.misPermisos();
+      if (!permisos.includes("VER_AUDITORIA")) {
+        mostrarMensaje(msg, "warn", SIN_PERMISO);
+        return;
+      }
+    } catch (e) {
+      mostrarError(e);
+      return;
+    }
+    contenido.hidden = false;
+    btnActualizar.addEventListener("click", cargar);
+    filtroModulo.addEventListener("change", cargar);
+    filtroAccion.addEventListener("change", cargar);
+    btnCsv.addEventListener("click", descargarCsv);
+    await cargar();
+  }
+
+  iniciar();
 })();
