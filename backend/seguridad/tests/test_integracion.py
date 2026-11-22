@@ -111,13 +111,27 @@ def test_desbloqueo_de_una_tarjeta(api, admin, persona, cuenta):
     tarjeta = _coredb("POST", "/coredb/tarjetas", admin, json={
         "pan_token": uuid.uuid4().hex, "bin": "004499", "ultimos4": "1234", "fecha_emision": "2026-01-01",
         "fecha_vencimiento": "2030-01-01", "cod_cliente": "DEV001", "num_cuenta": cuenta})["id_tarjeta"]
-    for estado in ("ACTIVA", "BLOQUEADA"):
-        _coredb("POST", f"/coredb/tarjetas/{tarjeta}/estado", admin, json={"estado": estado})
+    _coredb("POST", f"/coredb/tarjetas/{tarjeta}/estado", admin, json={"estado": "ACTIVA"})
+    _coredb("POST", f"/coredb/tarjetas/{tarjeta}/estado", admin,
+            json={"estado": "BLOQUEADA", "motivo": "Bloqueo solicitado por el cliente"})
     asesor = persona("ASESOR")
+    assert api.get(f"/seguridad/tarjetas/{tarjeta}", headers=_h(asesor)).status_code == 403
     assert api.post(f"/seguridad/tarjetas/{tarjeta}/desbloqueo", headers=_h(asesor),
                     json={"motivo": "Sin permiso"}).status_code == 403
     operador = persona("OPERADOR")
+    ficha = api.get(f"/seguridad/tarjetas/{tarjeta}", headers=_h(operador))
+    assert ficha.status_code == 200, ficha.text
+    assert ficha.json()["desbloqueable"] is True
+    assert (ficha.json()["bloqueo"]["motivo"], ficha.json()["bloqueo"]["origen"]) == (
+        "Bloqueo solicitado por el cliente", "OPERADOR")
+    lista = api.get("/seguridad/tarjetas", params={"cod_cliente": "DEV001"}, headers=_h(operador)).json()
+    assert tarjeta in [t["id_tarjeta"] for t in lista]
     r = api.post(f"/seguridad/tarjetas/{tarjeta}/desbloqueo", headers=_h(operador),
                  json={"motivo": "El cliente confirmó su identidad"})
     assert r.status_code == 200, r.text
     assert r.json()["estado_tarjeta"] == "ACTIVA"
+    cambio = r.json()["cambio"]
+    assert (cambio["estado_anterior"], cambio["estado_nuevo"], cambio["origen"]) == ("BLOQUEADA", "ACTIVA", "SEGURIDAD")
+    assert cambio["motivo"] == "El cliente confirmó su identidad" and cambio["id_historial"] > 0
+    despues = api.get(f"/seguridad/tarjetas/{tarjeta}", headers=_h(operador)).json()
+    assert despues["desbloqueable"] is False and despues["historial"][0]["id_historial"] == cambio["id_historial"]

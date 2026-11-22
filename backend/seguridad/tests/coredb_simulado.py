@@ -10,9 +10,10 @@ import httpx
 
 SECRETO_SERVICIO = "s" * 40
 ACCIONES = {
-    "ADMINISTRADOR": {"REGISTRAR_MOVIMIENTO", "VER_AUDITORIA", "GESTIONAR_INCIDENTES", "BLOQUEAR_TARJETA"},
-    "OPERADOR": {"REGISTRAR_MOVIMIENTO", "GESTIONAR_INCIDENTES", "BLOQUEAR_TARJETA"},
-    "AUDITOR": {"VER_AUDITORIA"},
+    "ADMINISTRADOR": {"REGISTRAR_MOVIMIENTO", "VER_AUDITORIA", "GESTIONAR_INCIDENTES", "BLOQUEAR_TARJETA",
+                      "VER_TARJETA"},
+    "OPERADOR": {"REGISTRAR_MOVIMIENTO", "GESTIONAR_INCIDENTES", "BLOQUEAR_TARJETA", "VER_TARJETA"},
+    "AUDITOR": {"VER_AUDITORIA", "VER_TARJETA"},
     "ASESOR": {"VER_CLIENTE"},
     "SERVICIO": {"OPERAR_SEGURIDAD", "VER_AUDITORIA"},
 }
@@ -35,6 +36,8 @@ class CoreDbSimulado:
         self.expirar_servicio = False
         self.caido = False
         self.logins_servicio = 0
+        self.tarjetas: dict[str, dict] = {}
+        self.historial: dict[str, list[dict]] = {}
 
     # ------------------------------------------------------------------ utilidades
     def evento(self, accion: str, segundos_atras: float = 3600, **detalle) -> dict:
@@ -43,6 +46,19 @@ class CoreDbSimulado:
                   "fecha_hora": _hora(segundos_atras)}
         self.eventos.append(evento)
         return evento
+
+    def tarjeta(self, estado: str = "BLOQUEADA", motivo: str | None = "Bloqueo solicitado por el cliente",
+                origen: str = "CLIENTE", cod_cliente: str = "CLI000000001") -> str:
+        id_tarjeta = str(uuid.uuid4())
+        self.tarjetas[id_tarjeta] = {"id_tarjeta": id_tarjeta, "bin": "004499", "ultimos4": "1904",
+                                     "fecha_emision": "2026-01-01", "fecha_vencimiento": "2030-01-31",
+                                     "estado_tarjeta": estado, "cod_cliente": cod_cliente, "num_cuenta": "CTA-1"}
+        self.historial[id_tarjeta] = [
+            {"id_historial": 2, "estado_nuevo": estado, "motivo": motivo, "origen": origen,
+             "fecha_hora": "2026-11-21T10:00:00Z"},
+            {"id_historial": 1, "estado_nuevo": "ACTIVA", "motivo": None, "origen": "OPERADOR",
+             "fecha_hora": "2026-11-20T10:00:00Z"}]
+        return id_tarjeta
 
     def transporte(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._atender)
@@ -87,6 +103,8 @@ class CoreDbSimulado:
             return self._json(200, {"username": quien[0], "rol": quien[1], "acciones": sorted(ACCIONES[quien[1]])})
         if ruta.startswith("/coredb/auditoria"):
             return self._auditoria(pedido, ruta, metodo, cuerpo, quien)
+        if ruta.startswith("/coredb/tarjetas") and metodo == "GET":
+            return self._tarjetas(pedido, ruta, quien)
         # Las demás: solo el servicio de Seguridad, por una persona.
         if quien[1] != "SERVICIO":
             return self._error(403, "PERMISO_DENEGADO")
@@ -113,8 +131,31 @@ class CoreDbSimulado:
             incidente.update(estado=cuerpo["estado"], resolucion=cuerpo.get("resolucion", incidente["resolucion"]))
             return self._json(200, incidente)
         if ruta.endswith("/desbloqueo"):
-            return self._json(200, {"id_tarjeta": ruta.split("/")[3], "estado_tarjeta": "ACTIVA"})
+            id_tarjeta = ruta.split("/")[3]
+            tarjeta = self.tarjetas.get(id_tarjeta) or {"id_tarjeta": id_tarjeta, "estado_tarjeta": "BLOQUEADA"}
+            if tarjeta["estado_tarjeta"] not in ("BLOQUEADA", "RETENIDA"):
+                return self._error(409, "TARJETA_NO_BLOQUEADA")
+            anterior, tarjeta["estado_tarjeta"] = tarjeta["estado_tarjeta"], "ACTIVA"
+            cambio = {"id_historial": 3, "estado_nuevo": "ACTIVA", "motivo": cuerpo["motivo"], "origen": "SEGURIDAD",
+                      "fecha_hora": _hora(0), "estado_anterior": anterior, "actor": persona[0]}
+            self.historial.setdefault(id_tarjeta, []).insert(0, cambio)
+            return self._json(200, {**tarjeta, "cambio": cambio})
         return self._error(404, "RUTA")
+
+    def _tarjetas(self, pedido, ruta, quien) -> httpx.Response:
+        if "VER_TARJETA" not in ACCIONES[quien[1]]:
+            return self._error(403, "PERMISO_DENEGADO")
+        partes = ruta.split("/")
+        if len(partes) == 3:
+            cod = pedido.url.params.get("cod_cliente")
+            lista = [t for t in self.tarjetas.values() if t["cod_cliente"] == cod]
+            return self._json(200, lista) if lista else self._error(404, "CLIENTE_NO_ENCONTRADO")
+        tarjeta = self.tarjetas.get(partes[3])
+        if tarjeta is None:
+            return self._error(404, "TARJETA_NO_ENCONTRADA")
+        if len(partes) == 5 and partes[4] == "historial":
+            return self._json(200, self.historial[partes[3]][:int(pedido.url.params.get("limite", 20))])
+        return self._json(200, tarjeta)
 
     def _auditoria(self, pedido, ruta, metodo, cuerpo, quien) -> httpx.Response:
         if ruta == "/coredb/auditoria/sellos" and metodo == "POST":

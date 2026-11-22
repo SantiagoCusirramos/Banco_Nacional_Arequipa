@@ -13,7 +13,7 @@ import uuid
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Header, Path, Request
+from fastapi import APIRouter, Depends, Header, Path, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -192,10 +192,45 @@ class Desbloqueo(BaseModel):
     motivo: str = Field(min_length=3, max_length=255)
 
 
+BLOQUEADAS = ("BLOQUEADA", "RETENIDA")
+
+
+def _con_numero(tarjeta: dict) -> dict:
+    """Solo el BIN y los últimos cuatro: el PAN nunca llega a Seguridad."""
+    return {**tarjeta, "numero_enmascarado": f"{tarjeta['bin']}******{tarjeta['ultimos4']}"}
+
+
+@router.get("/tarjetas")
+def tarjetas_de_un_cliente(request: Request,
+                           cod_cliente: str = Query(min_length=1, max_length=12, pattern=r"^[A-Za-z0-9]+$"),
+                           quien: Sesion = Depends(persona(DESBLOQUEAR))):
+    """Las tarjetas del cliente, para elegir la que se desbloquea. Lee con el token de la persona:
+    COREDB comprueba además su VER_TARJETA."""
+    lista = _ctx(request).coredb.como_persona(quien.token, "GET", "/coredb/tarjetas",
+                                              params={"cod_cliente": cod_cliente})
+    return [_con_numero(t) for t in lista]
+
+
+@router.get("/tarjetas/{id_tarjeta}")
+def ficha_de_tarjeta(request: Request, id_tarjeta: uuid.UUID = Path(),
+                     quien: Sesion = Depends(persona(DESBLOQUEAR))):
+    """La tarjeta, sus últimos cambios de estado y, si está bloqueada o retenida, el cambio que la
+    dejó así (motivo, origen y fecha), para decidir el desbloqueo."""
+    coredb = _ctx(request).coredb
+    tarjeta = coredb.como_persona(quien.token, "GET", f"/coredb/tarjetas/{id_tarjeta}")
+    historial = coredb.como_persona(quien.token, "GET", f"/coredb/tarjetas/{id_tarjeta}/historial",
+                                    params={"limite": 5})
+    bloqueada = tarjeta["estado_tarjeta"] in BLOQUEADAS
+    bloqueo = historial[0] if bloqueada and historial and historial[0]["estado_nuevo"] in BLOQUEADAS else None
+    return {**_con_numero(tarjeta), "desbloqueable": bloqueada, "bloqueo": bloqueo, "historial": historial}
+
+
 @router.post("/tarjetas/{id_tarjeta}/desbloqueo")
 def desbloquear_tarjeta(datos: Desbloqueo, request: Request, id_tarjeta: uuid.UUID = Path(),
                         quien: Sesion = Depends(persona(DESBLOQUEAR))):
     """Devuelve a ACTIVA una tarjeta BLOQUEADA o RETENIDA. Es el único camino: COREDB lo ejecuta con
-    la cuenta bna_seguridad de la base y registra a la persona como actor (origen SEGURIDAD)."""
+    la cuenta bna_seguridad de la base y registra a la persona como actor (origen SEGURIDAD). La
+    respuesta trae `cambio`, el registro del historial que dejó (id, fecha, motivo, estado anterior,
+    actor). Repetirlo da 409 TARJETA_NO_BLOQUEADA: no desbloquea dos veces."""
     return _ctx(request).coredb.por_persona(quien.token, "POST", f"/coredb/tarjetas/{id_tarjeta}/desbloqueo",
                                             json=datos.model_dump())
