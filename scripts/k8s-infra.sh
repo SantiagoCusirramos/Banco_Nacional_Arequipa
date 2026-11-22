@@ -87,7 +87,7 @@ construir() {
   echo "Construyendo las imágenes..."
   docker compose build -q
   for nombre in "${NOMBRES[@]}"; do
-    docker tag "bna/$nombre:local" "$REGISTRO/bna-$nombre:$tag"
+    docker tag "bna/$nombre:${BNA_ETIQUETA_LOCAL:-local}" "$REGISTRO/bna-$nombre:$tag"
   done
   echo "Imágenes etiquetadas $REGISTRO/bna-*:$tag"
 }

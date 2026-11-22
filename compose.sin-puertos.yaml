@@ -1,0 +1,33 @@
+# Modo prueba: ningún puerto en el anfitrión. Lo agrega `./bna test` (COMPOSE_FILE) para que
+# varias corridas a la vez no compitan por los puertos; las suites y el flujo corren dentro de
+# las redes de Compose. `./bna up` no lo usa: el producto se publica igual que siempre.
+# scripts/test_aislamiento_pruebas.py comprueba que nombra a todos los servicios con `ports:`.
+services:
+  db:
+    ports: !reset []
+  coredb:
+    ports: !reset []
+  cuentas:
+    ports: !reset []
+  tarjetas:
+    ports: !reset []
+  captacion:
+    ports: !reset []
+  sol:
+    ports: !reset []
+  evaluacion:
+    ports: !reset []
+  desembolso:
+    ports: !reset []
+  cobranza:
+    ports: !reset []
+  atm:
+    ports: !reset []
+  billetera:
+    ports: !reset []
+  seguridad:
+    ports: !reset []
+  bus:
+    ports: !reset []
+  frontend:
+    ports: !reset []
