@@ -25,10 +25,10 @@ describe("generarPin", () => {
 });
 
 describe("ClaveNueva", () => {
-  const props = (asignar = vi.fn(async () => undefined)) => ({ digitos: 4, nombre: "PIN del cajero", asignar });
+  const props = (asignar = vi.fn(async (_valor: string) => undefined)) => ({ digitos: 4, nombre: "PIN del cajero", asignar });
 
   it("PC-03 por omisión genera el PIN, lo asigna y lo muestra una sola vez", async () => {
-    const asignar = vi.fn(async () => undefined);
+    const asignar = vi.fn(async (_valor: string) => undefined);
     render(<ClaveNueva {...props(asignar)} />);
     await userEvent.click(screen.getByRole("button", { name: "Generar y asignar" }));
     await waitFor(() => expect(asignar).toHaveBeenCalledTimes(1));
@@ -42,7 +42,7 @@ describe("ClaveNueva", () => {
   });
 
   it("PC-04 si falla la asignación, no muestra ningún PIN", async () => {
-    const asignar = vi.fn(async () => { throw new Error("TARJETAS no respondió"); });
+    const asignar = vi.fn(async (_valor: string) => { throw new Error("TARJETAS no respondió"); });
     render(<ClaveNueva {...props(asignar)} />);
     await userEvent.click(screen.getByRole("button", { name: "Generar y asignar" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("TARJETAS no respondió");
@@ -50,7 +50,7 @@ describe("ClaveNueva", () => {
   });
 
   it("PC-05 la clienta lo escribe dos veces; si no coinciden no se asigna", async () => {
-    const asignar = vi.fn(async () => undefined);
+    const asignar = vi.fn(async (_valor: string) => undefined);
     render(<ClaveNueva {...props(asignar)} />);
     await userEvent.click(screen.getByLabelText("La clienta lo escribe"));
     fireEvent.change(screen.getByLabelText("PIN del cajero (lo escribe la clienta)"), { target: { value: "4821" } });
@@ -61,7 +61,7 @@ describe("ClaveNueva", () => {
   });
 
   it("PC-06 con los dos iguales lo asigna, borra los campos y no lo muestra", async () => {
-    const asignar = vi.fn(async () => undefined);
+    const asignar = vi.fn(async (_valor: string) => undefined);
     render(<ClaveNueva {...props(asignar)} />);
     await userEvent.click(screen.getByLabelText("La clienta lo escribe"));
     const campo = screen.getByLabelText("PIN del cajero (lo escribe la clienta)");
@@ -76,7 +76,7 @@ describe("ClaveNueva", () => {
   });
 
   it("PC-07 rechaza un PIN trivial escrito por la clienta", async () => {
-    const asignar = vi.fn(async () => undefined);
+    const asignar = vi.fn(async (_valor: string) => undefined);
     render(<ClaveNueva {...props(asignar)} />);
     await userEvent.click(screen.getByLabelText("La clienta lo escribe"));
     fireEvent.change(screen.getByLabelText("PIN del cajero (lo escribe la clienta)"), { target: { value: "1234" } });
