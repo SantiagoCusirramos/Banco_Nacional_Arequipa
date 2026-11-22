@@ -176,6 +176,20 @@ describe("Pantalla Usuarios", () => {
   });
 });
 
+describe("Cuentas de servicio", () => {
+  it("US-12 una cuenta de servicio (un módulo) no se desactiva, renueva ni desbloquea desde aquí", async () => {
+    sesion();
+    get.mockImplementation(async (url: string) => {
+      if (url === "/coredb/auth/me") return { data: { ...ADMIN, debe_cambiar_clave: false } };
+      return { data: [{ ...FILA, id_usuario: "s-1", username: "svc-captacion", nombre: "Captación", rol: "SERVICIO", modulo: "CLIENTES", debe_cambiar_clave: false }] };
+    });
+    render(<UsuariosPage />);
+    const fila = (await screen.findByText("svc-captacion")).closest("tr")!;
+    expect(within(fila).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(fila).queryByRole("combobox")).not.toBeInTheDocument();
+  });
+});
+
 describe("Portal", () => {
   it("US-11 el menú muestra «Usuarios» solo a quien puede crear usuarios", () => {
     const { unmount } = render(<BancaPersonal usuario={ADMIN} onSalir={() => {}} />);

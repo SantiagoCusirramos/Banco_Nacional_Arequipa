@@ -248,7 +248,8 @@ export default function UsuariosPage() {
                                 {!servicio && (
                                   <button type="button" className="sol-button secondary" onClick={() => setPorRenovar(u)}>Renovar contraseña</button>
                                 )}
-                                {u.id_usuario !== usuario.id_usuario && (
+                                {/* Desactivar una cuenta de servicio dejaría a su módulo sin acceso a COREDB. */}
+                                {u.id_usuario !== usuario.id_usuario && !servicio && (
                                   <button type="button" className="sol-button secondary"
                                     onClick={() => accion(u.activo ? `${u.username} ya no puede entrar.` : `${u.username} puede volver a entrar.`,
                                       () => cambiarEstado(u.id_usuario, !u.activo))}>
