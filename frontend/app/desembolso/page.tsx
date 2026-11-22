@@ -76,7 +76,8 @@ export default function Desembolsar() {
       <>
         <Encabezado titulo="Desembolso de créditos" />
         <Alerta tipo="info" titulo="Tu perfil solo consulta">
-          Puedes revisar las órdenes y sus constancias en{" "}
+          El desembolso lo hace un operador: verifica en ventanilla el documento del titular y abona el
+          crédito. Puedes revisar las órdenes y sus constancias en{" "}
           <Link href="/desembolso/ordenes" className="font-semibold underline">
             Órdenes
           </Link>
