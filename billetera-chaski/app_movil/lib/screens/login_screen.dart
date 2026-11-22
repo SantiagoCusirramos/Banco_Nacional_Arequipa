@@ -70,19 +70,16 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (ctx, setD) => AlertDialog(
             title: const Text('Servidor de Chaski'),
             content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Emulador: http://10.0.2.2:8020\nCelular real: http://IP-del-servidor:8020', style: TextStyle(color: C.muted, fontSize: 13)),
-              const SizedBox(height: 12),
-              TextField(controller: ctrl, keyboardType: TextInputType.url, decoration: const InputDecoration(hintText: 'http://IP-del-servidor:8020')),
+              TextField(controller: ctrl, keyboardType: TextInputType.url, decoration: const InputDecoration(hintText: 'https://servidor-del-banco:8020')),
               const SizedBox(height: 8),
               Text(estado, style: TextStyle(color: estado.startsWith('✓') ? C.ok : C.danger, fontWeight: FontWeight.w600)),
             ]),
             actions: [
               TextButton(
                 onPressed: () async {
-                  await st.setServidor(ctrl.text);
                   setD(() => estado = 'Probando…');
                   try {
-                    await st.probarServidor();
+                    await st.probarServidor(ctrl.text);
                     setD(() => estado = '✓ Conectado');
                   } on ApiException catch (e) {
                     setD(() => estado = e.message);
@@ -93,8 +90,13 @@ class _LoginScreenState extends State<LoginScreen> {
               FilledButton(
                 style: smallButton(),
                 onPressed: () async {
-                  await st.setServidor(ctrl.text);
-                  if (ctx.mounted) Navigator.pop(ctx);
+                  try {
+                    await st.probarServidor(ctrl.text);
+                    await st.setServidor(ctrl.text);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  } on ApiException catch (e) {
+                    setD(() => estado = e.message);
+                  }
                 },
                 child: const Text('Guardar'),
               ),

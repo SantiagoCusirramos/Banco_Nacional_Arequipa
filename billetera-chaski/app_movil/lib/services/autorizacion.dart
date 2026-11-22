@@ -95,13 +95,13 @@ class _PinSheetState extends State<_PinSheet> {
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 26, letterSpacing: 12, fontWeight: FontWeight.w700),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onSubmitted: (_) => _verificar(),
-            onChanged: (v) {
-              if (v.length == 6) _verificar();
-            },
+            onChanged: (_) => setState(() => _error = null),
           ),
           SizedBox(height: 22, child: Text(_error ?? '', style: const TextStyle(color: C.danger, fontWeight: FontWeight.w600))),
-          FilledButton(style: sunButton(), onPressed: _enviando ? null : _verificar, child: Text(_enviando ? 'Verificando…' : 'Autorizar')),
+          FilledButton(
+              style: sunButton(),
+              onPressed: _enviando || !RegExp(r'^\d{6}$').hasMatch(_pin.text) ? null : _verificar,
+              child: Text(_enviando ? 'Verificando…' : 'Autorizar')),
         ],
       ),
     );

@@ -9,11 +9,11 @@ import '../services/api.dart';
 import '../services/cache_db.dart';
 import '../services/operaciones.dart';
 import '../util/format.dart';
+import '../util/servidor.dart';
 
-/// Servidor por defecto: el emulador de Android ve la PC en 10.0.2.2.
-/// La API de Chaski se publica en el puerto 8020 (BNA_PUERTO_BILLETERA). Para un celular real se compila con
-/// --dart-define=SERVIDOR=http://IP-del-servidor:8020; también se cambia desde la pantalla de ingreso.
-const servidorPorDefecto = String.fromEnvironment('SERVIDOR', defaultValue: 'http://10.0.2.2:8020');
+/// URL fijada al compilar con --dart-define=SERVIDOR=... (por ejemplo http://10.0.2.2:8020 para el
+/// emulador). Vacía si no se definió: en ese caso la primera apertura pregunta a qué banco conectarse.
+const servidorPorDefecto = String.fromEnvironment('SERVIDOR');
 
 class LineaCarrito {
   Producto p;
@@ -60,6 +60,28 @@ class AppState extends ChangeNotifier {
   bool ocultarSaldo = false;
   bool usarBiometria = true;
 
+  bool _necesitaServidor = false;
+
+  /// Primer uso: no hay servidor guardado ni fijado al compilar.
+  bool get necesitaServidor => _necesitaServidor;
+
+  set necesitaServidor(bool v) {
+    if (_necesitaServidor == v) return;
+    _necesitaServidor = v;
+    notifyListeners();
+  }
+
+  bool _servidorSinConexion = false;
+
+  /// El servidor guardado no responde: hay que reintentar o cambiar de banco.
+  bool get servidorSinConexion => _servidorSinConexion;
+
+  set servidorSinConexion(bool v) {
+    if (_servidorSinConexion == v) return;
+    _servidorSinConexion = v;
+    notifyListeners();
+  }
+
   final Map<int, LineaCarrito> carrito = {};
 
   /// Operaciones sin terminar (p. ej. rechazar una solicitud), con su uuid de idempotencia.
@@ -71,32 +93,76 @@ class AppState extends ChangeNotifier {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
-    final url = _prefs.getString('servidor') ?? servidorPorDefecto;
-    if (_api == null) {
-      _api = Api(url);
+    final guardado = _prefs.getString('servidor');
+    final url = guardado != null
+        ? parsearServidor(guardado)
+        : (servidorPorDefecto.isEmpty ? null : parsearServidor(servidorPorDefecto));
+    if (_api == null) _api = Api(url ?? '');
+    if (url == null) {
+      necesitaServidor = true;
+      api.baseUrl = '';
     } else {
-      _api!.baseUrl = url;
+      api.baseUrl = url;
+      necesitaServidor = false;
     }
     api.onUnauthorized = () => logout(expirada: true);
     ocultarSaldo = _prefs.getBool('ocultar') ?? false;
     usarBiometria = _prefs.getBool('biometria') ?? true;
     token = _prefs.getString('token');
     api.token = token;
-    if (token != null) await refrescar();
-    if (token != null && me != null) _iniciarPoll();
+    if (!necesitaServidor) {
+      try {
+        await probarServidor();
+      } on ApiException {
+        servidorSinConexion = true;
+      }
+    }
+    if (!necesitaServidor && !servidorSinConexion) {
+      if (token != null) await refrescar();
+      if (token != null && me != null) _iniciarPoll();
+    }
     iniciando = false;
     notifyListeners();
   }
 
+  /// Normaliza y guarda el servidor tras haber comprobado que responde.
   Future<void> setServidor(String url) async {
-    var u = url.trim();
-    if (!u.startsWith('http://') && !u.startsWith('https://')) u = 'http://$u';
-    api.baseUrl = u.replaceAll(RegExp(r'/+$'), '');
-    await _prefs.setString('servidor', api.baseUrl);
+    final normalizada = parsearServidor(url);
+    if (normalizada == null) {
+      throw ApiException(0, 'La dirección debe ser http:// o https://, sin usuario ni clave', red: true);
+    }
+    api.baseUrl = normalizada;
+    await _prefs.setString('servidor', normalizada);
+    necesitaServidor = false;
+    servidorSinConexion = false;
     notifyListeners();
   }
 
-  Future<void> probarServidor() async => api.get('/salud');
+  /// Comprueba [url] (o el servidor actual) con la misma llamada de salud de siempre, sin guardar nada.
+  Future<void> probarServidor([String? url]) async {
+    String? destino;
+    if (url != null) {
+      destino = parsearServidor(url);
+      if (destino == null) throw ApiException(0, 'Escribe una dirección http:// o https:// válida', red: true);
+    }
+    final anterior = api.baseUrl;
+    if (destino != null) api.baseUrl = destino;
+    try {
+      await api.get('/salud');
+    } finally {
+      if (destino != null) api.baseUrl = anterior;
+    }
+  }
+
+  /// Descarta la sesión y el servidor actual para volver a la pantalla de conexión.
+  Future<void> cambiarBanco() async {
+    await logout();
+    await _prefs.remove('servidor');
+    api.baseUrl = '';
+    necesitaServidor = true;
+    servidorSinConexion = false;
+    notifyListeners();
+  }
 
   Future<void> _entrar(String t) async {
     token = t;
