@@ -4,8 +4,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
+import 'screens/conectar_screen.dart';
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
+import 'services/api.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 import 'widgets/comunes.dart';
@@ -46,7 +48,8 @@ class _Raiz extends StatelessWidget {
     if (st.iniciando) {
       return const Scaffold(backgroundColor: C.ink, body: Center(child: LogoChaski(size: 88)));
     }
-    if (st.token != null && st.me == null) return const _SinConexion();
+    if (st.necesitaServidor) return const ConectarScreen();
+    if (st.servidorSinConexion || (st.token != null && st.me == null)) return const _SinConexion();
     return st.logueado ? const HomeShell() : const LoginScreen();
   }
 }
@@ -71,25 +74,33 @@ class _SinConexionState extends State<_SinConexion> {
           child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const Icon(Icons.cloud_off, size: 64, color: C.muted),
             const SizedBox(height: 16),
-            const Text('No pudimos conectar con Chaski', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            const Text('No pudimos conectar con el banco.', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Text('Revisa tu conexión o la dirección del servidor (${st.servidor}).', textAlign: TextAlign.center, style: const TextStyle(color: C.muted)),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _cargando
-                  ? null
-                  : () async {
-                      setState(() => _cargando = true);
-                      await st.refrescar();
-                      if (mounted) setState(() => _cargando = false);
-                    },
+              onPressed: _cargando ? null : _reintentar,
               child: Text(_cargando ? 'Reintentando…' : 'Reintentar'),
             ),
             const SizedBox(height: 10),
-            OutlinedButton(onPressed: st.logout, child: const Text('Cerrar sesión')),
+            OutlinedButton(onPressed: () => st.cambiarBanco(), child: const Text('Cambiar de banco')),
           ]),
         ),
       ),
     );
+  }
+
+  Future<void> _reintentar() async {
+    setState(() => _cargando = true);
+    final st = context.read<AppState>();
+    try {
+      await st.probarServidor();
+      st.servidorSinConexion = false;
+      if (st.token != null) await st.refrescar();
+    } on ApiException {
+      st.servidorSinConexion = true;
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
   }
 }
