@@ -47,6 +47,8 @@ const Bus = (() => {
         const err = (typeof json.error === "object" && json.error) || {};
         const texto = err.message || json.message || (typeof json.detail === "string" ? json.detail : "") ||
           json.detalle || "No se pudo procesar la solicitud.";
+        // Con la contraseña inicial o renovada, COREDB no deja operar hasta cambiarla.
+        if (err.code === "CAMBIO_CLAVE_OBLIGATORIO") window.location.href = "/cambiar-clave";
         throw Object.assign(new Error(texto), {
           codigo: err.code || json.error_code || "ERR_API",
           mensaje: texto,

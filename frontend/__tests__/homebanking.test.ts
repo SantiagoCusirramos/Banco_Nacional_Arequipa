@@ -41,4 +41,9 @@ describe("Home Banking (K-5)", () => {
       expect(captura.slice(0, captura.indexOf("} finally"))).not.toMatch(/idemActual = null/);
     }
   });
+
+  it("HB-05 Con la contraseña temporal, lleva a cambiarla (403 CAMBIO_CLAVE_OBLIGATORIO)", () => {
+    const bus = readFileSync(join(JS, "bus.js"), "utf8");
+    expect(bus).toMatch(/err\.code === "CAMBIO_CLAVE_OBLIGATORIO"\) window\.location\.href = "\/cambiar-clave"/);
+  });
 });

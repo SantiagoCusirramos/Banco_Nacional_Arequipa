@@ -69,7 +69,7 @@ describe("Cambio de contraseña", () => {
     await userEvent.type(screen.getByLabelText("Contraseña actual"), actual);
     await userEvent.type(screen.getByLabelText("Contraseña nueva"), nueva);
     await userEvent.type(screen.getByLabelText("Repite la contraseña nueva"), repetir);
-    await userEvent.click(screen.getByRole("button", { name: "Guardar contraseña" }));
+    await userEvent.click(screen.getByRole("button", { name: /Guardar contraseña/ }));
   }
 
   it("US-03 si la repetición no coincide, avisa y no la envía", async () => {
