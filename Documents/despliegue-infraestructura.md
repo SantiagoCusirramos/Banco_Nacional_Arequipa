@@ -288,3 +288,10 @@ No choca con la base nueva: en un volumen vacío la crea `bna_extension.sql` con
 Redespliegue de `d3f9e99f6c9b` (`aplicar`): 14 pods 1/1 sin reinicios con las imágenes nuevas. Por el Ingress, `/tarjetas/desbloqueo` y `/homebanking/auditoria.html` dan 200; `/api/seguridad/auditoria` da 404 (el puente no la deja pasar) y `/api/seguridad/tarjetas/<uuid>` sin token, 401. `scripts/flujo_e2e.py` corrió en el pod del Bus con datos nuevos y terminó con «Flujo completo»: el Home Banking bloquea la tarjeta, el cajero la rechaza, un operador la desbloquea en la pantalla y el cajero vuelve a aceptarla.
 
 Si otra versión de bna-core-db cambia el esquema, hay dos caminos: aplicar a mano solo lo nuevo (si es idempotente, como aquí) o `borrar --si` y `aplicar` para crear la base de cero (se pierden los datos del clúster).
+
+## URL públicas de Chaski y del cajero (opcional)
+
+La pantalla Billetera muestra la descarga de Chaski y el QR «Configurar Chaski», y el portal enlaza al
+cajero, con las direcciones de `BNA_URL_BILLETERA`, `BNA_URL_CAJERO` y `BNA_URL_APK`. Si se definen al
+ejecutar `scripts/k8s-infra.sh aplicar` (por ejemplo, las de `tunel-rapido-urls`), quedan en el
+Deployment `frontend`; sin ellas, la pantalla dice qué variable falta. Solo http(s), sin credenciales.
