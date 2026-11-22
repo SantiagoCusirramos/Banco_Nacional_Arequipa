@@ -19,9 +19,11 @@ k8s/base. Uso:
   python3 scripts/overlay_infraestructura.py generar     # reescribe secretos.yaml
   python3 scripts/overlay_infraestructura.py comprobar   # sale con 1 si no está al día
   python3 scripts/overlay_infraestructura.py revisar MANIFIESTOS.yaml [--registro R]
-      # revisa la salida de `kubectl kustomize k8s/overlays/infraestructura`: ningún Secret
-      # ni secretKeyRef, nombres con el prefijo bna-, direcciones hacia los Services con
-      # prefijo e imágenes del registro.
+      # revisa la salida de `kubectl kustomize k8s/overlays/infraestructura` (o de su túnel
+      # opcional, `scripts/k8s-infra.sh tunel-manifiestos`): ningún Secret ni secretKeyRef,
+      # nombres con el prefijo bna-, direcciones hacia los Services con prefijo e imágenes del
+      # registro. La única imagen externa admitida es la de cloudflared, fijada por digest; el
+      # token del túnel solo puede llegar por --token-file (nunca --token ni TUNNEL_TOKEN).
 
 Requiere PyYAML. Pruebas: scripts/test_overlay_infraestructura.py.
 """
@@ -38,6 +40,10 @@ SALIDA = Path("k8s/overlays/infraestructura/secretos.yaml")
 SECRET = "bna-secretos"
 PREFIJO = "bna-"
 REGISTRO = "ghcr.io/miguelpro324/"
+# Imágenes de fuera del registro que se admiten, siempre fijadas por digest (tunel/).
+IMAGENES_EXTERNAS = ("cloudflare/cloudflared",)
+DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
+TOKEN_EN_VARIABLE = re.compile(r"\bTUNNEL_TOKEN\b(?!_)")
 # El Job bna-arranque escribe el .env (0600) con este usuario; el copiador lo lee con el mismo.
 UID_SECRETOS = 10001
 IMAGEN_COPIADOR = "bna/backend:local"
@@ -281,6 +287,16 @@ def _etiquetas(doc):
     yield from (selector.get("matchLabels") or selector if isinstance(selector, dict) else {}).items()
 
 
+def _revisar_imagen(tipo, nombre, imagen, registro):
+    if imagen.startswith(registro):
+        return []
+    if imagen.split("@")[0].rsplit(":", 1)[0] in IMAGENES_EXTERNAS:
+        if DIGEST.search(imagen):
+            return []
+        return [f"{tipo} {nombre}: la imagen {imagen} no está fijada por digest (@sha256:...)."]
+    return [f"{tipo} {nombre}: la imagen {imagen} no es de {registro}."]
+
+
 def revisar(documentos, servicios, registro=REGISTRO):
     """Problemas en los manifiestos ya generados del overlay (lista vacía si no hay)."""
     hallados = []
@@ -302,10 +318,16 @@ def revisar(documentos, servicios, registro=REGISTRO):
         plantilla = ((doc.get("spec") or {}).get("template") or {}).get("spec") or {}
         contenedores = (plantilla.get("initContainers") or []) + (plantilla.get("containers") or [])
         for c in contenedores:
-            textos += list(_cadenas(c.get("command") or [])) + list(_cadenas(c.get("args") or []))
+            orden = list(_cadenas(c.get("command") or [])) + list(_cadenas(c.get("args") or []))
+            textos += orden
             textos += [str(v.get("value", "")) for v in c.get("env") or []]
-            if not str(c.get("image", "")).startswith(registro):
-                hallados.append(f"{tipo} {nombre}: la imagen {c.get('image')} no es de {registro}.")
+            hallados += _revisar_imagen(tipo, nombre, str(c.get("image", "")), registro)
+            if any(a == "--token" or a.startswith("--token=") for a in orden):
+                hallados.append(f"{tipo} {nombre}: el token del túnel va en la orden; use --token-file.")
+            variables = [str(v.get("name", "")) for v in c.get("env") or []] + orden
+            variables += [str(v.get("value", "")) for v in c.get("env") or []]
+            if any(TOKEN_EN_VARIABLE.search(t) for t in variables):
+                hallados.append(f"{tipo} {nombre}: TUNNEL_TOKEN expone el token en el entorno; use --token-file.")
         for texto in textos:
             for linea in texto.splitlines() or [texto]:
                 m = sin_prefijo.search(linea.strip())

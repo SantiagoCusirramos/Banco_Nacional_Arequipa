@@ -264,3 +264,98 @@ def test_revisar_encuentra(viejo, nuevo, mensaje):
     assert viejo in texto, viejo
     hallados = revisar(texto.replace(viejo, nuevo))
     assert hallados and any(mensaje in h for h in hallados), hallados
+
+
+# ── Túnel de Cloudflare (k8s/overlays/infraestructura/tunel, opcional) ─────────
+
+TUNEL = REPO / "k8s" / "overlays" / "infraestructura" / "tunel"
+DIGEST = "sha256:" + "4" * 64
+
+RENDER_TUNEL = f"""
+apiVersion: apps/v1
+kind: Deployment
+metadata: {{name: bna-tunel}}
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: secretos
+          image: ghcr.io/miguelpro324/bna-backend:abc
+          command: [sh, -c, "cp /bna-secretos/cloudflared-token /secretos/token"]
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.10.7@{DIGEST}
+          command: [cloudflared, tunnel, --no-autoupdate, run, --token-file, /secretos/token]
+          env:
+            - {{name: TUNNEL_TRANSPORT_PROTOCOL, value: auto}}
+"""
+
+
+def render_tunel():
+    """tunel/ como lo deja kustomize: las imágenes de su kustomization ya reemplazadas."""
+    kustomization = yaml.safe_load((TUNEL / "kustomization.yaml").read_text())
+    imagenes = {i["name"]: f"{i['newName']}:{i['newTag']}" for i in kustomization.get("images") or []}
+    documentos = []
+    for recurso in kustomization["resources"]:
+        for doc in yaml.safe_load_all((TUNEL / recurso).read_text()):
+            plantilla = doc["spec"]["template"]["spec"]
+            for c in (plantilla.get("initContainers") or []) + plantilla["containers"]:
+                c["image"] = imagenes.get(c["image"], c["image"])
+            documentos.append(doc)
+    return documentos
+
+
+def test_el_tunel_no_entra_en_el_aplicar_normal():
+    recursos = yaml.safe_load((TUNEL.parent / "kustomization.yaml").read_text())["resources"]
+    assert not any("tunel" in r for r in recursos)
+
+
+def test_el_render_del_tunel_pasa_la_revision():
+    documentos = render_tunel()
+    assert [d["metadata"]["name"] for d in documentos] == ["bna-tunel"]
+    assert oi.revisar(documentos, servicios={"bus", "db", "frontend"}, registro="ghcr.io/miguelpro324/") == []
+
+
+def test_el_tunel_lee_el_token_de_un_archivo_en_memoria_y_no_ve_el_env():
+    (tunel,) = render_tunel()
+    plantilla = tunel["spec"]["template"]["spec"]
+    volumenes = {v["name"]: v for v in plantilla["volumes"]}
+    secretos, = plantilla["initContainers"]
+    cloudflared, = plantilla["containers"]
+    assert secretos["name"] == "secretos"
+    assert volumenes["secretos"]["emptyDir"]["medium"] == "Memory"
+    assert volumenes["bna-secretos"]["persistentVolumeClaim"] == {"claimName": "bna-secretos", "readOnly": True}
+    assert all(m.get("readOnly") for m in secretos["volumeMounts"] if m["name"] == "bna-secretos")
+    assert "/bna-secretos/cloudflared-token" in " ".join(secretos["command"])
+    assert [m["name"] for m in cloudflared["volumeMounts"]] == ["secretos"]
+    orden = cloudflared["command"] + cloudflared.get("args", [])
+    assert orden[orden.index("--token-file") + 1] == "/secretos/token"
+    assert re.search(r"@sha256:[0-9a-f]{64}$", cloudflared["image"])
+    seguridad = cloudflared["securityContext"]
+    assert seguridad["runAsNonRoot"] and seguridad["readOnlyRootFilesystem"]
+    assert seguridad["capabilities"] == {"drop": ["ALL"]}
+    assert plantilla["securityContext"]["fsGroup"] == seguridad["runAsGroup"]
+    assert cloudflared["readinessProbe"]["httpGet"]["path"] == "/ready"
+
+
+def revisar_tunel(texto):
+    return oi.revisar(list(yaml.safe_load_all(texto)), servicios={"bus"}, registro="ghcr.io/miguelpro324/")
+
+
+def test_revisar_acepta_el_tunel_fijado_por_digest():
+    assert revisar_tunel(RENDER_TUNEL) == []
+
+
+@pytest.mark.parametrize("viejo, nuevo, mensaje", [
+    (f"2026.10.7@{DIGEST}", "2026.10.7", "digest"),
+    (f"cloudflare/cloudflared:2026.10.7@{DIGEST}", f"otro/cloudflared@{DIGEST}", "no es de"),
+    ("--token-file, /secretos/token", "--token, eyJhIjoi", "--token-file"),
+    ("--token-file, /secretos/token", "--token=eyJhIjoi", "--token-file"),
+    ("{name: TUNNEL_TRANSPORT_PROTOCOL, value: auto}", "{name: TUNNEL_TOKEN, value: eyJhIjoi}", "TUNNEL_TOKEN"),
+    ("{name: TUNNEL_TRANSPORT_PROTOCOL, value: auto}",
+     "{name: TUNNEL_TOKEN, valueFrom: {secretKeyRef: {name: t, key: t}}}", "secretKeyRef"),
+])
+def test_revisar_encuentra_en_el_tunel(viejo, nuevo, mensaje):
+    assert viejo in RENDER_TUNEL, viejo
+    hallados = revisar_tunel(RENDER_TUNEL.replace(viejo, nuevo))
+    assert hallados and any(mensaje in h for h in hallados), hallados

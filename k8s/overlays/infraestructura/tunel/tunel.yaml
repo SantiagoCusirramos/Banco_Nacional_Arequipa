@@ -1,0 +1,110 @@
+# Deployment bna-tunel: cloudflared con el token en un archivo de un emptyDir en memoria.
+#
+# - Contenedor de inicio `secretos` (imagen del backend, usuario 10001, dueño del archivo en el
+#   PVC): espera a que exista el token y copia SOLO ese archivo a /secretos/token, 0440. El
+#   contenedor cloudflared lo lee por su grupo (fsGroup) y no monta el PVC: no ve el .env.
+# - cloudflared, fijado por digest (2026.10.7, del 2026-10-30; distroless, usuario 65532):
+#   `tunnel run --token-file`. El token nunca va en la orden ni en una variable (TUNNEL_TOKEN).
+#   Protocolo: TUNNEL_TRANSPORT_PROTOCOL (auto = QUIC y, si no hay, HTTP/2; los dos salen por el
+#   puerto 7844). scripts/k8s-infra.sh lo cambia con BNA_TUNEL_PROTOCOLO.
+# - /ready (puerto de métricas, solo dentro del pod) responde 200 cuando hay al menos una
+#   conexión con Cloudflare.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bna-tunel
+  labels:
+    app.kubernetes.io/name: tunel
+    app.kubernetes.io/part-of: bna
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tunel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tunel
+        app.kubernetes.io/part-of: bna
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: secretos
+          image: bna/backend
+          command:
+            - sh
+            - -c
+            - |
+              # No imprime el token.
+              set -eu
+              origen=/bna-secretos/cloudflared-token
+              espera=${BNA_ESPERA_SECRETOS:-300}
+              inicio=$(date +%s)
+              until [ -s "$origen" ]; do
+                if [ $(( $(date +%s) - inicio )) -ge "$espera" ]; then
+                  echo "No hay token del túnel en el PVC bna-secretos. Cargue el token: scripts/k8s-infra.sh tunel-cargar" >&2
+                  exit 1
+                fi
+                sleep 2
+              done
+              umask 077
+              tr -d '\r\n' < "$origen" > /secretos/token.nuevo
+              chmod 0440 /secretos/token.nuevo
+              mv -f /secretos/token.nuevo /secretos/token
+              echo "Token del túnel copiado a /secretos/token: permisos $(stat -c '%a' /secretos/token), $(stat -c '%s' /secretos/token) bytes."
+          env:
+            # Si falta el token, el pod queda en Init:Error con el aviso en un minuto.
+            - { name: BNA_ESPERA_SECRETOS, value: "60" }
+          volumeMounts:
+            - { name: bna-secretos, mountPath: /bna-secretos, readOnly: true }
+            - { name: secretos, mountPath: /secretos }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+          command:
+            - cloudflared
+            - tunnel
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:20241
+            - run
+            - --token-file
+            - /secretos/token
+          env:
+            - { name: TUNNEL_TRANSPORT_PROTOCOL, value: auto }
+          ports:
+            - { name: metricas, containerPort: 20241 }
+          readinessProbe:
+            httpGet: { path: /ready, port: metricas }
+            periodSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - { name: secretos, mountPath: /secretos, readOnly: true }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: secretos
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+        - name: bna-secretos
+          persistentVolumeClaim: { claimName: bna-secretos, readOnly: true }

@@ -123,11 +123,14 @@ jobs:
           kubectl kustomize k8s/overlays/infraestructura > "$RUNNER_TEMP/overlay.yaml"
           BNA_NAMESPACE=1234567890 scripts/k8s-infra.sh manifiestos > "$RUNNER_TEMP/aplicar.yaml"
           python3 scripts/overlay_infraestructura.py revisar "$RUNNER_TEMP/aplicar.yaml"
-          if grep -nE '^kind:[[:space:]]*Secret' "$RUNNER_TEMP/overlay.yaml" "$RUNNER_TEMP/aplicar.yaml"; then
+          BNA_NAMESPACE=1234567890 scripts/k8s-infra.sh tunel-manifiestos > "$RUNNER_TEMP/tunel.yaml"
+          python3 scripts/overlay_infraestructura.py revisar "$RUNNER_TEMP/tunel.yaml"
+          if grep -nE '^kind:[[:space:]]*Secret' "$RUNNER_TEMP/overlay.yaml" "$RUNNER_TEMP/aplicar.yaml" "$RUNNER_TEMP/tunel.yaml"; then
             echo "::error::El overlay de Infraestructura genera un Secret."
             exit 1
           fi
-          kubeconform -strict -summary -kubernetes-version 1.34.0 "$RUNNER_TEMP/overlay.yaml" "$RUNNER_TEMP/aplicar.yaml"
+          kubeconform -strict -summary -kubernetes-version 1.34.0 "$RUNNER_TEMP/overlay.yaml" "$RUNNER_TEMP/aplicar.yaml" \
+            "$RUNNER_TEMP/tunel.yaml"
 
       # El mismo motivo que en el trabajo de arriba.
       - name: Quitar del runner el perfil de AppArmor de mysqld

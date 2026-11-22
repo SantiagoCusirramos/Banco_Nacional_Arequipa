@@ -158,6 +158,62 @@ scripts/k8s-infra.sh borrar --si
 
 Borra todos los objetos con la etiqueta del producto, después de comprobar que todos se llaman `bna-*`; si alguno no, no borra nada. Incluye los dos PVC: la base y el `.env` se pierden. No toca nada más del namespace.
 
+## Acceso público por túnel (opcional)
+
+Para probar sin la VPN (por ejemplo, Chaski desde un celular con datos móviles), el producto se puede publicar por un túnel de Cloudflare que corre **dentro del clúster**: `cloudflared` abre una conexión de salida hacia Cloudflare y no hace falta abrir ningún puerto de entrada. Es opcional: el `aplicar` normal, kind del producto y la CI de despliegue no lo incluyen. Archivos: [`k8s/overlays/infraestructura/tunel/`](../k8s/overlays/infraestructura/tunel/) y las órdenes `tunel-*` de `scripts/k8s-infra.sh`.
+
+Ni el token, ni el id del túnel, ni el dominio van en el repositorio (es público). Abajo, «tu dominio» es el dominio que tengas en Cloudflare.
+
+| Pieza | Dónde |
+|---|---|
+| Token del túnel | Solo en el PVC `bna-secretos`, archivo `cloudflared-token` (0600, usuario 10001), separado del `.env`. Nunca en un manifiesto, ConfigMap, variable de entorno ni Git |
+| Id del túnel | En ningún lado del clúster ni del repo: va dentro del token |
+| Rutas (nombre público → Service) | En el panel de Cloudflare |
+| Deployment `bna-tunel` | Contenedor de inicio `secretos` (copia solo el token a un `emptyDir` en memoria, 0440) y `cloudflared` 2026.10.7 fijado por digest, con `--token-file`. `cloudflared` no monta el PVC: no ve el `.env` |
+
+`overlay_infraestructura.py revisar` rechaza un `Secret`, un `secretKeyRef`, `TUNNEL_TOKEN`, `--token` (solo vale `--token-file`) y una imagen externa sin digest; la CI revisa también la salida de `tunel-manifiestos`.
+
+### Pasos
+
+1. **Crear el túnel** en el panel de Cloudflare (Zero Trust → Networks → Tunnels, tipo `cloudflared`) y guardar el token en un gestor de claves, no en un archivo del repo.
+2. **Cargar el token.** En una terminal: `scripts/k8s-infra.sh tunel-cargar`. Crea el pod temporal `bna-carga-tunel` (con el PVC en escritura), imprime el comando de carga y espera. En otra terminal, con `KUBECONFIG` y `BNA_NAMESPACE` exportados, se manda el token por stdin (ejemplo con `pass`; vale cualquier orden que imprima el token en su primera línea):
+
+   ```bash
+   set -o pipefail
+   pass <ruta-del-token> \
+     | kubectl --kubeconfig "$KUBECONFIG" -n "$BNA_NAMESPACE" exec -i bna-carga-tunel -c carga -- \
+         sh -c 'umask 077; head -n 1 | tr -d "\r\n" > /bna-secretos/cloudflared-token.nuevo && test -s /bna-secretos/cloudflared-token.nuevo && mv -f /bna-secretos/cloudflared-token.nuevo /bna-secretos/cloudflared-token && echo "Token guardado ($(wc -c < /bna-secretos/cloudflared-token) bytes)."'
+   ```
+
+   El valor solo viaja por stdin y la escritura es atómica: si la orden falla o no imprime nada, el token anterior no cambia. `tunel-cargar` comprueba la forma (base64 de un JSON con `a`, `t` y `s`) sin mostrarla y borra el pod.
+3. **Aplicar:** `scripts/k8s-infra.sh tunel-aplicar`. Espera a que `bna-tunel` esté listo (`/ready` responde 200 cuando hay al menos una conexión con Cloudflare). Usa la imagen del backend que ya corre en el clúster; `BNA_ETIQUETA` la cambia.
+4. **Rutas en el panel** (Public Hostnames del túnel), con nombres cortos de Service (el túnel corre en el mismo namespace, así que el namespace no sale del clúster):
+
+   | Nombre público (en tu dominio) | Servicio |
+   |---|---|
+   | portal y Home Banking | `http://bna-frontend:3000` |
+   | cajero | `http://bna-atm:8019` |
+   | billetera (API de Chaski) | `http://bna-billetera:3000` |
+
+   El Bus no se publica. En Chaski, ⚙ → `https://<billetera en tu dominio>` (sin recompilar).
+5. **Cloudflare Access** antes de compartir los enlaces: una aplicación por nombre público con una política que permita solo los correos del equipo, para el portal y el cajero. La API de la billetera no puede pasar por el inicio de sesión de Access (la app no abre el navegador): o se deja fuera de Access (ya exige celular y PIN) o se usa un *service token*.
+
+### Operación
+
+| Qué | Cómo |
+|---|---|
+| Rotar el token | Nuevo token en el panel → `tunel-cargar` con la misma tubería → `kubectl rollout restart deployment/bna-tunel` |
+| Quitar el túnel | `scripts/k8s-infra.sh tunel-quitar` (borra el Deployment; el token queda en el PVC). `borrar --si` también lo borra, con el PVC |
+| No conecta (`tunel-aplicar` falla y muestra el diagnóstico) | `cloudflared` sale por el puerto 7844 (QUIC por UDP o HTTP/2 por TCP). Con `auto` prueba QUIC y luego HTTP/2; para forzar HTTP/2: `BNA_TUNEL_PROTOCOLO=http2 scripts/k8s-infra.sh tunel-aplicar`. Si 7844 está bloqueado del todo, hay que pedírselo a Infraestructura |
+| `Init:Error` en `secretos`, «No hay token del túnel» | Falta cargar el token (`tunel-cargar`) |
+
+### Riesgos
+
+- Publica una demo con marca de banco: sin Access, cualquiera con el enlace la ve. Un *quick tunnel* (`trycloudflare.com`, sin cuenta) no tiene Access: solo para una demo corta y vigilada.
+- Quien pueda crear pods en el namespace puede leer el PVC y, con él, el token (la misma limitación que el `.env`, ver «Limitaciones»).
+- Los registros de `cloudflared` (y por eso los de `diagnostico`) incluyen el id del túnel: no pegarlos en PR ni issues.
+- Hace falta el permiso de Infraestructura para exponer el despliegue.
+
 ## Si hay cuota de objetos
 
 No se conoce ninguna cuota (la cuenta no puede verlas). Si Infraestructura pone una por número de objetos, lo primero que se puede agrupar:
@@ -168,7 +224,7 @@ No se conoce ninguna cuota (la cuenta no puede verlas). Si Infraestructura pone 
 
 ## Prueba en kind
 
-[`scripts/prueba_k8s_infra_kind.sh`](../scripts/prueba_k8s_infra_kind.sh) prueba el mismo overlay en un clúster de kind v0.30.0 (Kubernetes 1.34): carga las imágenes con `kind load` en vez de descargarlas, crea un namespace numérico y una StorageClass `local-path`, aplica con `k8s-infra.sh`, comprueba que no haya Secrets, que cada pod tenga solo sus claves (0440, también los que corren con otro usuario) y que el Job no cambie un `.env` existente, carga los datos dos veces, corre `flujo_demo.py` por `kubectl port-forward` y borra todo. Al terminar elimina el clúster. La CI lo corre en el flujo «Kubernetes» (trabajo «Overlay de Infraestructura en kind»), junto con `kubectl kustomize`, `kubeconform` para Kubernetes 1.34 y `overlay_infraestructura.py comprobar` y `revisar`.
+[`scripts/prueba_k8s_infra_kind.sh`](../scripts/prueba_k8s_infra_kind.sh) prueba el mismo overlay en un clúster de kind v0.30.0 (Kubernetes 1.34): carga las imágenes con `kind load` en vez de descargarlas, crea un namespace numérico y una StorageClass `local-path`, aplica con `k8s-infra.sh`, comprueba que no haya Secrets, que cada pod tenga solo sus claves (0440, también los que corren con otro usuario) y que el Job no cambie un `.env` existente, carga los datos dos veces, corre `flujo_demo.py` por `kubectl port-forward` y borra todo. También prueba el túnel opcional con un token falso: `tunel-cargar` con la misma tubería de carga, el token copiado 0440 en memoria, `cloudflared` sin el PVC montado y sin conectar, y `tunel-quitar`. Al terminar elimina el clúster. La CI lo corre en el flujo «Kubernetes» (trabajo «Overlay de Infraestructura en kind»), junto con `kubectl kustomize`, `kubeconform` para Kubernetes 1.34 y `overlay_infraestructura.py comprobar` y `revisar`.
 
 Lo que la prueba en kind no cubre: el Ingress de Traefik (en kind no hay Traefik; el Ingress solo se valida con `kubeconform`) y la descarga desde ghcr.io. Las dos cosas se comprobaron en el clúster real (ver abajo).
 
