@@ -191,6 +191,19 @@ class Tarjeta(Base):
     num_cuenta: Mapped[str | None] = mapped_column(String(20))
 
 
+class HistorialEstadoTarjeta(Base):
+    # Solo lectura (bd-v1.16): los cambios pasan por cambiar_estado_tarjeta y desbloquear_tarjeta.
+    __tablename__ = "v_historial_estado_tarjeta_api"
+    __table_args__ = {"schema": "tarjetas"}
+
+    id_historial: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    id_tarjeta: Mapped[uuid.UUID] = mapped_column(UuidBinario)
+    estado_nuevo: Mapped[str] = mapped_column(String(25))
+    motivo: Mapped[str | None] = mapped_column(String(255))
+    origen: Mapped[str] = mapped_column(String(20))
+    fecha_hora: Mapped[datetime] = mapped_column(FechaUtc)
+
+
 class Autorizacion(Base):
     # La vista no incluye la IP de origen ni el nivel de riesgo.
     __tablename__ = "v_autorizacion_api"

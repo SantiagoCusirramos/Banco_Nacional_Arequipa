@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from COREDB.auth import Actor, requiere_permiso
 from COREDB.database import db_session, llamar
 from COREDB.errores import ErrorCoreDb
-from COREDB.models import EquivalenciaCatalogo, Tarjeta
+from COREDB.models import EquivalenciaCatalogo, HistorialEstadoTarjeta, Tarjeta
 from COREDB.routers.autorizaciones import ip_origen
 from COREDB.services import clientes
 from COREDB.transacciones import con_reintentos
@@ -54,6 +54,18 @@ class TarjetaRespuesta(BaseModel):
         default=None,
         description="La cuenta principal de la tarjeta, la de su emisión. Null si no tiene.",
     )
+
+
+class CambioEstado(BaseModel):
+    """Un registro del historial de estados de la tarjeta (tarjetas.historial_estado_tarjeta)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id_historial: int
+    estado_nuevo: str
+    motivo: str | None
+    origen: str = Field(description="CLIENTE, OPERADOR, SISTEMA, SEGURIDAD… (tarjetas.origen_cambio).")
+    fecha_hora: datetime
 
 
 TipoCredencial = Literal["PIN_ATM", "CLAVE_WEB"]
@@ -139,6 +151,23 @@ def de_un_cliente(
             dependencies=[Depends(requiere_permiso("VER_TARJETA"))])
 def ver(id_tarjeta: uuid.UUID, db: Session = Depends(db_session)):
     return _obtener(db, id_tarjeta)
+
+
+@router.get("/{id_tarjeta}/historial", response_model=list[CambioEstado],
+            dependencies=[Depends(requiere_permiso("VER_TARJETA"))],
+            responses={404: {"description": "TARJETA_NO_ENCONTRADA"}})
+def historial(id_tarjeta: uuid.UUID, limite: int = Query(default=20, ge=1, le=100),
+              db: Session = Depends(db_session)):
+    """Los cambios de estado de la tarjeta, del más reciente al más antiguo: el primero dice
+    por qué está como está (motivo, origen y fecha)."""
+    _obtener(db, id_tarjeta)
+    return (
+        db.query(HistorialEstadoTarjeta)
+        .filter(HistorialEstadoTarjeta.id_tarjeta == id_tarjeta)
+        .order_by(HistorialEstadoTarjeta.id_historial.desc())
+        .limit(limite)
+        .all()
+    )
 
 
 @router.post("", response_model=TarjetaRespuesta, status_code=status.HTTP_201_CREATED)

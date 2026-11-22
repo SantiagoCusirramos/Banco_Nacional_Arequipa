@@ -298,7 +298,7 @@ la registra como actor. Nadie llega a estas rutas sin pasar por Seguridad.
 | `GET /coredb/seguridad/incidentes` | `VER_AUDITORIA` o `GESTIONAR_INCIDENTES` | Los incidentes, del más reciente al más antiguo |
 | `POST /coredb/seguridad/incidentes` | `GESTIONAR_INCIDENTES` (OPERADOR, ADMINISTRADOR) | Abre un incidente P1 a P4 |
 | `POST /coredb/seguridad/incidentes/{id}/estado` | `GESTIONAR_INCIDENTES` | EN_PROGRESO → RESUELTO (con `resolucion`) → CERRADO, sin saltos (409 `BNA-INCIDENTE-TRANSICION`) |
-| `POST /coredb/tarjetas/{id}/desbloqueo` | `BLOQUEAR_TARJETA` | BLOQUEADA o RETENIDA → ACTIVA, origen SEGURIDAD, con la cuenta `bna_seguridad_user`; 409 `TARJETA_NO_BLOQUEADA` |
+| `POST /coredb/tarjetas/{id}/desbloqueo` | `BLOQUEAR_TARJETA` | BLOQUEADA o RETENIDA → ACTIVA, origen SEGURIDAD, con la cuenta `bna_seguridad_user`; devuelve la tarjeta y `cambio` (el registro del historial: id, fecha, motivo, estado anterior y actor); 409 `TARJETA_NO_BLOQUEADA` |
 
 Sellos de la bitácora: `POST /coredb/auditoria/sellos` (solo `OPERAR_SEGURIDAD`, sin persona)
 guarda el HMAC encadenado que calculó Seguridad sobre los eventos que siguen al último sello; la
@@ -314,6 +314,7 @@ para sellar y verificar. Pruebas: `tests/integracion/test_seguridad.py`.
 | `GET /coredb/movimientos/{uuid_transaccion}` | `VER_CUENTA` | Un movimiento |
 | `GET /coredb/cuentas?cod_cliente=` | `VER_CUENTA` | Las cuentas en las que el cliente es titular |
 | `GET /coredb/tarjetas?cod_cliente=` | `VER_TARJETA` | Las tarjetas del cliente, de la más reciente a la más antigua |
+| `GET /coredb/tarjetas/{id}/historial?limite=` | `VER_TARJETA` | Los cambios de estado (estado, motivo, origen, fecha), del más reciente al más antiguo; hasta 100 (por omisión 20). Vista `tarjetas.v_historial_estado_tarjeta_api` (bd-v1.16) |
 | `GET /coredb/auditoria` | `VER_AUDITORIA` | La bitácora, del evento más reciente al más antiguo, con filtros (con `despues_de_id`, del más antiguo al más reciente) |
 | `GET /coredb/auditoria/sellos` | `VER_AUDITORIA` | Los sellos HMAC de la bitácora (ver «Seguridad») |
 | `POST /coredb/auditoria/eventos` | `REGISTRAR_EVENTO_MODULO` (`svc-sol`) | Registra un evento que reporta un módulo sin base propia, una vez por `idEvento` (201; 200 si se repite; 409 con otro contenido) |
