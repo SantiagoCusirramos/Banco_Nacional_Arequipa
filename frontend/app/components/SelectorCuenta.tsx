@@ -15,29 +15,39 @@ type Props = {
 
 /** Lista las cuentas del titular para no copiar el número a mano; la entrada manual sigue disponible. */
 export default function SelectorCuenta({ id, label, codCliente, value, onChange, placeholder }: Props) {
-  const [cuentas, setCuentas] = useState<Cuenta[]>([]);
+  // La lista se guarda con el código al que pertenece: al cambiar de titular no se muestra
+  // la del anterior mientras llega la nueva, sin necesidad de limpiar estado dentro del efecto.
+  const [lista, setLista] = useState<{ codigo: string; cuentas: Cuenta[] }>({ codigo: "", cuentas: [] });
+  const [valorVisto, setValorVisto] = useState(value);
   const [numero, setNumero] = useState(value);
   const [mensaje, setMensaje] = useState("");
-
-  useEffect(() => { setNumero(value); }, [value]);
+  if (valorVisto !== value) {
+    setValorVisto(value);
+    setNumero(value);
+  }
 
   useEffect(() => {
     let activo = true;
-    setCuentas([]);
     if (!codCliente) return;
     cuentasDeCliente(codCliente)
       .then((encontradas) => {
         if (!activo) return;
-        setCuentas(encontradas);
+        setLista({ codigo: codCliente, cuentas: encontradas });
+        setMensaje("");
         // Si el titular solo tiene una cuenta, no hay nada que elegir: se toma esa.
         if (encontradas.length === 1) {
           setNumero(encontradas[0].num_cuenta);
           onChange(encontradas[0].num_cuenta);
         }
       })
-      .catch(() => { if (activo) setMensaje("No se pudieron cargar las cuentas del cliente."); });
+      .catch(() => {
+        if (!activo) return;
+        setLista({ codigo: codCliente, cuentas: [] });
+        setMensaje("No se pudieron cargar las cuentas del cliente.");
+      });
     return () => { activo = false; };
   }, [codCliente]);
+  const cuentas = lista.codigo === codCliente ? lista.cuentas : [];
 
   function elegir(cuenta: Cuenta) {
     setNumero(cuenta.num_cuenta);

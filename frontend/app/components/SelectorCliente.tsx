@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   buscarSolicitantes, nombreCompleto, nombreSolicitante, obtenerCliente,
   type SolicitanteBuscado,
@@ -31,12 +31,17 @@ function textoError(err: unknown): string {
  * en el cuerpo del POST; si reconoce un código, lo valida contra COREDB igual que antes.
  */
 export default function SelectorCliente({ id, label, value, onChange, error, placeholder }: Props) {
+  // El padre puede precargar el código (parámetros de URL, cambio de pestaña). Ajustar el
+  // estado durante el render, sin efecto, evita sobrescribir lo que el operador está escribiendo.
+  const [valorVisto, setValorVisto] = useState(value);
   const [texto, setTexto] = useState(value);
+  if (valorVisto !== value) {
+    setValorVisto(value);
+    setTexto(value);
+  }
   const [resultados, setResultados] = useState<SolicitanteBuscado[]>([]);
   const [mensaje, setMensaje] = useState("");
   const [buscando, setBuscando] = useState(false);
-
-  useEffect(() => { setTexto(value); }, [value]);
 
   async function buscar() {
     const consulta = texto.trim();
