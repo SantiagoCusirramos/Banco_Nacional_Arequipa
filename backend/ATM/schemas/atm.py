@@ -9,6 +9,19 @@ class _Entrada(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+# ── Identificar la tarjeta ───────────────────────────────────────────────
+# Lo que un cajero real leería del chip: aquí, el documento del titular y los 4 últimos dígitos.
+
+class IdentificarIn(_Entrada):
+    documento: str = Field(min_length=8, max_length=12, pattern=r"^[0-9A-Za-z]+$")
+    ultimos4: str = Field(min_length=4, max_length=4, pattern=r"^\d{4}$")
+
+
+class IdentificarOut(BaseModel):
+    id_tarjeta: str
+    ultimos4: str
+
+
 # ── Validar PIN ──────────────────────────────────────────────────────────
 
 class ValidarPinIn(_Entrada):
