@@ -259,10 +259,7 @@ const Bus = (() => {
   // de COBRANZA tal cual; la pantalla comprueba que esté completa y no rellena nada.
   async function pagarCuota(codCredito, p, idempotencyKey) {
     const s = sesion();
-    // La ruta conserva su nombre histórico; se arma por partes para que ese identificador
-    // interno no quede entre los textos que puede leer el cliente.
-    const ruta = "/api/cobranza/" + ["cr", "int", "08"].join("-") + "/pagos";
-    return invocarAPI(ruta, {
+    return invocarAPI("/api/cobranza/cr-int-08/pagos", {
       codCliente: s.codCliente, codCredito, montoPago: num(p.montoPago).toFixed(2),
       cuentaOrigen: p.numCuentaOrigen, referenciaTransaccion: idempotencyKey
     }, "COBRANZA · pagos", { idempotencyKey });

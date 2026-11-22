@@ -56,7 +56,9 @@ describe("Home Banking: lenguaje claro", () => {
   });
 
   it("HB-PU-02 ningún guión muestra jerga en los textos que escribe en pantalla", () => {
-    for (const guion of guiones) expect(sinComentarios(leer(`js/${guion}`)), guion).not.toMatch(JERGA_FUENTE);
+    // Las rutas de los puentes ("/api/…") no se muestran: HB-03 comprueba que existan.
+    for (const guion of guiones)
+      expect(sinComentarios(leer(`js/${guion}`)).replace(/(["'`])\/api\/[^"'`]*\1/g, '""'), guion).not.toMatch(JERGA_FUENTE);
   });
 
   it("HB-PU-03 mensajeError traduce códigos, estados y correlaciones a lenguaje llano", () => {
