@@ -7,6 +7,9 @@
 # Comprueba el patrón de claves sin Secrets (ningún Secret en el namespace, archivos 0440 con
 # solo las claves del pod, el Job no cambia un .env que ya existe), carga los datos de
 # referencia, corre scripts/flujo_demo.py y borra todo con `k8s-infra.sh borrar`.
+# También el túnel opcional de Cloudflare con un token falso: tunel-cargar con la misma tubería
+# que usa el dueño, el contenedor de inicio deja el token 0440 en memoria, cloudflared no monta
+# el PVC (no ve el .env), no conecta (el token es falso) y tunel-quitar lo borra.
 # Al terminar elimina el clúster, aunque algo falle.
 #
 # Uso: scripts/prueba_k8s_infra_kind.sh
@@ -124,6 +127,56 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 BNA_FRONTEND=http://127.0.0.1:13000 BNA_BUS=http://127.0.0.1:18018 scripts/k8s-infra.sh flujo
+
+paso "Túnel de Cloudflare con un token falso"
+falso="$(printf '{"a":"%s","t":"%s","s":"%s"}' 00000000000000000000000000000000 \
+  00000000-0000-0000-0000-000000000000 "$(printf 'falso' | base64)" | base64 -w0)"
+BNA_TUNEL_ESPERA_CARGA=180 scripts/k8s-infra.sh tunel-cargar >"$TRABAJO/carga.txt" 2>&1 &
+cargador=$!
+for _ in $(seq 1 90); do
+  grep -q "Esperando el token" "$TRABAJO/carga.txt" && break
+  kill -0 "$cargador" 2>/dev/null || break
+  sleep 2
+done
+# La misma tubería que imprime tunel-cargar (CARGA_REMOTA en scripts/k8s-infra.sh).
+remota="$(sed -n "s/^ *sh -c '\(.*\)'\$/\1/p" "$TRABAJO/carga.txt")"
+[ -n "$remota" ] || { cat "$TRABAJO/carga.txt" >&2; echo "tunel-cargar no imprimió el comando de carga." >&2; exit 1; }
+printf '%s\n' "$falso" | k exec -i bna-carga-tunel -c carga -- sh -c "$remota"
+if ! wait "$cargador"; then
+  cat "$TRABAJO/carga.txt" >&2
+  exit 1
+fi
+cat "$TRABAJO/carga.txt"
+grep -q "Token con forma válida: .* permisos 600" "$TRABAJO/carga.txt"
+k wait --for=delete pod/bna-carga-tunel --timeout=120s >/dev/null 2>&1 || true
+if k get pod bna-carga-tunel >/dev/null 2>&1; then
+  echo "Quedó el pod bna-carga-tunel." >&2
+  exit 1
+fi
+if BNA_TUNEL_ESPERA_SEGUNDOS=45 scripts/k8s-infra.sh tunel-aplicar >"$TRABAJO/tunel.txt" 2>&1; then
+  echo "El túnel quedó listo con un token falso." >&2
+  exit 1
+fi
+pod="$(k get pod -l app.kubernetes.io/name=tunel -o name)"
+salida_inicio="$(k get "$pod" -o jsonpath='{.status.initContainerStatuses[0].state.terminated.exitCode}')"
+copia="$(k logs "$pod" -c secretos)"
+echo "$copia"
+if [ "$salida_inicio" != 0 ] || ! grep -q "permisos 440" <<<"$copia"; then
+  echo "El contenedor de inicio del túnel no copió el token (salida '$salida_inicio')." >&2
+  exit 1
+fi
+montajes="$(k get "$pod" -o jsonpath='{.spec.containers[?(@.name=="cloudflared")].volumeMounts[*].name}')"
+if [ "$montajes" != secretos ]; then
+  echo "cloudflared monta [$montajes]; se esperaba solo secretos (sin el PVC con el .env)." >&2
+  exit 1
+fi
+echo "cloudflared monta solo /secretos y no conectó con el token falso, como se espera:"
+k logs "$pod" -c cloudflared --tail=3 2>/dev/null | cut -c1-160 || true
+scripts/k8s-infra.sh tunel-quitar
+if k get deployment bna-tunel >/dev/null 2>&1; then
+  echo "tunel-quitar no borró bna-tunel." >&2
+  exit 1
+fi
 
 paso "Borrar"
 kill "${REENVIOS[@]}" 2>/dev/null || true

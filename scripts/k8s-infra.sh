@@ -14,6 +14,13 @@
 #   diagnostico   estado + registros de los pods que no están listos
 #   borrar --si   borra todo lo del producto en el namespace (bna-*), también los PVC y sus datos
 #
+# Túnel de Cloudflare (opcional; k8s/overlays/infraestructura/tunel):
+#   tunel-manifiestos  imprime lo que aplicaría tunel-aplicar
+#   tunel-cargar       pod temporal bna-carga-tunel para guardar el token en el PVC bna-secretos;
+#                      imprime el comando de carga, espera el archivo y valida su forma sin mostrarlo
+#   tunel-aplicar      aplica el Deployment bna-tunel y espera a que conecte (/ready)
+#   tunel-quitar       borra el Deployment bna-tunel (el token queda en el PVC)
+#
 # Variables:
 #   KUBECONFIG      obligatorio para las órdenes que tocan el clúster (nunca ~/.kube/config por omisión)
 #   BNA_NAMESPACE   obligatorio para esas mismas órdenes; solo se usa ese namespace
@@ -22,12 +29,17 @@
 #   KUBECTL         kubectl a usar (kubectl)
 #   BNA_ESPERA_SEGUNDOS  espera máxima por Deployment (600)
 #   BNA_FRONTEND, BNA_BUS  direcciones para `flujo` (por omisión, las del Ingress)
+#   BNA_TUNEL_PROTOCOLO    auto (por omisión), quic o http2, para tunel-aplicar
+#   BNA_TUNEL_ESPERA_SEGUNDOS  espera máxima a que el túnel conecte (180)
+#   BNA_TUNEL_ESPERA_CARGA     espera máxima a que se cargue el token (540)
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$RAIZ"
 
 OVERLAY=k8s/overlays/infraestructura
+TUNEL="$OVERLAY/tunel"
+TOKEN_TUNEL=/bna-secretos/cloudflared-token
 REGISTRO_OVERLAY=ghcr.io/miguelpro324
 REGISTRO="${BNA_REGISTRO:-$REGISTRO_OVERLAY}"
 KUBECTL="${KUBECTL:-kubectl}"
@@ -91,17 +103,16 @@ exigir_cluster() {
 
 k() { "$KUBECTL" --kubeconfig "$KUBECONFIG" -n "$BNA_NAMESPACE" "$@"; }
 
-# El overlay más lo que depende del momento: namespace, etiqueta de las imágenes y el
-# ConfigMap con scripts/generar_env.sh y .env.example, que kustomize no lee desde el overlay.
-manifiestos() {
+# Un overlay más lo que depende del momento: namespace, etiqueta de las imágenes y, para el
+# principal, el ConfigMap con scripts/generar_env.sh y .env.example, que kustomize no lee desde
+# el overlay. Uso: kustomizar CARPETA [principal|tunel]
+kustomizar() {
   : "${BNA_NAMESPACE:?Falta BNA_NAMESPACE (el namespace asignado)}"
-  local dir tag relativo nombre
+  local carpeta="$1" tipo="$2" dir tag relativo nombre protocolo
   dir="$(mktemp -d)"
   TEMPORALES+=("$dir")
   tag="$(etiqueta)"
-  cp scripts/generar_env.sh "$dir/generar_env.sh"
-  cp .env.example "$dir/env.example"
-  relativo="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$RAIZ/$OVERLAY" "$dir")"
+  relativo="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$RAIZ/$carpeta" "$dir")"
   {
     echo "apiVersion: kustomize.config.k8s.io/v1beta1"
     echo "kind: Kustomization"
@@ -109,10 +120,25 @@ manifiestos() {
     echo "resources: [\"$relativo\"]"
     echo "labels:"
     echo "  - pairs: { app.kubernetes.io/part-of: bna, app.kubernetes.io/instance: bna }"
-    echo "configMapGenerator:"
-    echo "  - name: bna-generar-env"
-    echo "    files: [generar_env.sh, env.example]"
-    echo "    options: { disableNameSuffixHash: true }"
+    if [ "$tipo" = principal ]; then
+      cp scripts/generar_env.sh "$dir/generar_env.sh"
+      cp .env.example "$dir/env.example"
+      echo "configMapGenerator:"
+      echo "  - name: bna-generar-env"
+      echo "    files: [generar_env.sh, env.example]"
+      echo "    options: { disableNameSuffixHash: true }"
+    else
+      protocolo="${BNA_TUNEL_PROTOCOLO:-auto}"
+      case "$protocolo" in
+        auto) ;;
+        quic|http2)
+          echo "patches:"
+          echo "  - target: { kind: Deployment, name: bna-tunel }"
+          echo "    patch: '[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/env/0\", \"value\": {\"name\": \"TUNNEL_TRANSPORT_PROTOCOL\", \"value\": \"$protocolo\"}}]'"
+          ;;
+        *) echo "BNA_TUNEL_PROTOCOLO debe ser auto, quic o http2 (es '$protocolo')." >&2; exit 2 ;;
+      esac
+    fi
     echo "images:"
     for nombre in "${NOMBRES[@]}"; do
       echo "  - { name: $REGISTRO_OVERLAY/bna-$nombre, newName: $REGISTRO/bna-$nombre, newTag: \"$tag\" }"
@@ -120,6 +146,9 @@ manifiestos() {
   } > "$dir/kustomization.yaml"
   "$KUBECTL" kustomize "$dir"
 }
+
+manifiestos() { kustomizar "$OVERLAY" principal; }
+tunel_manifiestos() { kustomizar "$TUNEL" tunel; }
 
 # De cada pod que no está listo o que se reinició: estado de sus contenedores, motivo del último
 # reinicio (por ejemplo OOMKilled) y el final de sus registros. La cuenta no ve eventos.
@@ -234,6 +263,7 @@ borrar() {
     exit 2
   fi
   local objetos objeto
+  k delete pod bna-carga-tunel --ignore-not-found --wait=true >/dev/null
   objetos="$(k get deployments,services,ingresses,jobs,configmaps,persistentvolumeclaims -l "$SELECTOR" -o name)"
   for objeto in $objetos; do
     case "${objeto#*/}" in
@@ -251,6 +281,133 @@ borrar() {
   echo "Borrado lo del producto en $BNA_NAMESPACE."
 }
 
+# ── Túnel de Cloudflare (opcional) ─────────────────────────────────────────────
+# Guía: Documents/despliegue-infraestructura.md, «Acceso público por túnel (opcional)».
+
+# Sin BNA_ETIQUETA, la del backend que corre en el clúster: el commit actual puede no tener
+# imágenes publicadas (por ejemplo, un cambio solo de documentación).
+etiqueta_en_uso() {
+  [ -z "${BNA_ETIQUETA:-}" ] || return 0
+  local imagen
+  imagen="$(k get deployment bna-cuentas -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)"
+  if [ -z "$imagen" ]; then
+    echo "No está bna-cuentas en $BNA_NAMESPACE: aplique antes el producto o fije BNA_ETIQUETA." >&2
+    exit 1
+  fi
+  BNA_ETIQUETA="${imagen##*:}"
+}
+
+# Lo que corre dentro del pod de carga, con el token por stdin (la primera línea). Escritura
+# atómica: si llega vacío, el token anterior no cambia.
+CARGA_REMOTA='umask 077; head -n 1 | tr -d "\r\n" > /bna-secretos/cloudflared-token.nuevo && test -s /bna-secretos/cloudflared-token.nuevo && mv -f /bna-secretos/cloudflared-token.nuevo /bna-secretos/cloudflared-token && echo "Token guardado ($(wc -c < /bna-secretos/cloudflared-token) bytes)."'
+
+# Comprueba la forma del token sin mostrarlo: base64 de un JSON con a (cuenta), t (túnel) y s.
+VALIDAR_TOKEN="$(cat <<'PY'
+import base64, json, os, stat, sys
+archivo = "/bna-secretos/cloudflared-token"
+crudo = open(archivo, "rb").read().strip()
+try:
+    datos = json.loads(base64.b64decode(crudo + b"=" * (-len(crudo) % 4)))
+    valido = isinstance(datos, dict) and all(isinstance(datos.get(c), str) and datos[c] for c in ("a", "t", "s"))
+except Exception:
+    valido = False
+if not valido:
+    print("El archivo no tiene la forma de un token de túnel (base64 de un JSON con a, t y s). "
+          "Repita la carga con el token correcto.", file=sys.stderr)
+    sys.exit(1)
+os.chmod(archivo, 0o600)
+print(f"Token con forma válida: {len(crudo)} bytes, permisos {stat.S_IMODE(os.stat(archivo).st_mode):o}.")
+PY
+)"
+
+firma_token() {
+  k exec bna-carga-tunel -c carga -- sh -c "stat -c '%i %Y %s' $TOKEN_TUNEL 2>/dev/null || true"
+}
+
+tunel_cargar() {
+  exigir_cluster
+  etiqueta_en_uso
+  local imagen antes ahora espera inicio
+  imagen="$REGISTRO/bna-backend:$(etiqueta)"
+  espera="${BNA_TUNEL_ESPERA_CARGA:-540}"
+  k delete pod bna-carga-tunel --ignore-not-found --wait=true >/dev/null
+  trap 'k delete pod bna-carga-tunel --ignore-not-found --wait=false >/dev/null 2>&1 || true; rm -rf "${TEMPORALES[@]}"' EXIT
+  k apply -f - >/dev/null <<YAML
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bna-carga-tunel
+  labels: { app.kubernetes.io/name: carga-tunel, app.kubernetes.io/part-of: bna, app.kubernetes.io/instance: bna }
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 900
+  automountServiceAccountToken: false
+  securityContext: { runAsUser: 10001, runAsGroup: 10001, runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: carga
+      image: $imagen
+      command: [sleep, "600"]
+      volumeMounts: [{ name: bna-secretos, mountPath: /bna-secretos }]
+      resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+  volumes:
+    - name: bna-secretos
+      persistentVolumeClaim: { claimName: bna-secretos }
+YAML
+  if ! k wait --for=condition=Ready pod/bna-carga-tunel --timeout=180s >/dev/null; then
+    diagnostico
+    exit 1
+  fi
+  antes="$(firma_token)"
+  [ -z "$antes" ] || echo "Ya hay un token en el PVC: si carga otro, lo reemplaza (Ctrl-C para conservarlo)."
+  cat <<TEXTO
+Pod bna-carga-tunel listo. En otra terminal, con KUBECONFIG y BNA_NAMESPACE exportados:
+
+set -o pipefail
+<orden que imprime el token> \\
+  | kubectl --kubeconfig "\$KUBECONFIG" -n "\$BNA_NAMESPACE" exec -i bna-carga-tunel -c carga -- \\
+      sh -c '$CARGA_REMOTA'
+
+Esperando el token (hasta $espera s)...
+TEXTO
+  inicio="$(date +%s)"
+  while ahora="$(firma_token)"; [ -z "$ahora" ] || [ "$ahora" = "$antes" ]; do
+    if [ $(( $(date +%s) - inicio )) -ge "$espera" ]; then
+      echo "No llegó el token en $espera s. Vuelva a correr scripts/k8s-infra.sh tunel-cargar." >&2
+      exit 1
+    fi
+    sleep 3
+  done
+  k exec bna-carga-tunel -c carga -- python3 -c "$VALIDAR_TOKEN"
+  echo "Siguiente: scripts/k8s-infra.sh tunel-aplicar (para rotarlo con el túnel ya aplicado: kubectl rollout restart deployment/bna-tunel)."
+}
+
+tunel_aplicar() {
+  exigir_cluster
+  etiqueta_en_uso
+  local render
+  render="$(mktemp)"
+  TEMPORALES+=("$render")
+  tunel_manifiestos > "$render"
+  python3 scripts/overlay_infraestructura.py revisar "$render" --registro "$REGISTRO/" >/dev/null
+  echo "Túnel en $BNA_NAMESPACE (protocolo ${BNA_TUNEL_PROTOCOLO:-auto}, imagen del copiador $REGISTRO/bna-backend:$(etiqueta))"
+  k apply -f "$render"
+  if ! k rollout status deployment/bna-tunel --timeout="${BNA_TUNEL_ESPERA_SEGUNDOS:-180}s"; then
+    echo "El túnel no conectó. Si cloudflared no llega a Cloudflare por QUIC, pruebe BNA_TUNEL_PROTOCOLO=http2." >&2
+    echo "Los registros incluyen el id del túnel: no los pegue en PR ni issues." >&2
+    diagnostico
+    exit 1
+  fi
+  echo "Túnel conectado (bna-tunel listo: /ready con al menos una conexión). Las rutas y Access se configuran en el panel de Cloudflare."
+}
+
+tunel_quitar() {
+  exigir_cluster
+  k delete deployment bna-tunel --ignore-not-found --wait=true
+  k wait --for=delete pod -l app.kubernetes.io/name=tunel --timeout=120s 2>/dev/null || true
+  echo "Túnel quitado. El token sigue en el PVC bna-secretos (lo borra borrar --si)."
+}
+
 case "${1:-}" in
   construir) construir ;;
   publicar) publicar ;;
@@ -262,5 +419,9 @@ case "${1:-}" in
   estado) exigir_cluster; k get pods,services,ingresses,persistentvolumeclaims,jobs -l "$SELECTOR" ;;
   diagnostico) exigir_cluster; diagnostico ;;
   borrar) shift; borrar "$@" ;;
-  *) sed -n '2,24p' "$0" >&2; exit 2 ;;
+  tunel-manifiestos) tunel_manifiestos ;;
+  tunel-cargar) tunel_cargar ;;
+  tunel-aplicar) tunel_aplicar ;;
+  tunel-quitar) tunel_quitar ;;
+  *) sed -n '2,34p' "$0" >&2; exit 2 ;;
 esac

@@ -1,0 +1,21 @@
+# Túnel de Cloudflare (opcional): publica el portal, el cajero y la billetera por una conexión
+# de SALIDA desde el clúster, sin depender de la VPN. No lo incluye el `aplicar` normal, ni kind
+# ni la CI de despliegue: se aplica con scripts/k8s-infra.sh tunel-aplicar.
+# Guía: Documents/despliegue-infraestructura.md, «Acceso público por túnel (opcional)».
+#
+# El token vive solo en el PVC bna-secretos (/bna-secretos/cloudflared-token, lo carga
+# scripts/k8s-infra.sh tunel-cargar). Ni el token ni el id del túnel ni el dominio van en el
+# repositorio: las rutas se configuran en el panel de Cloudflare.
+#
+# Los nombres ya llevan el prefijo bna- (prefijo.yaml está fuera de esta carpeta). El namespace
+# y la etiqueta de la imagen los pone scripts/k8s-infra.sh, como en el overlay principal.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - tunel.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/instance: bna
+    includeSelectors: true
+images:
+  - { name: bna/backend, newName: ghcr.io/miguelpro324/bna-backend, newTag: sin-etiqueta }
