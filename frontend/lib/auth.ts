@@ -21,6 +21,10 @@ export type LoginRespuesta = {
 
 const TOKEN_KEY = "bna_access_token";
 const USER_KEY = "bna_usuario";
+/** Cada cierre de sesión escribe aquí la hora: las otras pestañas lo ven por el evento `storage`. */
+export const CLAVE_CIERRE = "bna_cierre_sesion";
+// La sesión del Home Banking (public/homebanking/js/comun.js) vive en sessionStorage.
+const CLAVES_HOME_BANKING = ["hb_sesion_bna", "hb_ultima_tarjeta"];
 
 export function guardarSesion(token: string, usuario: Usuario) {
   if (typeof window === "undefined") return;
@@ -40,14 +44,42 @@ export function obtenerUsuarioGuardado(): Usuario | null {
   try { return JSON.parse(raw) as Usuario; } catch { return null; }
 }
 
-export function cerrarSesion() {
+/**
+ * Borra las sesiones que guarda el navegador (portal y Home Banking) y avisa a las otras
+ * pestañas. No toca la cookie de Solicitud: para eso, `cerrarSesion`.
+ */
+export function borrarSesionesDelNavegador() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  for (const clave of CLAVES_HOME_BANKING) {
+    try { sessionStorage.removeItem(clave); } catch { /* sin sessionStorage */ }
+  }
+  localStorage.setItem(CLAVE_CIERRE, String(Date.now()));
+}
+
+/**
+ * Cierra todas las sesiones del producto en este navegador: portal, Home Banking y Solicitud de
+ * crédito (su cookie es HttpOnly, solo la borra el servidor). `keepalive` deja terminar esa
+ * petición aunque la pantalla navegue al login en el mismo clic. COREDB todavía no revoca tokens:
+ * el que se borra vence solo.
+ */
+export function cerrarSesion(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  borrarSesionesDelNavegador();
+  return fetch("/api/solicitud-credito/auth/logout", {
+    method: "POST",
+    keepalive: true,
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  }).then(() => undefined, () => undefined);
 }
 
 export async function iniciarSesion(username: string, password: string) {
   const { data } = await api.post<LoginRespuesta>("/coredb/auth/login", { username, password });
+  // Quien entra no hereda ninguna sesión del anterior (Solicitud, cliente del Home Banking).
+  await cerrarSesion();
   guardarSesion(data.access_token, data.usuario);
   return data;
 }

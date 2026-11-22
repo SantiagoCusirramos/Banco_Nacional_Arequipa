@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 // K-5: el Home Banking se sirve desde public/ y solo llama a los puentes que existen.
 const HB = resolve(process.cwd(), "public/homebanking"); // vitest corre en frontend/
 const JS = join(HB, "js");
-const PUENTES = ["/api/core/coredb/", "/api/cuenta/", "/api/tarjeta/", "/api/cobranza/"];
+// /api/solicitud-credito/auth/logout: cerrar sesión cierra también Solicitud de crédito.
+const PUENTES = ["/api/core/coredb/", "/api/cuenta/", "/api/tarjeta/", "/api/cobranza/", "/api/solicitud-credito/auth/logout"];
 const scripts = () => readdirSync(JS).filter((f) => f.endsWith(".js")).map((f) => [f, readFileSync(join(JS, f), "utf8")] as const);
 
 describe("Home Banking (K-5)", () => {
