@@ -184,6 +184,12 @@ curl -s -X POST $BUS/bus/billetera/api/qr/<id_qr>/pagar -H "X-Bus-Token: $BT" -H
 - **Resultado:** tarjeta **BLOQUEADA**. El cajero ya no la acepta: `POST /api/validar-pin` responde 400 `ERR-ATM-TARJETA-NO-OPERATIVA`. El desbloqueo no se hace en TARJETAS ni en el Home Banking (403): lo hace Seguridad.
 - **Quién entra al Home Banking:** un usuario del banco con su clave de COREDB, que escribe el código del cliente que atiende (decisión 14 de [`decisiones-del-equipo.md`](decisiones-del-equipo.md)). Que entre el propio cliente sigue siendo una pregunta del equipo.
 
+### 7b. Desbloquear la tarjeta (personal autorizado)
+
+- **Pantalla:** http://localhost:3000/tarjetas/desbloqueo, con un usuario OPERADOR o ADMINISTRADOR (decisión 22). Buscar por el código del cliente (o por el número de identificación de la tarjeta), «Revisar» la tarjeta BLOQUEADA: muestra el motivo («Bloqueo solicitado por el cliente en Home Banking»), quién la bloqueó y cuándo. Escribir el motivo del desbloqueo, marcar «Verifiqué la identidad del titular…», «Revisar desbloqueo» y, en la confirmación, escribir los últimos 4 dígitos de la tarjeta y «Desbloquear tarjeta».
+- **Petición:** `POST /api/seguridad/tarjetas/{id}/desbloqueo` `{"motivo":"…"}` (puente del frontend → Bus → Seguridad → COREDB, que ejecuta `tarjetas.desbloquear_tarjeta` con la cuenta `bna_seguridad_user`).
+- **Resultado:** tarjeta **ACTIVA** y un comprobante con los datos de la base: número de operación (el registro del historial), fecha y hora, estado anterior, motivo y quién desbloqueó. Queda en la bitácora (`DESBLOQUEAR_TARJETA`, con la persona como actor). El cajero vuelve a aceptar la tarjeta. Otro rol (asesor, analista, auditor) ve al entrar que la pantalla no es para él.
+
 ### 8. Comprobar en COREDB
 
 Con curl (los ejemplos de arriba) o con el script, que lo comprueba todo:

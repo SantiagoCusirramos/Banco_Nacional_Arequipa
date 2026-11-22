@@ -600,6 +600,49 @@ def flujo():
     paso(f"TARJETAS: emisión a {titular} (no a un cliente OBSERVADO), repetición con la misma llave "
          "sin duplicar, 409 con la misma llave y otra cuenta, activación, bloqueo, desbloqueo rechazado y tarjetas del cliente")
 
+    # ── Desbloqueo por la pantalla del portal (/tarjetas/desbloqueo): un operador, por el puente
+    # /api/seguridad del frontend → Bus → Seguridad → COREDB con la cuenta bna_seguridad. ──
+    operador_desbloqueo = "opd" + uuid.uuid4().hex[:12]
+    clave_desbloqueo = "clave-" + uuid.uuid4().hex
+    coredb("POST", "/coredb/usuarios", 201, {"username": operador_desbloqueo, "nombre": "Operador de desbloqueo",
+                                             "password": clave_desbloqueo, "rol": "OPERADOR"}, token)
+    token_desbloqueo = coredb("POST", "/coredb/auth/login", 200,
+                              {"username": operador_desbloqueo, "password": clave_desbloqueo})["access_token"]
+    pantalla = f"{FRONTEND}/api/seguridad"
+    estado, lista = pedir("GET", f"{pantalla}/tarjetas?cod_cliente={titular}", token=token_desbloqueo)
+    exigir(estado == 200 and tarjeta in [t["id_tarjeta"] for t in lista],
+           f"Pantalla de desbloqueo, tarjetas del cliente: {estado} {lista}")
+    estado, ficha = pedir("GET", f"{pantalla}/tarjetas/{tarjeta}", token=token_desbloqueo)
+    exigir(estado == 200 and ficha["desbloqueable"] is True and ficha["bloqueo"]
+           and ficha["bloqueo"]["motivo"] == "Bloqueo solicitado por el cliente en Home Banking",
+           f"La pantalla debía mostrar el motivo del bloqueo del Home Banking: {estado} {ficha}")
+    # El puente no deja pasar lo demás de Seguridad.
+    estado, _ = pedir("GET", f"{pantalla}/auditoria", token=token)
+    exigir(estado == 404, f"El puente de Seguridad no debía dar la bitácora: {estado}")
+    estado, desbloqueo = pedir("POST", f"{pantalla}/tarjetas/{tarjeta}/desbloqueo",
+                               {"motivo": "El titular se presentó con su DNI en agencia"}, token_desbloqueo)
+    cambio = (desbloqueo.get("cambio") if isinstance(desbloqueo, dict) else None) or {}
+    exigir(estado == 200 and desbloqueo["estado_tarjeta"] == "ACTIVA" and cambio.get("estado_anterior") == "BLOQUEADA"
+           and cambio.get("origen") == "SEGURIDAD" and cambio.get("actor") == operador_desbloqueo
+           and cambio.get("id_historial"), f"Desbloqueo por la pantalla: {estado} {desbloqueo}")
+    estado, ficha = pedir("GET", f"{pantalla}/tarjetas/{tarjeta}", token=token_desbloqueo)
+    exigir(estado == 200 and ficha["desbloqueable"] is False
+           and ficha["historial"][0]["id_historial"] == cambio["id_historial"],
+           f"El comprobante debía ser el último registro del historial: {estado} {ficha}")
+    # El cajero vuelve a aceptarla: el PIN abre sesión y muestra el saldo (los 10.00 siguen retenidos).
+    estado, respuesta = pedir("POST", f"{atm_base}/validar-pin",
+                              {"id_tarjeta": tarjeta, "pin": "4821", "id_terminal": "DEV-ATM-01"},
+                              token, cabeceras={"X-Idempotency-Key": str(uuid.uuid4())})
+    exigir(estado == 200 and respuesta["data"]["resultado"] == "EXITOSO" and respuesta["data"]["token_sesion"],
+           f"El cajero debía aceptar la tarjeta desbloqueada: {estado} {respuesta}")
+    sesion_atm = {"X-ATM-Sesion": respuesta["data"]["token_sesion"]}
+    mostrado = saldo_atm()
+    exigir(mostrado == [(cuenta_tarjeta, "****" + cuenta_tarjeta[-4:], "20.00")],
+           f"El cajero debía mostrar el saldo de la tarjeta desbloqueada: {mostrado}")
+    paso(f"Pantalla de desbloqueo: {operador_desbloqueo} (OPERADOR) ve el motivo del bloqueo del Home Banking, "
+         "desbloquea por el puente del portal (comprobante = historial de la base) y el cajero vuelve a aceptar "
+         "la tarjeta (PIN y saldo)")
+
     # ── EVALUACIÓN: expediente de SOL → evaluación → decisión, todo en COREDB ──
     exigir(TOKEN_SOL_EVALUACION, "Falta EVALUACION_TOKEN_SOL para enviar el expediente a Evaluación")
     base = EVALUACION + "/eva"
@@ -1090,7 +1133,8 @@ def flujo():
     exigir(estado == 200 and respuesta["data"]["saldo_disponible"] == "350.00",
            f"Puente a CUENTAS: {estado} {respuesta}")
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/tarjeta/{tarjeta}", token=token)
-    exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "BLOQUEADA",
+    # ACTIVA: la desbloqueó la pantalla de desbloqueo, después del bloqueo del Home Banking.
+    exigir(estado == 200 and respuesta["data"]["estado_tarjeta"] == "ACTIVA",
            f"Puente a TARJETAS: {estado} {respuesta}")
     estado, respuesta = pedir("GET", f"{FRONTEND}/api/captacion/casos/{caso}", token=token)
     exigir(estado == 200 and respuesta["data"]["cod_cliente"] == cod_cliente,
@@ -1276,15 +1320,13 @@ def flujo():
     paso(f"SEGURIDAD: {operador} abre un incidente P2 (SLA 30/240 min), no puede saltar de ABIERTO a RESUELTO, y lo "
          "lleva a EN_PROGRESO, RESUELTO con resolución y CERRADO")
 
-    desbloqueo = seguridad("POST", f"/tarjetas/{tarjeta}/desbloqueo", 200,
-                           {"motivo": "El cliente confirmó su identidad"}, token_op)
-    exigir(desbloqueo["estado_tarjeta"] == "ACTIVA", f"Desbloqueo por Seguridad: {desbloqueo}")
+    # La tarjeta que desbloqueó la pantalla: otra vez da 409, y la bitácora tiene un solo desbloqueo.
     seguridad("POST", f"/tarjetas/{tarjeta}/desbloqueo", 409, {"motivo": "Otra vez"}, token_op)
     eventos = coredb("GET", f"/coredb/auditoria?accion=DESBLOQUEAR_TARJETA&id_entidad={tarjeta}", 200, token=token)
-    exigir([e["actor"] for e in eventos] == [operador],
-           f"El desbloqueo debía quedar en la bitácora a nombre de {operador}: {eventos}")
-    paso(f"SEGURIDAD: {operador} desbloquea la tarjeta que TARJETAS no puede desbloquear (ACTIVA, origen SEGURIDAD, "
-         "actor en la bitácora); desbloquearla otra vez da 409")
+    exigir([e["actor"] for e in eventos] == [operador_desbloqueo],
+           f"El desbloqueo debía quedar en la bitácora a nombre de {operador_desbloqueo}: {eventos}")
+    paso(f"SEGURIDAD: el desbloqueo de la pantalla quedó en la bitácora a nombre de {operador_desbloqueo} "
+         "(DESBLOQUEAR_TARJETA, una sola vez); desbloquearla otra vez da 409")
 
     seguridad("POST", "/auditoria/sellos", 200, token_persona=token)
     verificacion = seguridad("GET", "/auditoria/verificar", 200, token_persona=token)
