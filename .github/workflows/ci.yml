@@ -32,16 +32,22 @@ jobs:
           fi
 
       - name: Todas las suites y el flujo
+        env:
+          BNA_PROYECTO: bna-ci
         run: ./bna test
 
-      # ./bna test muestra el estado y los registros si algo falla, y elimina lo que levantó.
-      - name: No quedan contenedores ni volúmenes del producto
+      # ./bna test muestra el estado y los registros si algo falla, y elimina lo que levantó:
+      # contenedores, redes y volúmenes de su proyecto y sus etiquetas de imagen.
+      - name: No quedan contenedores, volúmenes ni imágenes de la corrida
         if: always()
         run: |
-          sobra="$(docker ps -aq --filter label=com.docker.compose.project=bna; docker volume ls -q --filter label=com.docker.compose.project=bna)"
+          sobra="$(docker ps -aq --filter label=com.docker.compose.project=bna-ci
+            docker volume ls -q --filter label=com.docker.compose.project=bna-ci
+            docker network ls -q --filter label=com.docker.compose.project=bna-ci
+            docker image ls -q --filter 'reference=bna/*:bna-ci')"
           if [ -n "$sobra" ]; then
-            echo "::error::./bna test dejó contenedores o volúmenes:"
+            echo "::error::./bna test dejó contenedores, volúmenes, redes o imágenes:"
             echo "$sobra"
-            docker compose down -v || true
+            docker compose -p bna-ci down -v || true
             exit 1
           fi

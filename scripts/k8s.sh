@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 # Despliegue del producto en un clúster local de kind. Uso: ./bna k8s-up | k8s-smoke | k8s-ps | k8s-down
-# Requiere Docker, kind y kubectl. Solo toca el clúster `bna` que crea este script:
-# toda orden de kubectl lleva su contexto.
+# Requiere Docker, kind y kubectl. Solo toca el clúster que crea este script, con el nombre del
+# proyecto (BNA_PROYECTO, por omisión bna): toda orden de kubectl lleva su contexto.
+# El clúster `bna` publica los NodePort en 127.0.0.1 (k8s/kind-config.yaml); uno con otro nombre
+# no publica puertos, para que varios convivan: el flujo corre dentro del clúster igual.
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$RAIZ"
 
-CLUSTER=bna
+CLUSTER="${BNA_PROYECTO:-bna}"
 CONTEXTO="kind-$CLUSTER"
 RED=kind
 NS=bna
-IMAGENES=(bna/core-db:local bna/coredb:local bna/backend:local
-          bna/sol:local bna/seguridad:local bna/frontend:local bna/billetera:local)
+# Etiqueta de las imágenes de compose.yaml; los manifiestos dicen :local y se cambia al aplicar.
+ETIQUETA="${BNA_ETIQUETA_LOCAL:-local}"
+IMAGENES=()
+for nombre in core-db coredb backend sol seguridad frontend billetera; do
+  IMAGENES+=("bna/$nombre:$ETIQUETA")
+done
 DESPLIEGUES=(db coredb cuentas tarjetas sol evaluacion desembolso cobranza captacion seguridad bus frontend)
 ESPERA="${BNA_ESPERA_SEGUNDOS:-600}"
 
@@ -81,14 +87,20 @@ subir() {
   scripts/generar_env.sh "$RAIZ"
   echo "Construyendo las imágenes..."
   docker compose build -q
-  if ! hay_cluster; then
+  if hay_cluster; then
+    :
+  elif [ "$CLUSTER" = bna ]; then
     kind create cluster --config k8s/kind-config.yaml --wait 180s
+  else
+    kind create cluster --name "$CLUSTER" --wait 180s
   fi
   echo "Cargando las imágenes en el clúster..."
   kind load docker-image "${IMAGENES[@]}" --name "$CLUSTER"
   k apply -f k8s/base/namespace.yaml >/dev/null
   secreto
-  k apply -k k8s/overlays/local
+  kubectl kustomize k8s/overlays/local \
+    | sed -E "s#(image: bna/[a-z-]+):local\$#\\1:$ETIQUETA#" \
+    | k apply -f -
   local despliegue
   for despliegue in "${DESPLIEGUES[@]}"; do
     if ! k -n "$NS" rollout status "deployment/$despliegue" --timeout="${ESPERA}s"; then
@@ -96,6 +108,12 @@ subir() {
       exit 1
     fi
   done
+  if [ "$CLUSTER" != bna ]; then
+    echo
+    echo "Producto desplegado en el clúster $CLUSTER (kind), sin puertos en esta máquina."
+    echo "Para comprobarlo: BNA_PROYECTO=$CLUSTER ./bna k8s-smoke"
+    return 0
+  fi
   cat <<TEXTO
 
 Producto desplegado en el clúster $CLUSTER (kind).

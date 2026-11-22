@@ -171,7 +171,7 @@ Los archivos `.env.example` dentro de `backend/` y `frontend/` sirven para ejecu
 
 Corre, en contenedores, las suites de CUENTAS, TARJETAS, ATM, BILLETERA (Chaski), el Bus de Servicios (y la comprobación de que ningún módulo tiene la dirección directa de COREDB), SOL, Evaluación, Desembolso, COBRANZA CAPTACION y Seguridad (contra COREDB y la base integrada nuevas, a través de un Bus de pruebas; CAPTACION también con el adaptador real de SOL), COREDB (unitarias, contratos de CUENTAS y TARJETAS, y contra un MySQL nuevo), el despliegue de la base integrada, el aviso de push directo, el lint y las pruebas del frontend, y al final levanta el producto y ejecuta el flujo de `./bna smoke`. Termina con un resumen por suite y con un código de salida distinto de cero si alguna falla.
 
-Si el producto no estaba levantado, `./bna test` elimina al terminar los contenedores y volúmenes que creó. Si ya estaba levantado, lo deja en marcha con sus datos.
+Cada corrida de `./bna test` usa su propio proyecto de Compose (`bna-prueba-<rama>-<pid>`, o el de `BNA_PROYECTO`), sus propias etiquetas de imagen y ningún puerto de la máquina, y al terminar elimina sus contenedores, redes, volúmenes y etiquetas. No toca el producto de `./bna up` (proyecto `bna`): pueden estar los dos a la vez, y también varias corridas desde distintos worktrees (ver [Trabajar en paralelo](CONTRIBUTING.md#trabajar-en-paralelo)).
 
 `./bna smoke` recorre, en este orden:
 
