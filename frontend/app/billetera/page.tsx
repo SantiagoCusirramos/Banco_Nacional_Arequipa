@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ClaveNueva } from "../components/ClaveNueva";
 import Link from "next/link";
 import * as QRCode from "qrcode";
 import { afiliar, mensajeDeError, registrarComercio, type Afiliacion, type Comercio } from "@/lib/billetera";
@@ -37,7 +38,6 @@ export default function BilleteraPage() {
   // Afiliación: el cliente ya existe (lo registra Captación) y tiene una cuenta individual en soles.
   const [codCliente, setCodCliente] = useState("");
   const [numCuenta, setNumCuenta] = useState("");
-  const [pin, setPin] = useState("");
   const [afiliado, setAfiliado] = useState<Afiliacion | null>(null);
 
   // Comercio: recibe pagos con QR en su cuenta en soles.
@@ -79,20 +79,26 @@ export default function BilleteraPage() {
     }
   }
 
-  function enviarAfiliacion(e: React.FormEvent) {
-    e.preventDefault();
-    void ejecutar(async () => {
-      const r = await afiliar({ cod_cliente: codCliente.trim().toUpperCase(), num_cuenta: numCuenta.trim(), pin });
-      setPin(""); // el PIN solo vive en el campo
-      setAfiliado(r);
-      setNotice({
-        text: r.nueva
-          ? `Cliente ${r.cod_cliente} afiliado a Chaski. Ya puede entrar a la app con su celular y el PIN.`
-          : `El cliente ${r.cod_cliente} ya estaba afiliado: se actualizó su PIN o su cuenta y la billetera quedó ${r.estado}.`,
-        error: false,
-      });
+  // El PIN lo genera el sistema o lo escribe la clienta (ClaveNueva), nunca el operador.
+  async function afiliarConPin(pin: string) {
+    const cod = codCliente.trim().toUpperCase(), cuenta = numCuenta.trim();
+    if (!cod || !cuenta) throw new Error("Escribe el código del cliente y la cuenta antes de afiliar.");
+    setNotice(null);
+    let r: Afiliacion;
+    try {
+      r = await afiliar({ cod_cliente: cod, num_cuenta: cuenta, pin });
+    } catch (err) {
+      throw new Error(mensajeDeError(err));
+    }
+    setAfiliado(r);
+    setNotice({
+      text: r.nueva
+        ? `Cliente ${r.cod_cliente} afiliado a Chaski. Ya puede entrar a la app con su celular y el PIN.`
+        : `El cliente ${r.cod_cliente} ya estaba afiliado: se actualizó su PIN o su cuenta y la billetera quedó ${r.estado}.`,
+      error: false,
     });
   }
+
 
   function enviarComercio(e: React.FormEvent) {
     e.preventDefault();
@@ -167,7 +173,7 @@ export default function BilleteraPage() {
                   </p>
                 </div>
               </div>
-              <form onSubmit={enviarAfiliacion} className="sol-form-grid" style={{ marginTop: "20px" }}>
+              <div className="sol-form-grid" style={{ marginTop: "20px" }}>
                 <div className="sol-field">
                   <label htmlFor="af-cliente">Código del cliente</label>
                   <input id="af-cliente" value={codCliente} onChange={(e) => setCodCliente(e.target.value)} required maxLength={12} placeholder="CLI000000001" />
@@ -176,17 +182,11 @@ export default function BilleteraPage() {
                   <label htmlFor="af-cuenta">Número de cuenta en soles</label>
                   <input id="af-cuenta" value={numCuenta} onChange={(e) => setNumCuenta(e.target.value)} required maxLength={20} placeholder="Cuenta del cliente" />
                 </div>
-                <div className="sol-field">
-                  <label htmlFor="af-pin">PIN de la billetera (6 dígitos)</label>
-                  <input id="af-pin" type="password" inputMode="numeric" autoComplete="new-password" value={pin}
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))} required pattern="[0-9]{6}" placeholder="••••••" />
-                </div>
-                <div style={{ gridColumn: "1 / -2", marginTop: "10px" }}>
-                  <button className="sol-button primary" type="submit" disabled={loading}>
-                    {loading ? "Afiliando..." : "Afiliar a Chaski"}
-                  </button>
-                </div>
-              </form>
+              </div>
+              <div style={{ marginTop: "16px" }}>
+                <ClaveNueva digitos={6} nombre="PIN de Chaski" asignar={afiliarConPin}
+                  textoGenerar="Generar PIN y afiliar" textoAsignar="Afiliar a Chaski" />
+              </div>
               {afiliado && (
                 <div style={recuadro}>
                   <h3>Billetera de {afiliado.cod_cliente}</h3>
