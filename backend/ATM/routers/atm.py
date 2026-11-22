@@ -17,7 +17,7 @@ from ATM.respuestas import error, exito
 from ATM.services import atm as svc
 from ATM.schemas.atm import (
     AperturaIn, AutorizacionOut, AutorizarIn, ConfirmarIn, ConfigOut, EstadoOut,
-    ExtornarIn, SaldoOut, ValidarPinIn, ValidarPinOut,
+    ExtornarIn, IdentificarIn, SaldoOut, ValidarPinIn, ValidarPinOut,
 )
 
 router = APIRouter(prefix="/api", tags=["ATM"])
@@ -77,6 +77,27 @@ def config(request: Request):
 @router.get("/estado")
 def estado(request: Request):
     return exito(request, _estado_cajero())
+
+
+# ── Identificar la tarjeta (en vez del UUID) ─────────────────────────────
+
+@router.post("/identificar-tarjeta")
+def identificar_tarjeta(
+    request: Request,
+    datos: IdentificarIn,
+    core: CoreClient = Depends(get_core_client),
+    cid: str = Depends(correlation_id),
+    token: str | None = Depends(autorizacion),
+):
+    """Documento del titular + 4 últimos dígitos → id de la tarjeta. Exige el token del operador
+    que abrió el cajero (busca con sus permisos); no abre sesión: después se pide el PIN."""
+    if not token:
+        return error(request, 401, "ERR-ATM-TOKEN-REQUERIDO", "Se requiere la credencial del operador del cajero.")
+    try:
+        return exito(request, svc.identificar_tarjeta(core, datos, cid, token).model_dump())
+    except Exception as e:
+        status, code = traducir(getattr(e, "code", "DESCONOCIDO"), getattr(e, "status_code", 500))
+        return error(request, status, code, getattr(e, "message", str(e)), getattr(e, "details", {}))
 
 
 # ── Validar PIN ──────────────────────────────────────────────────────────

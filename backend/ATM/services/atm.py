@@ -158,3 +158,29 @@ async def consultar_movimientos(core: CoreClient, num_cuenta: str,
         authorization=authorization,
     )
     return resp
+
+# Mismo mensaje si el documento no existe o si los dígitos no coinciden: el cajero no dice qué
+# documentos tienen tarjeta. El PIN (tres intentos) sigue siendo lo que autoriza.
+NO_RECONOCIDA = ("ERR-ATM-TARJETA-NO-RECONOCIDA",
+                 "No reconocimos la tarjeta. Revisa el documento y los 4 últimos dígitos.", 404)
+_PREFERENCIA = {"ACTIVA": 0, "BLOQUEADA": 1, "RETENIDA": 1}
+
+
+def identificar_tarjeta(core, datos, cid: str, token: str):
+    """La tarjeta del titular con ese documento exacto y esos 4 últimos dígitos (la activa si
+    hay más de una). Con el token del operador que abrió el cajero."""
+    from ATM.exceptions import AtmError
+    from ATM.schemas.atm import IdentificarOut
+
+    documento = datos.documento.upper()
+    clientes = {s.get("cod_cliente") for s in core.buscar_por_documento(documento, token, cid)
+                if isinstance(s, dict) and str(s.get("numero_documento", "")).upper() == documento and s.get("cod_cliente")}
+    candidatas = []
+    for cod in sorted(clientes):
+        for t in core.tarjetas_del_cliente(cod, token, cid):
+            if isinstance(t, dict) and t.get("ultimos4") == datos.ultimos4 and t.get("id_tarjeta"):
+                candidatas.append(t)
+    if not candidatas:
+        raise AtmError(*NO_RECONOCIDA)
+    elegida = min(candidatas, key=lambda t: _PREFERENCIA.get(t.get("estado_tarjeta"), 2))
+    return IdentificarOut(id_tarjeta=elegida["id_tarjeta"], ultimos4=elegida["ultimos4"])

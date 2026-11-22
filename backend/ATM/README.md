@@ -39,6 +39,7 @@ solo de las cuentas que mostró su consulta de saldo. Un token del personal sin 
 0. **Apertura**: el operador del banco abre el cajero (`POST /api/apertura`); la pantalla guarda su token
    solo en la pestaña (`sessionStorage`) y lo envía en `Authorization` en cada llamada.
 
+0. **Insertar la tarjeta**: la pantalla pide el documento y los 4 últimos dígitos; `POST /api/identificar-tarjeta` devuelve el id de la tarjeta (ver `CONTRATO.md` §3.0). Ya no se escribe el UUID.
 1. **Validar PIN**: `POST /api/validar-pin` con `{id_tarjeta, pin, id_terminal}` (`id_tarjeta` es el UUID que
    da TARJETAS al emitir la tarjeta)
    → llama a `TARJETAS: POST /api/v1/tarjetas/{id}/credenciales/PIN_ATM/validacion`

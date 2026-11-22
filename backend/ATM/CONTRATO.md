@@ -35,6 +35,21 @@
 
 ## 3. Rutas de la API (exigen token COREDB)
 
+### 3.0 Identificar la tarjeta: `POST /api/identificar-tarjeta`
+
+```json
+{"documento": "45871236", "ultimos4": "3886"}
+```
+
+Lo que el chip daría en un cajero real: el documento del titular y los 4 últimos dígitos. Con el
+token del operador que abrió el cajero, busca al cliente por su documento exacto (COREDB, el
+documento en el cuerpo) y sus tarjetas (TARJETAS); con varias, la ACTIVA. Responde
+`{"id_tarjeta": "...", "ultimos4": "3886"}`, o 404 `ERR-ATM-TARJETA-NO-RECONOCIDA` con el mismo
+mensaje si el documento no existe o los dígitos no coinciden. No abre sesión: el PIN (§3.1)
+sigue siendo lo que autoriza. La búsqueda es la de Captación (`/coredb/captacion/solicitantes/busqueda`):
+encuentra a los clientes dados de alta por Captación, el único camino del portal; uno registrado
+directo en COREDB (scripts, datos de desarrollo) no se reconoce por documento.
+
 ### 3.1 Validar PIN: `POST /api/validar-pin`
 
 ```json
