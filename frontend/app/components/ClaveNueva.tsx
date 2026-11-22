@@ -95,11 +95,11 @@ export function ClaveNueva({ digitos, nombre, asignar, textoGenerar = "Generar y
       )}
 
       {paraEntregar && (
-        <section role="region" aria-labelledby={`${id}-titulo`} className="sol-card" style={{ marginTop: "12px", borderColor: "#c9a227" }}>
+        <section role="region" aria-labelledby={`${id}-titulo`} className="sol-card" style={{ marginTop: "12px", borderColor: "#c9a227", padding: "16px 24px" }}>
           <h3 id={`${id}-titulo`}>{nombre} para entregar</h3>
           <p style={{ fontFamily: "monospace", fontSize: "28px", letterSpacing: "6px", margin: "8px 0" }}>{paraEntregar}</p>
           <p><strong>No se volverá a mostrar.</strong> Entrégaselo a la clienta en privado; tú no lo anotes.</p>
-          <button type="button" className="sol-button" onClick={() => setParaEntregar(null)}>Ya lo entregué</button>
+          <button type="button" className="sol-button primary" onClick={() => setParaEntregar(null)}>Ya lo entregué</button>
         </section>
       )}
     </div>
