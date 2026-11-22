@@ -18,6 +18,7 @@ import {
   td,
   th,
 } from "@/app/desembolso/_componentes/ui";
+import { etiquetaSolicitud } from "@/lib/continuidad";
 import { api } from "@/lib/desembolso/api";
 import { ETIQUETA_ESTADO, MOTIVOS_CUENTA, dinero, fecha, porcentaje } from "@/lib/desembolso/formato";
 import { useSesion } from "@/lib/desembolso/sesion";
@@ -111,7 +112,7 @@ function ResumenCredito({ orden }: { orden: OrdenDetalle }) {
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-3">
         <Dato etiqueta="Cliente">{orden.codCliente}</Dato>
         <Dato etiqueta="Solicitud">
-          <span className="font-mono text-xs">{orden.idSolicitud}</span>
+          <span className="font-mono text-xs">{etiquetaSolicitud(orden)}</span>
         </Dato>
         <Dato etiqueta="Plazo y tasa">
           {orden.plazoMeses} meses{orden.calendario ? ` · ${porcentaje(orden.calendario.tasa)}` : ""}

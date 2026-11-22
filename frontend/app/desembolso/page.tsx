@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { VerificarDocumento } from "@/app/desembolso/_componentes/Identidad";
 import { Alerta, AlertaError, Boton, Encabezado, FilaVacia, Insignia, InsigniaEstado, Tarjeta, estiloEntrada, td, th } from "@/app/desembolso/_componentes/ui";
+import { etiquetaSolicitud } from "@/lib/continuidad";
 import { api, nuevaClave } from "@/lib/desembolso/api";
 import { ETIQUETA_ESTADO, MOTIVOS_CUENTA, dinero, fecha } from "@/lib/desembolso/formato";
 import { useSesion } from "@/lib/desembolso/sesion";
@@ -137,7 +138,7 @@ export default function Desembolsar() {
                   return (
                     <tr key={a.idEvaluacion} className="align-top">
                       <td className={td}>
-                        <p className="font-mono text-xs text-slate-900">{a.idSolicitud}</p>
+                        <p className="font-mono text-xs text-slate-900">{etiquetaSolicitud(a)}</p>
                         <p className="text-xs text-slate-500">Ronda {a.ronda}</p>
                       </td>
                       <td className={`${td} tabular text-right font-semibold text-slate-900`}>{dinero(a.monto, a.moneda)}</td>

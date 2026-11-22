@@ -6,6 +6,7 @@ import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
 import { AvisoPermiso } from "@/app/components/AvisoPermiso";
 import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import { etiquetaSolicitud } from "@/lib/continuidad";
 import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import {
   ESTADOS, RIESGOS, bandeja, conMoneda, decidir, evaluar, fecha, fechaHora, mensajeDeError, porcentaje,
@@ -164,7 +165,7 @@ export default function EvaluacionPage() {
     { id: "bandeja", etiqueta: "Bandeja de solicitudes", icono: "bandeja" },
     { id: "resultados", etiqueta: "Resultados para Solicitud", icono: "enviar" },
   ];
-  const titulo = detalle ? `Solicitud ${detalle.idSolicitud}` : navegacion.find((n) => n.id === vista)?.etiqueta;
+  const titulo = detalle ? etiquetaSolicitud(detalle) : navegacion.find((n) => n.id === vista)?.etiqueta;
   const conteo = (estado: string) => (items ?? []).filter((s) => s.estado === estado).length;
 
   if (cargandoPerfil) return <main className="sol-main"><p>Cargando…</p></main>;
@@ -313,7 +314,7 @@ export default function EvaluacionPage() {
                           <tr key={s.idSolicitud}>
                             <td>
                               <span className="sol-record">
-                                <strong>{s.idSolicitud}</strong>
+                                <strong>{etiquetaSolicitud(s)}</strong>
                                 <small>Ronda {s.ronda ?? "—"} · versión {s.versionSolicitud}</small>
                               </span>
                             </td>
@@ -624,7 +625,7 @@ function Resultados({ resultados }: { resultados: { configurado: boolean; ventan
           <tbody>
             {resultados?.items.map((m) => (
               <tr key={m.idOperacion}>
-                <td>{m.idSolicitud}</td>
+                <td>{etiquetaSolicitud(m)}</td>
                 <td>{m.ronda}</td>
                 <td><Estado valor={m.decision} /></td>
                 <td>{m.observaciones}</td>
