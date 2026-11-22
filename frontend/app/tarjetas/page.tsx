@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { ClaveNueva } from "../components/ClaveNueva";
 import {
   BINES, CANALES, CODIGOS_RESPUESTA, DIGITOS_CLAVE, ESTADOS_PEDIBLES, OPERACIONES, TIPOS_CLAVE,
   autorizarOperacion, cambiarEstado, emitirTarjeta, extornarAutorizacion, mensajeDeError, registrarClave,
@@ -345,18 +346,20 @@ export default function TarjetasPage() {
     });
   }
 
-  function guardarClave(e: React.FormEvent) {
-    e.preventDefault();
+  // Asignar: el PIN lo genera el sistema o lo escribe la clienta (ClaveNueva), nunca el empleado.
+  async function asignarClave(valor: string) {
     const id = idClave.trim();
-    if (!id) return;
-    const valor = clave;
-    setClave("");
-    void ejecutar(async () => {
+    if (!id) throw new Error("Falta el identificador de la tarjeta.");
+    setNotice(null);
+    try {
       await registrarClave(id, tipoClave, valor);
-      setValidacion(null);
-      const nombre = tipoClave === "PIN_ATM" ? "PIN registrado" : "Clave web registrada";
-      setNotice({ text: `${nombre}. Los intentos fallidos volvieron a cero.`, error: false });
-    });
+    } catch (err) {
+      if (esSesionInvalida(err)) setSinSesion(true);
+      throw new Error(mensajeDeError(err));
+    }
+    setValidacion(null);
+    const nombre = tipoClave === "PIN_ATM" ? "PIN registrado" : "Clave web registrada";
+    setNotice({ text: `${nombre}. Los intentos fallidos volvieron a cero.`, error: false });
   }
 
   function comprobarClave() {
@@ -754,10 +757,10 @@ export default function TarjetasPage() {
               <div className="sol-card-title">
                 <div>
                   <h2>Claves de la tarjeta</h2>
-                  <p>Asigna o comprueba el PIN del cajero o la clave web. Al tercer intento fallido seguido la tarjeta se bloquea.</p>
+                  <p>Asigna o comprueba el PIN del cajero o la clave web. El sistema lo genera o lo escribe la clienta: tú no lo eliges. Al tercer intento fallido seguido la tarjeta se bloquea.</p>
                 </div>
               </div>
-              <form onSubmit={guardarClave} className="sol-form-grid" style={{ padding: "0 24px 24px" }}>
+              <form onSubmit={(e) => e.preventDefault()} className="sol-form-grid" style={{ padding: "0 24px 24px" }}>
                 <div className="sol-field">
                   <label htmlFor="clave-id">Identificador de la tarjeta</label>
                   <input id="clave-id" value={idClave} onChange={(e) => setIdClave(e.target.value)} required />
@@ -781,16 +784,17 @@ export default function TarjetasPage() {
                   </select>
                 </div>
                 <div className="tj-item-actions" style={{ gridColumn: "1 / -1", maxWidth: "420px" }}>
-                  <button className="sol-button primary" type="submit" disabled={loading}>
-                    <Icono nombre="llave" />
-                    Asignar
-                  </button>
                   <button className="sol-button secondary" type="button" disabled={loading || clave.length !== digitos} onClick={comprobarClave}>
                     <Icono nombre="activa" />
                     Comprobar
                   </button>
                 </div>
               </form>
+              <div style={{ padding: "0 24px 24px" }}>
+                <h3 style={{ margin: "0 0 8px" }}>Asignar {tipoClave === "PIN_ATM" ? "el PIN del cajero" : "la clave web"}</h3>
+                <ClaveNueva key={tipoClave} digitos={digitos} nombre={tipoClave === "PIN_ATM" ? "PIN del cajero" : "Clave web"}
+                  asignar={asignarClave} />
+              </div>
               {validacion && (
                 <div className={`tj-resultado ${validacion.resultado === "EXITOSO" ? "ok" : "mal"}`} role="status" aria-label="Resultado de la validación">
                   <div className="tj-resultado-cabecera">
