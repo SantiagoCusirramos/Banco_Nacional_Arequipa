@@ -257,23 +257,29 @@ const Bus = (() => {
     }, "COBRANZA · CR-INT-08", { idempotencyKey });
   }
 
-  // Bitácora de COREDB (solo el administrador). No hay "resultado": cada evento es una acción hecha.
+  // Bitácora de COREDB (VER_AUDITORIA: administrador y auditor). Solo lo que COREDB guarda: fecha,
+  // módulo, acción, quién y sobre qué. No hay canal, IP ni «resultado»: cada evento es una acción hecha.
   async function consultarAuditoria(limit, filtros = {}) {
     const params = new URLSearchParams({ limite: String(Math.min(limit, 200)) });
     if (filtros.modulo) params.set("modulo", filtros.modulo);
     if (filtros.tipo) params.set("accion", filtros.tipo);
     const lista = await invocarAPI(`/api/core/coredb/auditoria?${params.toString()}`, null, "COREDB · auditoría", { method: "GET" }) || [];
     const eventos = lista.map(e => ({
-      idEvento: e.id_evento, fechaHora: e.fecha_hora, modulo: e.modulo, tipoEvento: e.accion,
-      usuario: e.actor, resultado: "OK", detalle: `${e.entidad} ${e.id_entidad}`,
-      canal: "-", ip: "-", uuid: e.correlation_id || "-"
+      idEvento: e.id_evento, fechaHora: e.fecha_hora, modulo: e.modulo, accion: e.accion,
+      usuario: e.actor, entidad: e.entidad, idEntidad: e.id_entidad
     }));
     return {
       total: eventos.length,
       eventos,
       modulos: [...new Set(eventos.map(e => e.modulo))],
-      tipos: [...new Set(eventos.map(e => e.tipoEvento))]
+      acciones: [...new Set(eventos.map(e => e.accion))]
     };
+  }
+
+  // Acciones del usuario que inició sesión (COREDB /auth/me).
+  async function misPermisos() {
+    const yo = await invocarAPI("/api/core/coredb/auth/me", null, "COREDB · perfil", { method: "GET" });
+    return (yo && yo.acciones) || [];
   }
 
   function constanciaUrl() {
@@ -294,6 +300,7 @@ const Bus = (() => {
     obtenerMontoAPagar,
     pagarCuota,
     consultarAuditoria,
+    misPermisos,
     constanciaUrl,
     nuevoIdempotencyKey: uuid
   };
