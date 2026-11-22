@@ -23,7 +23,7 @@ beforeEach(() => {
 async function datosDelCliente() {
   render(<BilleteraPage />);
   fireEvent.change(await screen.findByLabelText(/Código del cliente/), { target: { value: "cli000000001" } });
-  fireEvent.change(screen.getByLabelText(/Cuenta/, { selector: "#af-cuenta" }), { target: { value: "24233417472693" } });
+  fireEvent.change(screen.getByLabelText("Número de cuenta en soles"), { target: { value: "24233417472693" } });
 }
 
 it("PB-01 el operador ya no escribe el PIN: se genera, se afilia y se muestra una vez", async () => {

@@ -10,6 +10,9 @@ type Props = {
   nombre: string;
   /** Lo envía al servidor; si falla, lanza el error con el mensaje para mostrar. */
   asignar: (valor: string) => Promise<void>;
+  /** Texto de los botones (por omisión «Generar y asignar» y «Asignar»). */
+  textoGenerar?: string;
+  textoAsignar?: string;
 };
 
 type Modo = "generar" | "clienta";
@@ -18,7 +21,7 @@ type Modo = "generar" | "clienta";
  * Asignar un PIN sin que el empleado lo elija (hallazgo C6): por omisión el sistema lo genera y
  * se muestra una sola vez para entregarlo; o la clienta lo escribe dos veces en esta pantalla.
  */
-export function ClaveNueva({ digitos, nombre, asignar }: Props) {
+export function ClaveNueva({ digitos, nombre, asignar, textoGenerar = "Generar y asignar", textoAsignar = "Asignar" }: Props) {
   const id = useId();
   const [modo, setModo] = useState<Modo>("generar");
   const [valor, setValor] = useState("");
@@ -76,7 +79,7 @@ export function ClaveNueva({ digitos, nombre, asignar }: Props) {
 
       {modo === "generar" ? (
         <button type="button" className="sol-button primary" disabled={enviando} onClick={generar}>
-          {enviando ? "Asignando…" : "Generar y asignar"}
+          {enviando ? "Asignando…" : textoGenerar}
         </button>
       ) : (
         <form onSubmit={escrito} style={{ display: "grid", gap: "8px", maxWidth: "320px" }}>
@@ -87,7 +90,7 @@ export function ClaveNueva({ digitos, nombre, asignar }: Props) {
           <label htmlFor={`${id}-2`}>Repite el {nombre}</label>
           <input id={`${id}-2`} type="password" inputMode="numeric" autoComplete="off" value={repetido}
             onChange={(e) => setRepetido(soloDigitos(e.target.value))} maxLength={digitos} />
-          <button type="submit" className="sol-button primary" disabled={enviando}>Asignar</button>
+          <button type="submit" className="sol-button primary" disabled={enviando}>{textoAsignar}</button>
         </form>
       )}
 
