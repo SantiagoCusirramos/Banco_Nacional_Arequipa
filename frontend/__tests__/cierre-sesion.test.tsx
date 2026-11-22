@@ -12,7 +12,7 @@ vi.mock("@/lib/api", async (original) => ({
 }));
 import { api } from "@/lib/api";
 import { CLAVE_CIERRE, cerrarSesion, iniciarSesion, obtenerToken, obtenerUsuarioGuardado } from "@/lib/auth";
-import VigilanteSesion from "../app/_componentes/VigilanteSesion";
+import VigilanteSesion from "../app/components/VigilanteSesion";
 import SolicitudPage from "../app/solicitud-credito/page";
 
 const post = vi.mocked(api.post);
