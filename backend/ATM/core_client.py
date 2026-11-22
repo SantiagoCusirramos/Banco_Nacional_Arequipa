@@ -156,6 +156,20 @@ class CoreClient:
 
     # ── COREDB: apertura del cajero por el operador ─────────────────────
 
+    def buscar_por_documento(self, documento: str, authorization: str | None,
+                             correlation_id: str | None = None) -> list:
+        """POST /bus/coredb/coredb/captacion/solicitantes/busqueda: el documento va en el cuerpo
+        (en la URL quedaría en los registros de acceso). COREDB busca por parte del documento."""
+        return self._request("POST", "/bus/coredb/coredb/captacion/solicitantes/busqueda",
+                             json={"documento": documento, "con_cliente": True, "limite": 20},
+                             correlation_id=correlation_id, authorization=authorization)
+
+    def tarjetas_del_cliente(self, cod_cliente: str, authorization: str | None,
+                             correlation_id: str | None = None) -> list:
+        """GET /bus/tarjetas/api/v1/tarjetas/cliente/{cod_cliente}"""
+        return self._request("GET", f"/bus/tarjetas/api/v1/tarjetas/cliente/{cod_cliente}",
+                             correlation_id=correlation_id, authorization=authorization)
+
     def login(self, username: str, password: str, correlation_id: str | None = None) -> dict:
         return self._request("POST", "/bus/coredb/coredb/auth/login",
                              json={"username": username, "password": password}, correlation_id=correlation_id)
