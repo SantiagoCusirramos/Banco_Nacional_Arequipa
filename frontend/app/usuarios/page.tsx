@@ -29,7 +29,7 @@ function ClaveParaEntregar({ entrega, onListo }: { entrega: Entrega; onListo: ()
     }
   }
   return (
-    <section className="sol-card" role="region" aria-labelledby="titulo-clave" style={{ marginBottom: "24px", borderColor: "#c9a227" }}>
+    <section className="sol-card" role="region" aria-labelledby="titulo-clave" style={{ marginBottom: "24px", borderColor: "#c9a227", padding: "0 24px 24px" }}>
       <div className="sol-card-title">
         <div>
           <h2 id="titulo-clave">Contraseña inicial de {entrega.username}</h2>
@@ -43,7 +43,7 @@ function ClaveParaEntregar({ entrega, onListo }: { entrega: Entrega; onListo: ()
       <p role="note"><strong>No se volverá a mostrar.</strong> Si se pierde, usa «Renovar contraseña».</p>
       <div className="sol-actions" style={{ display: "flex", gap: "12px", marginTop: "12px" }}>
         <button type="button" className="sol-button secondary" onClick={copiar}>Copiar</button>
-        <button type="button" className="sol-button" onClick={onListo}>Ya la entregué</button>
+        <button type="button" className="sol-button primary" onClick={onListo}>Ya la entregué</button>
         {copiada && <span role="status">Copiada.</span>}
       </div>
     </section>
@@ -169,7 +169,7 @@ export default function UsuariosPage() {
               <p className="tj-sub">Altas del personal, roles y contraseñas. La contraseña inicial la genera el sistema y se muestra una sola vez.</p>
             </div>
             {puede && !formulario && (
-              <button type="button" className="sol-button" onClick={() => { setFormulario(true); setAviso(null); }}>Nuevo usuario</button>
+              <button type="button" className="sol-button primary" onClick={() => { setFormulario(true); setAviso(null); }}>Nuevo usuario</button>
             )}
           </div>
 
@@ -212,7 +212,7 @@ export default function UsuariosPage() {
                       {ROLES.map((r) => <option key={r} value={r}>{nombreRol(r)}</option>)}
                     </select>
                     <div style={{ display: "flex", gap: "12px" }}>
-                      <button type="submit" className="sol-button" disabled={enviando}>{enviando ? "Creando…" : "Crear usuario"}</button>
+                      <button type="submit" className="sol-button primary" disabled={enviando}>{enviando ? "Creando…" : "Crear usuario"}</button>
                       <button type="button" className="sol-button secondary" onClick={() => setFormulario(false)}>Cancelar</button>
                     </div>
                   </form>
@@ -281,7 +281,7 @@ export default function UsuariosPage() {
                 <h2 id="titulo-renovar">¿Renovar la contraseña de {porRenovar.username}?</h2>
                 <p>La actual dejará de servir. Verás una contraseña temporal para entregarle, y tendrá que cambiarla al entrar.</p>
                 <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
-                  <button type="button" className="sol-button" onClick={confirmarRenovacion}>Sí, renovar</button>
+                  <button type="button" className="sol-button primary" onClick={confirmarRenovacion}>Sí, renovar</button>
                   <button type="button" className="sol-button secondary" onClick={() => setPorRenovar(null)}>Cancelar</button>
                 </div>
               </div>
