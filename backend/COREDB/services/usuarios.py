@@ -47,33 +47,104 @@ def listar(db: Session, *, limite: int, offset: int) -> list[Usuario]:
     return db.query(Usuario).order_by(Usuario.username).offset(offset).limit(limite).all()
 
 
-def crear(
-    db: Session,
-    *,
-    username: str,
-    nombre: str,
-    password: str,
-    rol: str,
-    id_empleado: uuid.UUID | None,
-    actor: str,
-) -> Usuario:
+# Contraseña inicial o renovada: sin caracteres que se confunden al dictarla (0/O, 1/l/I).
+ALFABETO_CLAVE = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+LARGO_CLAVE = 12
+LARGO_MINIMO_CLAVE = 8
+
+
+def generar_clave() -> str:
+    """Contraseña temporal con al menos una mayúscula, una minúscula y un dígito."""
+    while True:
+        clave = "".join(secrets.choice(ALFABETO_CLAVE) for _ in range(LARGO_CLAVE))
+        if any(c.isupper() for c in clave) and any(c.islower() for c in clave) and any(c.isdigit() for c in clave):
+            return clave
+
+
+def _exigir_admitida(password: str) -> None:
     if not bcrypt_admite(password):
         raise ErrorCoreDb(
             "PASSWORD_NO_ADMITIDA",
             "La contraseña no puede superar 72 bytes ni contener caracteres inválidos.",
         )
+
+
+def crear(
+    db: Session,
+    *,
+    username: str,
+    nombre: str,
+    password: str | None,
+    rol: str,
+    id_empleado: uuid.UUID | None,
+    actor: str,
+) -> tuple[Usuario, str | None]:
+    """Crea a una persona. Sin `password`, COREDB genera la contraseña inicial, la devuelve una
+    sola vez (segundo valor) y la persona debe cambiarla antes de operar. Con `password`
+    (aprovisionamiento por scripts y pruebas) no se exige el cambio."""
+    clave_inicial = generar_clave() if password is None else None
+    password = clave_inicial or password
+    _exigir_admitida(password)
     id_usuario, hash_password = uuid.uuid4(), hash_bcrypt(password)
-    con_reintentos(
-        db,
-        lambda: llamar(
+
+    def _crear():
+        llamar(
             db,
             "core.crear_usuario",
             id_usuario, username, nombre, rol, hash_password,
             ALGORITMO_BCRYPT, VERSION_HASH_BCRYPT, id_empleado, True, actor,
+        )
+        if clave_inicial is not None:
+            llamar(db, "core.exigir_cambio_clave", id_usuario, actor, salidas=1)
+
+    con_reintentos(db, _crear, nombre="crear_usuario")
+    return obtener(db, id_usuario), clave_inicial
+
+
+def restablecer_clave(db: Session, id_usuario: uuid.UUID, *, actor: str) -> tuple[Usuario, str]:
+    """El administrador renueva la contraseña de una persona: la nueva se entrega una sola vez
+    y la persona debe cambiarla. La anterior deja de servir."""
+    usuario = obtener(db, id_usuario)
+    clave = generar_clave()
+    hash_password = hash_bcrypt(clave)
+    con_reintentos(
+        db,
+        lambda: llamar(
+            db, "core.restablecer_clave",
+            id_usuario, hash_password, ALGORITMO_BCRYPT, VERSION_HASH_BCRYPT, actor,
+            salidas=1,
         ),
-        nombre="crear_usuario",
+        nombre="restablecer_clave",
     )
-    return obtener(db, id_usuario)
+    db.refresh(usuario)
+    return usuario, clave
+
+
+def cambiar_clave_propia(
+    db: Session, id_usuario: uuid.UUID, *, actual: str, nueva: str, correlation_id: uuid.UUID | None
+) -> Usuario:
+    """La persona cambia su contraseña. Comprueba la actual como el login (un fallo cuenta para
+    el bloqueo tras cinco seguidos) y responde 422, no 401: la sesión sigue abierta."""
+    usuario = obtener(db, id_usuario)
+    try:
+        autenticar(db, username=usuario.username, password=actual, correlation_id=correlation_id)
+    except ErrorCoreDb:
+        raise ErrorCoreDb("CLAVE_ACTUAL_INCORRECTA", "La contraseña actual no es correcta.", 422) from None
+    if nueva == actual or nueva.casefold() == usuario.username.casefold():
+        raise ErrorCoreDb("CLAVE_NO_ADMITIDA", "La contraseña nueva debe ser distinta de la actual y del usuario.", 422)
+    _exigir_admitida(nueva)
+    hash_password = hash_bcrypt(nueva)
+    con_reintentos(
+        db,
+        lambda: llamar(
+            db, "core.cambiar_clave",
+            id_usuario, hash_password, ALGORITMO_BCRYPT, VERSION_HASH_BCRYPT,
+            salidas=1,
+        ),
+        nombre="cambiar_clave",
+    )
+    db.refresh(usuario)
+    return usuario
 
 
 def asignar_rol(db: Session, id_usuario: uuid.UUID, *, rol: str, actor: str) -> Usuario:
