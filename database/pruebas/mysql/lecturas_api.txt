@@ -45,4 +45,5 @@ cuentas.idempotencia_movimiento
 cuentas.titularidad
 cuentas.v_movimiento_api
 tarjetas.v_autorizacion_api
+tarjetas.v_historial_estado_tarjeta_api
 tarjetas.v_tarjeta_api
