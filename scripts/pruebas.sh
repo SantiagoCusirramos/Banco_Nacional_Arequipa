@@ -48,6 +48,11 @@ if [ -z "${BNA_PROYECTO:-}" ]; then
   rama="$(printf '%s' "$rama" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' | cut -c1-24 | sed 's/^-*//; s/-*$//')"
   BNA_PROYECTO="bna-prueba-${rama:+$rama-}$$"
 fi
+# `bna` es el producto de `./bna up`: una corrida nunca lo usa ni lo borra.
+if [ "$BNA_PROYECTO" = bna ]; then
+  echo "BNA_PROYECTO=bna es el producto de ./bna up: las pruebas usan otro proyecto (sin BNA_PROYECTO, uno propio)." >&2
+  exit 2
+fi
 BNA_ETIQUETA_LOCAL="${BNA_ETIQUETA_LOCAL:-$BNA_PROYECTO}"
 export BNA_PROYECTO BNA_ETIQUETA_LOCAL COMPOSE_PROJECT_NAME="$BNA_PROYECTO"
 export COMPOSE_PATH_SEPARATOR=: COMPOSE_FILE=compose.yaml:compose.sin-puertos.yaml

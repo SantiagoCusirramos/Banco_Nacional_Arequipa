@@ -71,6 +71,11 @@ def test_el_proyecto_y_el_cluster_salen_de_bna_proyecto():
 def test_la_corrida_de_pruebas_usa_su_propio_proyecto_y_no_publica_puertos():
     pruebas = _texto("scripts/pruebas.sh")
     assert "BNA_PROYECTO" in pruebas
+    # El producto de `./bna up` (proyecto bna) nunca es el de una corrida.
+    assert re.search(r'if \[ "\$BNA_PROYECTO" = bna \]; then', pruebas)
+    # bna no le pasa su valor por omisión (bna) a `./bna test`: dos corridas acabarían en el mismo.
+    bna = _texto("bna")
+    assert bna.index('exec scripts/pruebas.sh') < bna.index('BNA_PROYECTO="${BNA_PROYECTO:-bna}"')
     assert "compose.sin-puertos.yaml" in pruebas
     # Las suites de integración de los módulos publicaban la base en un puerto fijo (3327…3332).
     for modulo in ("COREDB", "EVALUACION", "DESEMBOLSO", "COBRANZA", "CAPTACION", "SEGURIDAD"):

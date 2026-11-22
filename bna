@@ -7,7 +7,12 @@ RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$RAIZ"
 
 # Proyecto de Compose: sus contenedores, redes y volúmenes son solo suyos, y `down -v` solo
-# toca los de este proyecto. Por omisión `bna`; `./bna test` usa uno propio por corrida.
+# toca los de este proyecto. Por omisión `bna`; `./bna test` usa uno propio por corrida, así
+# que a esa orden no se le pasa este valor por omisión (scripts/pruebas.sh elige el suyo).
+if [ "${1:-}" = test ] && [ -z "${BNA_PROYECTO:-}" ]; then
+  unset BNA_PROYECTO COMPOSE_PROJECT_NAME
+  exec scripts/pruebas.sh "${@:2}"
+fi
 BNA_PROYECTO="${BNA_PROYECTO:-bna}"
 case "$BNA_PROYECTO" in
   [a-z0-9]*) ;;

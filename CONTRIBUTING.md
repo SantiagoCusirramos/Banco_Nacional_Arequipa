@@ -25,7 +25,7 @@ BNA_PROYECTO=bna-<que-cambia> ./bna down -v
 
 - `BNA_PROYECTO` es el proyecto de Compose: contenedores, redes y volúmenes llevan su nombre, y `./bna down -v` solo borra los suyos. Por omisión es `bna`, el producto de uso diario.
 - `BNA_ETIQUETA_LOCAL` es la etiqueta de las imágenes `bna/*` (por omisión `local`). `./bna test` usa el nombre de su proyecto, así que dos corridas no construyen sobre la misma imagen, y borra sus etiquetas al terminar.
-- `./bna test` no publica puertos en la máquina (`compose.sin-puertos.yaml`): las suites y el flujo corren dentro de las redes de Compose, y la base de cada suite de integración toma un puerto libre. Se niega a usar un proyecto que ya tenga contenedores o volúmenes.
+- `./bna test` no publica puertos en la máquina (`compose.sin-puertos.yaml`): las suites y el flujo corren dentro de las redes de Compose, y la base de cada suite de integración toma un puerto libre. Se niega a usar el proyecto `bna` y cualquier proyecto que ya tenga contenedores o volúmenes.
 - Una copia levantada con `./bna up` sí publica puertos. Para dos a la vez, cambie también los `BNA_PUERTO_*` en el `.env` de uno de los worktrees.
 - kind: `./bna k8s-up` crea el clúster con el nombre del proyecto. El clúster `bna` publica sus puertos; uno con otro nombre no, y `k8s-smoke` corre igual dentro del clúster. `scripts/prueba_k8s_infra_kind.sh` usa `<proyecto>-infra` y reenvía a puertos libres.
 - La limpieza solo toca lo que cada corrida creó. No use `docker system prune` ni `docker volume rm` sobre lo que no es suyo.
