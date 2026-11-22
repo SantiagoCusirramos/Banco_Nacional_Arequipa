@@ -1,14 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import * as QRCode from "qrcode";
 import { afiliar, mensajeDeError, registrarComercio, type Afiliacion, type Comercio } from "@/lib/billetera";
 
 type Pestana = "afiliacion" | "comercio";
 type Aviso = { text: string; error: boolean };
+type ConfigPublica = { urlBilletera: string | null; urlCajero: string | null; urlApk: string | null };
 
 const filaDato = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" } as const;
 const recuadro = { marginTop: "30px", background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" } as const;
+const opcionesQr = { type: "image/png", width: 220, margin: 1 } as const;
+
+function useQr(trama: string | null) {
+  // Se guarda también la trama: si cambia, la imagen anterior deja de mostrarse hasta que
+  // termine el nuevo QR, sin necesitar un setState síncrono dentro del efecto.
+  const [resultado, setResultado] = useState<{ trama: string; imagen: string } | null>(null);
+  useEffect(() => {
+    let vigente = true;
+    if (!trama) return;
+    void QRCode.toDataURL(trama, opcionesQr).then(
+      (imagen) => { if (vigente) setResultado({ trama, imagen }); },
+      () => { if (vigente) setResultado(null); },
+    );
+    return () => { vigente = false; };
+  }, [trama]);
+  return resultado?.trama === trama ? resultado.imagen : null;
+}
 
 export default function BilleteraPage() {
   const [tab, setTab] = useState<Pestana>("afiliacion");
@@ -26,6 +45,27 @@ export default function BilleteraPage() {
   const [razonSocial, setRazonSocial] = useState("");
   const [cuentaComercio, setCuentaComercio] = useState("");
   const [comercio, setComercio] = useState<Comercio | null>(null);
+  const [config, setConfig] = useState<ConfigPublica | null>(null);
+
+  // La configuración se lee del servidor en cada carga: las URL no se incrustan en la imagen.
+  useEffect(() => {
+    let vigente = true;
+    fetch("/api/config-publica")
+      .then((respuesta) => (respuesta.ok ? respuesta.json() : null))
+      .then((datos: ConfigPublica | null) => {
+        if (!vigente) return;
+        setConfig(datos ?? { urlBilletera: null, urlCajero: null, urlApk: null });
+      })
+      .catch(() => {
+        if (vigente) setConfig({ urlBilletera: null, urlCajero: null, urlApk: null });
+      });
+    return () => { vigente = false; };
+  }, []);
+
+  const tramaQrComercio = comercio?.id_qr ? `CHASKI|${comercio.id_qr}` : null;
+  const imagenQrComercio = useQr(tramaQrComercio);
+  const tramaQrServidor = config?.urlBilletera ? `CHASKI-SERVIDOR|${config.urlBilletera}` : null;
+  const imagenQrServidor = useQr(tramaQrServidor);
 
   async function ejecutar(accion: () => Promise<void>) {
     setLoading(true);
@@ -199,10 +239,54 @@ export default function BilleteraPage() {
                     <div><small>Cuenta:</small> <strong>{comercio.num_cuenta}</strong></div>
                     <div><small>Id del QR:</small> <strong style={{ fontSize: "12px" }}>{comercio.id_qr ?? "—"}</strong></div>
                   </div>
+                  {tramaQrComercio && imagenQrComercio && (
+                    <div data-impresion-qr className="qr-impresion" style={{ marginTop: "20px" }}>
+                      <figure style={{ margin: 0, textAlign: "center" }}>
+                        <img src={imagenQrComercio} alt={`QR de pago de ${comercio.razon_social}`} width={220} height={220}
+                          style={{ imageRendering: "pixelated", maxWidth: "100%" }} />
+                        <figcaption style={{ marginTop: "8px", fontWeight: 700 }}>{comercio.razon_social}</figcaption>
+                      </figure>
+                      <div className="qr-no-impresion" style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "12px" }}>
+                        <a className="sol-button primary" href={imagenQrComercio} download={`qr-${comercio.ruc}.png`}>Descargar QR</a>
+                        <button type="button" className="sol-button" onClick={() => window.print()}>Imprimir</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
+
+          <section className="sol-card" aria-labelledby="instalar-chaski-titulo" style={{ marginTop: "20px" }}>
+            <div className="sol-card-title">
+              <div>
+                <h2 id="instalar-chaski-titulo">Instalar Chaski en el celular de la clienta</h2>
+                <p>Descargue la app y conéctela con este banco desde el celular; no hace falta configurar nada en la app.</p>
+              </div>
+            </div>
+            {config === null ? (
+              <p>Consultando la configuración pública…</p>
+            ) : (
+              <>
+                {config.urlApk ? (
+                  <p><a className="sol-button primary" href={config.urlApk}>Descargar Chaski (APK)</a></p>
+                ) : (
+                  <p>Falta la URL del APK: pida al administrador del despliegue que configure BNA_URL_APK.</p>
+                )}
+                {config.urlBilletera ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap", marginTop: "15px" }}>
+                    {imagenQrServidor && (
+                      <img src={imagenQrServidor} alt="QR de configuración de Chaski" width={180} height={180}
+                        style={{ imageRendering: "pixelated", maxWidth: "100%" }} />
+                    )}
+                    <p>En la app, toca &quot;Conectar con mi banco&quot; y escanea este código</p>
+                  </div>
+                ) : (
+                  <p>Falta la URL de la billetera: pida al administrador del despliegue que configure BNA_URL_BILLETERA.</p>
+                )}
+              </>
+            )}
+          </section>
         </main>
       </div>
     </div>

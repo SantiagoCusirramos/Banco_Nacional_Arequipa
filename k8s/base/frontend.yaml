@@ -26,6 +26,13 @@ spec:
           env:
             - name: BUS_TOKEN
               valueFrom: { secretKeyRef: { name: bna-secretos, key: BUS_TOKEN_FRONTEND } }
+            # La capa de Infraestructura fija estas URL; sin valor no se publica ninguna.
+            - name: BNA_URL_BILLETERA
+              value: ""
+            - name: BNA_URL_CAJERO
+              value: ""
+            - name: BNA_URL_APK
+              value: ""
           ports:
             - { name: http, containerPort: 3000 }
           startupProbe:
