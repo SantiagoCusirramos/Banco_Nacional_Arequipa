@@ -5,6 +5,9 @@
 #
 # Todos los puertos se publican solo en 127.0.0.1 y ninguna clave está en este
 # archivo: salen de .env, que `./bna up` genera a partir de .env.example.
+# `bna` es el proyecto por omisión: BNA_PROYECTO lo cambia (COMPOSE_PROJECT_NAME) y
+# BNA_ETIQUETA_LOCAL cambia la etiqueta de las imágenes. `./bna test` usa uno propio por corrida
+# y agrega compose.sin-puertos.yaml (ver CONTRIBUTING.md, «Trabajar en paralelo»).
 name: bna
 
 x-construir-backend: &construir-backend
@@ -14,11 +17,11 @@ x-construir-backend: &construir-backend
 # Cada imagen la construye un solo servicio; los demás que la usan la toman ya
 # construida (pull_policy: never). Así dos construcciones no compiten por la misma etiqueta.
 x-backend: &backend
-  image: bna/backend:local
+  image: bna/backend:${BNA_ETIQUETA_LOCAL:-local}
   pull_policy: never
 
 x-coredb: &coredb
-  image: bna/coredb:local
+  image: bna/coredb:${BNA_ETIQUETA_LOCAL:-local}
   pull_policy: never
   environment: &coredb-entorno
     CORE_DB_HOST: db
@@ -28,7 +31,7 @@ x-coredb: &coredb
     CORE_DB_JWT_CLAVE: ${CORE_DB_JWT_CLAVE:?Falta en .env. Ejecute ./bna up}
 
 x-captacion: &captacion
-  image: bna/backend:local
+  image: bna/backend:${BNA_ETIQUETA_LOCAL:-local}
   pull_policy: never
   environment: &captacion-entorno
     # COREDB, a través del Bus (fase 2), con la credencial de CAPTACION.
@@ -47,7 +50,7 @@ services:
   # ── Base integrada del CORE (bna-core-db) ───────────────────────────────
   # Solo COREDB se conecta a ella. Incluye los datos de desarrollo.
   db:
-    image: bna/core-db:local
+    image: bna/core-db:${BNA_ETIQUETA_LOCAL:-local}
     build:
       context: ./database
       dockerfile: ../docker/core-db/Dockerfile
@@ -229,7 +232,7 @@ services:
   # devuelve el resultado (CR-INT-03). Todo por el Bus. La persona entra con su usuario de
   # COREDB y SOL reenvía su token; lo de SOL va con svc-sol (lo crea coredb-init).
   sol:
-    image: bna/sol:local
+    image: bna/sol:${BNA_ETIQUETA_LOCAL:-local}
     build:
       <<: *construir-backend
       args:
@@ -392,7 +395,7 @@ services:
   # servicio svc-billetera y el token del cliente que COREDB emite al validar celular y PIN.
   # La app móvil la llama en el puerto de abajo. Ver billetera-chaski/README.md.
   billetera:
-    image: bna/billetera:local
+    image: bna/billetera:${BNA_ETIQUETA_LOCAL:-local}
     build:
       context: ./billetera-chaski/backend
       dockerfile: ../../docker/billetera/Dockerfile
@@ -426,7 +429,7 @@ services:
   # su usuario de servicio svc-seguridad y el token de la persona que llama. Sella la bitácora
   # de COREDB cada minuto. Ver backend/seguridad/README.md.
   seguridad:
-    image: bna/seguridad:local
+    image: bna/seguridad:${BNA_ETIQUETA_LOCAL:-local}
     build:
       <<: *construir-backend
       args:
@@ -505,7 +508,7 @@ services:
 
   # ── Frontend ────────────────────────────────────────────────────────────
   frontend:
-    image: bna/frontend:local
+    image: bna/frontend:${BNA_ETIQUETA_LOCAL:-local}
     build:
       context: ./frontend
       dockerfile: ../docker/frontend/Dockerfile

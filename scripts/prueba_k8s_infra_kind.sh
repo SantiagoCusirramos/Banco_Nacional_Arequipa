@@ -22,10 +22,13 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$RAIZ"
 
-CLUSTER="${BNA_KIND_CLUSTER:-bna-infra}"
+# Un clúster por proyecto (BNA_PROYECTO): dos corridas a la vez no se cruzan.
+CLUSTER="${BNA_KIND_CLUSTER:-${BNA_PROYECTO:-bna}-infra}"
 # Numérico, como el que asigna Infraestructura: comprueba que los manifiestos lo citan.
 export BNA_NAMESPACE="${BNA_NAMESPACE:-1234567890}"
-export BNA_ETIQUETA="${BNA_ETIQUETA:-prueba-kind}"
+export BNA_ETIQUETA="${BNA_ETIQUETA:-prueba-kind-${BNA_PROYECTO:-bna}}"
+# Las imágenes de esta corrida, con su propia etiqueta local (no bna/*:local, la de `./bna up`).
+export BNA_ETIQUETA_LOCAL="${BNA_ETIQUETA_LOCAL:-$BNA_ETIQUETA}"
 export KUBECTL="${KUBECTL:-kubectl}"
 TRABAJO="$(mktemp -d)"
 export KUBECONFIG="$TRABAJO/kubeconfig"
@@ -44,6 +47,14 @@ limpiar() {
   if docker network inspect kind >/dev/null 2>&1 && [ -z "$(docker ps -aq --filter network=kind)" ]; then
     docker network rm kind >/dev/null || true
   fi
+  # Las etiquetas de esta corrida; --no-prune conserva la caché de construcción.
+  local imagenes
+  imagenes="$(scripts/k8s-infra.sh imagenes 2>/dev/null || true)"
+  if [ "$BNA_ETIQUETA_LOCAL" != local ]; then
+    imagenes="$imagenes $(docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=bna/*:$BNA_ETIQUETA_LOCAL")"
+  fi
+  # shellcheck disable=SC2086
+  [ -z "${imagenes// /}" ] || docker image rm --no-prune $imagenes >/dev/null 2>&1 || true
   rm -rf "$TRABAJO"
   exit "$estado"
 }
@@ -116,20 +127,31 @@ scripts/k8s-infra.sh datos
 scripts/k8s-infra.sh datos >/dev/null
 
 paso "Flujo de demostración (scripts/flujo_demo.py)"
+# Puerto local libre que elige kubectl (`:<puerto>`): otra corrida a la vez no choca. Se lee de
+# su primera línea, «Forwarding from 127.0.0.1:<local> -> <puerto>».
 reenviar() {
   local servicio="$1" puerto="$2"
-  k port-forward "service/bna-$servicio" "$puerto" >"$TRABAJO/reenvio-$servicio.log" 2>&1 &
+  k port-forward "service/bna-$servicio" ":$puerto" >"$TRABAJO/reenvio-$servicio.log" 2>&1 &
   REENVIOS+=("$!")
 }
-reenviar frontend 13000:3000
-reenviar bus 18018:8018
+puerto_local() {
+  sed -n 's/^Forwarding from 127\.0\.0\.1:\([0-9]*\) .*/\1/p' "$TRABAJO/reenvio-$1.log" | head -n 1
+}
+reenviar frontend 3000
+reenviar bus 8018
+PUERTO_FRONTEND=""
+PUERTO_BUS=""
 for _ in $(seq 1 30); do
-  if curl -fsS -o /dev/null http://127.0.0.1:13000/login && curl -fsS -o /dev/null http://127.0.0.1:18018/docs; then
+  PUERTO_FRONTEND="$(puerto_local frontend)"
+  PUERTO_BUS="$(puerto_local bus)"
+  if [ -n "$PUERTO_FRONTEND" ] && [ -n "$PUERTO_BUS" ] \
+    && curl -fsS -o /dev/null "http://127.0.0.1:$PUERTO_FRONTEND/login" \
+    && curl -fsS -o /dev/null "http://127.0.0.1:$PUERTO_BUS/docs"; then
     break
   fi
   sleep 2
 done
-BNA_FRONTEND=http://127.0.0.1:13000 BNA_BUS=http://127.0.0.1:18018 scripts/k8s-infra.sh flujo
+BNA_FRONTEND="http://127.0.0.1:$PUERTO_FRONTEND" BNA_BUS="http://127.0.0.1:$PUERTO_BUS" scripts/k8s-infra.sh flujo
 
 paso "Túnel de Cloudflare con un token falso"
 falso="$(printf '{"a":"%s","t":"%s","s":"%s"}' 00000000000000000000000000000000 \
