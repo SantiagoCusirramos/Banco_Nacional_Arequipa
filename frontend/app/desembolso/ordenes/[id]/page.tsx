@@ -397,6 +397,11 @@ function Resultado({ orden }: { orden: OrdenDetalle }) {
               </EnlaceBoton>
             )}
             <EnlaceBoton href="/desembolso">Nuevo desembolso</EnlaceBoton>
+            {confirmada && (
+              <Link href={`/billetera?codCliente=${encodeURIComponent(orden.codCliente)}&numCuenta=${encodeURIComponent(orden.numCuenta)}`} className="rounded-lg px-4 py-2 text-sm font-semibold text-marca-700 ring-1 ring-marca-200 hover:bg-marca-50">
+                Afiliar a Chaski
+              </Link>
+            )}
           </div>
         </section>
       </div>

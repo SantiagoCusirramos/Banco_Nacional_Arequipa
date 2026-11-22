@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "o-1" }),
   usePathname: () => "/desembolso/ordenes/o-1",
   useRouter: () => ({ push, replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/desembolso/api", async (original) => ({
   ...(await original<typeof import("@/lib/desembolso/api")>()),

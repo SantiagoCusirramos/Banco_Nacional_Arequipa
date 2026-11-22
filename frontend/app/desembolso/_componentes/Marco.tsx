@@ -52,11 +52,12 @@ export function Marco({ children }: { children: React.ReactNode }) {
             <p className="text-sm font-semibold">{sesion.usuario}</p>
             <p className="text-xs text-marca-100">{PERFIL[sesion.perfil] ?? sesion.perfil}</p>
           </div>
+          <Link href="/" className="rounded-md px-3 py-2 text-sm text-marca-100 ring-1 ring-white/20 hover:bg-white/10 hover:text-white">Volver al portal</Link>
           <button
             onClick={salir}
             className="rounded-md px-3 py-2 text-sm text-marca-100 ring-1 ring-white/20 hover:bg-white/10 hover:text-white"
           >
-            Salir
+            Cerrar sesión
           </button>
         </div>
       </header>
