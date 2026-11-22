@@ -95,10 +95,10 @@ describe("Instalar Chaski en el celular de la clienta", () => {
     const titulo = screen.getByRole("heading", { name: "Instalar Chaski en el celular de la clienta" });
     expect(titulo.closest("form")).toBeNull();
     expect(fetchConfig).toHaveBeenCalledWith("/api/config-publica");
-    expect(screen.getByRole("link", { name: "Descargar Chaski (APK)" })).toHaveAttribute("href", CONFIG.urlApk);
-    expect(screen.getByText(/Conectar con mi banco/)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Descargar Chaski (APK)" })).toHaveAttribute("href", CONFIG.urlApk);
 
     const imagen = await screen.findByAltText("QR de configuración de Chaski");
+    expect(screen.getByText(/Conectar con mi banco/)).toBeInTheDocument();
     expect(toDataURL).toHaveBeenCalledWith(`CHASKI-SERVIDOR|${CONFIG.urlBilletera}`, expect.objectContaining({ type: "image/png" }));
     expect(imagen).toHaveAttribute("src", pngDe(`CHASKI-SERVIDOR|${CONFIG.urlBilletera}`));
   });
