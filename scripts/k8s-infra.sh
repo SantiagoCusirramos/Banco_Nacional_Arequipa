@@ -41,6 +41,8 @@
 #   BNA_TUNEL_ESPERA_SEGUNDOS  espera máxima a que el túnel conecte (180)
 #   BNA_TUNEL_ESPERA_CARGA     espera máxima a que se cargue el token (540)
 #   BNA_TUNEL_RAPIDO_API   solo para pruebas: otra API de quick tunnels (--quick-service)
+#   BNA_URL_BILLETERA, BNA_URL_CAJERO, BNA_URL_APK  opcionales, para manifiestos y aplicar: las URL
+#                   públicas que muestra el frontend (Chaski y cajero), p. ej. las de los túneles rápidos
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -118,6 +120,30 @@ k() { "$KUBECTL" --kubeconfig "$KUBECONFIG" -n "$BNA_NAMESPACE" "$@"; }
 # Un overlay más lo que depende del momento: namespace, etiqueta de las imágenes y, para el
 # principal, el ConfigMap con scripts/generar_env.sh y .env.example, que kustomize no lee desde
 # el overlay. Uso: kustomizar CARPETA [principal|tunel|rapido]
+# BNA_URL_BILLETERA, BNA_URL_CAJERO y BNA_URL_APK (opcionales): las direcciones públicas que el
+# frontend entrega en /api/config-publica (descarga de Chaski, QR de configuración, cajero). Por
+# ejemplo, las de los túneles rápidos. Solo http(s), sin credenciales ni comillas.
+urls_publicas() {
+  local nombre valor env=""
+  for nombre in BNA_URL_BILLETERA BNA_URL_CAJERO BNA_URL_APK; do
+    valor="${!nombre:-}"
+    [ -n "$valor" ] || continue
+    if ! [[ "$valor" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$ ]]; then
+      echo "$nombre debe ser una URL http(s) sin credenciales ni consulta (es '$valor')." >&2
+      exit 2
+    fi
+    env="$env{name: $nombre, value: \"$valor\"}, "
+  done
+  [ -n "$env" ] || return 0
+  echo "patches:"
+  echo "  - target: { kind: Deployment, name: frontend }"
+  echo "    patch: |-"
+  echo "      apiVersion: apps/v1"
+  echo "      kind: Deployment"
+  echo "      metadata: { name: frontend }"
+  echo "      spec: { template: { spec: { containers: [ { name: frontend, env: [ ${env%, } ] } ] } } }"
+}
+
 kustomizar() {
   : "${BNA_NAMESPACE:?Falta BNA_NAMESPACE (el namespace asignado)}"
   local carpeta="$1" tipo="$2" dir tag relativo nombre protocolo objetivo
@@ -139,6 +165,7 @@ kustomizar() {
       echo "  - name: bna-generar-env"
       echo "    files: [generar_env.sh, env.example]"
       echo "    options: { disableNameSuffixHash: true }"
+      urls_publicas
     else
       if [ "$tipo" = rapido ]; then
         objetivo="{ kind: Deployment, labelSelector: app.kubernetes.io/component=tunel-rapido }"
