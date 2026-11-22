@@ -19,7 +19,9 @@ Username = Field(min_length=3, max_length=40)
 class UsuarioCrear(BaseModel):
     username: str = Username
     nombre: str = Field(min_length=1, max_length=100)
-    password: str = Field(min_length=8)
+    # Sin contraseña (el portal), COREDB genera la inicial, la entrega una sola vez y la
+    # persona debe cambiarla. Con contraseña (scripts y pruebas), no se exige el cambio.
+    password: str | None = Field(default=None, min_length=8)
     rol: Rol
     id_empleado: uuid.UUID | None = None
 
@@ -53,11 +55,26 @@ class UsuarioRespuesta(BaseModel):
     id_empleado: uuid.UUID | None
     activo: bool
     creado_en: datetime
+    debe_cambiar_clave: bool = Field(
+        default=False, description="Debe cambiar su contraseña antes de operar (bd-v1.17)."
+    )
     bloqueado_hasta: datetime | None = Field(
         default=None,
         description="Hasta cuándo está bloqueado su login tras 5 fallos seguidos (bd-v1.12); "
                     "solo en GET /coredb/usuarios/{id} y en el desbloqueo.",
     )
+
+
+class UsuarioCreado(UsuarioRespuesta):
+    clave_inicial: str | None = Field(
+        default=None,
+        description="Contraseña inicial generada: solo en esta respuesta, y solo si no se envió `password`.",
+    )
+
+
+class ClaveTemporal(BaseModel):
+    usuario: UsuarioRespuesta
+    clave_inicial: str = Field(description="Se muestra solo en esta respuesta; la persona debe cambiarla.")
 
 
 class CredencialRespuesta(BaseModel):
@@ -96,13 +113,15 @@ def desbloquear(
     return usuarios.desbloquear_login(db, id_usuario, actor=actor.usuario)
 
 
-@router.post("", response_model=UsuarioRespuesta, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UsuarioCreado, status_code=status.HTTP_201_CREATED)
 def crear(
     datos: UsuarioCrear,
+    respuesta: Response,
     db: Session = Depends(db_session),
     actor: Actor = Depends(requiere_permiso("CREAR_USUARIO")),
 ):
-    return usuarios.crear(
+    _no_guardar(respuesta)
+    usuario, clave_inicial = usuarios.crear(
         db,
         username=datos.username,
         nombre=datos.nombre,
@@ -111,6 +130,23 @@ def crear(
         id_empleado=datos.id_empleado,
         actor=actor.usuario,
     )
+    return UsuarioCreado(**UsuarioRespuesta.model_validate(usuario).model_dump(), clave_inicial=clave_inicial)
+
+
+@router.post("/{id_usuario}/clave", response_model=ClaveTemporal,
+             responses={404: {"description": "USUARIO_NO_ENCONTRADO"},
+                        422: {"description": "BNA-USUARIO-SERVICIO: un usuario de servicio usa /credencial"}})
+def renovar_clave(
+    id_usuario: uuid.UUID,
+    respuesta: Response,
+    db: Session = Depends(db_session),
+    actor: Actor = Depends(requiere_permiso("CREAR_USUARIO")),
+):
+    """Entrega una contraseña temporal a una persona, una sola vez; la anterior deja de servir y
+    la persona debe cambiarla al entrar."""
+    _no_guardar(respuesta)
+    usuario, clave = usuarios.restablecer_clave(db, id_usuario, actor=actor.usuario)
+    return ClaveTemporal(usuario=UsuarioRespuesta.model_validate(usuario), clave_inicial=clave)
 
 
 @router.post("/{id_usuario}/rol", response_model=UsuarioRespuesta)

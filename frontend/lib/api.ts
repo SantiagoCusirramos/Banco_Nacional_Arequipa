@@ -88,6 +88,22 @@ export function cabecerasDeOperacion(llave: string): Record<string, string> {
 
 apiCuentas.interceptors.request.use(conToken);
 
+/**
+ * Con la contraseña inicial o renovada, COREDB responde 403 CAMBIO_CLAVE_OBLIGATORIO a todo lo
+ * demás: cualquier pantalla lleva entonces a cambiarla. El error sigue su curso.
+ */
+export function alExigirCambioDeClave(err: unknown): never {
+  if (axios.isAxiosError(err) && err.response?.status === 403
+      && err.response.data?.error?.code === "CAMBIO_CLAVE_OBLIGATORIO"
+      && typeof window !== "undefined" && window.location.pathname !== "/cambiar-clave") {
+    window.location.assign("/cambiar-clave");
+  }
+  throw err;
+}
+for (const cliente of [apiCore, apiCuentas, apiTarjetas, apiEvaluacion, apiCaptacion, apiCobranza, apiSeguridad]) {
+  cliente.interceptors.response.use(undefined, alExigirCambioDeClave);
+}
+
 export function mensajeError(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data;

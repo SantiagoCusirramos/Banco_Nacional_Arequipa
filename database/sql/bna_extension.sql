@@ -69,6 +69,10 @@ CREATE TABLE core.usuario_sistema (
     creado_en      DATETIME(6) DEFAULT (UTC_TIMESTAMP(6)) NOT NULL,
     -- Solo de los usuarios de servicio: el módulo que se autentica con este usuario.
     modulo         VARCHAR(40),
+    -- v1.17: la persona debe cambiar su contraseña antes de operar (contraseña inicial o
+    -- restablecida por un administrador). La pone exigir_cambio_clave o restablecer_clave y la
+    -- quita cambiar_clave.
+    debe_cambiar_clave TINYINT(1) DEFAULT FALSE NOT NULL,
     CONSTRAINT pk_usuario_sistema PRIMARY KEY (id_usuario),
     CONSTRAINT uk_usuario_sistema_1 UNIQUE (username),
     CONSTRAINT fk_usuario_empleado FOREIGN KEY (id_empleado) REFERENCES core.empleado (id_empleado),
@@ -76,6 +80,7 @@ CREATE TABLE core.usuario_sistema (
     CONSTRAINT ck_usuario_rol CHECK (rol IN ('ADMINISTRADOR', 'ASESOR', 'ANALISTA', 'OPERADOR', 'AUDITOR', 'SERVICIO')),
     CONSTRAINT ck_usuario_servicio CHECK ((rol = 'SERVICIO') = (modulo IS NOT NULL)),
     CONSTRAINT ck_usuario_activo CHECK (activo IN (0, 1)),
+    CONSTRAINT ck_usuario_debe_cambiar_clave CHECK (debe_cambiar_clave IN (0, 1)),
     CONSTRAINT ck_usuario_id CHECK ((ASCII(SUBSTR(id_usuario, 7, 1)) >> 4) BETWEEN 1 AND 8
                                     AND (ASCII(SUBSTR(id_usuario, 9, 1)) & 0xC0) = 0x80)
 ) ENGINE = InnoDB COMMENT = 'Extensión de integración: usuarios; VARCHAR(255) admite bcrypt y Argon2.';
@@ -1279,6 +1284,133 @@ BEGIN
     END;
 END //
 
+-- v1.17: contraseña inicial y cambio obligatorio. Solo personas; los usuarios de servicio usan
+-- renovar_credencial. La bitácora guarda quién y a quién, nunca el hash.
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.exigir_cambio_clave(
+    IN p_id BINARY(16), IN p_actor VARCHAR(40), OUT p_filas INT)
+    COMMENT 'Exige a una persona cambiar su contraseña en el próximo ingreso.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_rol VARCHAR(15);
+    DECLARE v_username VARCHAR(40);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT rol, username INTO v_rol, v_username FROM core.usuario_sistema WHERE id_usuario = p_id FOR UPDATE;
+        IF v_rol IS NULL THEN
+            CALL core.fallar('BNA-USUARIO: el usuario no existe');
+        END IF;
+        IF v_rol = 'SERVICIO' THEN
+            CALL core.fallar('BNA-USUARIO-SERVICIO: la contraseña de un usuario de servicio se renueva con renovar_credencial');
+        END IF;
+        UPDATE core.usuario_sistema SET debe_cambiar_clave = TRUE WHERE id_usuario = p_id;
+        SET p_filas = ROW_COUNT();
+        CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'EXIGIR_CAMBIO_CLAVE', p_actor, NULL,
+                                   JSON_OBJECT('username', v_username));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.restablecer_clave(
+    IN p_id BINARY(16), IN p_hash VARCHAR(255), IN p_algoritmo VARCHAR(20), IN p_version VARCHAR(10),
+    IN p_actor VARCHAR(40), OUT p_filas INT)
+    COMMENT 'Un administrador da una contraseña temporal a una persona, que debe cambiarla.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_rol VARCHAR(15);
+    DECLARE v_username VARCHAR(40);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT rol, username INTO v_rol, v_username FROM core.usuario_sistema WHERE id_usuario = p_id FOR UPDATE;
+        IF v_rol IS NULL THEN
+            CALL core.fallar('BNA-USUARIO: el usuario no existe');
+        END IF;
+        IF v_rol = 'SERVICIO' THEN
+            CALL core.fallar('BNA-USUARIO-SERVICIO: la contraseña de un usuario de servicio se renueva con renovar_credencial');
+        END IF;
+        UPDATE core.usuario_sistema
+           SET hash_password = p_hash, algoritmo_hash = p_algoritmo, version_hash = p_version,
+               debe_cambiar_clave = TRUE
+         WHERE id_usuario = p_id;
+        SET p_filas = ROW_COUNT();
+        CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'RESTABLECER_CLAVE', p_actor, NULL,
+                                   JSON_OBJECT('username', v_username));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
+CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.cambiar_clave(
+    IN p_id BINARY(16), IN p_hash VARCHAR(255), IN p_algoritmo VARCHAR(20), IN p_version VARCHAR(10),
+    OUT p_filas INT)
+    COMMENT 'La persona reemplaza su contraseña; ya no debe cambiarla.'
+BEGIN
+    DECLARE v_propia BOOLEAN DEFAULT FALSE;
+    DECLARE v_rol VARCHAR(15);
+    DECLARE v_username VARCHAR(40);
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR 1305 SET v_propia = TRUE;
+        SAVEPOINT bna_op;
+        RELEASE SAVEPOINT bna_op;
+    END;
+    IF v_propia THEN START TRANSACTION; ELSE SAVEPOINT bna_op; END IF;
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            -- Un deadlock ya revirtió toda la transacción y el savepoint no existe.
+            -- RESIGNAL queda fuera del alcance de este manejador, o se descartaría.
+            BEGIN
+                DECLARE CONTINUE HANDLER FOR 1305 BEGIN END;
+                IF v_propia THEN ROLLBACK; ELSE ROLLBACK TO SAVEPOINT bna_op; END IF;
+            END;
+            RESIGNAL;
+        END;
+        SELECT rol, username INTO v_rol, v_username FROM core.usuario_sistema WHERE id_usuario = p_id FOR UPDATE;
+        IF v_rol IS NULL THEN
+            CALL core.fallar('BNA-USUARIO: el usuario no existe');
+        END IF;
+        IF v_rol = 'SERVICIO' THEN
+            CALL core.fallar('BNA-USUARIO-SERVICIO: la contraseña de un usuario de servicio se renueva con renovar_credencial');
+        END IF;
+        UPDATE core.usuario_sistema
+           SET hash_password = p_hash, algoritmo_hash = p_algoritmo, version_hash = p_version,
+               debe_cambiar_clave = FALSE
+         WHERE id_usuario = p_id;
+        SET p_filas = ROW_COUNT();
+        CALL core.registrar_evento('CORE', 'usuario_sistema', BIN_TO_UUID(p_id), 'CAMBIAR_CLAVE', v_username, NULL,
+                                   JSON_OBJECT('username', v_username));
+        IF v_propia THEN COMMIT; ELSE RELEASE SAVEPOINT bna_op; END IF;
+    END;
+END //
+
 -- Revoca o restituye el acceso. Pedir el estado que ya tiene no cambia nada (p_filas = 0).
 CREATE DEFINER = 'bna_owner'@'%' PROCEDURE core.cambiar_estado_usuario(
     IN p_id BINARY(16), IN p_activo BOOLEAN, IN p_actor VARCHAR(40), OUT p_filas INT)
@@ -1656,6 +1788,9 @@ DELIMITER ;
 
 GRANT EXECUTE ON PROCEDURE core.crear_usuario_servicio TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.renovar_credencial TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.exigir_cambio_clave TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.restablecer_clave TO bna_api;
+GRANT EXECUTE ON PROCEDURE core.cambiar_clave TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.cambiar_estado_usuario TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.registrar_login TO bna_api;
 GRANT EXECUTE ON PROCEDURE clientes.registrar_cliente TO bna_api;

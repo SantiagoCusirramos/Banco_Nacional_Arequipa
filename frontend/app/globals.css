@@ -105,3 +105,11 @@
 .auth-loading{margin:auto;color:#60728b;font-size:13px}
 @media(max-width:850px){.auth-page{grid-template-columns:1fr}.auth-card{width:min(100%,560px);padding:34px 25px}.auth-brand{margin-bottom:38px}.auth-aside{display:none}}
 @media(max-width:420px){.auth-heading h1{font-size:26px}.auth-bottom{flex-direction:column}}
+
+/* Impresión del QR del comercio: solo el código y el nombre, sin el resto de la pantalla. */
+@media print{
+  body *{visibility:hidden}
+  .qr-impresion,.qr-impresion *{visibility:visible}
+  .qr-impresion{position:absolute;left:0;top:0}
+  .qr-impresion .qr-no-impresion{display:none}
+}

@@ -446,6 +446,16 @@ X837	bna_api_user	La vista del historial de tarjetas tiene exactamente las colum
 X838	bna_api_user	bna_api lee el motivo y el origen de un bloqueo en el historial de la tarjeta	pasa
 X839	bna_api_user	bna_api no puede: escribir en el historial de la tarjeta por la vista	pasa
 X840	bna_api_user	bna_api no puede: SELECT tarjetas.historial_estado_tarjeta (solo la vista)	pasa
+X841	bna_api_user	Un usuario nuevo no debe cambiar su contraseña salvo que se le exija	pasa
+X842	bna_api_user	Exigir el cambio de contraseña marca a la persona y queda en la bitácora	pasa
+X843	bna_api_user	A un usuario de servicio no se le exige cambiar la contraseña	pasa
+X844	bna_api_user	Restablecer la contraseña de una persona la reemplaza, exige cambiarla y queda en la bitácora	pasa
+X845	bna_api_user	La contraseña de un usuario de servicio no se restablece por esta vía	pasa
+X846	bna_api_user	No se restablece la contraseña de un usuario inexistente	pasa
+X847	bna_api_user	La persona cambia su contraseña: se reemplaza, ya no debe cambiarla y queda en la bitácora a su nombre	pasa
+X848	bna_api_user	Un usuario de servicio no cambia su contraseña por esta vía	pasa
+X849	bna_api_user	No cambia la contraseña un usuario inexistente	pasa
+X850	bna_api_user	bna_api no puede: quitar la marca de cambio obligatorio directamente	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa
