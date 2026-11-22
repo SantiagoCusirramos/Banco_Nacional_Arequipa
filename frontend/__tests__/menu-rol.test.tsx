@@ -36,7 +36,7 @@ describe("Mapa de pantallas del portal", () => {
     expect(visibles).not.toContain("/evaluacion");
     expect(visibles).not.toContain("/desembolso");
     expect(visibles).not.toContain("/usuarios");
-    expect(visibles).not.toContain("/pagar-cuota");
+    expect(visibles).toContain("/pagar-cuota");
   });
 
   it("MR-03 filtra por acciones: un analista ve evaluación pero no desembolso ni captación", () => {
