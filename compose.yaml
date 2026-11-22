@@ -526,6 +526,11 @@ services:
       # Solo para la pantalla de desbloqueo de tarjetas (el puente filtra las rutas).
       SEGURIDAD_GATEWAY_URL: http://bus:8018/bus/seguridad/seguridad
       BUS_TOKEN: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
+      # URLs públicas que /api/config-publica entrega a la app Chaski (sin sesión).
+      # Se pueden fijar en .env (por ejemplo, las URL públicas de un túnel).
+      BNA_URL_BILLETERA: ${BNA_URL_BILLETERA:-http://localhost:${BNA_PUERTO_BILLETERA:-8020}}
+      BNA_URL_CAJERO: ${BNA_URL_CAJERO:-http://localhost:${BNA_PUERTO_ATM:-8019}}
+      BNA_URL_APK: ${BNA_URL_APK:-https://github.com/SantiagoCusirramos/Banco_Nacional_Arequipa/releases}
     networks: [canales]
     depends_on:
       bus:
