@@ -17,6 +17,13 @@ export function rutaSeguraVolver(ruta: string | null | undefined): string | null
   return ruta;
 }
 
+/** Ruta que el navegador está mostrando, con consulta, para volver después de entrar. */
+export function rutaActual(): string {
+  if (typeof window === "undefined") return "/";
+  const { pathname, search } = window.location;
+  return typeof search === "string" && search ? `${pathname}${search}` : pathname;
+}
+
 /** Arma el destino del login. La ruta raíz no necesita parámetro. */
 export function urlLoginConVolver(ruta: string | null | undefined): string {
   const destino = rutaSeguraVolver(ruta);

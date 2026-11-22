@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent, ty
 import Link from "next/link";
 import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { rutaActual, urlLoginConVolver } from "@/lib/continuidad";
 import { AvisoPermiso } from "@/app/components/AvisoPermiso";
 import { BarraNavegacion } from "@/app/components/BarraNavegacion";
 import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
@@ -176,7 +177,7 @@ function CaptacionPageInner() {
           {sinSesion && (
             <div role="alert" className="sol-alert error">
               Tu sesión no está iniciada o ya venció.
-              <Link href="/login" onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>Iniciar sesión</Link>
+              <Link href={urlLoginConVolver(rutaActual())} onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>Iniciar sesión</Link>
             </div>
           )}
           {aviso && (

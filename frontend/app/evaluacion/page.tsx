@@ -6,7 +6,7 @@ import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
 import { AvisoPermiso } from "@/app/components/AvisoPermiso";
 import { BarraNavegacion } from "@/app/components/BarraNavegacion";
-import { etiquetaSolicitud } from "@/lib/continuidad";
+import { etiquetaSolicitud, rutaActual, urlLoginConVolver } from "@/lib/continuidad";
 import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import {
   ESTADOS, RIESGOS, bandeja, conMoneda, decidir, evaluar, fecha, fechaHora, mensajeDeError, porcentaje,
@@ -234,7 +234,7 @@ export default function EvaluacionPage() {
           {sinSesion && (
             <div role="alert" className="sol-alert error">
               Tu sesión no está iniciada o ya venció.
-              <Link href="/login" onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
+              <Link href={urlLoginConVolver(rutaActual())} onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
                 Iniciar sesión
               </Link>
             </div>
