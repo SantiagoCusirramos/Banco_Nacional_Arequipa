@@ -21,6 +21,7 @@ data:
   DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
   CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
   COBRANZA_GATEWAY_URL: http://bus:8018/bus/cobranza
+  SEGURIDAD_GATEWAY_URL: http://bus:8018/bus/seguridad/seguridad
   SOL_COOKIE_SECURE: "false"
 ---
 # Solo del Bus: la dirección de cada módulo (la directa de COREDB, entre ellas) y la lista de

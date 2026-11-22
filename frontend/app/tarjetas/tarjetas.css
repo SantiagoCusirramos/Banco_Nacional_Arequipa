@@ -262,3 +262,172 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Desbloqueo de tarjetas (/tarjetas/desbloqueo). */
+.tj-enlace-nav {
+  display: block;
+  border-radius: 7px;
+  padding: 13px 12px;
+  margin-bottom: 5px;
+  color: #c4d2df;
+  font-size: 12px;
+  text-decoration: none;
+}
+.tj-enlace-nav.active,
+.tj-enlace-nav:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: white;
+}
+.tj-sub {
+  margin: 6px 0 0;
+  color: var(--sol-muted);
+  font-size: 13px;
+}
+.tj-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.tj-busquedas {
+  display: grid;
+  gap: 12px;
+  padding: 0 24px 24px;
+}
+.tj-busquedas .sol-toolbar {
+  padding: 0;
+  flex-wrap: wrap;
+}
+.tj-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0 24px 24px;
+  display: grid;
+  gap: 10px;
+}
+.tj-lista li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--sol-line);
+  border-radius: 10px;
+}
+.tj-lista .sol-button {
+  margin-left: auto;
+}
+.tj-numero {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--sol-navy);
+  letter-spacing: 0.04em;
+}
+.tj-bloqueo {
+  margin: 0 24px 20px;
+  padding: 16px 18px;
+  border-left: 4px solid #c8503f;
+  border-radius: 9px;
+  background: #fdf3f1;
+}
+.tj-bloqueo h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #8f2f22;
+}
+.tj-historial {
+  margin: 0 24px 20px;
+  font-size: 13px;
+}
+.tj-historial summary {
+  cursor: pointer;
+  color: var(--sol-navy);
+  font-weight: 600;
+  padding: 6px 0;
+}
+.tj-historial table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.tj-historial th,
+.tj-historial td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--sol-line);
+  vertical-align: top;
+}
+.tj-historial th {
+  color: var(--sol-muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+.tj-check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--sol-text);
+}
+.tj-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--sol-teal);
+}
+.tj-error {
+  margin: 0;
+  color: #a33a2c;
+  font-size: 13px;
+}
+.tj-velo {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 33, 51, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 50;
+}
+.tj-dialogo {
+  width: min(480px, 100%);
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  display: grid;
+  gap: 14px;
+  color: var(--sol-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.tj-dialogo h2 {
+  margin: 0;
+  color: var(--sol-navy);
+  font-size: 18px;
+}
+.tj-dialogo p {
+  margin: 0;
+}
+.tj-dialogo-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+@media (max-width: 640px) {
+  .tj-historial {
+    overflow-x: auto;
+  }
+  .tj-lista .sol-button {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+@media print {
+  .sol-sidebar,
+  .sol-topbar,
+  .tj-comprobante .tj-dialogo-acciones {
+    display: none;
+  }
+}

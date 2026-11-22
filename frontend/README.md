@@ -33,6 +33,7 @@ El navegador solo llama a rutas de este mismo servidor, que las reenvía desde e
 | `/api/evaluacion/*` | EVALUACIÓN, `/eva/v1/*` | `EVALUACION_GATEWAY_URL` |
 | `/api/desembolso/*` | DESEMBOLSO, `/api/v1/*` | `DESEMBOLSO_GATEWAY_URL` |
 | `/api/cobranza/*` | COBRANZA | `COBRANZA_GATEWAY_URL` |
+| `/api/seguridad/*` | Seguridad, solo `auth/me`, `tarjetas`, `tarjetas/{id}` y `POST tarjetas/{id}/desbloqueo` (pantalla `/tarjetas/desbloqueo`); lo demás responde 404 | `SEGURIDAD_GATEWAY_URL` |
 
 En el producto, todas las variables apuntan al Bus de Servicios (`http://bus:8018/bus/<módulo>/...`, ver `compose.yaml`) y el servidor agrega `X-Bus-Token` con `BUS_TOKEN`.
 
