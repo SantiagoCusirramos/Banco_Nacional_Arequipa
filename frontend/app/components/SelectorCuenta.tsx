@@ -26,7 +26,15 @@ export default function SelectorCuenta({ id, label, codCliente, value, onChange,
     setCuentas([]);
     if (!codCliente) return;
     cuentasDeCliente(codCliente)
-      .then((encontradas) => { if (activo) setCuentas(encontradas); })
+      .then((encontradas) => {
+        if (!activo) return;
+        setCuentas(encontradas);
+        // Si el titular solo tiene una cuenta, no hay nada que elegir: se toma esa.
+        if (encontradas.length === 1) {
+          setNumero(encontradas[0].num_cuenta);
+          onChange(encontradas[0].num_cuenta);
+        }
+      })
       .catch(() => { if (activo) setMensaje("No se pudieron cargar las cuentas del cliente."); });
     return () => { activo = false; };
   }, [codCliente]);
