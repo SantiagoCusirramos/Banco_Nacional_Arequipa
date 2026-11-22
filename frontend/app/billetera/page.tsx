@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import { obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import { afiliar, mensajeDeError, registrarComercio, type Afiliacion, type Comercio } from "@/lib/billetera";
 
 type Pestana = "afiliacion" | "comercio";
@@ -10,14 +14,17 @@ type Aviso = { text: string; error: boolean };
 const filaDato = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" } as const;
 const recuadro = { marginTop: "30px", background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" } as const;
 
-export default function BilleteraPage() {
+function BilleteraPageInner() {
+  const params = useSearchParams();
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [cargandoPerfil, setCargandoPerfil] = useState(true);
   const [tab, setTab] = useState<Pestana>("afiliacion");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Aviso | null>(null);
 
   // Afiliación: el cliente ya existe (lo registra Captación) y tiene una cuenta individual en soles.
-  const [codCliente, setCodCliente] = useState("");
-  const [numCuenta, setNumCuenta] = useState("");
+  const [codCliente, setCodCliente] = useState(() => params?.get("codCliente")?.toUpperCase() ?? "");
+  const [numCuenta, setNumCuenta] = useState(() => params?.get("numCuenta") ?? "");
   const [pin, setPin] = useState("");
   const [afiliado, setAfiliado] = useState<Afiliacion | null>(null);
 
@@ -26,6 +33,8 @@ export default function BilleteraPage() {
   const [razonSocial, setRazonSocial] = useState("");
   const [cuentaComercio, setCuentaComercio] = useState("");
   const [comercio, setComercio] = useState<Comercio | null>(null);
+
+  useEffect(() => { obtenerMiPerfil().then(setUsuario).catch(() => setUsuario(null)).finally(() => setCargandoPerfil(false)); }, []);
 
   async function ejecutar(accion: () => Promise<void>) {
     setLoading(true);
@@ -63,6 +72,18 @@ export default function BilleteraPage() {
     });
   }
 
+  if (cargandoPerfil) return <main className="sol-main"><p>Cargando…</p></main>;
+  const pantalla = pantallaPorHref("/billetera");
+  const permitido = puedeVerPantalla(usuario?.acciones, "/billetera");
+  if (!permitido) {
+    return (
+      <main className="sol-main">
+        <BarraNavegacion titulo="Billetera Chaski" usuario={usuario} />
+        <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas afiliar clientes o comercios, pide a un administrador que revise tus permisos en COREDB." />
+      </main>
+    );
+  }
+
   return (
     <div className="sol-shell">
       <aside className="sol-sidebar">
@@ -96,16 +117,7 @@ export default function BilleteraPage() {
       </aside>
 
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div>
-            <span>Billetera</span>
-            <b>/</b>Afiliación a Chaski
-          </div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">Requiere sesión iniciada</span>
-            <Link href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>Volver al Home Banking</Link>
-          </div>
-        </header>
+        <BarraNavegacion titulo="Billetera Chaski" subtitulo="Afiliación a Chaski" usuario={usuario} />
 
         <main className="sol-main">
           {notice && (
@@ -207,4 +219,14 @@ export default function BilleteraPage() {
       </div>
     </div>
   );
+}
+
+
+function BilleteraConParametros() {
+  const params = useSearchParams();
+  return <BilleteraPageInner key={params?.toString() ?? ""} />;
+}
+
+export default function BilleteraPage() {
+  return <Suspense fallback={<main className="sol-main"><p>Cargando…</p></main>}><BilleteraConParametros /></Suspense>;
 }

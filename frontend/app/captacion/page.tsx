@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import {
   CANALES, CENTRALES, CONSENTIMIENTOS, TIPOS_DOCUMENTO, VALIDACIONES,
   abrirCaso, bandeja, calcularPerfil, cambiarEstado, consultarCentral, enviarOtp, expediente,
@@ -70,7 +73,7 @@ function datosDemo(d: { final?: string; doc?: string }): NuevoSolicitante {
   };
 }
 
-export default function CaptacionPage() {
+function CaptacionPageInner() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [sinSesion, setSinSesion] = useState(false);
   const [vista, setVista] = useState<Vista>("bandeja");
@@ -85,9 +88,18 @@ export default function CaptacionPage() {
     setAviso({ text: mensajeDeError(err), error: true, faltantes: faltantesDelError(err) });
   }, []);
 
+  const acciones = usuario?.acciones ?? [];
+  const permitido = puedeVerPantalla(acciones, "/captacion");
+
+  useEffect(() => {
+    if (!permitido) return;
+    bandeja(filtro || undefined).then(setCasos).catch(fallo);
+  }, [fallo, filtro, permitido]);
+
   const cargarBandeja = useCallback(async (estado = filtro) => {
+    if (!permitido) return;
     try { setCasos(await bandeja(estado || undefined)); } catch (err) { fallo(err); }
-  }, [filtro, fallo]);
+  }, [filtro, fallo, permitido]);
 
   const abrir = useCallback(async (idCaso: string) => {
     try {
@@ -98,7 +110,6 @@ export default function CaptacionPage() {
 
   useEffect(() => {
     obtenerMiPerfil().then(setUsuario).catch(() => setSinSesion(true));
-    bandeja().then(setCasos).catch(fallo);
   }, [fallo]);
 
   /** Ejecuta un paso del expediente y vuelve a leerlo: el estado lo decide el backend. */
@@ -129,6 +140,16 @@ export default function CaptacionPage() {
     if (v === "bandeja") void cargarBandeja();
   };
 
+  const pantalla = pantallaPorHref("/captacion");
+  if (usuario && !permitido) {
+    return (
+      <main className="sol-main">
+        <BarraNavegacion titulo="Captación" usuario={usuario} />
+        <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas trabajar con captación de clientes, pide a un administrador que revise tus permisos en COREDB." />
+      </main>
+    );
+  }
+
   return (
     <div className="sol-shell">
       <aside className="sol-sidebar">
@@ -143,21 +164,13 @@ export default function CaptacionPage() {
             <div className="sol-profile">
               <span className="sol-avatar">{usuario.nombre.trim()[0]?.toUpperCase()}</span>
               <div><strong>{usuario.nombre}</strong><small>{usuario.rol}</small></div>
-              <Link href="/login" onClick={cerrarSesion} title="Cerrar sesión" aria-label="Cerrar sesión"
-                style={{ marginLeft: "auto", color: "#b2c6d6", display: "flex" }}><Icono nombre="salir" tamano={16} /></Link>
             </div>
           </div>
         )}
       </aside>
 
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div><span>Captación</span><b>/</b>{vista === "nuevo" ? "Nuevo solicitante" : vista === "caso" ? "Expediente" : "Bandeja"}</div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">RENIEC, centrales y SMS simulados</span>
-            <Link href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>Volver al Home Banking</Link>
-          </div>
-        </header>
+        <BarraNavegacion titulo="Captación" subtitulo={vista === "nuevo" ? "Nuevo solicitante" : vista === "caso" ? "Expediente" : "Bandeja"} usuario={usuario} />
 
         <main className="sol-main">
           {sinSesion && (
@@ -182,7 +195,7 @@ export default function CaptacionPage() {
               onAbrir={abrir} onNuevo={() => irA("nuevo")} />
           )}
           {vista === "nuevo" && <Registro onAbierto={abrir} onError={fallo} />}
-          {vista === "caso" && exp && <ExpedienteVista key={exp.id_caso} exp={exp} ocupado={ocupado} paso={paso} />}
+          {vista === "caso" && exp && <ExpedienteVista key={exp.id_caso} exp={exp} ocupado={ocupado} paso={paso} acciones={usuario?.acciones ?? []} />}
         </main>
       </div>
     </div>
@@ -298,7 +311,7 @@ function Registro({ onAbierto, onError }: { onAbierto: (id: string) => void; onE
 // ── Expediente: pasos 2 a 5 ──────────────────────────────────────────────────
 type Paso = (nombre: string, accion: () => Promise<unknown>, exito?: string) => Promise<void>;
 
-function ExpedienteVista({ exp, ocupado, paso }: { exp: Expediente; ocupado: string | null; paso: Paso }) {
+function ExpedienteVista({ exp, ocupado, paso, acciones }: { exp: Expediente; ocupado: string | null; paso: Paso; acciones: string[] }) {
   const consent = ultimos(exp.consentimientos);
   const vals = ultimos(exp.validaciones);
   const cerrado = ["HABILITADO", "RECHAZADO", "REVOCADO"].includes(exp.estado);
@@ -334,7 +347,7 @@ function ExpedienteVista({ exp, ocupado, paso }: { exp: Expediente; ocupado: str
       <Consentimientos exp={exp} cerrado={cerrado} ocupado={ocupado} paso={paso} />
       <Verificacion exp={exp} cerrado={cerrado} ocupado={ocupado} paso={paso} />
       <Riesgo exp={exp} cerrado={cerrado} ocupado={ocupado} paso={paso} />
-      <Habilitacion exp={exp} ocupado={ocupado} paso={paso} />
+      <Habilitacion exp={exp} ocupado={ocupado} paso={paso} acciones={acciones} />
       <Decisiones exp={exp} ocupado={ocupado} paso={paso} />
     </>
   );
@@ -524,7 +537,7 @@ function Riesgo({ exp, cerrado, ocupado, paso }: PropsPaso) {
   );
 }
 
-function Habilitacion({ exp, ocupado, paso }: { exp: Expediente; ocupado: string | null; paso: Paso }) {
+function Habilitacion({ exp, ocupado, paso, acciones }: { exp: Expediente; ocupado: string | null; paso: Paso; acciones: string[] }) {
   const [ref, setRef] = useState<Referencia | null>(null);
   const habilitado = exp.estado === "HABILITADO" || exp.estado === "REVOCADO";
   return (
@@ -554,6 +567,11 @@ function Habilitacion({ exp, ocupado, paso }: { exp: Expediente; ocupado: string
             </button>
             <Link className="sol-link" href="/solicitud-credito">Ir a Solicitud de Crédito</Link>
           </div>
+          {puedeVerPantalla(acciones, "/cuenta") && (
+            <div className="sol-alert success" role="status" style={{ marginTop: 12 }}>
+              Siguiente paso: <Link href={`/cuenta?codCliente=${encodeURIComponent(exp.cod_cliente ?? "")}&tab=apertura`} style={{ fontWeight: 700, color: "inherit" }}>Abrir cuenta</Link> (lo hace un operador).
+            </div>
+          )}
           {ref && (
             <div className="cap-caja">
               <h3>Referencia CR-INT-01 <Insignia valor={ref.estado_habilitante === "HABILITADO" ? "APROBADO" : "RECHAZADO"} texto={ref.estado_habilitante} /></h3>
@@ -586,4 +604,9 @@ function Decisiones({ exp, ocupado, paso }: { exp: Expediente; ocupado: string |
       </div>
     </section>
   );
+}
+
+
+export default function CaptacionPage() {
+  return <Suspense fallback={<main className="sol-main"><p>Cargando…</p></main>}><CaptacionPageInner /></Suspense>;
 }

@@ -4,6 +4,9 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import {
   ESTADOS, RIESGOS, bandeja, conMoneda, decidir, evaluar, fecha, fechaHora, mensajeDeError, porcentaje,
   resultadosSol, revocar, sumar, verSolicitud,
@@ -12,6 +15,11 @@ import {
 
 // Pantalla del analista. Todo vive en COREDB: Evaluación reenvía el token de esta sesión,
 // así que COREDB vuelve a comprobar el permiso y su historial registra a la persona.
+
+// Evaluación se consulta con VER_CREDITO ( auditoría ), se evalúa y decide con las acciones del mapa.
+// El menú del portal no ofrece la pantalla a quien solo tiene VER_CREDITO (MR-02).
+const puedeConsultarEvaluacion = (acciones?: string[] | null) =>
+  puedeVerPantalla(acciones, "/evaluacion") || Boolean(acciones?.includes("VER_CREDITO"));
 
 type Vista = "bandeja" | "resultados";
 type Aviso = { text: string; error: boolean };
@@ -78,6 +86,7 @@ const MONTO = "^\\d{1,13}(\\.\\d{1,2})?$";
 
 export default function EvaluacionPage() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [cargandoPerfil, setCargandoPerfil] = useState(true);
   const [sinSesion, setSinSesion] = useState(false);
   const [vista, setVista] = useState<Vista>("bandeja");
   const [aviso, setAviso] = useState<Aviso | null>(null);
@@ -103,13 +112,14 @@ export default function EvaluacionPage() {
     obtenerMiPerfil()
       .then((perfil) => {
         setUsuario(perfil);
-        return bandeja();
+        return puedeConsultarEvaluacion(perfil.acciones) ? bandeja() : null;
       })
-      .then(setItems)
+      .then((lista) => { if (lista) setItems(lista); })
       .catch((err) => {
         if (esSesionInvalida(err)) setSinSesion(true);
         else setAviso({ text: mensajeDeError(err), error: true });
-      });
+      })
+      .finally(() => setCargandoPerfil(false));
   }, []);
 
   const ejecutar: Ejecutar = async (accion) => {
@@ -157,6 +167,18 @@ export default function EvaluacionPage() {
   const titulo = detalle ? `Solicitud ${detalle.idSolicitud}` : navegacion.find((n) => n.id === vista)?.etiqueta;
   const conteo = (estado: string) => (items ?? []).filter((s) => s.estado === estado).length;
 
+  if (cargandoPerfil) return <main className="sol-main"><p>Cargando…</p></main>;
+  const pantalla = pantallaPorHref("/evaluacion");
+  const permitido = puedeConsultarEvaluacion(usuario?.acciones);
+  if (usuario && !permitido) {
+    return (
+      <main className="sol-main">
+        <BarraNavegacion titulo="Evaluación" usuario={usuario} />
+        <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas evaluar solicitudes, pide a un administrador que revise tus permisos en COREDB." />
+      </main>
+    );
+  }
+
   return (
     <div className="sol-shell">
       <aside className="sol-sidebar">
@@ -193,18 +215,7 @@ export default function EvaluacionPage() {
       </aside>
 
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div>
-            <span>Evaluación</span>
-            <b>/</b>{titulo}
-          </div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">Regla provisional RN-EVA-002-P</span>
-            <Link href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>
-              Volver al inicio
-            </Link>
-          </div>
-        </header>
+        <BarraNavegacion titulo="Evaluación" subtitulo={String(titulo ?? "")} usuario={usuario} />
 
         <main className="sol-main">
           <div className="sol-heading">
