@@ -94,7 +94,7 @@ export default function SelectorCliente({ id, label, value, onChange, error, pla
             setTexto(event.target.value);
             setResultados([]);
             setMensaje("");
-            onChange("");
+            onChange(event.target.value);
           }}
         />
         <button

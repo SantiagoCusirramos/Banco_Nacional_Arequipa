@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = { replace: vi.fn(), push: vi.fn() };
+vi.mock("qrcode", () => ({ toDataURL: vi.fn(async () => "data:image/png;base64,") }));
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
   useSearchParams: () => new URLSearchParams(window.location.search),

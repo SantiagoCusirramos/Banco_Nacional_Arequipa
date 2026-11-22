@@ -35,6 +35,7 @@
 .selector-opcion{display:flex;justify-content:space-between;gap:10px;align-items:center;text-align:left;border:1px solid transparent;border-radius:6px;background:#f7f9fc;padding:9px 11px;font-size:11px;color:#293a53}
 .selector-opcion:hover,.selector-opcion:focus{background:#eaf2ff;border-color:#7095c4;outline:none}
 .selector-opcion strong{color:#214f8d}
+.sol-field-label{font-size:11px;font-weight:700;color:#45546a}
 .fx-error{font-size:10px;color:#c0443a}
 .fx-alert{border:1px solid #f1c9c4;background:#fff3f1;color:#a23b32;border-radius:8px;padding:11px 13px;font-size:11px;line-height:1.5;margin-top:4px}
 .fx-section{border-top:1px solid var(--line);padding-top:18px;display:grid;gap:12px}

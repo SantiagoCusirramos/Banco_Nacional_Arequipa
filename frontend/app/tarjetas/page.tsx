@@ -10,6 +10,8 @@ import { BarraNavegacion } from "@/app/components/BarraNavegacion";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
 import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import { ClaveNueva } from "../components/ClaveNueva";
+import SelectorCliente from "../components/SelectorCliente";
+import SelectorCuenta from "../components/SelectorCuenta";
 import {
   BINES, CANALES, CODIGOS_RESPUESTA, DIGITOS_CLAVE, ESTADOS_PEDIBLES, OPERACIONES, TIPOS_CLAVE,
   autorizarOperacion, cambiarEstado, emitirTarjeta, extornarAutorizacion, mensajeDeError, registrarClave,
@@ -611,14 +613,19 @@ function TarjetasPageInner() {
               </div>
               <div className="tj-emision">
                 <form onSubmit={emitir} className="sol-form-grid">
-                  <div className="sol-field">
-                    <label htmlFor="emision-cliente">Código del cliente</label>
-                    <input id="emision-cliente" value={clienteEmision} onChange={(e) => editarEmision(setClienteEmision)(e.target.value)} required maxLength={12} />
-                  </div>
-                  <div className="sol-field">
-                    <label htmlFor="emision-cuenta">Cuenta a vincular</label>
-                    <input id="emision-cuenta" value={cuentaEmision} onChange={(e) => editarEmision(setCuentaEmision)(e.target.value)} required maxLength={20} placeholder="Número de cuenta" />
-                  </div>
+                  <SelectorCliente
+                    id="emision-cliente"
+                    label="Código del cliente"
+                    value={clienteEmision}
+                    onChange={editarEmision(setClienteEmision)}
+                  />
+                  <SelectorCuenta
+                    id="emision-cuenta"
+                    label="Cuenta a vincular"
+                    codCliente={clienteEmision.trim()}
+                    value={cuentaEmision}
+                    onChange={editarEmision(setCuentaEmision)}
+                  />
                   <div className="sol-field">
                     <label htmlFor="emision-bin">BIN</label>
                     <select id="emision-bin" value={bin} onChange={(e) => editarEmision(setBin)(e.target.value)}>
@@ -773,8 +780,22 @@ function TarjetasPageInner() {
               </div>
               <form onSubmit={(e) => e.preventDefault()} className="sol-form-grid" style={{ padding: "0 24px 24px" }}>
                 <div className="sol-field">
-                  <label htmlFor="clave-id">Identificador de la tarjeta</label>
-                  <input id="clave-id" value={idClave} onChange={(e) => setIdClave(e.target.value)} required />
+                  <span className="sol-field-label">Tarjeta del cliente</span>
+                  <div className="selector-opciones">
+                    {(tarjetas ?? []).map((t) => (
+                      <button
+                        className="selector-opcion"
+                        type="button"
+                        key={t.id_tarjeta}
+                        aria-pressed={idClave === t.id_tarjeta}
+                        onClick={() => { setIdClave(t.id_tarjeta); setValidacion(null); }}
+                      >
+                        <strong>{t.numero_enmascarado}</strong>
+                        <span>{t.estado_tarjeta}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {!tarjetas?.length && <span className="fx-hint">Busca las tarjetas del cliente para elegir una.</span>}
                 </div>
                 <div className="sol-field">
                   <label htmlFor="clave-tipo">Clave</label>
