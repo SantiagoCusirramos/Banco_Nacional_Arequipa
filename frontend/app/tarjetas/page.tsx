@@ -400,7 +400,7 @@ function TarjetasPageInner() {
       <div className="sol-shell">
         <div className="sol-work" style={{ width: "100%" }}>
           <BarraNavegacion titulo="Tarjetas" usuario={usuario} />
-          <main className="sol-main">
+          <main id="contenido" className="sol-main">
             <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas operar tarjetas, pide a un administrador que revise tus permisos en COREDB." />
           </main>
         </div>
@@ -442,7 +442,7 @@ function TarjetasPageInner() {
       <div className="sol-work">
         <BarraNavegacion titulo="Tarjetas" subtitulo={navegacion.find((n) => n.id === tab)?.etiqueta} usuario={usuario} />
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           <div className="sol-heading">
             <div>
               <h1>Tarjetas de débito</h1>
@@ -863,5 +863,5 @@ function TarjetasConParametros() {
 }
 
 export default function TarjetasPage() {
-  return <Suspense fallback={<main className="sol-main"><p>Cargando…</p></main>}><TarjetasConParametros /></Suspense>;
+  return <Suspense fallback={<main id="contenido" className="sol-main"><p>Cargando…</p></main>}><TarjetasConParametros /></Suspense>;
 }

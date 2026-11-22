@@ -55,13 +55,13 @@ export function Marco({ children }: { children: React.ReactNode }) {
           <Link href="/" className="rounded-md px-3 py-2 text-sm text-marca-100 ring-1 ring-white/20 hover:bg-white/10 hover:text-white">Volver al portal</Link>
           <button
             onClick={salir}
-            className="rounded-md px-3 py-2 text-sm text-marca-100 ring-1 ring-white/20 hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded-md px-3 py-2 text-sm text-marca-100 ring-1 ring-white/20 hover:bg-white/10 hover:text-white"
           >
             Cerrar sesión
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-6 py-6">{children}</main>
+      <main id="contenido" className="mx-auto max-w-7xl px-6 py-6">{children}</main>
     </div>
   );
 }

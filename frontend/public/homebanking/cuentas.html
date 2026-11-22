@@ -51,8 +51,8 @@
     <section class="panel">
       <h1>Obtener mis cuentas con la tarjeta</h1>
       <p class="sub">
-        Selecciona o ingresa el número de tu tarjeta BNA. El canal verifica la titularidad
-        y luego solicita tu posición consolidada al Bus de Servicios.
+        Selecciona o escribe el número de tu tarjeta BNA. El canal comprueba los datos
+        de la tarjeta y muestra tus cuentas activas con sus saldos.
       </p>
 
       <div class="plastico" id="plastico">
@@ -79,7 +79,7 @@
             <label for="numTarjeta">Número de tarjeta</label>
             <input type="text" id="numTarjeta" class="mono" inputmode="numeric"
                    placeholder="0000 0000 0000 0000" maxlength="19">
-            <div class="pista">16 dígitos, sin espacios en la solicitud al Bus.</div>
+            <div class="pista">Elige una de «Mis tarjetas» o escribe los 16 dígitos que aparecen en tu tarjeta.</div>
           </div>
           <button type="submit" class="btn" id="btnObtener">Obtener cuentas</button>
         </div>
@@ -88,14 +88,9 @@
       <div class="msg" id="msgCuentas"></div>
 
       <div class="nota">
-        Flujo del prototipo (usando puentes del frontend Next.js):<br>
-        1) <code>GET /api/tarjeta/cliente/{codCliente}</code> → módulo <b>Tarjetas</b>
-        lista las tarjetas del cliente.<br>
-        2) <code>GET /api/cuenta/consolidada/{codCliente}</code> → interfaz <b>INT-08</b> del módulo
-        <b>Cuentas</b> devuelve las cuentas activas con saldos.<br>
-        3) «Bloquear», tras confirmar: <code>POST /api/tarjeta/{id}/bloqueo</code> → módulo <b>Tarjetas</b>
-        (por el Bus) deja la tarjeta BLOQUEADA.<br>
-        <i>Nota: Verificar titularidad no disponible en esta versión (requiere endpoint /api/tarjeta/{id}/verificar-titularidad).</i>
+        Así obtenemos tus cuentas: primero mostramos tus tarjetas BNA y luego consultamos tus
+        cuentas activas con sus saldos. Si pides bloquear una tarjeta, deja de aceptarse de inmediato.
+        La verificación de titularidad no está disponible en esta versión.
       </div>
     </section>
 
@@ -148,9 +143,8 @@
       <div class="msg" id="msgOmitidas"></div>
 
       <div class="nota">
-        <b>INT-08</b> · Origen: Home Banking → Destino: Módulo Cuentas (vía Bus).<br>
-        Entrada: <code>codCliente</code> · Salida: <code>numCuenta, tipoCuenta, moneda,
-        saldoContable, saldoDisponible</code>. RF-HB-002 / RF-HB-003.
+        Mostramos las cuentas activas del cliente con su número, tipo, moneda y saldo disponible.
+        Las cuentas que no están activas no aparecen.
       </div>
     </section>
 

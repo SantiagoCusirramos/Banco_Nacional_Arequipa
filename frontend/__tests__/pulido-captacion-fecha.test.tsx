@@ -41,7 +41,7 @@ describe("Captación: fecha de apertura", () => {
     get.mockImplementation(async (url: string) => sobre(url === "/casos" ? [{ ...CASO, solicitante: SOLICITANTE }] : EXPEDIENTE));
     render(<CaptacionPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Abrir" }));
-    await waitFor(() => expect(screen.getByText(/Abierto 15 nov/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Abierto 15[ -]nov/)).toBeInTheDocument());
     expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
   });
 

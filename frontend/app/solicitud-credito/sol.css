@@ -186,6 +186,7 @@
   width: 100%;
   border: 0;
   border-radius: 7px;
+  min-height: 48px;
   padding: 13px 12px;
   color: #c4d2df;
   background: none;
@@ -463,6 +464,9 @@
   border: 1px solid var(--sol-line);
   border-radius: 10px;
   overflow: hidden;
+}
+.sol-card-pad {
+  padding: 0 24px 24px;
 }
 .sol-card-title {
   display: flex;

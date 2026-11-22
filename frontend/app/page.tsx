@@ -33,7 +33,7 @@ export default function Home() {
   }
 
   if (!usuario) {
-    return <main className="auth-page"><div className="auth-loading">Cargando tu banca personal...</div></main>;
+    return <main id="contenido" className="auth-page"><div className="auth-loading">Cargando tu banca personal...</div></main>;
   }
   return <BancaPersonal usuario={usuario} onSalir={salir} />;
 }

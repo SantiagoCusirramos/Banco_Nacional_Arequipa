@@ -20,7 +20,7 @@ describe("Consistencia visual", () => {
   it("ES-02 las tarjetas tienen el relleno del sistema", () => {
     for (const archivo of ARCHIVOS) {
       const fuente = leer(archivo);
-      for (const tarjeta of fuente.matchAll(/className="sol-card([^"]*)"[\s\S]{0,200}/g)) {
+      for (const tarjeta of fuente.matchAll(/className="sol-card(?: [^"]*)?"[\s\S]{0,200}/g)) {
         expect(tarjeta[0], `${archivo}: ${tarjeta[0]}`).toMatch(/sol-card-pad|padding:/);
       }
     }

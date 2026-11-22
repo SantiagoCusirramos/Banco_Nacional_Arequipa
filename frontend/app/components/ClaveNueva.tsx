@@ -95,7 +95,7 @@ export function ClaveNueva({ digitos, nombre, asignar, textoGenerar = "Generar y
       )}
 
       {paraEntregar && (
-        <section role="region" aria-labelledby={`${id}-titulo`} className="sol-card" style={{ marginTop: "12px", borderColor: "#c9a227", padding: "16px 24px" }}>
+        <section role="region" aria-labelledby={`${id}-titulo`} className="sol-card sol-card-pad" style={{ marginTop: "12px", borderColor: "#c9a227" }}>
           <h3 id={`${id}-titulo`}>{nombre} para entregar</h3>
           <p style={{ fontFamily: "monospace", fontSize: "28px", letterSpacing: "6px", margin: "8px 0" }}>{paraEntregar}</p>
           <p><strong>No se volverá a mostrar.</strong> Entrégaselo a la clienta en privado; tú no lo anotes.</p>

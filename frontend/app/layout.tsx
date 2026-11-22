@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SaltarContenido } from "./components/SaltarContenido";
 import VigilanteSesion from "./components/VigilanteSesion";
 
 export const metadata: Metadata = {
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es">
       <body>
+        <SaltarContenido />
         <VigilanteSesion />
         {children}
       </body>

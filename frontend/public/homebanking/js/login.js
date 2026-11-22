@@ -13,10 +13,10 @@
     const etiqueta = document.getElementById("estadoCanal");
     try {
       const r = await fetch("/api/core/coredb/salud");
-      if (etiqueta && r.ok) etiqueta.textContent = "COREDB · en línea";
+      if (etiqueta && r.ok) etiqueta.textContent = "Servicio disponible";
     } catch (e) {
-      if (etiqueta) etiqueta.textContent = "COREDB no disponible";
-      mostrarMensaje(msg, "warn", "COREDB no responde. Verifique que los servicios estén en ejecución.");
+      if (etiqueta) etiqueta.textContent = "Servicio no disponible";
+      mostrarMensaje(msg, "warn", "No se pudo comprobar la conexión. Intenta de nuevo más tarde.");
     }
   })();
 
@@ -58,7 +58,7 @@
       mostrarMensaje(msg, "ok", `${r.mensajeAcceso}. Redirigiendo a sus cuentas…`);
       setTimeout(() => { window.location.href = "cuentas.html"; }, 700);
     } catch (err) {
-      const texto = err.mensaje || "No fue posible iniciar sesión. Intente nuevamente.";
+      const texto = mensajeError(err);
       mostrarMensaje(msg, err.codigo === "BUS_TIMEOUT" ? "warn" : "error", texto);
       clave.value = "";
       clave.focus();

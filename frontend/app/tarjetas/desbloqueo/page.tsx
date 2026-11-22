@@ -209,7 +209,7 @@ export default function DesbloqueoPage() {
           </div>
         </header>
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           <div className="sol-heading">
             <div>
               <h1>Desbloqueo de tarjetas</h1>

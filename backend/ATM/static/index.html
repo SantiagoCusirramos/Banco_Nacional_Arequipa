@@ -327,9 +327,9 @@ function expulsar(){
 /* ---- comprobante opcional ---- */
 function preguntarRecibo(imprimir, siguiente){
   const c = nueva();
-  c.append(el('div','peque','Operación terminada'), el('h2',null,'¿Desea comprobante?'));
+  c.append(el('div','peque','Operación terminada'), el('div','peque','La operación ya terminó.'), el('h2',null,'¿Desea comprobante?'));
   etiqueta('der', 3, 'Sí', () => { imprimir(); siguiente(); });
-  etiqueta('der', 4, 'No', siguiente);
+  etiqueta('der', 4, 'No, volver al menú', siguiente);
 }
 
 /* ---- validacion de monto ---- */

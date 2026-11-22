@@ -121,12 +121,12 @@ function BilleteraPageInner() {
     });
   }
 
-  if (cargandoPerfil) return <main className="sol-main"><p>Cargando…</p></main>;
+  if (cargandoPerfil) return <main id="contenido" className="sol-main"><p>Cargando…</p></main>;
   const pantalla = pantallaPorHref("/billetera");
   const permitido = puedeVerPantalla(usuario?.acciones, "/billetera");
   if (!permitido) {
     return (
-      <main className="sol-main">
+      <main id="contenido" className="sol-main">
         <BarraNavegacion titulo="Billetera Chaski" usuario={usuario} />
         <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas afiliar clientes o comercios, pide a un administrador que revise tus permisos en COREDB." />
       </main>
@@ -168,7 +168,7 @@ function BilleteraPageInner() {
       <div className="sol-work">
         <BarraNavegacion titulo="Billetera Chaski" subtitulo="Afiliación a Chaski" usuario={usuario} />
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           {notice && (
             <div role={notice.error ? "alert" : "status"} className={`sol-alert ${notice.error ? "error" : "success"}`}>
               {notice.text}
@@ -177,7 +177,7 @@ function BilleteraPageInner() {
           )}
 
           {tab === "afiliacion" && (
-            <div className="sol-card">
+            <div className="sol-card sol-card-pad">
               <div className="sol-card-title">
                 <div>
                   <h2>Afiliar un cliente a Chaski</h2>
@@ -224,7 +224,7 @@ function BilleteraPageInner() {
           )}
 
           {tab === "comercio" && (
-            <div className="sol-card">
+            <div className="sol-card sol-card-pad">
               <div className="sol-card-title">
                 <div>
                   <h2>Registrar un comercio</h2>
@@ -279,7 +279,7 @@ function BilleteraPageInner() {
                       </figure>
                       <div className="qr-no-impresion" style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "12px" }}>
                         <a className="sol-button primary" href={imagenQrComercio} download={`qr-${comercio.ruc}.png`}>Descargar QR</a>
-                        <button type="button" className="sol-button" onClick={() => window.print()}>Imprimir</button>
+                        <button type="button" className="sol-button secondary" onClick={() => window.print()}>Imprimir</button>
                       </div>
                     </div>
                   )}
@@ -288,7 +288,7 @@ function BilleteraPageInner() {
             </div>
           )}
 
-          <section className="sol-card" aria-labelledby="instalar-chaski-titulo" style={{ marginTop: "20px" }}>
+          <section className="sol-card sol-card-pad" aria-labelledby="instalar-chaski-titulo" style={{ marginTop: "20px" }}>
             <div className="sol-card-title">
               <div>
                 <h2 id="instalar-chaski-titulo">Instalar Chaski en el celular de la clienta</h2>
@@ -331,5 +331,5 @@ function BilleteraConParametros() {
 }
 
 export default function BilleteraPage() {
-  return <Suspense fallback={<main className="sol-main"><p>Cargando…</p></main>}><BilleteraConParametros /></Suspense>;
+  return <Suspense fallback={<main id="contenido" className="sol-main"><p>Cargando…</p></main>}><BilleteraConParametros /></Suspense>;
 }

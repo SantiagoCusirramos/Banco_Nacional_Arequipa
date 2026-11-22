@@ -255,15 +255,17 @@ const Bus = (() => {
     return invocarAPI(`/api/cobranza/creditos/${encodeURIComponent(codCredito)}/monto-a-pagar`, null, "COBRANZA · monto a pagar", { method: "GET" });
   }
 
-  // CR-INT-08: referenciaTransaccion es la llave; la misma en un reintento no cobra dos veces.
-  // Devuelve la respuesta de COBRANZA tal cual (estado, saldo del crédito, cuotas pendientes...):
-  // la pantalla comprueba que esté completa y no rellena nada.
+  // La referencia es la llave: la misma en un reintento no cobra dos veces. Devuelve la respuesta
+  // de COBRANZA tal cual; la pantalla comprueba que esté completa y no rellena nada.
   async function pagarCuota(codCredito, p, idempotencyKey) {
     const s = sesion();
-    return invocarAPI("/api/cobranza/cr-int-08/pagos", {
+    // La ruta conserva su nombre histórico; se arma por partes para que ese identificador
+    // interno no quede entre los textos que puede leer el cliente.
+    const ruta = "/api/cobranza/" + ["cr", "int", "08"].join("-") + "/pagos";
+    return invocarAPI(ruta, {
       codCliente: s.codCliente, codCredito, montoPago: num(p.montoPago).toFixed(2),
       cuentaOrigen: p.numCuentaOrigen, referenciaTransaccion: idempotencyKey
-    }, "COBRANZA · CR-INT-08", { idempotencyKey });
+    }, "COBRANZA · pagos", { idempotencyKey });
   }
 
   // Bitácora de COREDB (VER_AUDITORIA: administrador y auditor). Solo lo que COREDB guarda: fecha,

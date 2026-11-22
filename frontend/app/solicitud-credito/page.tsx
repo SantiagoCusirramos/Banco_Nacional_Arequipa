@@ -824,7 +824,7 @@ export default function SolicitudPage() {
     return (
       <div className="sol-shell"><div className="sol-work" style={{ width: "100%" }}>
         <BarraNavegacion titulo="Solicitud de crédito" usuario={user} />
-        <main className="sol-main"><AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantallaSolicitud?.rolesPermitidos ?? "personal autorizado"}.`} /></main>
+        <main id="contenido" className="sol-main"><AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantallaSolicitud?.rolesPermitidos ?? "personal autorizado"}.`} /></main>
       </div></div>
     );
   }
@@ -908,7 +908,7 @@ export default function SolicitudPage() {
       </aside>
       <div className="sol-work">
         <BarraNavegacion titulo="Solicitud de crédito" usuario={user} />
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           {notice && (
             <div
               role={notice.error ? "alert" : "status"}

@@ -29,7 +29,7 @@ function ClaveParaEntregar({ entrega, onListo }: { entrega: Entrega; onListo: ()
     }
   }
   return (
-    <section className="sol-card" role="region" aria-labelledby="titulo-clave" style={{ marginBottom: "24px", borderColor: "#c9a227", padding: "0 24px 24px" }}>
+    <section className="sol-card sol-card-pad" role="region" aria-labelledby="titulo-clave" style={{ marginBottom: "24px", borderColor: "#c9a227" }}>
       <div className="sol-card-title">
         <div>
           <h2 id="titulo-clave">Contraseña inicial de {entrega.username}</h2>
@@ -162,7 +162,7 @@ export default function UsuariosPage() {
           </div>
         </header>
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           <div className="sol-heading">
             <div>
               <h1>Usuarios</h1>
@@ -183,7 +183,7 @@ export default function UsuariosPage() {
           )}
 
           {usuario && !puede && (
-            <section className="sol-card">
+            <section className="sol-card sol-card-pad">
               <div className="sol-empty" role="status">
                 <h3>Esta pantalla es para administradores.</h3>
                 <p>Tu rol ({nombreRol(usuario.rol)}) no puede crear usuarios. Si necesitas una cuenta para alguien, pídesela a un administrador.</p>
@@ -199,7 +199,7 @@ export default function UsuariosPage() {
               {entrega && <ClaveParaEntregar entrega={entrega} onListo={() => setEntrega(null)} />}
 
               {formulario && (
-                <section className="sol-card" style={{ marginBottom: "24px" }}>
+                <section className="sol-card sol-card-pad" style={{ marginBottom: "24px" }}>
                   <div className="sol-card-title"><div><h2>Nuevo usuario</h2><p>El sistema genera la contraseña inicial: no hace falta inventarla.</p></div></div>
                   <form onSubmit={crear} className="tj-form" style={{ display: "grid", gap: "12px", maxWidth: "480px" }}>
                     <label htmlFor="nu-nombre">Nombre completo</label>
@@ -219,7 +219,7 @@ export default function UsuariosPage() {
                 </section>
               )}
 
-              <section className="sol-card">
+              <section className="sol-card sol-card-pad">
                 <div className="sol-card-title"><div><h2>Personal con acceso</h2><p>{lista ? `${lista.length} usuarios` : "Cargando…"}</p></div></div>
                 {lista && (
                   <div style={{ overflowX: "auto" }}>
@@ -277,7 +277,7 @@ export default function UsuariosPage() {
           {porRenovar && (
             <div role="dialog" aria-modal="true" aria-labelledby="titulo-renovar" className="tj-modal-fondo"
               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", display: "grid", placeItems: "center" }}>
-              <div className="sol-card" style={{ maxWidth: "440px" }}>
+              <div className="sol-card sol-card-pad" style={{ maxWidth: "440px" }}>
                 <h2 id="titulo-renovar">¿Renovar la contraseña de {porRenovar.username}?</h2>
                 <p>La actual dejará de servir. Verás una contraseña temporal para entregarle, y tendrá que cambiarla al entrar.</p>
                 <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>

@@ -46,8 +46,14 @@ function Icono({ nombre, tamano = 18 }: { nombre: string; tamano?: number }) {
   );
 }
 
-const fecha = (iso: string | null) =>
-  iso ? new Date(iso.endsWith("Z") ? iso : `${iso}Z`).toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+const fecha = (iso: string | null) => {
+  if (!iso) return "—";
+  // COREDB serializa con offset (+00:00); los mocks, sin zona. Añadir «Z» a un offset parte la fecha.
+  const valor = /[+-]\d{2}:\d{2}$/.test(iso) || iso.endsWith("Z") ? iso : `${iso}Z`;
+  const instante = new Date(valor);
+  if (Number.isNaN(instante.getTime())) return "—";
+  return instante.toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+};
 const soles = (v: string | number) => new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(Number(v));
 const nombre = (s: { nombres: string; apellido_paterno: string; apellido_materno: string | null }) =>
   `${s.nombres} ${s.apellido_paterno}${s.apellido_materno ? ` ${s.apellido_materno}` : ""}`;
@@ -144,7 +150,7 @@ function CaptacionPageInner() {
   const pantalla = pantallaPorHref("/captacion");
   if (usuario && !permitido) {
     return (
-      <main className="sol-main">
+      <main id="contenido" className="sol-main">
         <BarraNavegacion titulo="Captación" usuario={usuario} />
         <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas trabajar con captación de clientes, pide a un administrador que revise tus permisos en COREDB." />
       </main>
@@ -173,7 +179,7 @@ function CaptacionPageInner() {
       <div className="sol-work">
         <BarraNavegacion titulo="Captación" subtitulo={vista === "nuevo" ? "Nuevo solicitante" : vista === "caso" ? "Expediente" : "Bandeja"} usuario={usuario} />
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           {sinSesion && (
             <div role="alert" className="sol-alert error">
               Tu sesión no está iniciada o ya venció.
@@ -335,7 +341,7 @@ function ExpedienteVista({ exp, ocupado, paso, acciones }: { exp: Expediente; oc
           <h1>{nombre(exp.solicitante)}</h1>
           <p className="cap-sub">{exp.solicitante.tipo_documento} {exp.solicitante.numero_documento} · {exp.solicitante.celular} · {exp.solicitante.correo}</p>
         </div>
-        <div className="cap-estado"><Insignia valor={exp.estado} /><small>Abierto {fecha(exp.creado_en)} por {exp.creado_por}</small></div>
+        <div className="cap-estado"><Insignia valor={exp.estado} />{exp.creado_en && <small>Abierto {fecha(exp.creado_en)} por {exp.creado_por}</small>}</div>
       </div>
 
       <ol className="sol-steps">
@@ -465,6 +471,7 @@ function Verificacion({ exp, cerrado, ocupado, paso }: PropsPaso) {
               </button>
             </>
           )}
+          <div className="sol-tablewrap">
           <table className="cap-tabla">
             <tbody>
               {VALIDACIONES.map((v) => {
@@ -479,6 +486,7 @@ function Verificacion({ exp, cerrado, ocupado, paso }: PropsPaso) {
               })}
             </tbody>
           </table>
+          </div>
           {!cerrado && (
             <details className="cap-manual">
               <summary>Registrar una validación manual (debida diligencia, verificación presencial)</summary>
@@ -514,6 +522,7 @@ function Riesgo({ exp, cerrado, ocupado, paso }: PropsPaso) {
         </div>
       )}
       <div className="cap-dos">
+        <div className="sol-tablewrap">
         <table className="cap-tabla">
           <thead><tr><th>Central</th><th>Calificación</th><th>Deuda</th><th>Entidades</th><th>Mora</th></tr></thead>
           <tbody>
@@ -523,6 +532,7 @@ function Riesgo({ exp, cerrado, ocupado, paso }: PropsPaso) {
             ))}
           </tbody>
         </table>
+        </div>
         <div className="cap-caja">
           {p ? (
             <>
@@ -609,5 +619,5 @@ function Decisiones({ exp, ocupado, paso }: { exp: Expediente; ocupado: string |
 
 
 export default function CaptacionPage() {
-  return <Suspense fallback={<main className="sol-main"><p>Cargando…</p></main>}><CaptacionPageInner /></Suspense>;
+  return <Suspense fallback={<main id="contenido" className="sol-main"><p>Cargando…</p></main>}><CaptacionPageInner /></Suspense>;
 }
