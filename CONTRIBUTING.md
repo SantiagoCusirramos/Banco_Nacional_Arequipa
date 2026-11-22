@@ -10,6 +10,26 @@ Este repositorio es el producto integrado del BNA. Lo que llega a `main` lo usa 
 4. **CI en verde**: los flujos «CI» y, si toca el despliegue, «Kubernetes».
 5. **Merge commit**, nunca squash ni rebase. Después se borra la rama.
 
+## Trabajar en paralelo
+
+Varias personas o agentes pueden trabajar a la vez en la misma máquina, cada uno en su worktree, sin cruzarse:
+
+```bash
+git worktree add -b <modulo>/<que-cambia> ../bna-<que-cambia> origin/main
+cd ../bna-<que-cambia>
+./bna test                            # proyecto propio: bna-prueba-<rama>-<pid>
+BNA_PROYECTO=bna-<que-cambia> ./bna up   # una copia del producto para probar a mano
+BNA_PROYECTO=bna-<que-cambia> ./bna smoke
+BNA_PROYECTO=bna-<que-cambia> ./bna down -v
+```
+
+- `BNA_PROYECTO` es el proyecto de Compose: contenedores, redes y volúmenes llevan su nombre, y `./bna down -v` solo borra los suyos. Por omisión es `bna`, el producto de uso diario.
+- `BNA_ETIQUETA_LOCAL` es la etiqueta de las imágenes `bna/*` (por omisión `local`). `./bna test` usa el nombre de su proyecto, así que dos corridas no construyen sobre la misma imagen, y borra sus etiquetas al terminar.
+- `./bna test` no publica puertos en la máquina (`compose.sin-puertos.yaml`): las suites y el flujo corren dentro de las redes de Compose, y la base de cada suite de integración toma un puerto libre. Se niega a usar un proyecto que ya tenga contenedores o volúmenes.
+- Una copia levantada con `./bna up` sí publica puertos. Para dos a la vez, cambie también los `BNA_PUERTO_*` en el `.env` de uno de los worktrees.
+- kind: `./bna k8s-up` crea el clúster con el nombre del proyecto. El clúster `bna` publica sus puertos; uno con otro nombre no, y `k8s-smoke` corre igual dentro del clúster. `scripts/prueba_k8s_infra_kind.sh` usa `<proyecto>-infra` y reenvía a puertos libres.
+- La limpieza solo toca lo que cada corrida creó. No use `docker system prune` ni `docker volume rm` sobre lo que no es suyo.
+
 ## Lo que no se hace
 
 - **No se sube nada directo a `main`.** Eso incluye «Add files via upload» desde la web: en ese formulario hay que elegir «Create a new branch for this commit and start a pull request». Cada push directo abre un aviso automático para su autor (`.github/workflows/aviso-push-directo.yml`). El aviso no revierte nada.
