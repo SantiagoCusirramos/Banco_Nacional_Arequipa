@@ -37,6 +37,8 @@ El navegador solo llama a rutas de este mismo servidor, que las reenvía desde e
 
 En el producto, todas las variables apuntan al Bus de Servicios (`http://bus:8018/bus/<módulo>/...`, ver `compose.yaml`) y el servidor agrega `X-Bus-Token` con `BUS_TOKEN`.
 
+`GET /api/config-publica` (sin sesión, `Cache-Control: no-store`) publica `BNA_URL_BILLETERA`, `BNA_URL_CAJERO` y `BNA_URL_APK` como `urlBilletera`, `urlCajero` y `urlApk`: solo http(s) sin credenciales y vacío o inválido → `null`. La app Chaski lo usa para conectarse y descargar el APK; los QR de `/billetera` se generan en el navegador con `qrcode`.
+
 Las variables se leen al ejecutar, no al construir. De cada petición se reenvían `Authorization`, `X-Idempotency-Key`, `X-Channel-ID` y `X-Request-Timestamp`; si falta `X-Correlation-ID`, se genera uno. La sesión de COREDB (el token) se guarda en `localStorage` con clave `bna_access_token`; la de SOL, en una cookie que maneja su propio puente.
 
 Cobranza funciona igual que los demás: el puente `/api/cobranza` reenvía el bearer token de COREDB y `X-Bus-Token`; sin claves propias.
