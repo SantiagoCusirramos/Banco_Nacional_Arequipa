@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-// Configuración pública de Chaski: la app del celular la lee sin sesión para saber dónde
-// conectar y de dónde descargar el APK. Se resuelve en cada petición: la misma imagen
+// Configuración pública: la pantalla Billetera la lee para el enlace de descarga del APK y el
+// QR de configuración de Chaski (y el portal, para el cajero). Se resuelve en cada petición: la misma imagen
 // sirve para varios despliegues.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
