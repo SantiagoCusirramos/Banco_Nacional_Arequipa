@@ -442,6 +442,10 @@ X833	bna_api_user	La acción de un evento es un código en mayúsculas	pasa
 X834	bna_api_user	Un evento de un módulo desconocido se rechaza	pasa
 X835	bna_api_user	bna_api no escribe core.evento_modulo	pasa
 X836	bna_api_user	Un evento sin actor se rechaza	pasa
+X837	bna_api_user	La vista del historial de tarjetas tiene exactamente las columnas acordadas	pasa
+X838	bna_api_user	bna_api lee el motivo y el origen de un bloqueo en el historial de la tarjeta	pasa
+X839	bna_api_user	bna_api no puede: escribir en el historial de la tarjeta por la vista	pasa
+X840	bna_api_user	bna_api no puede: SELECT tarjetas.historial_estado_tarjeta (solo la vista)	pasa
 X30	bna_admin_user	El empleado exige una agencia existente	pasa
 X31	bna_admin_user	La tasa debe ser positiva	pasa
 X32	bna_admin_user	El plazo mínimo no supera al máximo	pasa

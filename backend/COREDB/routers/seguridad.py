@@ -18,9 +18,9 @@ from sqlalchemy.orm import Session
 from COREDB.auth import PersonaSeguridad, persona_por_seguridad
 from COREDB.database import db_session, llamar, sesion_seguridad
 from COREDB.errores import ErrorCoreDb
-from COREDB.models import IncidenteSeguridad
+from COREDB.models import HistorialEstadoTarjeta, IncidenteSeguridad
 from COREDB.permisos import GESTIONAR_INCIDENTES
-from COREDB.routers.tarjetas import TarjetaRespuesta, _obtener
+from COREDB.routers.tarjetas import CambioEstado, TarjetaRespuesta, _obtener
 from COREDB.transacciones import con_reintentos
 
 router = APIRouter(tags=["seguridad"])
@@ -216,7 +216,16 @@ class DesbloqueoPeticion(BaseModel):
     motivo: str = Field(min_length=3, max_length=255)
 
 
-@router.post("/coredb/tarjetas/{id_tarjeta}/desbloqueo", response_model=TarjetaRespuesta,
+class CambioDesbloqueo(CambioEstado):
+    estado_anterior: str = Field(description="BLOQUEADA o RETENIDA: el estado del que salió.")
+    actor: str = Field(description="La persona que desbloqueó; queda igual en la bitácora (DESBLOQUEAR_TARJETA).")
+
+
+class DesbloqueoRespuesta(TarjetaRespuesta):
+    cambio: CambioDesbloqueo = Field(description="El registro del historial que dejó este desbloqueo.")
+
+
+@router.post("/coredb/tarjetas/{id_tarjeta}/desbloqueo", response_model=DesbloqueoRespuesta,
              responses={404: {"description": "TARJETA_NO_ENCONTRADA"},
                         409: {"description": "TARJETA_NO_BLOQUEADA"},
                         503: {"description": "SEGURIDAD_NO_CONFIGURADA"}})
@@ -228,11 +237,11 @@ def desbloquear_tarjeta(
 ):
     """Devuelve a ACTIVA una tarjeta BLOQUEADA o RETENIDA, con origen SEGURIDAD. La base solo lo
     permite al rol bna_seguridad: esta ruta usa esa cuenta y nada más. El actor es la persona."""
-    _obtener(db, id_tarjeta)
+    estado_leido = _obtener(db, id_tarjeta).estado_tarjeta
     db.rollback()  # la lectura de después no debe ver la instantánea de antes del cambio
     sesion = sesion_seguridad()
     try:
-        con_reintentos(
+        (id_historial,) = con_reintentos(
             sesion,
             lambda: llamar(sesion, "tarjetas.desbloquear_tarjeta", id_tarjeta, datos.motivo, quien.actor,
                            salidas=1),
@@ -245,4 +254,18 @@ def desbloquear_tarjeta(
     finally:
         sesion.close()
     db.expire_all()
-    return _obtener(db, id_tarjeta)
+    tarjeta = _obtener(db, id_tarjeta)
+    # El registro del desbloqueo y el anterior (el bloqueo del que salió), leídos de la base.
+    # Una tarjeta cargada ya bloqueada, sin historial previo, toma el estado leído antes.
+    registro, *anterior = (
+        db.query(HistorialEstadoTarjeta)
+        .filter(HistorialEstadoTarjeta.id_tarjeta == id_tarjeta,
+                HistorialEstadoTarjeta.id_historial <= int(id_historial))
+        .order_by(HistorialEstadoTarjeta.id_historial.desc())
+        .limit(2)
+        .all()
+    )
+    cambio = CambioDesbloqueo(**CambioEstado.model_validate(registro).model_dump(),
+                              estado_anterior=anterior[0].estado_nuevo if anterior else estado_leido,
+                              actor=quien.actor)
+    return DesbloqueoRespuesta(**TarjetaRespuesta.model_validate(tarjeta).model_dump(), cambio=cambio)

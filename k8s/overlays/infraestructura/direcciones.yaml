@@ -16,6 +16,7 @@ data:
   DESEMBOLSO_GATEWAY_URL: http://bna-bus:8018/bus/desembolso/api/v1
   CAPTACION_GATEWAY_URL: http://bna-bus:8018/bus/captacion/api/v1/captacion
   COBRANZA_GATEWAY_URL: http://bna-bus:8018/bus/cobranza
+  SEGURIDAD_GATEWAY_URL: http://bna-bus:8018/bus/seguridad/seguridad
 ---
 apiVersion: v1
 kind: ConfigMap

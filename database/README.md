@@ -418,6 +418,17 @@ APROBADO o RECHAZADO (T1). `bna_api` ejecuta los procedimientos y lee
 `v_recepcion_solicitud_api` y `v_solicitud_api` (ahora con código, revisión y destino).
 Pruebas X800 a X836, X880 y X881. Agrega tablas: una base anterior necesita un volumen nuevo.
 
+### Historial de estados de una tarjeta (desde `bd-v1.16-mysql`)
+
+La pantalla de desbloqueo del personal muestra por qué está bloqueada una tarjeta. El motivo,
+el origen y la fecha de cada cambio están en `tarjetas.historial_estado_tarjeta`, que
+`bna_api` no leía. `tarjetas.v_historial_estado_tarjeta_api` (`id_historial`, `id_tarjeta`,
+`estado_nuevo`, `motivo`, `origen`, `fecha_hora`) se los da en solo lectura; la tabla sigue
+sin permisos para la API y los cambios siguen pasando por `cambiar_estado_tarjeta` y
+`desbloquear_tarjeta`. Pruebas X837 a X840. Solo agrega una vista y un permiso: en una base
+anterior basta con ejecutar ese `CREATE VIEW` y ese `GRANT` de `sql/bna_extension.sql` como
+root, sin volumen nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.

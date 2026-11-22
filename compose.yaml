@@ -520,6 +520,8 @@ services:
       DESEMBOLSO_GATEWAY_URL: http://bus:8018/bus/desembolso/api/v1
       COBRANZA_GATEWAY_URL: http://bus:8018/bus/cobranza
       CAPTACION_GATEWAY_URL: http://bus:8018/bus/captacion/api/v1/captacion
+      # Solo para la pantalla de desbloqueo de tarjetas (el puente filtra las rutas).
+      SEGURIDAD_GATEWAY_URL: http://bus:8018/bus/seguridad/seguridad
       BUS_TOKEN: ${BUS_TOKEN_FRONTEND:?Falta en .env. Ejecute ./bna up}
     networks: [canales]
     depends_on:
@@ -540,6 +542,8 @@ services:
       cobranza:
         condition: service_healthy
       captacion:
+        condition: service_healthy
+      seguridad:
         condition: service_healthy
       atm:
         condition: service_healthy

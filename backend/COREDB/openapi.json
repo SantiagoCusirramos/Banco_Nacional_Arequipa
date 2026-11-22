@@ -1219,6 +1219,103 @@
         "title": "CalendarioRespuesta",
         "type": "object"
       },
+      "CambioDesbloqueo": {
+        "properties": {
+          "actor": {
+            "description": "La persona que desbloqueó; queda igual en la bitácora (DESBLOQUEAR_TARJETA).",
+            "title": "Actor",
+            "type": "string"
+          },
+          "estado_anterior": {
+            "description": "BLOQUEADA o RETENIDA: el estado del que salió.",
+            "title": "Estado Anterior",
+            "type": "string"
+          },
+          "estado_nuevo": {
+            "title": "Estado Nuevo",
+            "type": "string"
+          },
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "id_historial": {
+            "title": "Id Historial",
+            "type": "integer"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "origen": {
+            "description": "CLIENTE, OPERADOR, SISTEMA, SEGURIDAD… (tarjetas.origen_cambio).",
+            "title": "Origen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_historial",
+          "estado_nuevo",
+          "motivo",
+          "origen",
+          "fecha_hora",
+          "estado_anterior",
+          "actor"
+        ],
+        "title": "CambioDesbloqueo",
+        "type": "object"
+      },
+      "CambioEstado": {
+        "description": "Un registro del historial de estados de la tarjeta (tarjetas.historial_estado_tarjeta).",
+        "properties": {
+          "estado_nuevo": {
+            "title": "Estado Nuevo",
+            "type": "string"
+          },
+          "fecha_hora": {
+            "format": "date-time",
+            "title": "Fecha Hora",
+            "type": "string"
+          },
+          "id_historial": {
+            "title": "Id Historial",
+            "type": "integer"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "origen": {
+            "description": "CLIENTE, OPERADOR, SISTEMA, SEGURIDAD… (tarjetas.origen_cambio).",
+            "title": "Origen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_historial",
+          "estado_nuevo",
+          "motivo",
+          "origen",
+          "fecha_hora"
+        ],
+        "title": "CambioEstado",
+        "type": "object"
+      },
       "CasoCaptacion": {
         "properties": {
           "canal": {
@@ -3366,6 +3463,69 @@
           "motivo"
         ],
         "title": "DesbloqueoPeticion",
+        "type": "object"
+      },
+      "DesbloqueoRespuesta": {
+        "properties": {
+          "bin": {
+            "title": "Bin",
+            "type": "string"
+          },
+          "cambio": {
+            "$ref": "#/components/schemas/CambioDesbloqueo",
+            "description": "El registro del historial que dejó este desbloqueo."
+          },
+          "cod_cliente": {
+            "title": "Cod Cliente",
+            "type": "string"
+          },
+          "estado_tarjeta": {
+            "title": "Estado Tarjeta",
+            "type": "string"
+          },
+          "fecha_emision": {
+            "format": "date",
+            "title": "Fecha Emision",
+            "type": "string"
+          },
+          "fecha_vencimiento": {
+            "format": "date",
+            "title": "Fecha Vencimiento",
+            "type": "string"
+          },
+          "id_tarjeta": {
+            "format": "uuid",
+            "title": "Id Tarjeta",
+            "type": "string"
+          },
+          "num_cuenta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La cuenta principal de la tarjeta, la de su emisión. Null si no tiene.",
+            "title": "Num Cuenta"
+          },
+          "ultimos4": {
+            "title": "Ultimos4",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_tarjeta",
+          "bin",
+          "ultimos4",
+          "fecha_emision",
+          "fecha_vencimiento",
+          "estado_tarjeta",
+          "cod_cliente",
+          "cambio"
+        ],
+        "title": "DesbloqueoRespuesta",
         "type": "object"
       },
       "DocumentoVerificado": {
@@ -15325,7 +15485,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TarjetaRespuesta"
+                  "$ref": "#/components/schemas/DesbloqueoRespuesta"
                 }
               }
             },
@@ -15416,6 +15576,74 @@
           }
         ],
         "summary": "Cambiar Estado",
+        "tags": [
+          "tarjetas"
+        ]
+      }
+    },
+    "/coredb/tarjetas/{id_tarjeta}/historial": {
+      "get": {
+        "description": "Los cambios de estado de la tarjeta, del más reciente al más antiguo: el primero dice\npor qué está como está (motivo, origen y fecha).",
+        "operationId": "historial_coredb_tarjetas__id_tarjeta__historial_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_tarjeta",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Tarjeta",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CambioEstado"
+                  },
+                  "title": "Response Historial Coredb Tarjetas  Id Tarjeta  Historial Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "TARJETA_NO_ENCONTRADA"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Historial",
         "tags": [
           "tarjetas"
         ]

@@ -252,6 +252,15 @@ def test_seguridad_desbloquea_una_tarjeta_por_una_persona(cliente, autorizacion,
     assert respuesta.json()["estado_tarjeta"] == "ACTIVA"
     assert consulta("SELECT origen FROM tarjetas.historial_estado_tarjeta WHERE id_tarjeta = UUID_TO_BIN(%s) "
                     "ORDER BY id_historial DESC LIMIT 1", tarjeta) == [{"origen": "SEGURIDAD"}]
+    # El comprobante sale de la base: el registro del historial que dejó el desbloqueo.
+    fila = consulta("SELECT id_historial FROM tarjetas.historial_estado_tarjeta WHERE id_tarjeta = UUID_TO_BIN(%s) "
+                    "ORDER BY id_historial DESC LIMIT 1", tarjeta)[0]
+    cambio = respuesta.json()["cambio"]
+    assert cambio["id_historial"] == fila["id_historial"]
+    assert {k: cambio[k] for k in ("estado_anterior", "estado_nuevo", "motivo", "origen", "actor")} == {
+        "estado_anterior": "BLOQUEADA", "estado_nuevo": "ACTIVA", "motivo": "El cliente confirmó su identidad",
+        "origen": "SEGURIDAD", "actor": username}
+    assert cambio["fecha_hora"]
     assert consulta("SELECT actor FROM core.evento_auditoria WHERE id_entidad = %s AND accion = "
                     "'DESBLOQUEAR_TARJETA'", tarjeta) == [{"actor": username}]
     # Otra vez: ya no está bloqueada.
@@ -274,3 +283,33 @@ def test_el_desbloqueo_de_una_tarjeta_que_no_existe_es_404(cliente, por_persona)
     respuesta = cliente.post(f"/coredb/tarjetas/{uuid.uuid4()}/desbloqueo", headers=encabezados,
                              json={"motivo": "No existe"})
     assert respuesta.status_code == 404
+
+
+# --------------------------------------------------------------------- historial de una tarjeta
+def test_historial_de_una_tarjeta_con_el_motivo_del_bloqueo(cliente, autorizacion, sesion_de, abrir_cuenta):
+    tarjeta = _tarjeta_bloqueada(cliente, autorizacion, abrir_cuenta())
+    r = cliente.post(f"/coredb/tarjetas/{tarjeta}/estado", headers=autorizacion,
+                     json={"estado": "RETENIDA", "motivo": "Intentos de PIN sospechosos"})
+    assert r.status_code == 200, r.text
+    encabezados, _ = sesion_de("OPERADOR")
+    respuesta = cliente.get(f"/coredb/tarjetas/{tarjeta}/historial", headers=encabezados)
+    assert respuesta.status_code == 200, respuesta.text
+    historial = respuesta.json()
+    # De la más reciente a la más antigua.
+    assert [h["estado_nuevo"] for h in historial[:3]] == ["RETENIDA", "BLOQUEADA", "ACTIVA"]
+    assert historial[0]["motivo"] == "Intentos de PIN sospechosos"
+    assert historial[0]["origen"] == "OPERADOR"
+    assert historial[0]["fecha_hora"]
+    assert historial[0]["id_historial"] > historial[1]["id_historial"]
+
+
+def test_el_historial_exige_ver_tarjetas(cliente, autorizacion, sesion_de, abrir_cuenta):
+    tarjeta = _tarjeta_bloqueada(cliente, autorizacion, abrir_cuenta())
+    encabezados, _ = sesion_de("ANALISTA")  # sin VER_TARJETA
+    assert cliente.get(f"/coredb/tarjetas/{tarjeta}/historial", headers=encabezados).status_code == 403
+
+
+def test_el_historial_de_una_tarjeta_que_no_existe_es_404(cliente, autorizacion):
+    respuesta = cliente.get(f"/coredb/tarjetas/{uuid.uuid4()}/historial", headers=autorizacion)
+    assert respuesta.status_code == 404
+    assert respuesta.json()["error"]["code"] == "TARJETA_NO_ENCONTRADA"

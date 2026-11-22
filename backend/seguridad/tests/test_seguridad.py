@@ -222,10 +222,61 @@ def test_incidentes_con_sla(api, coredb):
 
 
 def test_desbloqueo_por_una_persona_que_puede_bloquear(api, coredb):
-    tarjeta = str(uuid.uuid4())
+    tarjeta = coredb.tarjeta()
     respuesta = api.post(f"/seguridad/tarjetas/{tarjeta}/desbloqueo", headers=como("ana"),
                          json={"motivo": "Identidad confirmada"})
     assert respuesta.status_code == 200 and respuesta.json()["estado_tarjeta"] == "ACTIVA"
+    # El comprobante es el de COREDB, tal cual.
+    cambio = respuesta.json()["cambio"]
+    assert (cambio["estado_anterior"], cambio["origen"], cambio["actor"]) == ("BLOQUEADA", "SEGURIDAD", "ana")
     assert coredb.peticiones[-1].headers["X-Persona-Token"] == "tok-ana"
     assert api.post(f"/seguridad/tarjetas/{tarjeta}/desbloqueo", headers=como("ase"),
                     json={"motivo": "Sin permiso"}).status_code == 403
+
+
+# --------------------------------------------------------------------- lecturas de la pantalla de desbloqueo
+def test_ficha_de_una_tarjeta_bloqueada_con_el_motivo(api, coredb):
+    tarjeta = coredb.tarjeta(motivo="Bloqueo solicitado por el cliente en Home Banking", origen="CLIENTE")
+    respuesta = api.get(f"/seguridad/tarjetas/{tarjeta}", headers=como("ana"))
+    assert respuesta.status_code == 200, respuesta.text
+    ficha = respuesta.json()
+    assert ficha["estado_tarjeta"] == "BLOQUEADA" and ficha["desbloqueable"] is True
+    assert ficha["numero_enmascarado"] == "004499******1904"
+    assert ficha["bloqueo"] == {"estado_nuevo": "BLOQUEADA", "id_historial": 2, "origen": "CLIENTE",
+                                "motivo": "Bloqueo solicitado por el cliente en Home Banking",
+                                "fecha_hora": "2026-11-21T10:00:00Z"}
+    assert [h["estado_nuevo"] for h in ficha["historial"]] == ["BLOQUEADA", "ACTIVA"]
+    # Lee con el token de la persona: COREDB comprueba su VER_TARJETA.
+    assert all(p.headers["Authorization"] == "Bearer tok-ana" for p in coredb.peticiones[-2:])
+
+
+def test_ficha_de_una_tarjeta_activa_no_es_desbloqueable(api, coredb):
+    tarjeta = coredb.tarjeta(estado="ACTIVA", motivo=None, origen="OPERADOR")
+    ficha = api.get(f"/seguridad/tarjetas/{tarjeta}", headers=como("adm")).json()
+    assert ficha["desbloqueable"] is False and ficha["bloqueo"] is None
+
+
+def test_tarjetas_de_un_cliente(api, coredb):
+    coredb.tarjeta(cod_cliente="CLI000000003")
+    coredb.tarjeta(estado="ACTIVA", cod_cliente="CLI000000003")
+    respuesta = api.get("/seguridad/tarjetas", params={"cod_cliente": "CLI000000003"}, headers=como("ana"))
+    assert respuesta.status_code == 200
+    assert sorted(t["estado_tarjeta"] for t in respuesta.json()) == ["ACTIVA", "BLOQUEADA"]
+    assert all(t["numero_enmascarado"].endswith("1904") for t in respuesta.json())
+    assert api.get("/seguridad/tarjetas", params={"cod_cliente": "CLI-9;"}, headers=como("ana")).status_code == 422
+    assert api.get("/seguridad/tarjetas", params={"cod_cliente": "CLI000000099"},
+                   headers=como("ana")).json()["error"]["code"] == "CLIENTE_NO_ENCONTRADO"
+
+
+@pytest.mark.parametrize("usuario", ["ase", "aud"])
+def test_las_lecturas_de_desbloqueo_exigen_poder_bloquear(api, coredb, usuario):
+    tarjeta = coredb.tarjeta()
+    assert api.get(f"/seguridad/tarjetas/{tarjeta}", headers=como(usuario)).status_code == 403
+    assert api.get("/seguridad/tarjetas", params={"cod_cliente": "CLI000000001"},
+                   headers=como(usuario)).status_code == 403
+    assert api.get(f"/seguridad/tarjetas/{tarjeta}").status_code == 401
+
+
+def test_ficha_de_una_tarjeta_que_no_existe(api):
+    respuesta = api.get(f"/seguridad/tarjetas/{uuid.uuid4()}", headers=como("ana"))
+    assert respuesta.status_code == 404 and respuesta.json()["error"]["code"] == "TARJETA_NO_ENCONTRADA"

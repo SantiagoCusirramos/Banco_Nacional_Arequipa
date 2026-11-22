@@ -1143,6 +1143,13 @@ SELECT t.id_tarjeta, t.bin, t.ultimos4, t.fecha_emision, t.fecha_vencimiento, t.
   FROM tarjetas.tarjeta t
   LEFT JOIN tarjetas.tarjeta_cuenta tc ON tc.id_tarjeta = t.id_tarjeta AND tc.es_principal = 1;
 
+-- El historial de estados de una tarjeta (v1.16): la pantalla de desbloqueo muestra el
+-- motivo, el origen y la fecha del bloqueo vigente. Solo lectura: los cambios siguen
+-- pasando por cambiar_estado_tarjeta y desbloquear_tarjeta.
+CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW tarjetas.v_historial_estado_tarjeta_api AS
+SELECT id_historial, id_tarjeta, estado_nuevo, motivo, origen, fecha_hora
+  FROM tarjetas.historial_estado_tarjeta;
+
 -- La autorización sin la IP de origen ni el nivel de riesgo (v1.5).
 CREATE DEFINER = 'bna_owner'@'%' SQL SECURITY DEFINER VIEW tarjetas.v_autorizacion_api AS
 SELECT uuid_autorizacion, id_tarjeta, num_cuenta, id_canal, id_terminal, tipo_operacion, monto, estado_autorizacion,
@@ -1165,6 +1172,7 @@ GRANT SELECT ON cuentas.cuenta_ahorro TO bna_api;
 GRANT SELECT ON cuentas.idempotencia_movimiento TO bna_api;
 GRANT SELECT ON tarjetas.v_tarjeta_api TO bna_api;
 GRANT SELECT ON tarjetas.v_autorizacion_api TO bna_api;
+GRANT SELECT ON tarjetas.v_historial_estado_tarjeta_api TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.verificar_configuracion TO bna_api;
 GRANT EXECUTE ON FUNCTION core.fn_fecha_negocio TO bna_api;
 GRANT EXECUTE ON PROCEDURE core.crear_usuario TO bna_api, bna_app, bna_admin;

@@ -666,7 +666,7 @@ export default function TarjetasPage() {
               </form>
               <div className="tj-nota">
                 <Icono nombre="escudo" />
-                <span>El desbloqueo (de BLOQUEADA a ACTIVA) lo hace el módulo de Seguridad y aquí se rechaza. ANULADA cancela la tarjeta de forma definitiva.</span>
+                <span>El desbloqueo no se hace aquí: está en <Link href="/tarjetas/desbloqueo">Desbloqueo de tarjetas</Link> (operadores y administradores). ANULADA cancela la tarjeta de forma definitiva.</span>
               </div>
             </section>
           )}

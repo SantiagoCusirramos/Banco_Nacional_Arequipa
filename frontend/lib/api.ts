@@ -64,6 +64,15 @@ export const apiCobranza = axios.create({
 });
 apiCobranza.interceptors.request.use(conToken);
 
+// SEGURIDAD por el puente de Next (/api/seguridad), que solo deja pasar las rutas de la
+// pantalla de desbloqueo de tarjetas.
+export const apiSeguridad = axios.create({
+  baseURL: "/api/seguridad",
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000,
+});
+apiSeguridad.interceptors.request.use(conToken);
+
 /**
  * Cabeceras que CUENTAS exige en toda operación que mueve dinero. La llave la pone quien
  * llama: la misma para cada reintento de la misma operación (si no, CUENTAS movería el

@@ -43,7 +43,9 @@ Todas las rutas `/seguridad/*` exigen `X-Correlation-ID` (1 a 100 caracteres alf
 | `/seguridad/incidentes` | GET | `VER_AUDITORIA` o `GESTIONAR_INCIDENTES` | `/coredb/seguridad/incidentes` |
 | `/seguridad/incidentes` | POST | `GESTIONAR_INCIDENTES` | `/coredb/seguridad/incidentes` |
 | `/seguridad/incidentes/{id}` | PATCH | `GESTIONAR_INCIDENTES` | `/coredb/seguridad/incidentes/{id}/estado` |
-| `/seguridad/tarjetas/{id}/desbloqueo` | POST | `BLOQUEAR_TARJETA` | `/coredb/tarjetas/{id}/desbloqueo` |
+| `/seguridad/tarjetas?cod_cliente=` | GET | `BLOQUEAR_TARJETA` (y `VER_TARJETA` en COREDB) | `/coredb/tarjetas?cod_cliente=`, con el token de la persona |
+| `/seguridad/tarjetas/{id}` | GET | `BLOQUEAR_TARJETA` (y `VER_TARJETA` en COREDB) | `/coredb/tarjetas/{id}` y `/historial`: la tarjeta, `desbloqueable`, `bloqueo` (motivo, origen y fecha del bloqueo vigente) y los 5 últimos cambios |
+| `/seguridad/tarjetas/{id}/desbloqueo` | POST | `BLOQUEAR_TARJETA` | `/coredb/tarjetas/{id}/desbloqueo`; devuelve `cambio`, el registro del historial (comprobante) |
 
 `GESTIONAR_INCIDENTES` la tienen OPERADOR y ADMINISTRADOR; `VER_AUDITORIA`, AUDITOR y
 ADMINISTRADOR; `REGISTRAR_MOVIMIENTO` y `BLOQUEAR_TARJETA`, OPERADOR y ADMINISTRADOR.
@@ -95,6 +97,12 @@ TARJETAS y `POST /coredb/tarjetas/{id}/estado` rechazan el desbloqueo (403
 `BLOQUEAR_TARJETA`; COREDB lo ejecuta con la cuenta `bna_seguridad_user` y nada más, y la
 tarjeta vuelve a ACTIVA con origen `SEGURIDAD` y la persona como actor. Una tarjeta que no está
 bloqueada responde 409 `TARJETA_NO_BLOQUEADA`.
+
+El personal lo hace desde el portal, en **Desbloqueo de tarjetas** (`/tarjetas/desbloqueo`):
+busca la tarjeta por cliente o por su id, ve el estado y el motivo del bloqueo, confirma y
+recibe el comprobante que devuelve COREDB. El portal llega a Seguridad por su puente
+`/api/seguridad`, que solo deja pasar `auth/me` y las rutas `tarjetas/...`. El Home Banking
+solo bloquea; no tiene ninguna ruta de desbloqueo.
 
 ## Pruebas
 
