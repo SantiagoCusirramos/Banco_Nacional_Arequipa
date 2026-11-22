@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AxiosError } from "axios";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
@@ -80,6 +80,7 @@ beforeEach(() => {
   perfil.mockReset();
   perfil.mockResolvedValue({ data: ANALISTA });
 });
+afterEach(() => window.history.pushState({}, "", "/"));
 
 describe("Página del módulo Evaluación", () => {
   it("EV-01 Muestra la bandeja y abre la solicitud con el calendario de SOL", async () => {
@@ -145,6 +146,16 @@ describe("Página del módulo Evaluación", () => {
     render(<EvaluacionPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Tu sesión no está iniciada o ya venció.");
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("EV-08 Al vencer la sesión, el enlace al login vuelve a la pantalla actual", async () => {
+    window.history.pushState({}, "", "/evaluacion?tab=bandeja");
+    perfil.mockRejectedValue(new AxiosError("Unauthorized", "ERR_BAD_REQUEST", undefined, undefined, {
+      status: 401, statusText: "", headers: {}, config: {} as never, data: {},
+    }));
+    render(<EvaluacionPage />);
+    const enlace = await screen.findByRole("link", { name: "Iniciar sesión" });
+    expect(enlace).toHaveAttribute("href", "/login?volver=%2Fevaluacion%3Ftab%3Dbandeja");
   });
 
   it("EV-06 El error de COREDB se muestra con su mensaje", async () => {
