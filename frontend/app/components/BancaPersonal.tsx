@@ -44,11 +44,11 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
   const pantallas = pantallasParaUsuario(usuario);
 
   return (
-    <main className="app-shell">
+    <main id="contenido" className="app-shell">
       <aside className={`sidebar ${mobileMenu ? "sidebar-open" : ""}`}>
         <a className="brand" href="#" onClick={(e) => { e.preventDefault(); setTab("inicio"); }}>
           <span className="brand-mark">B</span>
-          <span><strong>BAN</strong><small>Banco Nacional de Arequipa</small></span>
+          <span><strong>BNA</strong><small>Banco Nacional de Arequipa</small></span>
         </a>
         <div className="side-caption">BANCA PERSONAL</div>
         <nav className="navigation" aria-label="Navegación principal">

@@ -33,11 +33,11 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="auth-page">
+    <main id="contenido" className="auth-page">
       <section className="auth-card">
         <div className="auth-brand">
           <div className="auth-brand-mark">B</div>
-          <div><strong>BAN</strong><span>Banco Nacional de Arequipa</span></div>
+          <div><strong>BNA</strong><span>Banco Nacional de Arequipa</span></div>
         </div>
 
         <div className="auth-heading">

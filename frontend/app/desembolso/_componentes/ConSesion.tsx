@@ -24,7 +24,7 @@ export function ConSesion({ children }: { children: React.ReactNode }) {
   if (error) {
     const sinSesion = error.estado === 401;
     return (
-      <main className="mx-auto mt-24 max-w-md rounded-xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
+      <main id="contenido" className="mx-auto mt-24 max-w-md rounded-xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
         <p className="text-lg font-semibold text-slate-900">
           {sinSesion ? "Tu sesión no está iniciada o ya venció." : "No se pudo abrir Desembolso."}
         </p>

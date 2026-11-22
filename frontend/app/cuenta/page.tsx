@@ -143,7 +143,7 @@ function CuentaPageInner() {
   const pantalla = pantallaPorHref("/cuenta");
   if (usuario && !puedeVerPantalla(usuario.acciones, "/cuenta")) {
     return (
-      <main className="sol-main">
+      <main id="contenido" className="sol-main">
         <BarraNavegacion titulo="Cuentas" usuario={usuario} />
         <AvisoPermiso
           mensaje={`Tu rol no tiene permiso para abrir cuentas o consultar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`}
@@ -189,7 +189,7 @@ function CuentaPageInner() {
       <div className="sol-work">
         <BarraNavegacion titulo="Cuentas" subtitulo="Módulo de Ahorros y Operaciones" usuario={usuario} />
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           {notice && (
             <div role={notice.error ? "alert" : "status"} className={`sol-alert ${notice.error ? "error" : "success"}`}>
               {notice.text}
@@ -439,5 +439,5 @@ function CuentaConParametros() {
 }
 
 export default function CuentaPage() {
-  return <Suspense fallback={<main className="sol-main"><p>Cargando…</p></main>}><CuentaConParametros /></Suspense>;
+  return <Suspense fallback={<main id="contenido" className="sol-main"><p>Cargando…</p></main>}><CuentaConParametros /></Suspense>;
 }

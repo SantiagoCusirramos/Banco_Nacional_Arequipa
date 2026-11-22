@@ -168,12 +168,12 @@ export default function EvaluacionPage() {
   const titulo = detalle ? etiquetaSolicitud(detalle) : navegacion.find((n) => n.id === vista)?.etiqueta;
   const conteo = (estado: string) => (items ?? []).filter((s) => s.estado === estado).length;
 
-  if (cargandoPerfil) return <main className="sol-main"><p>Cargando…</p></main>;
+  if (cargandoPerfil) return <main id="contenido" className="sol-main"><p>Cargando…</p></main>;
   const pantalla = pantallaPorHref("/evaluacion");
   const permitido = puedeConsultarEvaluacion(usuario?.acciones);
   if (usuario && !permitido) {
     return (
-      <main className="sol-main">
+      <main id="contenido" className="sol-main">
         <BarraNavegacion titulo="Evaluación" usuario={usuario} />
         <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas evaluar solicitudes, pide a un administrador que revise tus permisos en COREDB." />
       </main>
@@ -218,7 +218,7 @@ export default function EvaluacionPage() {
       <div className="sol-work">
         <BarraNavegacion titulo="Evaluación" subtitulo={String(titulo ?? "")} usuario={usuario} />
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           <div className="sol-heading">
             <div>
               <h1>{titulo}</h1>

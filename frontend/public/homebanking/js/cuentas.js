@@ -51,7 +51,7 @@
         chips.appendChild(grupo);
       });
     } catch (e) {
-      chips.innerHTML = `<span class="tono-suave">No fue posible recuperar sus tarjetas: ${e.mensaje || "servicio no disponible"}.</span>`;
+      chips.innerHTML = `<span class="tono-suave">No fue posible recuperar sus tarjetas: ${mensajeError(e)}.</span>`;
     }
   })();
 
@@ -73,7 +73,7 @@
     } catch (err) {
       cargando(boton, false);
       mostrarMensaje("msgBloqueo", "error",
-        `No se pudo bloquear la tarjeta terminada en ${fin}: ${err.mensaje || "servicio no disponible"}.`);
+        `No se pudo bloquear la tarjeta terminada en ${fin}: ${mensajeError(err)}.`);
     }
   }
 
@@ -122,7 +122,7 @@
 
     const num = soloDigitos();
     if (num.length !== 16) {
-      mostrarMensaje(msg, "error", "Ingrese los 16 dígitos de su tarjeta.");
+      mostrarMensaje(msg, "error", "Elige una de Mis tarjetas o escribe los 16 dígitos de tu tarjeta.");
       return;
     }
 
@@ -139,7 +139,7 @@
         }
       }
 
-      /* 2. Módulo Cuentas: posición consolidada (INT-08) */
+      /* 2. Módulo Cuentas: posición consolidada */
       const pos = await Bus.consultarPosicion(sesion.codCliente, null);
 
       // Crear objeto tarjeta simulado para pintarResultado (sin verificar titularidad)
@@ -157,9 +157,9 @@
       pintarPasos(false);
       if (err.codigo === "BUS_TIMEOUT") {
         mostrarMensaje(msg, "warn",
-          "El Bus de Servicios no respondió. La consulta queda PENDIENTE / NO CONFIRMADA; no se muestra información parcial. Intente nuevamente.");
+          "El servicio no respondió. La consulta quedó sin confirmar y no se muestra información parcial. Intenta de nuevo.");
       } else {
-        mostrarMensaje(msg, "error", err.mensaje || "La consulta no pudo procesarse. Intente nuevamente.");
+        mostrarMensaje(msg, "error", mensajeError(err));
       }
       limpiarResultado();
     } finally {
@@ -225,7 +225,7 @@
     const omitidas = pos.cuentasIgnoradas;
     if (omitidas > 0) {
       mostrarMensaje("msgOmitidas", "info",
-        `Se omitieron ${omitidas} cuenta(s) que no se encuentran activas. RF-HB-002: el canal muestra únicamente cuentas ACTIVAS.`);
+        `Se omitieron ${omitidas} cuentas que no están activas. Solo mostramos tus cuentas activas.`);
     }
   }
 })();

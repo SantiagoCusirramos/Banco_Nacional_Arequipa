@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { ErrorApi } from "@/lib/desembolso/api";
+import { mensajeError } from "@/lib/api";
 import type { Tono } from "@/lib/desembolso/formato";
 import { TONO_ESTADO } from "@/lib/desembolso/formato";
 
@@ -112,15 +112,7 @@ export function Alerta({ tipo = "info", titulo, children }: { tipo?: keyof typeo
 
 export function AlertaError({ error }: { error: unknown }) {
   if (!error) return null;
-  const e = error instanceof ErrorApi ? error : new ErrorApi(String(error), "ERROR", 0);
-  return (
-    <Alerta tipo="error" titulo={e.message}>
-      <span className="font-mono text-xs opacity-80">
-        {e.codigo}
-        {e.correlationId ? ` · correlación ${e.correlationId}` : ""}
-      </span>
-    </Alerta>
-  );
+  return <Alerta tipo="error" titulo={mensajeError(error)} />;
 }
 
 export function Dato({ etiqueta, children, grande = false }: { etiqueta: string; children: ReactNode; grande?: boolean }) {

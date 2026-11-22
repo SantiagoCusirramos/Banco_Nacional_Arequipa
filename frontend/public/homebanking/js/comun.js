@@ -97,6 +97,23 @@ function ocultarMensaje(idOEl) {
   if (el) el.className = "msg";
 }
 
+// Los errores del bus pueden traer códigos internos, la ruta llamada y la correlación del
+// servidor. Al cliente solo se le explica qué pasó y qué puede hacer, nunca ese detalle técnico.
+function mensajeError(err) {
+  const e = err || {};
+  const codigo = e.codigo || "";
+  if (codigo === "PERMISO_DENEGADO" || e.status === 403) return "Tu rol no puede hacer esta operación.";
+  if (codigo === "CAMBIO_CLAVE_OBLIGATORIO") return "Debes cambiar tu clave antes de continuar.";
+  if (codigo === "BUS_TIMEOUT") return "El servicio no respondió a tiempo. Intenta de nuevo.";
+  if (codigo === "BUS_NO_DISPONIBLE") return "No se pudo conectar con el servicio. Revisa tu conexión.";
+  if (e.status === 401) return "Tu sesión venció. Vuelve a iniciar sesión.";
+  const texto = typeof e.mensaje === "string" ? e.mensaje : "";
+  if (/\/(api|core)\//i.test(texto) || /correlaci[oó]n/i.test(texto) || /\b(?:int|rf|rn|cr)[- ]?\d+/i.test(texto)) {
+    return "No se pudo completar la operación. Intenta de nuevo.";
+  }
+  return texto || "No se pudo completar la operación. Intenta de nuevo.";
+}
+
 /* ---------- Encabezado de sesión ---------- */
 function pintarCabecera() {
   const s = Sesion.leer();

@@ -40,11 +40,11 @@
       }
     } catch (err) {
       if (err.codigo === "BUS_TIMEOUT") {
-        mostrarMensaje(msg, "warn", "El Bus de Servicios no respondió. La consulta quedó PENDIENTE / NO CONFIRMADA (RN-BUS-002). Intente nuevamente.");
+        mostrarMensaje(msg, "warn", "El servicio no respondió. La consulta quedó sin confirmar. Intenta de nuevo.");
       } else if (err.status === 403) {
         mostrarMensaje(msg, "error", "La cuenta consultada no pertenece a su titularidad.");
       } else {
-        mostrarMensaje(msg, "error", err.mensaje || "La consulta de movimientos no pudo procesarse.");
+        mostrarMensaje(msg, "error", mensajeError(err));
       }
     } finally {
       cargando(btn, false);

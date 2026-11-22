@@ -58,7 +58,7 @@ export default function CambiarClavePage() {
 
   const obligatoria = usuario?.debe_cambiar_clave !== false;
   return (
-    <main className="auth-page">
+    <main id="contenido" className="auth-page">
       <section className="auth-card">
         <div className="auth-brand">
           <div className="auth-brand-mark">B</div>

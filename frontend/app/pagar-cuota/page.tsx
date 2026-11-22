@@ -154,7 +154,7 @@ export default function PagarCuotaPage() {
   const permitido = puedeVerPantalla(usuario?.acciones, "/pagar-cuota");
   if (usuario && !permitido) {
     return (
-      <main className="sol-main">
+      <main id="contenido" className="sol-main">
         <BarraNavegacion titulo="Pagar cuota" usuario={usuario} />
         <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantallaInfo?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas registrar pagos, pide a un administrador que revise tus permisos en COREDB." />
       </main>
@@ -201,7 +201,7 @@ export default function PagarCuotaPage() {
       <div className="sol-work">
         <BarraNavegacion titulo="Pagar cuota" subtitulo={navegacion.find((n) => n.id === tab)?.etiqueta} usuario={usuario} />
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           {sinSesion && (
             <div role="alert" className="sol-alert error">
               Tu sesión no está iniciada o ya venció.

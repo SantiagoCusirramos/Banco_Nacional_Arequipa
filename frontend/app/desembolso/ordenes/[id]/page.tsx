@@ -341,6 +341,7 @@ function CalendarioDeLaSolicitud({ orden }: { orden: OrdenDetalle }) {
           ? "Copia sin cambios del calendario de Solicitud (RN-SOL-006), creada al confirmar el desembolso."
           : "Lo arma Solicitud (RN-SOL-006); al confirmar, COREDB lo copia sin cambios como calendario oficial del crédito."}
       </p>
+      <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
@@ -359,6 +360,7 @@ function CalendarioDeLaSolicitud({ orden }: { orden: OrdenDetalle }) {
           ))}
         </tbody>
       </table>
+      </div>
     </Tarjeta>
   );
 }
