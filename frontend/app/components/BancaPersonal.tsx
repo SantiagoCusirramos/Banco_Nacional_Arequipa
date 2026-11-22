@@ -6,6 +6,7 @@ import type { Usuario } from "@/lib/auth";
 import { pantallasParaUsuario } from "@/lib/pantallas";
 import { CrearCuenta } from "./CrearCuenta";
 import { ModificarCuenta } from "./ModificarCuenta";
+import { CanalesExternos } from "./CanalesExternos";
 import type { Cuenta } from "@/lib/cuentas";
 
 // Pestañas que viven en la portada; el resto son pantallas propias, enlazadas abajo.
@@ -92,6 +93,7 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
                 </Link>
               ))}
             </div>
+            <CanalesExternos />
           </>}
 
           {tab === "crear-cuenta" && <CrearCuenta onNotice={setNotice} onModificar={(cuenta) => { setCuentaParaModificar(cuenta); setTab("modificar-cuenta"); setNotice(""); }} />}
