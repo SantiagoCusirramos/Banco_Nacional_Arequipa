@@ -76,8 +76,16 @@ del commit) y las notas dicen la URL que lleva y su SHA-256. También queda como
 ejecución (Actions → la ejecución → *Artifacts*, 30 días, hay que entrar a GitHub; viene en un `.zip`).
 
 **Qué URL lleva.** Por omisión `http://bna-billetera.172.16.10.31.sslip.io`: la API de Chaski en el
-Ingress del clúster de Infraestructura (solo HTTP). Se cambia en la app desde el engranaje ⚙ de la
-pantalla de ingreso, sin recompilar.
+Ingress del clúster de Infraestructura (solo HTTP). El build fija esa URL con
+`--dart-define=SERVIDOR=...`; si no se definió, la primera apertura muestra «Conectar con mi banco».
+
+**Conectar la app a un banco.** En esa pantalla (o desde el engranaje ⚙, opción secundaria) se puede
+escanear el QR que muestra la pantalla Billetera del banco, con la trama exacta
+`CHASKI-SERVIDOR|https://servidor-del-banco:8020`, o escribir la dirección. Se aceptan solo URLs
+`http://` o `https://` sin usuario ni clave; la app normaliza el esquema y la barra final, prueba
+`GET /api/salud` y guarda la dirección solo si responde. Si el servidor guardado no responde, la app
+ofrece «Reintentar» y «Cambiar de banco». Para un primer uso con URL fija, compila con
+`--dart-define=SERVIDOR=http://localhost:8020` (o la URL correspondiente).
 
 **Instalarlo.**
 - Por USB: `adb install chaski-<commit>.apk` (con la depuración USB activada).
@@ -140,12 +148,12 @@ del `.env` del producto), `npm install` y `npm start`.
 2. En `app_movil`: `flutter pub get`.
 3. Pruebas: `flutter analyze` y `flutter test` (la API va simulada; no hace falta el producto).
 4. Con el producto levantado (`./bna up`), elige el servidor al compilar con `--dart-define=SERVIDOR=...`
-   o cámbialo en la pantalla de ingreso (engranaje ⚙). La API de Chaski está en el puerto **8020**.
+   o conéctate al banco en la primera pantalla (o desde el ⚙). La API de Chaski está en el puerto **8020**.
 
 | Dónde corre la app | Servidor | Build |
 |---|---|---|
 | Celular por USB | `http://localhost:8020`, con `adb reverse tcp:8020 tcp:8020` en la PC | release o debug |
-| Emulador de Android | `http://10.0.2.2:8020` (el valor por omisión) | debug |
+| Emulador de Android | `http://10.0.2.2:8020` (con ese `--dart-define`, o escribiéndolo al conectar) | debug |
 | Celular por Wi-Fi | `http://IP-del-servidor:8020` (hay que exponer el puerto, ver abajo) | debug |
 | Cualquier lugar | `https://…` (por ejemplo, un túnel) | release o debug |
 
