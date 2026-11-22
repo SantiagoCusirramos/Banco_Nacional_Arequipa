@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { nombreCompleto, obtenerCliente, type Cliente } from "@/lib/clientes";
 import { listarAgencias, type Agencia } from "@/lib/catalogos";
 import { abrirCuenta, mensajeDeError, MONEDAS, REGIMENES, type Cuenta } from "@/lib/cuentas";
 import { CuentaResumen } from "./CuentaResumen";
+import SelectorCliente from "./SelectorCliente";
 
 const requerido = (mensaje: string) => z.string().trim().min(1, mensaje);
 
@@ -50,82 +50,6 @@ type Props = {
   onNotice: (mensaje: string) => void;
   onModificar: (cuenta: Cuenta) => void;
 };
-
-type ClienteSelectorProps = {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (codCliente: string) => void;
-  error?: string;
-};
-
-// El CORE no busca clientes por documento ni por nombre: se consulta por su código.
-function ClienteSelector({ id, label, value, onChange, error }: ClienteSelectorProps) {
-  const [codigo, setCodigo] = useState("");
-  const [cliente, setCliente] = useState<Cliente | null>(null);
-  const [buscando, setBuscando] = useState(false);
-  const [errorBusqueda, setErrorBusqueda] = useState("");
-
-  async function buscar() {
-    const consulta = codigo.trim().toUpperCase();
-    if (!consulta) {
-      setErrorBusqueda("Ingresa el código del cliente para buscar.");
-      return;
-    }
-    setBuscando(true);
-    setErrorBusqueda("");
-    try {
-      const encontrado = await obtenerCliente(consulta);
-      setCliente(encontrado);
-      if (encontrado.permite_operar) {
-        onChange(encontrado.cod_cliente);
-      } else {
-        onChange("");
-        setErrorBusqueda(`El cliente está ${encontrado.estado_cliente} y no puede operar.`);
-      }
-    } catch (err) {
-      setCliente(null);
-      setErrorBusqueda(mensajeDeError(err));
-      onChange("");
-    } finally {
-      setBuscando(false);
-    }
-  }
-
-  return (
-    <div className="fx-field">
-      <label htmlFor={id}>{label}</label>
-      <div className="fx-search">
-        <div className="fx-field fx-grow">
-          <input
-            id={id}
-            autoComplete="off"
-            placeholder="Código del cliente, por ejemplo CLI000000001"
-            maxLength={12}
-            value={codigo}
-            aria-invalid={!!error}
-            onChange={(event) => {
-              setCodigo(event.target.value);
-              setCliente(null);
-              setErrorBusqueda("");
-              onChange("");
-            }}
-          />
-        </div>
-        <button className="outline-button" type="button" aria-label={"Buscar " + id} onClick={buscar} disabled={buscando}>
-          {buscando ? "Buscando..." : "Buscar"}
-        </button>
-      </div>
-      {cliente && value && (
-        <span className="fx-hint">
-          Cliente seleccionado: {nombreCompleto(cliente)} · {cliente.tipo_documento} {cliente.numero_documento} · {cliente.estado_cliente}
-        </span>
-      )}
-      {errorBusqueda && <span className="fx-error" role="status">{errorBusqueda}</span>}
-      {error && <span className="fx-error">{error}</span>}
-    </div>
-  );
-}
 
 export function CrearCuenta({ onNotice, onModificar }: Props) {
   const [creada, setCreada] = useState<Cuenta | null>(null);
@@ -209,7 +133,7 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
           name="cod_cliente"
           control={control}
           render={({ field }) => (
-            <ClienteSelector
+            <SelectorCliente
               id="cod_cliente"
               label="Cliente titular"
               value={field.value}
@@ -263,7 +187,7 @@ export function CrearCuenta({ onNotice, onModificar }: Props) {
                 name={`titulares.${i}.cod_cliente`}
                 control={control}
                 render={({ field }) => (
-                  <ClienteSelector
+                  <SelectorCliente
                     id={"titular_" + (i + 2)}
                     label={"Titular " + (i + 2)}
                     value={field.value}
