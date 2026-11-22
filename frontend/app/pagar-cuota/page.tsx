@@ -4,6 +4,7 @@ import { nuevoUuid } from "@/lib/uuid";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { rutaActual, urlLoginConVolver } from "@/lib/continuidad";
 import { AvisoPermiso } from "@/app/components/AvisoPermiso";
 import { BarraNavegacion } from "@/app/components/BarraNavegacion";
 import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
@@ -204,7 +205,7 @@ export default function PagarCuotaPage() {
           {sinSesion && (
             <div role="alert" className="sol-alert error">
               Tu sesión no está iniciada o ya venció.
-              <Link href="/login" onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
+              <Link href={urlLoginConVolver(rutaActual())} onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
                 Iniciar sesión
               </Link>
             </div>

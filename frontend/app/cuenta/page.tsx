@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AvisoPermiso } from "@/app/components/AvisoPermiso";
 import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import SelectorCuenta from "@/app/components/SelectorCuenta";
+import { enmascararCuenta } from "@/lib/continuidad";
 import { obtenerMiPerfil, type Usuario } from "@/lib/auth";
 import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import {
@@ -36,8 +38,9 @@ function CuentaPageInner() {
   const [cci, setCci] = useState("");
   const [numCuentaNueva, setNumCuentaNueva] = useState("");
 
-  // Formulario operaciones
-  const [cuentaOrigen, setCuentaOrigen] = useState("");
+  // Formulario operaciones. La cuenta elegida se comparte con la pestaña de consulta para
+  // no volver a copiarla al cambiar de pestaña.
+  const [clienteOperacion, setClienteOperacion] = useState(() => params?.get("codCliente")?.toUpperCase() ?? "");
   const [cuentaDestino, setCuentaDestino] = useState("");
   const [montoOp, setMontoOp] = useState("");
   const [tipoOp, setTipoOp] = useState<Operacion>("deposito");
@@ -104,12 +107,20 @@ function CuentaPageInner() {
     const llave = llaveOp;
     void ejecutar(async () => {
       if (tipoOp === "transferencia") {
-        const resultado = await transferir(cuentaOrigen.trim(), cuentaDestino.trim(), monto, llave);
+        const resultado = await transferir(numCuentaConsulta.trim(), cuentaDestino.trim(), monto, llave);
         setNotice({ text: `Transferencia registrada. Débito ${resultado.uuid_debito}, abono ${resultado.uuid_abono}.`, error: false });
       } else {
         const operar = tipoOp === "deposito" ? depositar : retirar;
-        const resultado = await operar(cuentaOrigen.trim(), monto, llave);
-        setNotice({ text: `Operación registrada: ${resultado.uuid_transaccion}.`, error: false });
+        const numero = numCuentaConsulta.trim();
+        await operar(numero, monto, llave);
+        // CUENTAS solo devuelve el UUID del movimiento: el número y el saldo se leen de la
+        // cuenta real para que el aviso sea legible y no muestre identificadores técnicos.
+        let cuenta: Cuenta | null = null;
+        try { cuenta = await verCuenta(numero); } catch { /* aviso sin saldo */ }
+        const detalle = cuenta
+          ? ` en la cuenta ${enmascararCuenta(cuenta.num_cuenta)}. Saldo disponible: ${formatoMoneda(cuenta.saldo_disponible, cuenta.moneda)}`
+          : ` en la cuenta ${enmascararCuenta(numero)}`;
+        setNotice({ text: `${tipoOp === "deposito" ? "Depósito" : "Retiro"} registrado${detalle}.`, error: false });
       }
       setLlaveOp(nuevoUuid());
     });
@@ -235,12 +246,16 @@ function CuentaPageInner() {
                 </div>
               </div>
               <form onSubmit={consultarCuenta} className="sol-toolbar" style={{ marginTop: "20px" }}>
-                <input
-                  placeholder="Número de cuenta..."
-                  value={numCuentaConsulta}
-                  onChange={(e) => setNumCuentaConsulta(e.target.value)}
-                  required
-                />
+                <div className="sol-field">
+                  <label htmlFor="consulta-num">Número de cuenta a consultar</label>
+                  <input
+                    id="consulta-num"
+                    placeholder="Número de cuenta..."
+                    value={numCuentaConsulta}
+                    onChange={(e) => setNumCuentaConsulta(e.target.value)}
+                    required
+                  />
+                </div>
                 <button className="sol-button primary" type="submit" disabled={loading}>
                   {loading ? "Buscando..." : "Ver cuenta"}
                 </button>
@@ -292,9 +307,16 @@ function CuentaPageInner() {
                   </select>
                 </div>
                 <div className="sol-field">
-                  <label htmlFor="operacion-cuenta">{tipoOp === "transferencia" ? "Cuenta de Origen" : "Número de Cuenta"}</label>
-                  <input id="operacion-cuenta" value={cuentaOrigen} onChange={(e) => editarOperacion(setCuentaOrigen)(e.target.value)} required placeholder="Ej. 1010000001" />
+                  <label htmlFor="operacion-cliente">Cliente titular</label>
+                  <input id="operacion-cliente" value={clienteOperacion} onChange={(e) => setClienteOperacion(e.target.value)} placeholder="Código del cliente para ver sus cuentas" />
                 </div>
+                <SelectorCuenta
+                  id="operacion-cuenta"
+                  label={tipoOp === "transferencia" ? "Cuenta de Origen" : "Número de Cuenta"}
+                  codCliente={clienteOperacion.trim()}
+                  value={numCuentaConsulta}
+                  onChange={editarOperacion(setNumCuentaConsulta)}
+                />
                 {tipoOp === "transferencia" && (
                   <div className="sol-field">
                     <label htmlFor="operacion-destino">Cuenta de Destino</label>

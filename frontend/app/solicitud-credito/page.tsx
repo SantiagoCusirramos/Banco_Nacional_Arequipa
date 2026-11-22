@@ -3,6 +3,9 @@ import { nuevoUuid } from "@/lib/uuid";
 import { borrarSesionesDelNavegador, cerrarSesion, obtenerMiPerfil, obtenerToken, obtenerUsuarioGuardado, type Usuario } from "@/lib/auth";
 import { AvisoPermiso } from "@/app/components/AvisoPermiso";
 import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import {
+  borrarBorradorSolicitud, guardarBorradorSolicitud, leerBorradorSolicitud,
+} from "@/lib/continuidad";
 import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 
 /** Interfaz de agencia del MVP SOL. Todas las validaciones de negocio y los
@@ -462,8 +465,11 @@ export default function SolicitudPage() {
   const [version, setVersion] = useState(1);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("TODAS");
-  const [form, setForm] = useState<FormData>(freshForm);
-  const [step, setStep] = useState(0);
+  // Lo escrito queda en la pestaña mientras haya sesión: si esta caduca, el borrador
+  // sigue aquí y se retoma al volver a entrar, sin pedirle que repita el expediente.
+  const borrador = leerBorradorSolicitud<FormData>();
+  const [form, setForm] = useState<FormData>(() => borrador?.form ?? freshForm());
+  const [step, setStep] = useState(() => borrador?.step ?? 0);
   const [preview, setPreview] = useState<Snapshot | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -486,6 +492,11 @@ export default function SolicitudPage() {
     setMetrics(null);
     setPageOffset(0); sendKeys.current.clear();
   }, []);
+  useEffect(() => {
+    // Solo mientras se edita con sesión: una caducidad (clearSession) no borra lo guardado.
+    if (user && view === "editor")
+      guardarBorradorSolicitud({ form, step, view });
+  }, [form, step, view, user]);
   const fail = useCallback((e: unknown) => {
     setNotice({
       text:
@@ -624,6 +635,8 @@ export default function SolicitudPage() {
       const d = editing
         ? await api<Detail>(`applications/${selected!.id}`, "PUT", form)
         : await api<Detail>("applications", "POST", form);
+      // Ya está en la base: el respaldo local de la pestaña terminó su trabajo.
+      borrarBorradorSolicitud();
       // Abrir el borrador antes de enviar evita perder el ID si el gateway falla.
       setSelected(d);
       setVersion(d.version);
@@ -661,6 +674,7 @@ export default function SolicitudPage() {
           { revision: selected.revision },
           sendKey(selected),
         );
+        borrarBorradorSolicitud();
         setSelected(d);
         await refresh();
         setNotice({
@@ -743,7 +757,14 @@ export default function SolicitudPage() {
                   borrarSesionesDelNavegador();
                 setUser(result.usuario);
                 setPassword("");
-                setView("bandeja");
+                // Si quedó un expediente a medio escribir antes de caducar la sesión, se retoma.
+                const guardado = leerBorradorSolicitud<FormData>();
+                if (guardado?.view === "editor") {
+                  setForm(guardado.form);
+                  setStep(guardado.step);
+                  setSelected(null);
+                  setView("editor");
+                } else setView("bandeja");
                 await refresh();
               });
             }}
@@ -876,7 +897,7 @@ export default function SolicitudPage() {
                 run(async () => {
                   // Cierra también el portal y el Home Banking, y avisa a las otras pestañas.
                   try { await cerrarSesion(); }
-                  finally { clearSession(); }
+                  finally { clearSession(); borrarBorradorSolicitud(); }
                 })
               }
             >

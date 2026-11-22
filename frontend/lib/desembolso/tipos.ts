@@ -26,6 +26,7 @@ export interface Verificacion {
 export interface Aprobacion {
   idEvaluacion: string;
   idSolicitud: string;
+  codigo?: string;
   codCliente: string;
   ronda: number;
   monto: string;
@@ -50,6 +51,7 @@ export interface Cuenta {
 export interface Orden {
   idOrden: string;
   codigoOrden: string;
+  codigo?: string;
   estado: EstadoOrden;
   motivoRechazo: string | null;
   importe: string;

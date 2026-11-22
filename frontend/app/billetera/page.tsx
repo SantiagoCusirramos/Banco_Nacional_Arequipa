@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import * as QRCode from "qrcode";
 import { AvisoPermiso } from "@/app/components/AvisoPermiso";
 import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import SelectorCliente from "../components/SelectorCliente";
+import SelectorCuenta from "../components/SelectorCuenta";
 import { obtenerMiPerfil, type Usuario } from "@/lib/auth";
 import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import { ClaveNueva } from "../components/ClaveNueva";
@@ -50,6 +52,7 @@ function BilleteraPageInner() {
   // Comercio: recibe pagos con QR en su cuenta en soles.
   const [ruc, setRuc] = useState("");
   const [razonSocial, setRazonSocial] = useState("");
+  const [clienteComercio, setClienteComercio] = useState("");
   const [cuentaComercio, setCuentaComercio] = useState("");
   const [comercio, setComercio] = useState<Comercio | null>(null);
   const [config, setConfig] = useState<ConfigPublica | null>(null);
@@ -186,14 +189,23 @@ function BilleteraPageInner() {
                 </div>
               </div>
               <div className="sol-form-grid" style={{ marginTop: "20px" }}>
+                <SelectorCliente
+                  id="cod_cliente"
+                  label="Cliente titular"
+                  value={codCliente}
+                  onChange={setCodCliente}
+                />
                 <div className="sol-field">
                   <label htmlFor="af-cliente">Código del cliente</label>
                   <input id="af-cliente" value={codCliente} onChange={(e) => setCodCliente(e.target.value)} required maxLength={12} placeholder="CLI000000001" />
                 </div>
-                <div className="sol-field">
-                  <label htmlFor="af-cuenta">Número de cuenta en soles</label>
-                  <input id="af-cuenta" value={numCuenta} onChange={(e) => setNumCuenta(e.target.value)} required maxLength={20} placeholder="Cuenta del cliente" />
-                </div>
+                <SelectorCuenta
+                  id="af-cuenta"
+                  label="Número de cuenta en soles"
+                  codCliente={codCliente}
+                  value={numCuenta}
+                  onChange={setNumCuenta}
+                />
               </div>
               <div style={{ marginTop: "16px" }}>
                 <ClaveNueva digitos={6} nombre="PIN de Chaski" asignar={afiliarConPin}
@@ -233,9 +245,16 @@ function BilleteraPageInner() {
                   <input id="co-razon" value={razonSocial} onChange={(e) => setRazonSocial(e.target.value)} required maxLength={150} placeholder="Bodega Doña Rosa" />
                 </div>
                 <div className="sol-field">
-                  <label htmlFor="co-cuenta">Cuenta de abono en soles</label>
-                  <input id="co-cuenta" value={cuentaComercio} onChange={(e) => setCuentaComercio(e.target.value)} required maxLength={20} placeholder="Número de cuenta" />
+                  <label htmlFor="co-cliente">Código del cliente de la cuenta de abono</label>
+                  <input id="co-cliente" value={clienteComercio} onChange={(e) => setClienteComercio(e.target.value)} placeholder="Código del titular de la cuenta" />
                 </div>
+                <SelectorCuenta
+                  id="co-cuenta"
+                  label="Cuenta de abono en soles"
+                  codCliente={clienteComercio}
+                  value={cuentaComercio}
+                  onChange={setCuentaComercio}
+                />
                 <div style={{ gridColumn: "1 / -2", marginTop: "10px" }}>
                   <button className="sol-button primary" type="submit" disabled={loading}>
                     {loading ? "Registrando..." : "Registrar comercio"}

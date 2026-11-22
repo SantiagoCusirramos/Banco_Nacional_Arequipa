@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { mensajeError } from "@/lib/api";
 import { iniciarSesion } from "@/lib/auth";
+import { rutaSeguraVolver } from "@/lib/continuidad";
 
 // Solo el ingreso. Los usuarios los crea un administrador en la pantalla «Usuarios» del portal.
 
@@ -19,8 +20,11 @@ export default function LoginPage() {
     setError(""); setCargando(true);
     try {
       const sesion = await iniciarSesion(username.trim(), password);
-      // Con la contraseña inicial o renovada, primero se cambia.
-      router.replace(sesion.usuario.debe_cambiar_clave ? "/cambiar-clave" : "/");
+      // Con la contraseña inicial o renovada, primero se cambia. Si no, se vuelve a la
+      // pantalla que estaba abierta cuando venció la sesión (solo rutas internas).
+      const volver = new URLSearchParams(window.location.search).get("volver");
+      const destino = rutaSeguraVolver(volver) ?? "/";
+      router.replace(sesion.usuario.debe_cambiar_clave ? "/cambiar-clave" : destino);
     } catch (err) {
       setError(mensajeError(err));
     } finally {

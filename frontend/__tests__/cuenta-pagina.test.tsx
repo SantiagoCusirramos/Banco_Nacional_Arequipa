@@ -1,4 +1,4 @@
-import { render, screen, within, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AxiosError } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
   apiCuentas: { get: vi.fn(), post: vi.fn() },
-  api: { get: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn() },
 }));
 import { api, apiCuentas } from "@/lib/api";
 import CuentaPage from "../app/cuenta/page";
@@ -14,6 +14,7 @@ import CuentaPage from "../app/cuenta/page";
 const get = vi.mocked(apiCuentas.get);
 const post = vi.mocked(apiCuentas.post);
 const perfil = vi.mocked(api.get);
+const buscar = vi.mocked(api.post);
 const sobre = (data: unknown) => ({ data: { success: true, status_code: 200, data } });
 
 const CUENTA = {
@@ -35,6 +36,7 @@ const pestana = (nombre: RegExp) => userEvent.click(screen.getByRole("button", {
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
+  buscar.mockReset();
   perfil.mockReset();
   perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "operador", rol: "OPERADOR", acciones: ["VER_CUENTA","CREAR_CUENTA","REGISTRAR_MOVIMIENTO","VER_TARJETA","CREAR_TARJETA"] } });
 });
@@ -58,8 +60,9 @@ describe("Página del módulo Cuentas", () => {
     expect(screen.getByText("S/ 300.00", { selector: "strong[style]" })).toBeInTheDocument();
   });
 
-  it("CT-02 Un depósito envía el monto como texto decimal y muestra el identificador", async () => {
+  it("CT-02 Un depósito envía el monto como texto decimal y avisa con cuenta enmascarada y saldo real", async () => {
     post.mockResolvedValue(sobre({ uuid_transaccion: "11111111-1111-4111-8111-111111111111", replay: false }));
+    get.mockImplementation((url) => Promise.resolve(sobre(url === `/${CUENTA.num_cuenta}` ? CUENTA : MOVIMIENTOS)));
     render(<CuentaPage />);
     await pestana(/3\. Depositar/);
     await userEvent.type(screen.getByLabelText("Número de Cuenta"), "10100000000001");
@@ -69,7 +72,11 @@ describe("Página del módulo Cuentas", () => {
     const { headers } = post.mock.calls[0][2] as { headers: Record<string, string> };
     expect(headers["X-Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/);
     expect(headers["X-Channel-ID"]).toBe("VEN");
-    expect(await screen.findByRole("status")).toHaveTextContent("11111111-1111-4111-8111-111111111111");
+    const aviso = await screen.findByRole("status");
+    expect(aviso).toHaveTextContent("Depósito registrado");
+    expect(aviso).toHaveTextContent("••••0001");
+    expect(aviso).toHaveTextContent("S/ 300.00");
+    expect(aviso).not.toHaveTextContent("11111111-1111-4111-8111-111111111111");
   });
 
   it("CT-03 Una transferencia envía origen, destino y monto", async () => {
@@ -207,5 +214,20 @@ describe("Página del módulo Cuentas", () => {
     await enviar(/Ejecutar TRANSFERENCIA/);
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(llave(1)).toBe(llave(0));
+  });
+
+  it("CT-12 Elige la cuenta de un cliente y la recuerda al cambiar de pestaña", async () => {
+    get.mockResolvedValue(sobre([CUENTA]));
+    render(<CuentaPage />);
+    await pestana(/3\. Depositar/);
+    fireEvent.change(screen.getByLabelText("Cliente titular"), { target: { value: "CLI000000001" } });
+    const opcion = await screen.findByRole("button", { name: /••••0001/ });
+    await userEvent.click(opcion);
+    expect(screen.getByLabelText("Número de Cuenta")).toHaveValue(CUENTA.num_cuenta);
+    await pestana(/2\. Ver cuenta/);
+    expect(screen.getByLabelText("Número de cuenta a consultar")).toHaveValue(CUENTA.num_cuenta);
+    await pestana(/3\. Depositar/);
+    expect(screen.getByLabelText("Número de Cuenta")).toHaveValue(CUENTA.num_cuenta);
+    expect(get).toHaveBeenCalledWith("/consolidada/CLI000000001");
   });
 });
