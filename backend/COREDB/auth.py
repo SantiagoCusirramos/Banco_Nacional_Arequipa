@@ -25,23 +25,34 @@ from COREDB.errores import ErrorAutenticacion, ErrorCoreDb
 from COREDB.models import Usuario
 
 __all__ = ["Actor", "ClienteBilletera", "PersonaSeguridad", "actor_actual", "cliente_actual", "persona_por_seguridad",
-           "requiere_permiso"]
+           "requiere_permiso", "usuario_de_la_sesion"]
 
 _bearer = HTTPBearer(auto_error=False, scheme_name="JWT")
 
 
-def actor_actual(
+def usuario_de_la_sesion(
     credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(db_session),
-) -> Actor:
+) -> Usuario:
+    """El usuario vigente del token, aunque deba cambiar su contraseña. Solo lo usan
+    GET /coredb/auth/me y POST /coredb/auth/clave; todo lo demás pasa por `actor_actual`."""
     if credenciales is None or credenciales.scheme.lower() != "bearer":
         raise ErrorAutenticacion(
-            "TOKEN_REQUERIDO", "Falta el encabezado Authorization: Bearer <token>."
+            "TOKEN_REQUERIDO", "Inicia sesión para continuar (falta el encabezado Authorization: Bearer <token>)."
         )
     claims = tokens.decodificar(credenciales.credentials)
     usuario = db.get(Usuario, uuid.UUID(claims["sub"]))
     if usuario is None or not usuario.activo:
         raise ErrorAutenticacion("USUARIO_NO_VIGENTE", "El usuario ya no está habilitado.")
+    return usuario
+
+
+def actor_actual(usuario: Usuario = Depends(usuario_de_la_sesion)) -> Actor:
+    # bd-v1.17: con la contraseña inicial o renovada, nada más hasta cambiarla.
+    if usuario.debe_cambiar_clave:
+        raise ErrorCoreDb(
+            "CAMBIO_CLAVE_OBLIGATORIO", "Antes de continuar, cambia tu contraseña.", 403
+        )
     return Actor(usuario.id_usuario, usuario.username, usuario.rol, usuario.modulo)
 
 
@@ -131,6 +142,10 @@ def persona_por_seguridad(*acciones: str) -> Callable[..., PersonaSeguridad]:
         usuario = db.get(Usuario, uuid.UUID(claims["sub"]))
         if usuario is None or not usuario.activo or usuario.rol == "SERVICIO":
             raise ErrorAutenticacion("PERSONA_NO_VIGENTE", "La persona ya no está habilitada.")
+        if usuario.debe_cambiar_clave:
+            raise ErrorCoreDb(
+                "CAMBIO_CLAVE_OBLIGATORIO", "La persona debe cambiar su contraseña antes de continuar.", 403
+            )
         persona = Actor(usuario.id_usuario, usuario.username, usuario.rol, usuario.modulo)
         if not any(permisos.puede(persona, accion) for accion in acciones):
             raise ErrorCoreDb(

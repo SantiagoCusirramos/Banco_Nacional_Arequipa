@@ -53,6 +53,15 @@ integrada y con PyJWT:
   HS256 por omisión). El usuario se relee en cada petición: desactivarlo o cambiarle el
   rol surte efecto de inmediato. Un token de CORE no sirve aquí.
 - `GET /coredb/auth/me` devuelve el perfil y sus acciones.
+- **Contraseña inicial y cambio obligatorio (bd-v1.17).** `POST /coredb/usuarios` sin
+  `password` genera la contraseña inicial y la devuelve una sola vez en `clave_inicial`
+  (`Cache-Control: no-store`); `POST /coredb/usuarios/{id}/clave` (`CREAR_USUARIO`) la renueva
+  igual, solo para personas. En los dos casos `debe_cambiar_clave` queda en `true` y, hasta que
+  la persona use `POST /coredb/auth/clave {actual, nueva}`, toda ruta responde 403
+  `CAMBIO_CLAVE_OBLIGATORIO` salvo `GET /coredb/auth/me` (sin acciones) y esa. La actual se
+  comprueba como en el login (un fallo cuenta para el bloqueo); una incorrecta responde 422
+  `CLAVE_ACTUAL_INCORRECTA`, no 401. Con `password` explícita (scripts y pruebas) no se exige
+  el cambio. COREDB no revoca tokens: cerrar sesión borra el token del navegador y vence solo.
 - Errores: 401 `TOKEN_REQUERIDO | TOKEN_INVALIDO | TOKEN_EXPIRADO | USUARIO_NO_VIGENTE |
   CREDENCIALES_INVALIDAS`, con `WWW-Authenticate: Bearer`; 403 `PERMISO_DENEGADO`.
 
