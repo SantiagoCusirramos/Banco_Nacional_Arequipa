@@ -192,3 +192,13 @@ for p in $(kubectl -n "$BNA_NAMESPACE" get pod -l app.kubernetes.io/instance=bna
   kubectl -n "$BNA_NAMESPACE" logs "$p" --all-containers --prefix
 done > registros.txt                              # revisar y borrar; no se versiona
 ```
+
+## Cambio de base a mano: vista v1.16 (2026-11-21)
+
+La base del clúster vive en el PVC `bna-db-datos`. La imagen de la base solo ejecuta sus scripts (`database/sql/`) cuando el volumen está vacío, así que una versión nueva de bna-core-db no llega a una base que ya existe. `bd-v1.16-mysql` agregó la vista `tarjetas.v_historial_estado_tarjeta_api` (la usa COREDB en `GET /coredb/tarjetas/{id}/historial` y en la respuesta del desbloqueo), así que antes del redespliegue de `d3f9e99f6c9b` se aplicó a mano en el pod de la base, como root y con la clave dentro del pod (igual que `datos`): el `CREATE OR REPLACE VIEW` y el `GRANT SELECT … TO bna_api` de `database/sql/bna_extension.sql`. Sin la vista, el código nuevo de COREDB fallaría en esas rutas; el código anterior no la usa, así que no le afectó.
+
+No choca con la base nueva: en un volumen vacío la crea `bna_extension.sql` con la misma definición (`DEFINER bna_owner`, `SQL SECURITY DEFINER`) y en el volumen actual el script no vuelve a correr. Comprobado después del redespliegue: la vista existe con ese definidor, `bna_api` tiene el `SELECT` y devuelve filas.
+
+Redespliegue de `d3f9e99f6c9b` (`aplicar`): 14 pods 1/1 sin reinicios con las imágenes nuevas. Por el Ingress, `/tarjetas/desbloqueo` y `/homebanking/auditoria.html` dan 200; `/api/seguridad/auditoria` da 404 (el puente no la deja pasar) y `/api/seguridad/tarjetas/<uuid>` sin token, 401. `scripts/flujo_e2e.py` corrió en el pod del Bus con datos nuevos y terminó con «Flujo completo»: el Home Banking bloquea la tarjeta, el cajero la rechaza, un operador la desbloquea en la pantalla y el cajero vuelve a aceptarla.
+
+Si otra versión de bna-core-db cambia el esquema, hay dos caminos: aplicar a mano solo lo nuevo (si es idempotente, como aquí) o `borrar --si` y `aplicar` para crear la base de cero (se pierden los datos del clúster).
