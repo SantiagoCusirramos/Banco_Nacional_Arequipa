@@ -52,9 +52,9 @@ const COMPROBANTE = {
   saldoRestanteCuota: "0.00", moraRestanteCuota: "0.00", saldoRestanteCredito: "150.00", estadoCredito: "ACTIVO",
 };
 
-function errorCobranza(status: number, detalle: string) {
+function errorCobranza(status: number, message: string) {
   return new AxiosError("fail", "ERR_BAD_REQUEST", undefined, undefined, {
-    status, statusText: "", headers: {}, config: {} as never, data: { detalle, regla: null },
+    status, statusText: "", headers: {}, config: {} as never, data: { error: { code: "X", message } },
   });
 }
 

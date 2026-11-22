@@ -7,7 +7,7 @@
  * Solo se exponen las 4 rutas que usa esta pantalla; cualquier otra devuelve 404.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { credencialBus, reenviar } from "@/lib/proxy";
+import { reenviar } from "@/lib/proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

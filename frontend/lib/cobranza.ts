@@ -1,5 +1,5 @@
 import axios from "axios";
-import { apiCobranza as api } from "@/lib/api";
+import { apiCobranza as api, mensajeError } from "@/lib/api";
 
 /** Una cuota del cronograma, tal como la devuelve Cobranza (CR-INT-08). */
 export interface Cuota {
@@ -91,19 +91,8 @@ export interface PagoCuota {
 export const formatoMoneda = (monto: string | number, moneda = "PEN") =>
   `${moneda === "USD" ? "$" : "S/"} ${Number(monto).toFixed(2)}`;
 
-/** Cobranza no envuelve su respuesta (a diferencia de CUENTAS/TARJETAS): usa su `detalle`. */
-export function mensajeDeError(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    const detalle = err.response?.data?.detalle;
-    if (typeof detalle === "string") return detalle;
-    if (err.response?.status === 401) return "Tu sesión no está iniciada o ya venció.";
-    if (err.response?.status === 403) return "Tu usuario no tiene permisos para realizar esta operación.";
-    if (err.code === "ERR_NETWORK") return "No se pudo conectar con el servidor.";
-    return err.message;
-  }
-  if (err instanceof Error) return err.message;
-  return "Error inesperado";
-}
+/** Cobranza responde sus errores de negocio como COREDB: {"error": {"code", "message"}}. */
+export const mensajeDeError = mensajeError;
 
 export const esSesionInvalida = (err: unknown) => axios.isAxiosError(err) && err.response?.status === 401;
 
