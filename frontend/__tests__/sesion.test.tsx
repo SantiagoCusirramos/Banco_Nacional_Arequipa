@@ -102,21 +102,8 @@ describe("Inicio de sesión", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("LG-03 'Registrar usuario' crea un usuario del sistema con la sesión actual", async () => {
-    conSesion();
-    post.mockResolvedValue({ data: { ...USUARIO, username: "nuevo" } });
-    render(<LoginPage />);
-    await userEvent.click(screen.getByRole("button", { name: "Registrar usuario" }));
-    await userEvent.type(screen.getByLabelText("Nombre completo"), "Persona Nueva");
-    await userEvent.type(screen.getByLabelText("Usuario"), "nuevo");
-    await userEvent.selectOptions(screen.getByLabelText("Rol del usuario"), "OPERADOR");
-    await userEvent.type(screen.getByLabelText("Contraseña"), "otra-clave-larga");
-    await userEvent.click(screen.getByRole("button", { name: /Crear usuario/ }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Usuario nuevo creado correctamente");
-    expect(post).toHaveBeenCalledWith("/coredb/usuarios", {
-      username: "nuevo", nombre: "Persona Nueva", password: "otra-clave-larga", rol: "OPERADOR", id_empleado: null,
-    });
-  });
+  // LG-03 (alta en la pestaña «Registrar usuario» del login) se retiró: el alta está en la
+  // pantalla «Usuarios» (__tests__/usuarios.test.tsx, US-01 y US-08).
 });
 
 describe("Mensajes de error y cabeceras", () => {

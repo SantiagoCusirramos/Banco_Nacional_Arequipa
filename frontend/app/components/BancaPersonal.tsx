@@ -41,6 +41,9 @@ export const PANTALLAS: { href: string; label: string; icon: string; descripcion
   { href: "/homebanking/index.html", label: "Home Banking", icon: "⌂", descripcion: "Prototipo de Home Banking sobre las mismas rutas" },
 ];
 
+// Solo para quien puede crear usuarios (administradores): la gestión del personal.
+const USUARIOS = { href: "/usuarios", label: "Usuarios", icon: "👤", descripcion: "Altas del personal, roles y contraseñas" };
+
 const iniciales = (nombre: string) => nombre.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
 export function BancaPersonal({ usuario, onSalir }: Props) {
@@ -50,6 +53,7 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [cuentaParaModificar, setCuentaParaModificar] = useState<Cuenta | null>(null);
   const titulo = pestanas.find((item) => item.id === tab)?.label;
+  const pantallas = usuario.acciones?.includes("CREAR_USUARIO") ? [...PANTALLAS, USUARIOS] : PANTALLAS;
 
   return (
     <main className="app-shell">
@@ -65,7 +69,7 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
               <span className="nav-icon">{item.icon}</span>{item.label}
             </button>
           ))}
-          {PANTALLAS.map((item) => (
+          {pantallas.map((item) => (
             <Link key={item.href} className="nav-item" href={item.href}>
               <span className="nav-icon">{item.icon}</span>{item.label}
             </Link>
@@ -91,7 +95,7 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
           {tab === "inicio" && <>
             <div className="section-heading"><div><h2>Pantallas del banco</h2><p>Cada una pide los permisos de tu rol ({usuario.rol}).</p></div></div>
             <div className="quick-grid">
-              {PANTALLAS.map((item) => (
+              {pantallas.map((item) => (
                 <Link key={item.href} href={item.href} className="quick-action">
                   <span className="quick-icon blue">{item.icon}</span>
                   <span><strong>{item.label}</strong><small>{item.descripcion}</small></span>

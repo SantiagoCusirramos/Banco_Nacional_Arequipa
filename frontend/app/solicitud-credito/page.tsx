@@ -1,5 +1,6 @@
 "use client";
 import { nuevoUuid } from "@/lib/uuid";
+import { borrarSesionesDelNavegador, cerrarSesion, obtenerToken, obtenerUsuarioGuardado } from "@/lib/auth";
 
 /** Interfaz de agencia del MVP SOL. Todas las validaciones de negocio y los
  * cálculos financieros se ejecutan de nuevo en el servidor con Decimal.
@@ -134,6 +135,25 @@ class ApiError extends Error {
     public status: number,
   ) {
     super(message);
+  }
+}
+
+/** El token del portal pasa a la cookie de Solicitud si SOL lo acepta; null si no hay o no sirve. */
+async function adoptarSesionDelPortal(): Promise<User | null> {
+  const token = obtenerToken();
+  if (!token) return null;
+  try {
+    const response = await fetch("/api/solicitud-credito/auth/portal", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: "{}",
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data?.usuario ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -487,7 +507,15 @@ export default function SolicitudPage() {
     let active = true;
     (async () => {
       try {
-        const u = await api<User>("auth/me");
+        let u: User;
+        try {
+          u = await api<User>("auth/me");
+        } catch (e) {
+          // Sin sesión propia: si el portal tiene una, Solicitud la adopta (una sola sesión).
+          const adoptado = e instanceof ApiError && e.status === 401 ? await adoptarSesionDelPortal() : null;
+          if (!adoptado) throw e;
+          u = adoptado;
+        }
         if (active) {
           setUser(u);
           await refresh();
@@ -699,6 +727,10 @@ export default function SolicitudPage() {
                   "POST",
                   { username, password },
                 );
+                // Quien entra aquí no deja abierta en el portal la sesión de otro usuario.
+                const previo = obtenerUsuarioGuardado();
+                if (previo ? previo.username !== result.usuario.username : obtenerToken())
+                  borrarSesionesDelNavegador();
                 setUser(result.usuario);
                 setPassword("");
                 setView("bandeja");
@@ -815,7 +847,8 @@ export default function SolicitudPage() {
               aria-label="Cerrar sesión"
               onClick={() =>
                 run(async () => {
-                  try { await api("auth/logout", "POST", {}); }
+                  // Cierra también el portal y el Home Banking, y avisa a las otras pestañas.
+                  try { await cerrarSesion(); }
                   finally { clearSession(); }
                 })
               }

@@ -16,7 +16,11 @@ export default function Home() {
       return;
     }
     obtenerMiPerfil()
-      .then(setUsuario)
+      .then((perfil) => {
+        // Con la contraseña inicial o renovada, primero se cambia.
+        if (perfil.debe_cambiar_clave) router.replace("/cambiar-clave");
+        else setUsuario(perfil);
+      })
       .catch(() => {
         cerrarSesion();
         router.replace("/login");

@@ -16,6 +16,45 @@ function json(body: unknown, init?: ResponseInit) {
   return response;
 }
 
+function guardarCookie(response: NextResponse, token: string) {
+  response.cookies.set(COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.SOL_COOKIE_SECURE === "true",
+    maxAge: 8 * 60 * 60,
+    path: "/api/solicitud-credito",
+  });
+}
+
+/**
+ * Una sola sesión: el token de COREDB que el portal ya tiene en el navegador pasa a la cookie
+ * HttpOnly de Solicitud, solo si SOL lo acepta (/auth/me comprueba el token y el perfil). Si no,
+ * se responde lo mismo que SOL y no se guarda nada.
+ */
+async function adoptarSesionDelPortal(request: NextRequest, base: string, trace: string) {
+  const autorizacion = request.headers.get("authorization") || "";
+  const token = /^Bearer ([^\s]+)$/.exec(autorizacion)?.[1];
+  if (!token) return json({ detail: "Inicia sesión para continuar." }, { status: 401 });
+  const headers = new Headers({ "X-Correlation-ID": trace, Authorization: `Bearer ${token}` });
+  credencialBus(headers);
+  try {
+    const upstream = await fetch(`${base.replace(/\/$/, "")}/auth/me`, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(3000),
+    });
+    const data = await upstream.json();
+    if (!upstream.ok) return json(data, { status: upstream.status });
+    const response = json({ usuario: data });
+    guardarCookie(response, token);
+    return response;
+  } catch {
+    return json({ detail: "No se pudo contactar al servicio SOL." }, { status: 503 });
+  }
+}
+
 async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -64,6 +103,7 @@ async function proxy(
       { detail: "Configura SOL_GATEWAY_URL en frontend/.env.local." },
       { status: 503 },
     );
+  if (route === "auth/portal") return adoptarSesionDelPortal(request, base, trace);
   const token = request.cookies.get(COOKIE)?.value;
   if (route !== "auth/login" && !token) {
     return json(
@@ -97,13 +137,7 @@ async function proxy(
         return json({ detail: "Respuesta de acceso no válida." }, { status: 503 });
       const response = json({ usuario: data.usuario });
       response.headers.set("X-Correlation-ID", upstream.headers.get("X-Correlation-ID") || trace);
-      response.cookies.set(COOKIE, data.token, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.SOL_COOKIE_SECURE === "true",
-        maxAge: 8 * 60 * 60,
-        path: "/api/solicitud-credito",
-      });
+      guardarCookie(response, data.token);
       return response;
     }
     const response = json(data, { status: upstream.status });

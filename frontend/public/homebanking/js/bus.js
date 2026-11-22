@@ -47,6 +47,8 @@ const Bus = (() => {
         const err = (typeof json.error === "object" && json.error) || {};
         const texto = err.message || json.message || (typeof json.detail === "string" ? json.detail : "") ||
           json.detalle || "No se pudo procesar la solicitud.";
+        // Con la contraseña inicial o renovada, COREDB no deja operar hasta cambiarla.
+        if (err.code === "CAMBIO_CLAVE_OBLIGATORIO") window.location.href = "/cambiar-clave";
         throw Object.assign(new Error(texto), {
           codigo: err.code || json.error_code || "ERR_API",
           mensaje: texto,
@@ -97,10 +99,17 @@ const Bus = (() => {
   // El Home Banking no tiene todavía autenticación de clientes (CR-INT-08 sigue sin canal propio):
   // entra un usuario del banco con su clave de COREDB y elige el cliente que atiende.
   async function autenticar(usuario, clave, codCliente) {
+    // Quien entra no hereda ninguna sesión anterior (portal, Solicitud, otro cliente atendido).
+    Sesion.cerrarTodo();
     const r = await invocarAPI("/api/core/coredb/auth/login", { username: usuario, password: clave }, "COREDB · login");
     if (!r.access_token) fallo(401, "LOGIN", "COREDB no devolvió un token.");
     localStorage.setItem("bna_access_token", r.access_token);
     const yo = await invocarAPI("/api/core/coredb/auth/me", null, "COREDB · perfil", { method: "GET" });
+    // La misma sesión que el portal (lib/auth.ts): su token y su usuario.
+    localStorage.setItem("bna_usuario", JSON.stringify({
+      id_usuario: yo.id_usuario, username: yo.username || usuario,
+      nombre: yo.nombre_completo || yo.username || usuario, rol: yo.rol, acciones: yo.acciones || []
+    }));
     return {
       estadoAutenticacion: "AUTENTICADO",
       mensajeAcceso: "Acceso autorizado",
