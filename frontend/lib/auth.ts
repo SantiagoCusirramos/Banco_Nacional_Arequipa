@@ -8,6 +8,8 @@ export type Usuario = {
   modulo?: string | null;
   activo?: boolean;
   acciones?: string[];
+  /** Con la contraseña inicial o renovada: debe cambiarla antes de operar (bd-v1.17). */
+  debe_cambiar_clave?: boolean;
 };
 
 export type LoginRespuesta = {
@@ -93,13 +95,11 @@ export async function obtenerMiPerfil(): Promise<Usuario> {
   return usuario;
 }
 
-export async function registrarUsuario(datos: {
-  username: string;
-  nombre: string;
-  password: string;
-  rol: string;
-  id_empleado?: string | null;
-}) {
-  const { data } = await api.post<Usuario>("/coredb/usuarios", datos);
+/** La persona cambia su contraseña (obligatorio tras la inicial o una renovada). */
+export async function cambiarClave(actual: string, nueva: string) {
+  const { data } = await api.post<{ debe_cambiar_clave: boolean }>("/coredb/auth/clave", { actual, nueva });
+  const guardado = obtenerUsuarioGuardado();
+  const token = obtenerToken();
+  if (guardado && token) guardarSesion(token, { ...guardado, debe_cambiar_clave: data.debe_cambiar_clave });
   return data;
 }

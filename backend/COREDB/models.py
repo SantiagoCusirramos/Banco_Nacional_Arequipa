@@ -29,6 +29,8 @@ class Usuario(Base):
     activo: Mapped[bool] = mapped_column()
     creado_en: Mapped[datetime] = mapped_column(FechaUtc)
     modulo: Mapped[str | None] = mapped_column(String(40))
+    # bd-v1.17: debe cambiar su contraseña antes de operar (inicial o renovada).
+    debe_cambiar_clave: Mapped[bool] = mapped_column()
 
 
 class Moneda(Base):

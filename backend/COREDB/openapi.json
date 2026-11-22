@@ -688,6 +688,10 @@
             "title": "Acciones",
             "type": "array"
           },
+          "debe_cambiar_clave": {
+            "title": "Debe Cambiar Clave",
+            "type": "boolean"
+          },
           "id_usuario": {
             "format": "uuid",
             "title": "Id Usuario",
@@ -718,7 +722,8 @@
           "username",
           "rol",
           "modulo",
-          "acciones"
+          "acciones",
+          "debe_cambiar_clave"
         ],
         "title": "PerfilRespuesta",
         "type": "object"
@@ -1217,6 +1222,29 @@
           "cuotas"
         ],
         "title": "CalendarioRespuesta",
+        "type": "object"
+      },
+      "CambioClave": {
+        "additionalProperties": false,
+        "properties": {
+          "actual": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Actual",
+            "type": "string"
+          },
+          "nueva": {
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Nueva",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actual",
+          "nueva"
+        ],
+        "title": "CambioClave",
         "type": "object"
       },
       "CambioDesbloqueo": {
@@ -1841,6 +1869,37 @@
           "vigenciaAprobacionDias"
         ],
         "title": "CatalogosCreditoRespuesta",
+        "type": "object"
+      },
+      "ClaveCambiada": {
+        "properties": {
+          "debe_cambiar_clave": {
+            "title": "Debe Cambiar Clave",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "debe_cambiar_clave"
+        ],
+        "title": "ClaveCambiada",
+        "type": "object"
+      },
+      "ClaveTemporal": {
+        "properties": {
+          "clave_inicial": {
+            "description": "Se muestra solo en esta respuesta; la persona debe cambiarla.",
+            "title": "Clave Inicial",
+            "type": "string"
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/UsuarioRespuesta"
+          }
+        },
+        "required": [
+          "usuario",
+          "clave_inicial"
+        ],
+        "title": "ClaveTemporal",
         "type": "object"
       },
       "ClienteCaptacionLigar": {
@@ -7869,6 +7928,102 @@
         "title": "TransferenciaRespuesta",
         "type": "object"
       },
+      "UsuarioCreado": {
+        "properties": {
+          "activo": {
+            "title": "Activo",
+            "type": "boolean"
+          },
+          "bloqueado_hasta": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hasta cuándo está bloqueado su login tras 5 fallos seguidos (bd-v1.12); solo en GET /coredb/usuarios/{id} y en el desbloqueo.",
+            "title": "Bloqueado Hasta"
+          },
+          "clave_inicial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Contraseña inicial generada: solo en esta respuesta, y solo si no se envió `password`.",
+            "title": "Clave Inicial"
+          },
+          "creado_en": {
+            "format": "date-time",
+            "title": "Creado En",
+            "type": "string"
+          },
+          "debe_cambiar_clave": {
+            "default": false,
+            "description": "Debe cambiar su contraseña antes de operar (bd-v1.17).",
+            "title": "Debe Cambiar Clave",
+            "type": "boolean"
+          },
+          "id_empleado": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Empleado"
+          },
+          "id_usuario": {
+            "format": "uuid",
+            "title": "Id Usuario",
+            "type": "string"
+          },
+          "modulo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modulo"
+          },
+          "nombre": {
+            "title": "Nombre",
+            "type": "string"
+          },
+          "rol": {
+            "title": "Rol",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_usuario",
+          "username",
+          "nombre",
+          "rol",
+          "modulo",
+          "id_empleado",
+          "activo",
+          "creado_en"
+        ],
+        "title": "UsuarioCreado",
+        "type": "object"
+      },
       "UsuarioCrear": {
         "properties": {
           "id_empleado": {
@@ -7890,9 +8045,16 @@
             "type": "string"
           },
           "password": {
-            "minLength": 8,
-            "title": "Password",
-            "type": "string"
+            "anyOf": [
+              {
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
           },
           "rol": {
             "enum": [
@@ -7915,7 +8077,6 @@
         "required": [
           "username",
           "nombre",
-          "password",
           "rol"
         ],
         "title": "UsuarioCrear",
@@ -7944,6 +8105,12 @@
             "format": "date-time",
             "title": "Creado En",
             "type": "string"
+          },
+          "debe_cambiar_clave": {
+            "default": false,
+            "description": "Debe cambiar su contraseña antes de operar (bd-v1.17).",
+            "title": "Debe Cambiar Clave",
+            "type": "boolean"
           },
           "id_empleado": {
             "anyOf": [
@@ -8010,6 +8177,10 @@
             "title": "Creado En",
             "type": "string"
           },
+          "debe_cambiar_clave": {
+            "title": "Debe Cambiar Clave",
+            "type": "boolean"
+          },
           "id_usuario": {
             "format": "uuid",
             "title": "Id Usuario",
@@ -8046,7 +8217,8 @@
           "rol",
           "modulo",
           "activo",
-          "creado_en"
+          "creado_en",
+          "debe_cambiar_clave"
         ],
         "title": "UsuarioSesion",
         "type": "object"
@@ -8822,6 +8994,64 @@
         ]
       }
     },
+    "/coredb/auth/clave": {
+      "post": {
+        "description": "La persona cambia su contraseña (obligatorio con la inicial o una renovada). La actual se\ncomprueba como en el login: un fallo cuenta para el bloqueo tras cinco seguidos.",
+        "operationId": "cambiar_clave_coredb_auth_clave_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-correlation-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Correlation-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CambioClave"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaveCambiada"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "CLAVE_ACTUAL_INCORRECTA o CLAVE_NO_ADMITIDA"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Cambiar Clave",
+        "tags": [
+          "autenticación"
+        ]
+      }
+    },
     "/coredb/auth/login": {
       "post": {
         "description": "Usuario inexistente, clave incorrecta, usuario inactivo, login bloqueado y contraseña\nno admitida responden el mismo 401. Un login exitoso queda en la bitácora (LOGIN); cada\nfallo de un usuario que existe, como LOGIN_FALLIDO. Cinco fallos seguidos bloquean a una\npersona 15 minutos (BLOQUEAR_LOGIN); los usuarios de servicio no se bloquean.",
@@ -8887,6 +9117,7 @@
     },
     "/coredb/auth/me": {
       "get": {
+        "description": "También con el cambio de contraseña pendiente: así la pantalla sabe que debe pedirlo.",
         "operationId": "me_coredb_auth_me_get",
         "responses": {
           "200": {
@@ -15730,7 +15961,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                  "$ref": "#/components/schemas/UsuarioCreado"
                 }
               }
             },
@@ -15848,6 +16079,51 @@
           }
         ],
         "summary": "Ver",
+        "tags": [
+          "usuarios"
+        ]
+      }
+    },
+    "/coredb/usuarios/{id_usuario}/clave": {
+      "post": {
+        "description": "Entrega una contraseña temporal a una persona, una sola vez; la anterior deja de servir y\nla persona debe cambiarla al entrar.",
+        "operationId": "renovar_clave_coredb_usuarios__id_usuario__clave_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id_usuario",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Id Usuario",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaveTemporal"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "USUARIO_NO_ENCONTRADO"
+          },
+          "422": {
+            "description": "BNA-USUARIO-SERVICIO: un usuario de servicio usa /credencial"
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ],
+        "summary": "Renovar Clave",
         "tags": [
           "usuarios"
         ]
