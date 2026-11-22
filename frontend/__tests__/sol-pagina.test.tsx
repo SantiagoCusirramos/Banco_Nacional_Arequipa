@@ -16,6 +16,8 @@ const api = vi.fn(async (input: string, init?: RequestInit) => {
   const custom = override(path, init);
   if (custom) return custom;
   if (path === "auth/me") return Response.json(profile);
+  if (path === "auth/login") return Response.json({ usuario: user });
+  if (path === "auth/logout") return Response.json({ ok: true });
   if (path === "policy") return Response.json(policy);
   if (path === "clients") return Response.json([client]);
   if (path.startsWith("applications?")) return Response.json({ items: [detail], total: 1, limit: 50, offset: 0, estados: { [detail.estado]: 1 } });
@@ -146,7 +148,7 @@ it("el borrador sobrevive a una sesión vencida y vuelve al entrar", async () =>
   fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "clave-sintetica" } });
   await userEvent.click(screen.getByRole("button", { name: "Ingresar al portal" }));
 
-  expect(await screen.findByLabelText("Monto solicitado")).toHaveValue("12345");
+  expect(await screen.findByLabelText("Monto solicitado")).toHaveValue(12345);
   expect(screen.getByLabelText("Destino del crédito")).toHaveValue("Compra de un local");
   await userEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
   expect(sessionStorage.getItem("bna_borrador_solicitud")).toBeNull();
