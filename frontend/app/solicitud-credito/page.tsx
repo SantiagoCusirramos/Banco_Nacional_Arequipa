@@ -1,6 +1,9 @@
 "use client";
 import { nuevoUuid } from "@/lib/uuid";
-import { borrarSesionesDelNavegador, cerrarSesion, obtenerToken, obtenerUsuarioGuardado } from "@/lib/auth";
+import { borrarSesionesDelNavegador, cerrarSesion, obtenerMiPerfil, obtenerToken, obtenerUsuarioGuardado, type Usuario } from "@/lib/auth";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 
 /** Interfaz de agencia del MVP SOL. Todas las validaciones de negocio y los
  * cálculos financieros se ejecutan de nuevo en el servidor con Decimal.
@@ -441,6 +444,7 @@ function CalendarTable({
 
 export default function SolicitudPage() {
   const [user, setUser] = useState<User | null>(null);
+  const [perfilPortal, setPerfilPortal] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(
@@ -502,6 +506,12 @@ export default function SolicitudPage() {
     setTotalApplications(a.total);
     setStateCounts(a.estados);
   }, [pageOffset]);
+
+  useEffect(() => {
+    let active = true;
+    obtenerMiPerfil().then((perfil) => { if (active) setPerfilPortal(perfil); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -781,7 +791,24 @@ export default function SolicitudPage() {
       </div>
     );
 
-  const filtered = apps.filter(
+  // La sesión válida la da el perfil real de SOL (auth/me de su puente: ASESOR, SUPERVISOR o
+  // AUDITOR); el permiso sobre la pantalla lo decide el perfil de COREDB del portal cuando está
+  // disponible. En ningún caso se lee bna_usuario de localStorage para decidir.
+  const conSesionSol = Boolean(user && ["ASESOR", "SUPERVISOR", "AUDITOR"].includes(user.rol));
+  const sinPermisoPortal = Boolean(perfilPortal?.acciones)
+    && !puedeVerPantalla(perfilPortal?.acciones, "/solicitud-credito");
+  const puedeCrearSolicitud = conSesionSol && !sinPermisoPortal;
+  const pantallaSolicitud = pantallaPorHref("/solicitud-credito");
+  if (!puedeCrearSolicitud) {
+    return (
+      <div className="sol-shell"><div className="sol-work" style={{ width: "100%" }}>
+        <BarraNavegacion titulo="Solicitud de crédito" usuario={user} />
+        <main className="sol-main"><AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantallaSolicitud?.rolesPermitidos ?? "personal autorizado"}.`} /></main>
+      </div></div>
+    );
+  }
+
+  const filtered = (apps ?? []).filter(
     (a) =>
       (filter === "TODAS" || a.estado === filter) &&
       `${a.codigo} ${a.cliente_nombre} ${a.documento}`
@@ -859,23 +886,7 @@ export default function SolicitudPage() {
         </div>
       </aside>
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div>
-            <span>Créditos</span>
-            <b>/</b>Solicitud de crédito
-          </div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">DEMO ACADÉMICA</span>
-            <span className="sol-date">
-              {new Date().toLocaleDateString("es-PE", {
-                timeZone: "America/Lima",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </span>
-          </div>
-        </header>
+        <BarraNavegacion titulo="Solicitud de crédito" usuario={user} />
         <main className="sol-main">
           {notice && (
             <div
