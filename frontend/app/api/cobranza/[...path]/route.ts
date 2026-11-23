@@ -7,7 +7,7 @@
  * Solo se exponen las 4 rutas que usa esta pantalla; cualquier otra devuelve 404.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { credencialBus, reenviar } from "@/lib/proxy";
+import { reenviar } from "@/lib/proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,19 +22,23 @@ const RUTAS: { metodo: string; coincide: (ruta: string[]) => boolean }[] = [
   { metodo: "POST", coincide: (r) => r.length >= 2 && r[0] === "api" && r[1] === "v1" },
 ];
 
+/** Mismo formato de error que Cobranza y COREDB, para que la pantalla muestre el mensaje. */
+const rechazo = (status: number, code: string, message: string) =>
+  NextResponse.json({ error: { code, message } }, { status });
+
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
   const regla = RUTAS.find((r) => r.metodo === request.method && r.coincide(path));
   if (!regla) {
-    return NextResponse.json({ detalle: "Ruta no disponible en este canal." }, { status: 404 });
+    return rechazo(404, "RUTA_NO_DISPONIBLE", "Ruta no disponible en este canal.");
   }
   if (!request.headers.get("authorization")) {
-    return NextResponse.json({ detalle: "Inicia sesión para continuar." }, { status: 401 });
+    return rechazo(401, "SESION_REQUERIDA", "Inicia sesión para continuar.");
   }
   if (request.method !== "GET") {
     const origin = request.headers.get("origin");
     if (origin && new URL(origin).host !== request.headers.get("host")) {
-      return NextResponse.json({ detalle: "Origen de la petición no permitido." }, { status: 403 });
+      return rechazo(403, "ORIGEN_NO_PERMITIDO", "Origen de la petición no permitido.");
     }
   }
 
