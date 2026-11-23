@@ -6,14 +6,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api", async (original) => ({
   ...(await original<typeof import("@/lib/api")>()),
   apiTarjetas: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
-  api: { get: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn() },
+  apiCuentas: { get: vi.fn(), post: vi.fn() },
 }));
-import { api, apiTarjetas } from "@/lib/api";
+import { api, apiCuentas, apiTarjetas } from "@/lib/api";
 import TarjetasPage from "../app/tarjetas/page";
 
 const get = vi.mocked(apiTarjetas.get);
 const post = vi.mocked(apiTarjetas.post);
 const put = vi.mocked(apiTarjetas.put);
+const getCuentas = vi.mocked(apiCuentas.get);
 const sobre = (data: unknown) => ({ data: { success: true, status_code: 200, data } });
 
 const TARJETA = {
@@ -49,6 +51,7 @@ beforeEach(() => {
   get.mockReset();
   post.mockReset();
   put.mockReset();
+  getCuentas.mockReset();
   perfil.mockReset();
   perfil.mockRejectedValue(new Error("sin sesión"));
 });
@@ -176,7 +179,7 @@ describe("Página del módulo Tarjetas", () => {
   it("TJ-08 Muestra en el menú quién tiene la sesión", async () => {
     // /coredb/auth/me no trae el nombre: viene de la sesión guardada al iniciar sesión.
     localStorage.setItem("bna_usuario", JSON.stringify({ id_usuario: "u1", username: "ana", nombre: "Ana Torres", rol: "OPERADOR" }));
-    perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "ana", rol: "OPERADOR" } });
+    perfil.mockResolvedValue({ data: { id_usuario: "u1", username: "ana", rol: "OPERADOR", acciones: ["VER_TARJETA"] } });
     render(<TarjetasPage />);
     expect(await screen.findByText("Ana Torres")).toBeInTheDocument();
     expect(screen.getByText("OPERADOR")).toBeInTheDocument();
@@ -264,18 +267,32 @@ describe("Página del módulo Tarjetas", () => {
     expect(screen.getByText(/el monto volvió al saldo disponible/)).toBeInTheDocument();
   });
 
-  it("TJ-16 Asigna el PIN y no lo deja en el campo", async () => {
+  it("TJ-16 Asigna el PIN que escribe la clienta y no lo deja en el campo", async () => {
     await abrirDetalle();
     await userEvent.click(enPantalla().getByRole("button", { name: "Claves" }));
-    const campo = screen.getByLabelText("Valor");
+    await userEvent.click(screen.getByLabelText("La clienta lo escribe"));
+    const campo = screen.getByLabelText("PIN del cajero (lo escribe la clienta)");
     expect(campo).toHaveAttribute("type", "password");
     escribir(campo, "48a21");
     expect(campo).toHaveValue("4821");
+    escribir(screen.getByLabelText("Repite el PIN del cajero"), "4821");
     put.mockResolvedValue(sobre(null));
     await userEvent.click(screen.getByRole("button", { name: "Asignar" }));
     await waitFor(() => expect(put).toHaveBeenCalledWith(`/${TARJETA.id_tarjeta}/credenciales/PIN_ATM`, { valor: "4821" }));
     expect(campo).toHaveValue("");
     expect(await screen.findByText(/PIN registrado/)).toBeInTheDocument();
+  });
+
+  it("TJ-16b Genera el PIN, lo asigna a la tarjeta y lo muestra una vez para entregarlo", async () => {
+    await abrirDetalle();
+    await userEvent.click(enPantalla().getByRole("button", { name: "Claves" }));
+    put.mockResolvedValue(sobre(null));
+    await userEvent.click(screen.getByRole("button", { name: "Generar y asignar" }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    const [ruta, cuerpo] = put.mock.calls[0] as [string, { valor: string }];
+    expect(ruta).toBe(`/${TARJETA.id_tarjeta}/credenciales/PIN_ATM`);
+    expect(cuerpo.valor).toMatch(/^\d{4}$/);
+    expect(await screen.findByRole("region", { name: /para entregar/ })).toHaveTextContent(cuerpo.valor);
   });
 
   it("TJ-17 Comprueba un PIN equivocado y muestra los intentos que quedan", async () => {
@@ -308,5 +325,34 @@ describe("Página del módulo Tarjetas", () => {
     escribir(campo, "61524399");
     expect(campo).toHaveValue("615243");
     expect(campo).toHaveAttribute("pattern", "[0-9]{6}");
+  });
+
+  it("TJ-20 En claves se elige la tarjeta por su número enmascarado, sin pegar el UUID", async () => {
+    await abrirDetalle();
+    await userEvent.click(enPantalla().getByRole("button", { name: "Claves" }));
+    expect(screen.queryByLabelText("Identificador de la tarjeta")).not.toBeInTheDocument();
+    const tarjeta = await screen.findByRole("button", { name: /0044 99\*\* \*\*\*\* 0001/ });
+    expect(tarjeta).toBeInTheDocument();
+    await userEvent.click(tarjeta);
+    escribir(screen.getByLabelText("Valor"), "1234");
+    post.mockResolvedValue(sobre({ resultado: "EXITOSO", intentos_restantes: 3 }));
+    await userEvent.click(screen.getByRole("button", { name: "Comprobar" }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      `/${TARJETA.id_tarjeta}/credenciales/PIN_ATM/validacion`, { valor: "1234", id_canal: "ATM" }));
+  });
+
+  it("TJ-21 La emisión elige cliente y cuenta de listas en vez de escribir códigos", async () => {
+    getCuentas.mockResolvedValue(sobre([{
+      num_cuenta: "10100000000001", cci: "0".repeat(20), moneda: "PEN", regimen: "INDIVIDUAL",
+      estado_cuenta: "ACTIVA", saldo_contable: "100.00", saldo_disponible: "100.00", id_agencia: "AQP01",
+      titulares: ["CLI000000001"],
+    }]));
+    render(<TarjetasPage />);
+    await pestana("Emitir tarjeta");
+    escribir(screen.getByLabelText("Código del cliente"), "CLI000000001");
+    const cuenta = await screen.findByRole("button", { name: /••••0001/ });
+    await userEvent.click(cuenta);
+    expect(screen.getByLabelText("Cuenta a vincular")).toHaveValue("10100000000001");
+    expect(getCuentas).toHaveBeenCalledWith("/consolidada/CLI000000001");
   });
 });

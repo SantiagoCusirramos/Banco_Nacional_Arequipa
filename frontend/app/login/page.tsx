@@ -2,53 +2,29 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { mensajeError } from "@/lib/api";
-import { iniciarSesion, registrarUsuario } from "@/lib/auth";
+import { iniciarSesion } from "@/lib/auth";
+import { rutaSeguraVolver } from "@/lib/continuidad";
 
-type Modo = "login" | "registro";
+// Solo el ingreso. Los usuarios los crea un administrador en la pantalla «Usuarios» del portal.
 
 export default function LoginPage() {
   const router = useRouter();
-  const [modo, setModo] = useState<Modo>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [nombre, setNombre] = useState("");
-  const [rol, setRol] = useState("ASESOR");
-  const [idEmpleado, setIdEmpleado] = useState("");
-  const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
 
   async function enviarLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(""); setMensaje(""); setCargando(true);
+    setError(""); setCargando(true);
     try {
-      await iniciarSesion(username.trim(), password);
-      router.replace("/");
-    } catch (err) {
-      setError(mensajeError(err));
-    } finally {
-      setCargando(false);
-    }
-  }
-
-  async function enviarRegistro(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(""); setMensaje(""); setCargando(true);
-    try {
-      const creado = await registrarUsuario({
-        username: username.trim(),
-        nombre: nombre.trim(),
-        password,
-        rol,
-        id_empleado: idEmpleado.trim() || null,
-      });
-      setMensaje(`Usuario ${creado.username} creado correctamente. Ya puede iniciar sesión.`);
-      setModo("login");
-      setPassword("");
-      setNombre("");
-      setIdEmpleado("");
+      const sesion = await iniciarSesion(username.trim(), password);
+      // Con la contraseña inicial o renovada, primero se cambia. Si no, se vuelve a la
+      // pantalla que estaba abierta cuando venció la sesión (solo rutas internas).
+      const volver = new URLSearchParams(window.location.search).get("volver");
+      const destino = rutaSeguraVolver(volver) ?? "/";
+      router.replace(sesion.usuario.debe_cambiar_clave ? "/cambiar-clave" : destino);
     } catch (err) {
       setError(mensajeError(err));
     } finally {
@@ -57,70 +33,35 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="auth-page">
+    <main id="contenido" className="auth-page">
       <section className="auth-card">
         <div className="auth-brand">
           <div className="auth-brand-mark">B</div>
-          <div><strong>BAN</strong><span>Banco Nacional de Arequipa</span></div>
+          <div><strong>BNA</strong><span>Banco Nacional de Arequipa</span></div>
         </div>
 
         <div className="auth-heading">
           <span className="auth-eyebrow">BANCA DIGITAL</span>
-          <h1>{modo === "login" ? "Bienvenido de nuevo" : "Registrar usuario"}</h1>
-          <p>{modo === "login"
-            ? "Ingresa tus credenciales para acceder a tu banca personal."
-            : "El registro de usuarios del sistema requiere una sesión con permiso CREAR_USUARIO."}</p>
-        </div>
-
-        <div className="auth-tabs">
-          <button type="button" className={modo === "login" ? "selected" : ""} onClick={() => { setModo("login"); setError(""); setMensaje(""); }}>Iniciar sesión</button>
-          <button type="button" className={modo === "registro" ? "selected" : ""} onClick={() => { setModo("registro"); setError(""); setMensaje(""); }}>Registrar usuario</button>
+          <h1>Bienvenido de nuevo</h1>
+          <p>Ingresa con tu usuario del banco. Si aún no tienes uno, pídelo a un administrador.</p>
         </div>
 
         {error && <div className="auth-alert auth-error" role="alert">{error}</div>}
-        {mensaje && <div className="auth-alert auth-success" role="status">{mensaje}</div>}
 
-        <form className="auth-form" onSubmit={modo === "login" ? enviarLogin : enviarRegistro}>
-          {modo === "registro" && (
-            <>
-              <label htmlFor="nombre">Nombre completo</label>
-              <input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre y apellidos" required maxLength={100} />
-            </>
-          )}
-
+        <form className="auth-form" onSubmit={enviarLogin}>
           <label htmlFor="username">Usuario</label>
-          <input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Tu nombre de usuario" required minLength={modo === "registro" ? 3 : 1} maxLength={40} autoComplete="username" />
-
-          {modo === "registro" && (
-            <>
-              <label htmlFor="rol">Rol del usuario</label>
-              <select id="rol" value={rol} onChange={(e) => setRol(e.target.value)}>
-                <option value="ASESOR">Asesor</option>
-                <option value="ANALISTA">Analista</option>
-                <option value="OPERADOR">Operador</option>
-                <option value="AUDITOR">Auditor</option>
-                <option value="ADMINISTRADOR">Administrador</option>
-              </select>
-              <label htmlFor="idEmpleado">ID de empleado (opcional)</label>
-              <input id="idEmpleado" value={idEmpleado} onChange={(e) => setIdEmpleado(e.target.value)} placeholder="UUID del empleado, si corresponde" />
-            </>
-          )}
+          <input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Tu nombre de usuario" required maxLength={40} autoComplete="username" />
 
           <label htmlFor="password">Contraseña</label>
-          <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={modo === "registro" ? "Mínimo 8 caracteres" : "Ingresa tu contraseña"} required minLength={modo === "registro" ? 8 : 1} maxLength={128} autoComplete={modo === "login" ? "current-password" : "new-password"} />
+          <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Ingresa tu contraseña" required maxLength={128} autoComplete="current-password" />
 
           <button className="auth-submit" type="submit" disabled={cargando}>
-            {cargando ? "Procesando..." : modo === "login" ? "Ingresar a mi cuenta" : "Crear usuario"}
+            {cargando ? "Procesando..." : "Ingresar a mi cuenta"}
             <span>→</span>
           </button>
         </form>
 
-        {modo === "registro" && (
-          <p className="auth-note">Este formulario crea usuarios internos del sistema mediante <code>POST /coredb/usuarios</code>. No es un registro público de clientes. Si recibes un error 403, inicia sesión con un usuario administrador autorizado.</p>
-        )}
-
         <div className="auth-bottom">
-          <Link href="/">Volver a la banca personal</Link>
           <span>Conexión protegida · BNA</span>
         </div>
       </section>

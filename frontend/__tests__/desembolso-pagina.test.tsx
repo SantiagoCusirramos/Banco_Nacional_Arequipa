@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "o-1" }),
   usePathname: () => "/desembolso/ordenes/o-1",
   useRouter: () => ({ push, replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/desembolso/api", async (original) => ({
   ...(await original<typeof import("@/lib/desembolso/api")>()),
@@ -32,7 +33,7 @@ const CUOTAS = Array.from({ length: 12 }, (_, i) => ({
 const ORDEN: OrdenDetalle = {
   idOrden: "o-1", codigoOrden: "DES-2026-000001", estado: "PREPARADA", motivoRechazo: null, importe: "15000.00",
   moneda: "PEN", numCuenta: "CTA-0000000000000001", canal: "VEN", idAgencia: null, idEvaluacion: "e-1",
-  idSolicitud: "0198b000-0000-7000-8000-000000000001", codCliente: "C000000123", usuarioPreparacion: "operador1",
+  idSolicitud: "0198b000-0000-7000-8000-000000000001", codigo: "SOL-2611-ABCDEF12", codCliente: "C000000123", usuarioPreparacion: "operador1",
   usuarioConfirmacion: null, uuidTransaccionAbono: null, codCredito: null,
   fechaCreacion: "2026-11-16T20:00:00Z", fechaActualizacion: "2026-11-16T20:00:00Z",
   validaciones: [{ idValidacion: "v-1", tipo: "CUENTA", resultado: "APROBADA", referenciaEvidencia: "CTA-0000000000000001",
@@ -48,7 +49,7 @@ const CUENTAS: Cuenta[] = [
     motivo: "CUENTA_MANCOMUNADA" },
 ];
 const APROBACION: Aprobacion = {
-  idEvaluacion: "e-1", idSolicitud: ORDEN.idSolicitud, codCliente: "C000000123", ronda: 1, monto: "15000.00", moneda: "PEN",
+  idEvaluacion: "e-1", idSolicitud: ORDEN.idSolicitud, codigo: ORDEN.codigo, codCliente: "C000000123", ronda: 1, monto: "15000.00", moneda: "PEN",
   plazoMeses: 12, limiteAprobado: "21000.00", fechaAprobacion: "2026-11-16T19:00:00Z", vigenteHasta: "2026-12-16T19:00:00Z",
   idCalendario: "c-1", ordenAbierta: null,
 };
@@ -161,5 +162,12 @@ describe("Pantallas del módulo Desembolso", () => {
     render(<ProveedorSesion sesion={OPERADOR}><PaginaOrden /></ProveedorSesion>);
     expect(await screen.findByRole("button", { name: "Confirmar desembolso" })).toBeDisabled();
     expect(await screen.findByRole("button", { name: /CTA-0000000000000002/ })).toBeDisabled();
+  });
+
+  it("DS-12 La orden muestra el código SOL en vez del UUID de la solicitud", async () => {
+    servidor(ORDEN);
+    render(<ProveedorSesion sesion={AUDITOR}><PaginaOrden /></ProveedorSesion>);
+    expect(await screen.findByText("SOL-2611-ABCDEF12")).toBeInTheDocument();
+    expect(screen.queryByText(ORDEN.idSolicitud)).not.toBeInTheDocument();
   });
 });

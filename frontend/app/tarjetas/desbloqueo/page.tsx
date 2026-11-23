@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { isAxiosError } from "axios";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { rutaActual, urlLoginConVolver } from "@/lib/continuidad";
 import {
   PERMISO_DESBLOQUEO, desbloquearTarjeta, fechaHora, fichaDeTarjeta, mensajeParaPersonal, nombreEstado, nombreOrigen,
   tarjetasDelCliente, tipoDeError,
@@ -208,7 +209,7 @@ export default function DesbloqueoPage() {
           </div>
         </header>
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           <div className="sol-heading">
             <div>
               <h1>Desbloqueo de tarjetas</h1>
@@ -221,7 +222,7 @@ export default function DesbloqueoPage() {
           {usuario === null && (
             <div role="alert" className="sol-alert error">
               Tu sesión no está iniciada o ya venció.
-              <Link href="/login" onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
+              <Link href={urlLoginConVolver(rutaActual())} onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
                 Iniciar sesión
               </Link>
             </div>

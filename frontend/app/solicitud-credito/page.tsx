@@ -1,5 +1,12 @@
 "use client";
 import { nuevoUuid } from "@/lib/uuid";
+import { borrarSesionesDelNavegador, cerrarSesion, obtenerMiPerfil, obtenerToken, obtenerUsuarioGuardado, type Usuario } from "@/lib/auth";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import {
+  borrarBorradorSolicitud, guardarBorradorSolicitud, leerBorradorSolicitud,
+} from "@/lib/continuidad";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 
 /** Interfaz de agencia del MVP SOL. Todas las validaciones de negocio y los
  * cálculos financieros se ejecutan de nuevo en el servidor con Decimal.
@@ -134,6 +141,25 @@ class ApiError extends Error {
     public status: number,
   ) {
     super(message);
+  }
+}
+
+/** El token del portal pasa a la cookie de Solicitud si SOL lo acepta; null si no hay o no sirve. */
+async function adoptarSesionDelPortal(): Promise<User | null> {
+  const token = obtenerToken();
+  if (!token) return null;
+  try {
+    const response = await fetch("/api/solicitud-credito/auth/portal", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: "{}",
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data?.usuario ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -421,6 +447,7 @@ function CalendarTable({
 
 export default function SolicitudPage() {
   const [user, setUser] = useState<User | null>(null);
+  const [perfilPortal, setPerfilPortal] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(
@@ -438,8 +465,11 @@ export default function SolicitudPage() {
   const [version, setVersion] = useState(1);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("TODAS");
-  const [form, setForm] = useState<FormData>(freshForm);
-  const [step, setStep] = useState(0);
+  // Lo escrito queda en la pestaña mientras haya sesión: si esta caduca, el borrador
+  // sigue aquí y se retoma al volver a entrar, sin pedirle que repita el expediente.
+  const borrador = leerBorradorSolicitud<FormData>();
+  const [form, setForm] = useState<FormData>(() => borrador?.form ?? freshForm());
+  const [step, setStep] = useState(() => borrador?.step ?? 0);
   const [preview, setPreview] = useState<Snapshot | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -462,6 +492,11 @@ export default function SolicitudPage() {
     setMetrics(null);
     setPageOffset(0); sendKeys.current.clear();
   }, []);
+  useEffect(() => {
+    // Solo mientras se edita con sesión: una caducidad (clearSession) no borra lo guardado.
+    if (user && view === "editor")
+      guardarBorradorSolicitud({ form, step, view });
+  }, [form, step, view, user]);
   const fail = useCallback((e: unknown) => {
     setNotice({
       text:
@@ -485,9 +520,23 @@ export default function SolicitudPage() {
 
   useEffect(() => {
     let active = true;
+    obtenerMiPerfil().then((perfil) => { if (active) setPerfilPortal(perfil); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     (async () => {
       try {
-        const u = await api<User>("auth/me");
+        let u: User;
+        try {
+          u = await api<User>("auth/me");
+        } catch (e) {
+          // Sin sesión propia: si el portal tiene una, Solicitud la adopta (una sola sesión).
+          const adoptado = e instanceof ApiError && e.status === 401 ? await adoptarSesionDelPortal() : null;
+          if (!adoptado) throw e;
+          u = adoptado;
+        }
         if (active) {
           setUser(u);
           await refresh();
@@ -586,6 +635,8 @@ export default function SolicitudPage() {
       const d = editing
         ? await api<Detail>(`applications/${selected!.id}`, "PUT", form)
         : await api<Detail>("applications", "POST", form);
+      // Ya está en la base: el respaldo local de la pestaña terminó su trabajo.
+      borrarBorradorSolicitud();
       // Abrir el borrador antes de enviar evita perder el ID si el gateway falla.
       setSelected(d);
       setVersion(d.version);
@@ -623,6 +674,7 @@ export default function SolicitudPage() {
           { revision: selected.revision },
           sendKey(selected),
         );
+        borrarBorradorSolicitud();
         setSelected(d);
         await refresh();
         setNotice({
@@ -699,9 +751,20 @@ export default function SolicitudPage() {
                   "POST",
                   { username, password },
                 );
+                // Quien entra aquí no deja abierta en el portal la sesión de otro usuario.
+                const previo = obtenerUsuarioGuardado();
+                if (previo ? previo.username !== result.usuario.username : obtenerToken())
+                  borrarSesionesDelNavegador();
                 setUser(result.usuario);
                 setPassword("");
-                setView("bandeja");
+                // Si quedó un expediente a medio escribir antes de caducar la sesión, se retoma.
+                const guardado = leerBorradorSolicitud<FormData>();
+                if (guardado?.view === "editor") {
+                  setForm(guardado.form);
+                  setStep(guardado.step);
+                  setSelected(null);
+                  setView("editor");
+                } else setView("bandeja");
                 await refresh();
               });
             }}
@@ -749,7 +812,24 @@ export default function SolicitudPage() {
       </div>
     );
 
-  const filtered = apps.filter(
+  // La sesión válida la da el perfil real de SOL (auth/me de su puente: ASESOR, SUPERVISOR o
+  // AUDITOR); el permiso sobre la pantalla lo decide el perfil de COREDB del portal cuando está
+  // disponible. En ningún caso se lee bna_usuario de localStorage para decidir.
+  const conSesionSol = Boolean(user && ["ASESOR", "SUPERVISOR", "AUDITOR"].includes(user.rol));
+  const sinPermisoPortal = Boolean(perfilPortal?.acciones)
+    && !puedeVerPantalla(perfilPortal?.acciones, "/solicitud-credito");
+  const puedeCrearSolicitud = conSesionSol && !sinPermisoPortal;
+  const pantallaSolicitud = pantallaPorHref("/solicitud-credito");
+  if (!puedeCrearSolicitud) {
+    return (
+      <div className="sol-shell"><div className="sol-work" style={{ width: "100%" }}>
+        <BarraNavegacion titulo="Solicitud de crédito" usuario={user} />
+        <main id="contenido" className="sol-main"><AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantallaSolicitud?.rolesPermitidos ?? "personal autorizado"}.`} /></main>
+      </div></div>
+    );
+  }
+
+  const filtered = (apps ?? []).filter(
     (a) =>
       (filter === "TODAS" || a.estado === filter) &&
       `${a.codigo} ${a.cliente_nombre} ${a.documento}`
@@ -815,8 +895,9 @@ export default function SolicitudPage() {
               aria-label="Cerrar sesión"
               onClick={() =>
                 run(async () => {
-                  try { await api("auth/logout", "POST", {}); }
-                  finally { clearSession(); }
+                  // Cierra también el portal y el Home Banking, y avisa a las otras pestañas.
+                  try { await cerrarSesion(); }
+                  finally { clearSession(); borrarBorradorSolicitud(); }
                 })
               }
             >
@@ -826,24 +907,8 @@ export default function SolicitudPage() {
         </div>
       </aside>
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div>
-            <span>Créditos</span>
-            <b>/</b>Solicitud de crédito
-          </div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">DEMO ACADÉMICA</span>
-            <span className="sol-date">
-              {new Date().toLocaleDateString("es-PE", {
-                timeZone: "America/Lima",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </span>
-          </div>
-        </header>
-        <main className="sol-main">
+        <BarraNavegacion titulo="Solicitud de crédito" usuario={user} />
+        <main id="contenido" className="sol-main">
           {notice && (
             <div
               role={notice.error ? "alert" : "status"}

@@ -91,7 +91,7 @@
       if (!cuentas.length && !silencioso) mostrarMensaje(msg, "warn", "No se encontraron cuentas activas.");
       return true;
     } catch (e) {
-      if (!silencioso) mostrarMensaje(msg, "error", e.mensaje || "No se pudieron recuperar sus cuentas.");
+      if (!silencioso) mostrarMensaje(msg, "error", mensajeError(e));
       return false;
     }
   }
@@ -144,7 +144,7 @@
     } catch (err) {
       mostrarMensaje(msg, "error", err.codigo === "ERR-CTA-NO-ENCONTRADA"
         ? `La cuenta de destino ${v.destino} no existe. Revise el número.`
-        : `No se pudo comprobar la cuenta de destino: ${err.mensaje || "intente de nuevo"}. No se movió dinero.`);
+        : `No se pudo comprobar la cuenta de destino: ${mensajeError(err)}. No se movió dinero.`);
       return null;
     }
     if (!d.titular || !d.moneda || !d.estado) {
@@ -331,7 +331,7 @@
       } else {
         // Respuesta definitiva del banco: el próximo intento (p. ej. tras depositar) lleva otra llave.
         nuevoIntento();
-        aviso = ["error", `La transferencia fue rechazada: ${MOTIVOS[err.codigo] || err.mensaje || "sin motivo informado"}. ` +
+        aviso = ["error", `La transferencia fue rechazada: ${MOTIVOS[err.codigo] || mensajeError(err)}. ` +
           "No se movió dinero."];
       }
     } finally {

@@ -88,18 +88,48 @@ export function cabecerasDeOperacion(llave: string): Record<string, string> {
 
 apiCuentas.interceptors.request.use(conToken);
 
+/**
+ * Con la contraseña inicial o renovada, COREDB responde 403 CAMBIO_CLAVE_OBLIGATORIO a todo lo
+ * demás: cualquier pantalla lleva entonces a cambiarla. El error sigue su curso.
+ */
+export function alExigirCambioDeClave(err: unknown): never {
+  if (axios.isAxiosError(err) && err.response?.status === 403
+      && err.response.data?.error?.code === "CAMBIO_CLAVE_OBLIGATORIO"
+      && typeof window !== "undefined" && window.location.pathname !== "/cambiar-clave") {
+    window.location.assign("/cambiar-clave");
+  }
+  throw err;
+}
+for (const cliente of [apiCore, apiCuentas, apiTarjetas, apiEvaluacion, apiCaptacion, apiCobranza, apiSeguridad]) {
+  cliente.interceptors.response.use(undefined, alExigirCambioDeClave);
+}
+
+/** Un mensaje del servidor nunca debe filtrar la ruta, el método, la correlación ni un id interno. */
+function textoLlano(texto: string): string {
+  if (/\b(?:GET|POST|PUT|PATCH|DELETE)\s+\//i.test(texto)
+    || /\/api\//i.test(texto)
+    || /correlaci[oó]n/i.test(texto)
+    || /\b(?:INT|RF|RN|CR)[- ]?\d+/i.test(texto)) {
+    return "No se pudo completar la operación. Intenta de nuevo.";
+  }
+  return texto;
+}
+
 export function mensajeError(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data;
-    if (data?.error?.message) return data.error.message; // COREDB
-    if (typeof data?.message === "string" && data.message) return data.message; // CUENTAS, TARJETAS, CAPTACION
-    if (typeof data?.detail === "string") return data.detail;
+    const codigo = data?.error?.code;
+    if (codigo === "PERMISO_DENEGADO") return "Tu rol no puede hacer esta operación.";
+    if (codigo === "CAMBIO_CLAVE_OBLIGATORIO") return "Debes cambiar tu clave antes de continuar.";
+    if (data?.error?.message) return textoLlano(data.error.message); // COREDB
+    if (typeof data?.message === "string" && data.message) return textoLlano(data.message); // CUENTAS, TARJETAS, CAPTACION
+    if (typeof data?.detail === "string") return textoLlano(data.detail);
     if (Array.isArray(data?.detail)) return "Revisa los datos enviados: algún campo no es válido.";
     if (err.response?.status === 401) return "Credenciales incorrectas o sesión vencida.";
     if (err.response?.status === 403) return "Tu usuario no tiene permisos para realizar esta operación.";
     if (err.code === "ERR_NETWORK") return "No se pudo conectar con el servidor.";
-    return err.message;
+    return textoLlano(err.message);
   }
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) return textoLlano(err.message);
   return "Error inesperado";
 }

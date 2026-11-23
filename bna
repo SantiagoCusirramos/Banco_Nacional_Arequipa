@@ -6,6 +6,23 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$RAIZ"
 
+# Proyecto de Compose: sus contenedores, redes y volúmenes son solo suyos, y `down -v` solo
+# toca los de este proyecto. Por omisión `bna`; `./bna test` usa uno propio por corrida, así
+# que a esa orden no se le pasa este valor por omisión (scripts/pruebas.sh elige el suyo).
+if [ "${1:-}" = test ] && [ -z "${BNA_PROYECTO:-}" ]; then
+  unset BNA_PROYECTO COMPOSE_PROJECT_NAME
+  exec scripts/pruebas.sh "${@:2}"
+fi
+BNA_PROYECTO="${BNA_PROYECTO:-bna}"
+case "$BNA_PROYECTO" in
+  [a-z0-9]*) ;;
+  *) echo "BNA_PROYECTO debe empezar con una letra minúscula o un dígito: $BNA_PROYECTO" >&2; exit 2 ;;
+esac
+case "$BNA_PROYECTO" in
+  *[!a-z0-9_-]*) echo "BNA_PROYECTO solo admite minúsculas, dígitos, - y _: $BNA_PROYECTO" >&2; exit 2 ;;
+esac
+export BNA_PROYECTO COMPOSE_PROJECT_NAME="$BNA_PROYECTO"
+
 ESPERA_SEGUNDOS="${BNA_ESPERA_SEGUNDOS:-600}"
 
 ayuda() {
@@ -21,11 +38,20 @@ Uso: ./bna <orden>
   logs [servicio] Registros, en vivo
   smoke           Flujo de extremo a extremo contra el producto levantado
   demo            Flujo de la demo del profesor (cliente, cuenta, tarjeta, ATM, Chaski, bloqueo); deja los datos
-  test            Todas las suites de pruebas, en contenedores, y el flujo. Si el
-                  producto no estaba levantado, al terminar elimina lo que creó
+  test            Todas las suites de pruebas, en contenedores, y el flujo, en un
+                  proyecto propio que elimina al terminar (no toca el de ./bna up)
   help            Esta ayuda
 
-En Kubernetes, sobre un clúster local de kind (requiere kind y kubectl):
+Variables (opcionales):
+
+  BNA_PROYECTO        proyecto de Compose (por omisión bna). Con otro nombre, otra copia del
+                      producto con sus propios contenedores, redes y volúmenes
+  BNA_ETIQUETA_LOCAL  etiqueta de las imágenes bna/* (por omisión local)
+
+  ./bna test usa un proyecto y una etiqueta propios por corrida y no publica puertos, así que
+  varias corridas (por ejemplo, desde dos worktrees) pueden ir a la vez. Ver CONTRIBUTING.md.
+
+En Kubernetes, sobre un clúster local de kind con el nombre del proyecto (requiere kind y kubectl):
 
   k8s-up          Crea el clúster si falta, carga las imágenes, aplica el Secret
                   generado desde .env y despliega k8s/overlays/local
@@ -101,6 +127,11 @@ esperar() {
 
 resumen() {
   printf '\r%-75s\n' "Todos los servicios están sanos."
+  case ":${COMPOSE_FILE:-}:" in
+    *:compose.sin-puertos.yaml:*)
+      echo "  Proyecto $BNA_PROYECTO en modo prueba: sin puertos en esta máquina."
+      return 0 ;;
+  esac
   cat <<TEXTO
 
   Frontend          http://localhost:$(valor BNA_PUERTO_FRONTEND)

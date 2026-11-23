@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 // K-5: el Home Banking se sirve desde public/ y solo llama a los puentes que existen.
 const HB = resolve(process.cwd(), "public/homebanking"); // vitest corre en frontend/
 const JS = join(HB, "js");
-const PUENTES = ["/api/core/coredb/", "/api/cuenta/", "/api/tarjeta/", "/api/cobranza/"];
+// /api/solicitud-credito/auth/logout: cerrar sesión cierra también Solicitud de crédito.
+const PUENTES = ["/api/core/coredb/", "/api/cuenta/", "/api/tarjeta/", "/api/cobranza/", "/api/solicitud-credito/auth/logout"];
 const scripts = () => readdirSync(JS).filter((f) => f.endsWith(".js")).map((f) => [f, readFileSync(join(JS, f), "utf8")] as const);
 
 describe("Home Banking (K-5)", () => {
@@ -40,5 +41,10 @@ describe("Home Banking (K-5)", () => {
       const captura = texto.slice(texto.lastIndexOf("} catch (err) {"));
       expect(captura.slice(0, captura.indexOf("} finally"))).not.toMatch(/idemActual = null/);
     }
+  });
+
+  it("HB-05 Con la contraseña temporal, lleva a cambiarla (403 CAMBIO_CLAVE_OBLIGATORIO)", () => {
+    const bus = readFileSync(join(JS, "bus.js"), "utf8");
+    expect(bus).toMatch(/err\.code === "CAMBIO_CLAVE_OBLIGATORIO"\) window\.location\.href = "\/cambiar-clave"/);
   });
 });

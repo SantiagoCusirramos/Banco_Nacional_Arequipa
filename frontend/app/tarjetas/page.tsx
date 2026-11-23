@@ -1,10 +1,18 @@
 "use client";
 import { nuevoUuid } from "@/lib/uuid";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { isAxiosError } from "axios";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
 import { cerrarSesion, obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { rutaActual, urlLoginConVolver } from "@/lib/continuidad";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
+import { ClaveNueva } from "../components/ClaveNueva";
+import SelectorCliente from "../components/SelectorCliente";
+import SelectorCuenta from "../components/SelectorCuenta";
 import {
   BINES, CANALES, CODIGOS_RESPUESTA, DIGITOS_CLAVE, ESTADOS_PEDIBLES, OPERACIONES, TIPOS_CLAVE,
   autorizarOperacion, cambiarEstado, emitirTarjeta, extornarAutorizacion, mensajeDeError, registrarClave,
@@ -171,8 +179,12 @@ function Resumen({ tarjetas }: { tarjetas: Tarjeta[] }) {
 
 const esSesionInvalida = (err: unknown) => isAxiosError(err) && err.response?.status === 401;
 
-export default function TarjetasPage() {
-  const [tab, setTab] = useState<Pestana>("cliente");
+function TarjetasPageInner() {
+  const params = useSearchParams();
+  const [tab, setTab] = useState<Pestana>(() => {
+    const destino = params?.get("tab");
+    return destino === "cliente" || destino === "consulta" || destino === "emision" || destino === "estado" || destino === "operacion" || destino === "claves" ? destino : "cliente";
+  });
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   // Sin sesión o con la sesión vencida se pide iniciarla, en vez de mostrar el error técnico.
   const [sinSesion, setSinSesion] = useState(false);
@@ -185,10 +197,11 @@ export default function TarjetasPage() {
       if (esSesionInvalida(err)) setSinSesion(true);
     });
   }, []);
+
   const [notice, setNotice] = useState<Aviso | null>(null);
 
-  // Tarjetas de un cliente
-  const [codCliente, setCodCliente] = useState("");
+  // Tarjetas de un cliente. La ficha del cliente y la emisión llegan precargadas desde la cuenta.
+  const [codCliente, setCodCliente] = useState(() => params?.get("codCliente")?.toUpperCase() ?? "");
   const [tarjetas, setTarjetas] = useState<Tarjeta[] | null>(null);
 
   // Una tarjeta
@@ -196,8 +209,8 @@ export default function TarjetasPage() {
   const [tarjetaActual, setTarjetaActual] = useState<Tarjeta | null>(null);
 
   // Emisión
-  const [clienteEmision, setClienteEmision] = useState("");
-  const [cuentaEmision, setCuentaEmision] = useState("");
+  const [clienteEmision, setClienteEmision] = useState(() => params?.get("codCliente")?.toUpperCase() ?? "");
+  const [cuentaEmision, setCuentaEmision] = useState(() => params?.get("numCuenta") ?? "");
   const [bin, setBin] = useState(BINES[0]);
   const [vencimiento, setVencimiento] = useState(enCuatroAnios);
   // Llave de idempotencia de esta emisión: se mantiene si se repite el mismo envío (doble
@@ -345,18 +358,20 @@ export default function TarjetasPage() {
     });
   }
 
-  function guardarClave(e: React.FormEvent) {
-    e.preventDefault();
+  // Asignar: el PIN lo genera el sistema o lo escribe la clienta (ClaveNueva), nunca el empleado.
+  async function asignarClave(valor: string) {
     const id = idClave.trim();
-    if (!id) return;
-    const valor = clave;
-    setClave("");
-    void ejecutar(async () => {
+    if (!id) throw new Error("Falta el identificador de la tarjeta.");
+    setNotice(null);
+    try {
       await registrarClave(id, tipoClave, valor);
-      setValidacion(null);
-      const nombre = tipoClave === "PIN_ATM" ? "PIN registrado" : "Clave web registrada";
-      setNotice({ text: `${nombre}. Los intentos fallidos volvieron a cero.`, error: false });
-    });
+    } catch (err) {
+      if (esSesionInvalida(err)) setSinSesion(true);
+      throw new Error(mensajeDeError(err));
+    }
+    setValidacion(null);
+    const nombre = tipoClave === "PIN_ATM" ? "PIN registrado" : "Clave web registrada";
+    setNotice({ text: `${nombre}. Los intentos fallidos volvieron a cero.`, error: false });
   }
 
   function comprobarClave() {
@@ -377,6 +392,21 @@ export default function TarjetasPage() {
   ];
   const digitos = DIGITOS_CLAVE[tipoClave];
   const vencePrevia = vencimiento ? `${vencimiento.slice(5, 7)}/${vencimiento.slice(2, 4)}` : "MM/AA";
+
+  const pantalla = pantallaPorHref("/tarjetas");
+  const permitido = puedeVerPantalla(usuario?.acciones, "/tarjetas");
+  if (usuario && !permitido) {
+    return (
+      <div className="sol-shell">
+        <div className="sol-work" style={{ width: "100%" }}>
+          <BarraNavegacion titulo="Tarjetas" usuario={usuario} />
+          <main id="contenido" className="sol-main">
+            <AvisoPermiso mensaje={`Tu rol no tiene permiso para usar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`} detalle="Si necesitas operar tarjetas, pide a un administrador que revise tus permisos en COREDB." />
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="sol-shell">
@@ -404,33 +434,20 @@ export default function TarjetasPage() {
                 <strong>{usuario.nombre}</strong>
                 <small>{usuario.rol}</small>
               </div>
-              <Link href="/login" onClick={cerrarSesion} title="Cerrar sesión" aria-label="Cerrar sesión"
-                style={{ marginLeft: "auto", color: "#b2c6d6", display: "flex" }}>
-                <Icono nombre="salir" tamano={16} />
-              </Link>
             </div>
           </div>
         )}
       </aside>
 
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div>
-            <span>Tarjetas</span>
-            <b>/</b>{navegacion.find((n) => n.id === tab)?.etiqueta}
-          </div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">Requiere sesión iniciada</span>
-            <Link href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>Volver al Home Banking</Link>
-          </div>
-        </header>
+        <BarraNavegacion titulo="Tarjetas" subtitulo={navegacion.find((n) => n.id === tab)?.etiqueta} usuario={usuario} />
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           <div className="sol-heading">
             <div>
               <h1>Tarjetas de débito</h1>
             </div>
-            {tab !== "emision" && (
+            {tab !== "emision" && puedeVerPantalla(usuario?.acciones, "/tarjetas") && (
               <button className="sol-button primary" onClick={() => irA("emision")}>
                 <Icono nombre="mas" />
                 Nueva tarjeta
@@ -441,7 +458,7 @@ export default function TarjetasPage() {
           {sinSesion && (
             <div role="alert" className="sol-alert error">
               Tu sesión no está iniciada o ya venció.
-              <Link href="/login" onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
+              <Link href={urlLoginConVolver(rutaActual())} onClick={cerrarSesion} style={{ marginLeft: "auto", fontWeight: 600, color: "inherit" }}>
                 Iniciar sesión
               </Link>
             </div>
@@ -597,14 +614,19 @@ export default function TarjetasPage() {
               </div>
               <div className="tj-emision">
                 <form onSubmit={emitir} className="sol-form-grid">
-                  <div className="sol-field">
-                    <label htmlFor="emision-cliente">Código del cliente</label>
-                    <input id="emision-cliente" value={clienteEmision} onChange={(e) => editarEmision(setClienteEmision)(e.target.value)} required maxLength={12} />
-                  </div>
-                  <div className="sol-field">
-                    <label htmlFor="emision-cuenta">Cuenta a vincular</label>
-                    <input id="emision-cuenta" value={cuentaEmision} onChange={(e) => editarEmision(setCuentaEmision)(e.target.value)} required maxLength={20} placeholder="Número de cuenta" />
-                  </div>
+                  <SelectorCliente
+                    id="emision-cliente"
+                    label="Código del cliente"
+                    value={clienteEmision}
+                    onChange={editarEmision(setClienteEmision)}
+                  />
+                  <SelectorCuenta
+                    id="emision-cuenta"
+                    label="Cuenta a vincular"
+                    codCliente={clienteEmision.trim()}
+                    value={cuentaEmision}
+                    onChange={editarEmision(setCuentaEmision)}
+                  />
                   <div className="sol-field">
                     <label htmlFor="emision-bin">BIN</label>
                     <select id="emision-bin" value={bin} onChange={(e) => editarEmision(setBin)(e.target.value)}>
@@ -754,13 +776,27 @@ export default function TarjetasPage() {
               <div className="sol-card-title">
                 <div>
                   <h2>Claves de la tarjeta</h2>
-                  <p>Asigna o comprueba el PIN del cajero o la clave web. Al tercer intento fallido seguido la tarjeta se bloquea.</p>
+                  <p>Asigna o comprueba el PIN del cajero o la clave web. El sistema lo genera o lo escribe la clienta: tú no lo eliges. Al tercer intento fallido seguido la tarjeta se bloquea.</p>
                 </div>
               </div>
-              <form onSubmit={guardarClave} className="sol-form-grid" style={{ padding: "0 24px 24px" }}>
+              <form onSubmit={(e) => e.preventDefault()} className="sol-form-grid" style={{ padding: "0 24px 24px" }}>
                 <div className="sol-field">
-                  <label htmlFor="clave-id">Identificador de la tarjeta</label>
-                  <input id="clave-id" value={idClave} onChange={(e) => setIdClave(e.target.value)} required />
+                  <span className="sol-field-label">Tarjeta del cliente</span>
+                  <div className="selector-opciones">
+                    {(tarjetas ?? []).map((t) => (
+                      <button
+                        className="selector-opcion"
+                        type="button"
+                        key={t.id_tarjeta}
+                        aria-pressed={idClave === t.id_tarjeta}
+                        onClick={() => { setIdClave(t.id_tarjeta); setValidacion(null); }}
+                      >
+                        <strong>{t.numero_enmascarado}</strong>
+                        <span>{t.estado_tarjeta}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {!tarjetas?.length && <span className="fx-hint">Busca las tarjetas del cliente para elegir una.</span>}
                 </div>
                 <div className="sol-field">
                   <label htmlFor="clave-tipo">Clave</label>
@@ -781,16 +817,17 @@ export default function TarjetasPage() {
                   </select>
                 </div>
                 <div className="tj-item-actions" style={{ gridColumn: "1 / -1", maxWidth: "420px" }}>
-                  <button className="sol-button primary" type="submit" disabled={loading}>
-                    <Icono nombre="llave" />
-                    Asignar
-                  </button>
                   <button className="sol-button secondary" type="button" disabled={loading || clave.length !== digitos} onClick={comprobarClave}>
                     <Icono nombre="activa" />
                     Comprobar
                   </button>
                 </div>
               </form>
+              <div style={{ padding: "0 24px 24px" }}>
+                <h3 style={{ margin: "0 0 8px" }}>Asignar {tipoClave === "PIN_ATM" ? "el PIN del cajero" : "la clave web"}</h3>
+                <ClaveNueva key={tipoClave} digitos={digitos} nombre={tipoClave === "PIN_ATM" ? "PIN del cajero" : "Clave web"}
+                  asignar={asignarClave} />
+              </div>
               {validacion && (
                 <div className={`tj-resultado ${validacion.resultado === "EXITOSO" ? "ok" : "mal"}`} role="status" aria-label="Resultado de la validación">
                   <div className="tj-resultado-cabecera">
@@ -818,4 +855,13 @@ export default function TarjetasPage() {
       </div>
     </div>
   );
+}
+
+function TarjetasConParametros() {
+  const params = useSearchParams();
+  return <TarjetasPageInner key={params?.toString() ?? ""} />;
+}
+
+export default function TarjetasPage() {
+  return <Suspense fallback={<main id="contenido" className="sol-main"><p>Cargando…</p></main>}><TarjetasConParametros /></Suspense>;
 }

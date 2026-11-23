@@ -16,7 +16,11 @@ export default function Home() {
       return;
     }
     obtenerMiPerfil()
-      .then(setUsuario)
+      .then((perfil) => {
+        // Con la contraseña inicial o renovada, primero se cambia.
+        if (perfil.debe_cambiar_clave) router.replace("/cambiar-clave");
+        else setUsuario(perfil);
+      })
       .catch(() => {
         cerrarSesion();
         router.replace("/login");
@@ -29,7 +33,7 @@ export default function Home() {
   }
 
   if (!usuario) {
-    return <main className="auth-page"><div className="auth-loading">Cargando tu banca personal...</div></main>;
+    return <main id="contenido" className="auth-page"><div className="auth-loading">Cargando tu banca personal...</div></main>;
   }
   return <BancaPersonal usuario={usuario} onSalir={salir} />;
 }

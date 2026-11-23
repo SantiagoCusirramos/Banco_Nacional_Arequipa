@@ -1,8 +1,15 @@
 "use client";
 import { nuevoUuid } from "@/lib/uuid";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { AvisoPermiso } from "@/app/components/AvisoPermiso";
+import { BarraNavegacion } from "@/app/components/BarraNavegacion";
+import SelectorCuenta from "@/app/components/SelectorCuenta";
+import { enmascararCuenta } from "@/lib/continuidad";
+import { obtenerMiPerfil, type Usuario } from "@/lib/auth";
+import { pantallaPorHref, puedeVerPantalla } from "@/lib/pantallas";
 import {
   abrirCuenta, depositar, formatoMoneda, mensajeDeError, movimientosDeCuenta, retirar, transferir,
   verCuenta, verMovimiento, REGIMENES, type Cuenta, type Movimiento, type Regimen,
@@ -12,22 +19,28 @@ type Pestana = "apertura" | "consulta" | "operaciones" | "movimientos" | "detall
 type Operacion = "deposito" | "retiro" | "transferencia";
 type Aviso = { text: string; error: boolean };
 
-export default function CuentaPage() {
-  const [tab, setTab] = useState<Pestana>("apertura");
+function CuentaPageInner() {
+  const params = useSearchParams();
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [tab, setTab] = useState<Pestana>(() => {
+    const destino = params?.get("tab");
+    return destino === "apertura" || destino === "consulta" || destino === "operaciones" || destino === "movimientos" ? destino : "apertura";
+  });
   const [numCuentaConsulta, setNumCuentaConsulta] = useState("");
   const [cuentaActual, setCuentaActual] = useState<Cuenta | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Aviso | null>(null);
 
   // Formulario de apertura
-  const [idCliente, setIdCliente] = useState("");
+  const [idCliente, setIdCliente] = useState(() => params?.get("codCliente")?.toUpperCase() ?? "");
   const [idAgencia, setIdAgencia] = useState("");
   const [regimen, setRegimen] = useState<Regimen>("INDIVIDUAL");
   const [cci, setCci] = useState("");
   const [numCuentaNueva, setNumCuentaNueva] = useState("");
 
-  // Formulario operaciones
-  const [cuentaOrigen, setCuentaOrigen] = useState("");
+  // Formulario operaciones. La cuenta elegida se comparte con la pestaña de consulta para
+  // no volver a copiarla al cambiar de pestaña.
+  const [clienteOperacion, setClienteOperacion] = useState(() => params?.get("codCliente")?.toUpperCase() ?? "");
   const [cuentaDestino, setCuentaDestino] = useState("");
   const [montoOp, setMontoOp] = useState("");
   const [tipoOp, setTipoOp] = useState<Operacion>("deposito");
@@ -44,6 +57,10 @@ export default function CuentaPage() {
   const [movimientosList, setMovimientosList] = useState<Movimiento[] | null>(null);
   const [uuidMovimiento, setUuidMovimiento] = useState("");
   const [movimientoDetalle, setMovimientoDetalle] = useState<Movimiento | null>(null);
+
+  useEffect(() => {
+    obtenerMiPerfil().then(setUsuario).catch(() => setUsuario(null));
+  }, []);
 
   // Ejecuta una llamada mostrando el avance y, si falla, el mensaje del servicio.
   async function ejecutar(accion: () => Promise<void>, alFallar?: () => void) {
@@ -90,12 +107,20 @@ export default function CuentaPage() {
     const llave = llaveOp;
     void ejecutar(async () => {
       if (tipoOp === "transferencia") {
-        const resultado = await transferir(cuentaOrigen.trim(), cuentaDestino.trim(), monto, llave);
+        const resultado = await transferir(numCuentaConsulta.trim(), cuentaDestino.trim(), monto, llave);
         setNotice({ text: `Transferencia registrada. Débito ${resultado.uuid_debito}, abono ${resultado.uuid_abono}.`, error: false });
       } else {
         const operar = tipoOp === "deposito" ? depositar : retirar;
-        const resultado = await operar(cuentaOrigen.trim(), monto, llave);
-        setNotice({ text: `Operación registrada: ${resultado.uuid_transaccion}.`, error: false });
+        const numero = numCuentaConsulta.trim();
+        await operar(numero, monto, llave);
+        // CUENTAS solo devuelve el UUID del movimiento: el número y el saldo se leen de la
+        // cuenta real para que el aviso sea legible y no muestre identificadores técnicos.
+        let cuenta: Cuenta | null = null;
+        try { cuenta = await verCuenta(numero); } catch { /* aviso sin saldo */ }
+        const detalle = cuenta
+          ? ` en la cuenta ${enmascararCuenta(cuenta.num_cuenta)}. Saldo disponible: ${formatoMoneda(cuenta.saldo_disponible, cuenta.moneda)}`
+          : ` en la cuenta ${enmascararCuenta(numero)}`;
+        setNotice({ text: `${tipoOp === "deposito" ? "Depósito" : "Retiro"} registrado${detalle}.`, error: false });
       }
       setLlaveOp(nuevoUuid());
     });
@@ -113,6 +138,19 @@ export default function CuentaPage() {
     const uuid = uuidMovimiento.trim();
     if (!uuid) return;
     void ejecutar(async () => setMovimientoDetalle(await verMovimiento(uuid)), () => setMovimientoDetalle(null));
+  }
+
+  const pantalla = pantallaPorHref("/cuenta");
+  if (usuario && !puedeVerPantalla(usuario.acciones, "/cuenta")) {
+    return (
+      <main id="contenido" className="sol-main">
+        <BarraNavegacion titulo="Cuentas" usuario={usuario} />
+        <AvisoPermiso
+          mensaje={`Tu rol no tiene permiso para abrir cuentas o consultar esta pantalla. Esta pantalla es para ${pantalla?.rolesPermitidos ?? "personal autorizado"}.`}
+          detalle="Si crees que deberías tener acceso, pide a un administrador que revise tus permisos en COREDB."
+        />
+      </main>
+    );
   }
 
   return (
@@ -146,29 +184,12 @@ export default function CuentaPage() {
             5. Ver movimiento específico
           </button>
         </nav>
-        <div className="sol-sidebar-bottom">
-          <div className="sol-lab">
-            <div>
-              <strong>CUENTAS</strong>
-              <small>Sobre la API del CORE</small>
-            </div>
-          </div>
-        </div>
       </aside>
 
       <div className="sol-work">
-        <header className="sol-topbar">
-          <div>
-            <span>Cuentas</span>
-            <b>/</b>Módulo de Ahorros y Operaciones
-          </div>
-          <div className="sol-topbar-right">
-            <span className="sol-demo-pill">Requiere sesión iniciada</span>
-            <Link href="/" style={{ color: "#15324f", fontWeight: 600, textDecoration: "none", fontSize: "13px" }}>Volver al Home Banking</Link>
-          </div>
-        </header>
+        <BarraNavegacion titulo="Cuentas" subtitulo="Módulo de Ahorros y Operaciones" usuario={usuario} />
 
-        <main className="sol-main">
+        <main id="contenido" className="sol-main">
           {notice && (
             <div role={notice.error ? "alert" : "status"} className={`sol-alert ${notice.error ? "error" : "success"}`}>
               {notice.text}
@@ -225,12 +246,16 @@ export default function CuentaPage() {
                 </div>
               </div>
               <form onSubmit={consultarCuenta} className="sol-toolbar" style={{ marginTop: "20px" }}>
-                <input
-                  placeholder="Número de cuenta..."
-                  value={numCuentaConsulta}
-                  onChange={(e) => setNumCuentaConsulta(e.target.value)}
-                  required
-                />
+                <div className="sol-field">
+                  <label htmlFor="consulta-num">Número de cuenta a consultar</label>
+                  <input
+                    id="consulta-num"
+                    placeholder="Número de cuenta..."
+                    value={numCuentaConsulta}
+                    onChange={(e) => setNumCuentaConsulta(e.target.value)}
+                    required
+                  />
+                </div>
                 <button className="sol-button primary" type="submit" disabled={loading}>
                   {loading ? "Buscando..." : "Ver cuenta"}
                 </button>
@@ -249,6 +274,16 @@ export default function CuentaPage() {
                     <div><small>Agencia:</small> <strong>{cuentaActual.id_agencia}</strong></div>
                     <div><small>Titulares:</small> <strong>{cuentaActual.titulares.join(", ")}</strong></div>
                   </div>
+                  {puedeVerPantalla(usuario?.acciones, "/tarjetas") && (
+                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #dbe4ee" }}>
+                      <strong>Siguiente paso</strong>
+                      <p style={{ margin: "6px 0 0" }}>
+                        <Link href={`/tarjetas?tab=emision&codCliente=${encodeURIComponent(cuentaActual.titulares[0] ?? "")}&numCuenta=${encodeURIComponent(cuentaActual.num_cuenta)}`}>
+                          Emitir tarjeta para esta cuenta
+                        </Link>
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -272,9 +307,16 @@ export default function CuentaPage() {
                   </select>
                 </div>
                 <div className="sol-field">
-                  <label htmlFor="operacion-cuenta">{tipoOp === "transferencia" ? "Cuenta de Origen" : "Número de Cuenta"}</label>
-                  <input id="operacion-cuenta" value={cuentaOrigen} onChange={(e) => editarOperacion(setCuentaOrigen)(e.target.value)} required placeholder="Ej. 1010000001" />
+                  <label htmlFor="operacion-cliente">Cliente titular</label>
+                  <input id="operacion-cliente" value={clienteOperacion} onChange={(e) => setClienteOperacion(e.target.value)} placeholder="Código del cliente para ver sus cuentas" />
                 </div>
+                <SelectorCuenta
+                  id="operacion-cuenta"
+                  label={tipoOp === "transferencia" ? "Cuenta de Origen" : "Número de Cuenta"}
+                  codCliente={clienteOperacion.trim()}
+                  value={numCuentaConsulta}
+                  onChange={editarOperacion(setNumCuentaConsulta)}
+                />
                 {tipoOp === "transferencia" && (
                   <div className="sol-field">
                     <label htmlFor="operacion-destino">Cuenta de Destino</label>
@@ -389,4 +431,13 @@ export default function CuentaPage() {
       </div>
     </div>
   );
+}
+
+function CuentaConParametros() {
+  const params = useSearchParams();
+  return <CuentaPageInner key={params?.toString() ?? ""} />;
+}
+
+export default function CuentaPage() {
+  return <Suspense fallback={<main id="contenido" className="sol-main"><p>Cargando…</p></main>}><CuentaConParametros /></Suspense>;
 }

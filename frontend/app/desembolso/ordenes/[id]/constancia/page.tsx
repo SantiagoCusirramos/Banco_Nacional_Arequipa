@@ -64,6 +64,7 @@ export default function PaginaConstancia() {
         <Fila etiqueta="Fecha" valor={fecha(o.fechaActualizacion)} />
         <Fila etiqueta="Preparada / confirmada por" valor={`${o.usuarioPreparacion} / ${o.usuarioConfirmacion ?? "—"}`} />
         {cuotas.length > 0 && (
+          <div className="overflow-x-auto">
           <table className="mt-6 min-w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
@@ -82,6 +83,7 @@ export default function PaginaConstancia() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         <footer className="mt-8 text-center text-xs text-slate-500">
           <p>Constancia del módulo de Desembolso con la confirmación de COREDB: abono, crédito y calendario oficial en una sola operación.</p>

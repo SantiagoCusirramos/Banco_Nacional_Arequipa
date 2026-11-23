@@ -429,6 +429,21 @@ sin permisos para la API y los cambios siguen pasando por `cambiar_estado_tarjet
 anterior basta con ejecutar ese `CREATE VIEW` y ese `GRANT` de `sql/bna_extension.sql` como
 root, sin volumen nuevo.
 
+### Contraseña inicial y cambio obligatorio (desde `bd-v1.17-mysql`)
+
+El administrador da de alta a una persona con una contraseña inicial generada por COREDB y la
+persona debe cambiarla antes de operar; lo mismo cuando el administrador la renueva.
+`core.usuario_sistema.debe_cambiar_clave` (0 por omisión) guarda esa marca. `bna_api` la lee
+y la cambia solo con tres procedimientos, únicamente para personas (un usuario de servicio
+responde `BNA-USUARIO-SERVICIO`): `exigir_cambio_clave` (la pone), `restablecer_clave` (hash
+temporal y la pone) y `cambiar_clave` (hash propio y la quita; el evento queda a nombre de la
+persona). La bitácora registra `EXIGIR_CAMBIO_CLAVE`, `RESTABLECER_CLAVE` y `CAMBIAR_CLAVE` con
+el usuario, nunca el hash. Pruebas X841 a X850. En una base anterior: `ALTER TABLE
+core.usuario_sistema ADD COLUMN debe_cambiar_clave TINYINT(1) DEFAULT FALSE NOT NULL AFTER
+modulo, ADD CONSTRAINT ck_usuario_debe_cambiar_clave CHECK (debe_cambiar_clave IN (0, 1))`, y
+los tres `CREATE PROCEDURE` con sus `GRANT` de `sql/bna_extension.sql`, como root, sin volumen
+nuevo.
+
 `sql/bna_datos_dev.sql` es **solo para desarrollo**: los periodos contables de 24 meses
 desde el mes en curso, todos abiertos, el BIN 004499, una agencia, un terminal por canal y un cliente, para que una base nueva
 pueda hacer un depósito. No va en producción.

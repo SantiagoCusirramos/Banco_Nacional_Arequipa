@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SaltarContenido } from "./components/SaltarContenido";
+import VigilanteSesion from "./components/VigilanteSesion";
 
 export const metadata: Metadata = {
   title: "Banco Nacional de Arequipa | Banca personal",
@@ -9,7 +11,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <SaltarContenido />
+        <VigilanteSesion />
+        {children}
+      </body>
     </html>
   );
 }

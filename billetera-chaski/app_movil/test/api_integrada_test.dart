@@ -137,7 +137,7 @@ void main() {
 
   group('al iniciar', () {
     test('no pide /api/promos ni /api/recientes', () async {
-      SharedPreferences.setMockInitialValues({'token': 'token-de-prueba'});
+      SharedPreferences.setMockInitialValues({'servidor': 'http://localhost:8020', 'token': 'token-de-prueba'});
       final (api, peticiones) = apiSimulada((r) async => switch (r.url.path) {
             '/api/me' => json(meJson),
             '/api/solicitudes' => json({'recibidas': [], 'enviadas': []}),

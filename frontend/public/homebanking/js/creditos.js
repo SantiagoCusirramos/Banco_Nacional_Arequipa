@@ -128,7 +128,7 @@
       }
       return true;
     } catch (e) {
-      if (!silencioso) mostrarMensaje(msg, "error", e.mensaje || "No se pudieron recuperar los créditos.");
+      if (!silencioso) mostrarMensaje(msg, "error", mensajeError(e));
       return false;
     }
   }
@@ -314,7 +314,7 @@
           "Vuelve a pulsar «Revisar y pagar» sin cambiar los datos: se usa la misma operación y " +
           "no se cobrará dos veces. Si cambias el monto o la cuenta, revisa antes tus movimientos."];
       } else {
-        aviso = ["error", err.mensaje || "El pago no pudo procesarse."];
+        aviso = ["error", mensajeError(err)];
       }
       // La llave (referenciaTransaccion) se conserva: reintentar el mismo pago no cobra dos
       // veces. Cambia al editar el monto o la cuenta.

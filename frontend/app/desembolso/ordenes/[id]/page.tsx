@@ -18,6 +18,7 @@ import {
   td,
   th,
 } from "@/app/desembolso/_componentes/ui";
+import { etiquetaSolicitud } from "@/lib/continuidad";
 import { api } from "@/lib/desembolso/api";
 import { ETIQUETA_ESTADO, MOTIVOS_CUENTA, dinero, fecha, porcentaje } from "@/lib/desembolso/formato";
 import { useSesion } from "@/lib/desembolso/sesion";
@@ -111,7 +112,7 @@ function ResumenCredito({ orden }: { orden: OrdenDetalle }) {
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-3">
         <Dato etiqueta="Cliente">{orden.codCliente}</Dato>
         <Dato etiqueta="Solicitud">
-          <span className="font-mono text-xs">{orden.idSolicitud}</span>
+          <span className="font-mono text-xs">{etiquetaSolicitud(orden)}</span>
         </Dato>
         <Dato etiqueta="Plazo y tasa">
           {orden.plazoMeses} meses{orden.calendario ? ` · ${porcentaje(orden.calendario.tasa)}` : ""}
@@ -340,6 +341,7 @@ function CalendarioDeLaSolicitud({ orden }: { orden: OrdenDetalle }) {
           ? "Copia sin cambios del calendario de Solicitud (RN-SOL-006), creada al confirmar el desembolso."
           : "Lo arma Solicitud (RN-SOL-006); al confirmar, COREDB lo copia sin cambios como calendario oficial del crédito."}
       </p>
+      <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
@@ -358,6 +360,7 @@ function CalendarioDeLaSolicitud({ orden }: { orden: OrdenDetalle }) {
           ))}
         </tbody>
       </table>
+      </div>
     </Tarjeta>
   );
 }
@@ -397,6 +400,11 @@ function Resultado({ orden }: { orden: OrdenDetalle }) {
               </EnlaceBoton>
             )}
             <EnlaceBoton href="/desembolso">Nuevo desembolso</EnlaceBoton>
+            {confirmada && (
+              <Link href={`/billetera?codCliente=${encodeURIComponent(orden.codCliente)}&numCuenta=${encodeURIComponent(orden.numCuenta)}`} className="rounded-lg px-4 py-2 text-sm font-semibold text-marca-700 ring-1 ring-marca-200 hover:bg-marca-50">
+                Afiliar a Chaski
+              </Link>
+            )}
           </div>
         </section>
       </div>

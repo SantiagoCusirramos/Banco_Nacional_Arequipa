@@ -3,8 +3,10 @@
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import type { Usuario } from "@/lib/auth";
+import { pantallasParaUsuario } from "@/lib/pantallas";
 import { CrearCuenta } from "./CrearCuenta";
 import { ModificarCuenta } from "./ModificarCuenta";
+import { CanalesExternos } from "./CanalesExternos";
 import type { Cuenta } from "@/lib/cuentas";
 
 // Pestañas que viven en la portada; el resto son pantallas propias, enlazadas abajo.
@@ -27,19 +29,8 @@ const pestanas: { id: Tab; label: string; icon: string }[] = [
   { id: "modificar-cuenta", label: "Modificar cuenta", icon: "✎" },
 ];
 
-// Las pantallas reales del producto. Cada una exige la sesión y comprueba los permisos del rol.
-export const PANTALLAS: { href: string; label: string; icon: string; descripcion: string }[] = [
-  { href: "/cuenta", label: "Cuentas", icon: "▤", descripcion: "Abrir y consultar cuentas, depósitos, retiros, transferencias y movimientos" },
-  { href: "/tarjetas", label: "Tarjetas", icon: "▭", descripcion: "Emitir, activar, bloquear tarjetas y autorizar débitos" },
-  { href: "/tarjetas/desbloqueo", label: "Desbloqueo de tarjetas", icon: "🔓", descripcion: "Operadores y administradores: desbloquear una tarjeta tras verificar al titular" },
-  { href: "/billetera", label: "Billetera Chaski", icon: "◎", descripcion: "Afiliar clientes y comercios a la billetera digital" },
-  { href: "/captacion", label: "Captación", icon: "📋", descripcion: "Registrar solicitantes y habilitarlos como clientes" },
-  { href: "/solicitud-credito", label: "Solicitud de crédito", icon: "📝", descripcion: "El asesor arma y envía la solicitud (SOL)" },
-  { href: "/evaluacion", label: "Evaluación", icon: "⚖", descripcion: "El analista evalúa y decide las solicitudes" },
-  { href: "/desembolso", label: "Desembolso", icon: "⇣", descripcion: "Órdenes de desembolso, confirmación y conciliación" },
-  { href: "/pagar-cuota", label: "Pagar cuota", icon: "⎘", descripcion: "Pago de cuotas de un crédito (Cobranza, CR-INT-08)" },
-  { href: "/homebanking/index.html", label: "Home Banking", icon: "⌂", descripcion: "Prototipo de Home Banking sobre las mismas rutas" },
-];
+// Las pantallas reales del producto. La visibilidad sale del mapa central (lib/pantallas.ts)
+// y de las acciones que COREDB entrega en /coredb/auth/me.
 
 const iniciales = (nombre: string) => nombre.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
@@ -50,13 +41,14 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [cuentaParaModificar, setCuentaParaModificar] = useState<Cuenta | null>(null);
   const titulo = pestanas.find((item) => item.id === tab)?.label;
+  const pantallas = pantallasParaUsuario(usuario);
 
   return (
-    <main className="app-shell">
+    <main id="contenido" className="app-shell">
       <aside className={`sidebar ${mobileMenu ? "sidebar-open" : ""}`}>
         <a className="brand" href="#" onClick={(e) => { e.preventDefault(); setTab("inicio"); }}>
           <span className="brand-mark">B</span>
-          <span><strong>BAN</strong><small>Banco Nacional de Arequipa</small></span>
+          <span><strong>BNA</strong><small>Banco Nacional de Arequipa</small></span>
         </a>
         <div className="side-caption">BANCA PERSONAL</div>
         <nav className="navigation" aria-label="Navegación principal">
@@ -65,14 +57,16 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
               <span className="nav-icon">{item.icon}</span>{item.label}
             </button>
           ))}
-          {PANTALLAS.map((item) => (
+          {pantallas.map((item) => (
             <Link key={item.href} className="nav-item" href={item.href}>
               <span className="nav-icon">{item.icon}</span>{item.label}
             </Link>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="profile"><div className="avatar">{iniciales(usuario.nombre)}</div><div className="profile-text"><strong>{usuario.nombre}</strong><span>{usuario.rol}</span></div><button aria-label="Cerrar sesión" title="Cerrar sesión" className="more-button" onClick={onSalir}>↪</button></div>
+          <Link href="/" className="nav-item" onClick={() => setMobileMenu(false)}><span className="nav-icon">↩</span>Volver al portal</Link>
+          <div className="profile"><div className="avatar">{iniciales(usuario.nombre)}</div><div className="profile-text"><strong>{usuario.nombre}</strong><span>{usuario.rol}</span></div></div>
+          <button type="button" aria-label="Cerrar sesión" className="nav-item" onClick={onSalir} style={{ width: "100%", marginTop: 8 }}><span className="nav-icon">⎋</span>Cerrar sesión</button>
         </div>
       </aside>
 
@@ -91,7 +85,7 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
           {tab === "inicio" && <>
             <div className="section-heading"><div><h2>Pantallas del banco</h2><p>Cada una pide los permisos de tu rol ({usuario.rol}).</p></div></div>
             <div className="quick-grid">
-              {PANTALLAS.map((item) => (
+              {pantallas.map((item) => (
                 <Link key={item.href} href={item.href} className="quick-action">
                   <span className="quick-icon blue">{item.icon}</span>
                   <span><strong>{item.label}</strong><small>{item.descripcion}</small></span>
@@ -99,6 +93,7 @@ export function BancaPersonal({ usuario, onSalir }: Props) {
                 </Link>
               ))}
             </div>
+            <CanalesExternos />
           </>}
 
           {tab === "crear-cuenta" && <CrearCuenta onNotice={setNotice} onModificar={(cuenta) => { setCuentaParaModificar(cuenta); setTab("modificar-cuenta"); setNotice(""); }} />}

@@ -1,0 +1,90 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { cuentasDeCliente, formatoMoneda, type Cuenta } from "@/lib/cuentas";
+import { enmascararCuenta } from "@/lib/continuidad";
+
+type Props = {
+  id: string;
+  label: string;
+  codCliente: string;
+  value: string;
+  onChange: (numCuenta: string) => void;
+  placeholder?: string;
+};
+
+/** Lista las cuentas del titular para no copiar el número a mano; la entrada manual sigue disponible. */
+export default function SelectorCuenta({ id, label, codCliente, value, onChange, placeholder }: Props) {
+  // La lista se guarda con el código al que pertenece: al cambiar de titular no se muestra
+  // la del anterior mientras llega la nueva, sin necesidad de limpiar estado dentro del efecto.
+  const [lista, setLista] = useState<{ codigo: string; cuentas: Cuenta[] }>({ codigo: "", cuentas: [] });
+  const [valorVisto, setValorVisto] = useState(value);
+  const [numero, setNumero] = useState(value);
+  const [mensaje, setMensaje] = useState("");
+  if (valorVisto !== value) {
+    setValorVisto(value);
+    setNumero(value);
+  }
+
+  useEffect(() => {
+    let activo = true;
+    if (!codCliente) return;
+    cuentasDeCliente(codCliente)
+      .then((encontradas) => {
+        if (!activo) return;
+        setLista({ codigo: codCliente, cuentas: encontradas });
+        setMensaje("");
+        // Si el titular solo tiene una cuenta, no hay nada que elegir: se toma esa.
+        if (encontradas.length === 1) {
+          setNumero(encontradas[0].num_cuenta);
+          onChange(encontradas[0].num_cuenta);
+        }
+      })
+      .catch(() => {
+        if (!activo) return;
+        setLista({ codigo: codCliente, cuentas: [] });
+        setMensaje("No se pudieron cargar las cuentas del cliente.");
+      });
+    return () => { activo = false; };
+  }, [codCliente]);
+  const cuentas = lista.codigo === codCliente ? lista.cuentas : [];
+
+  function elegir(cuenta: Cuenta) {
+    setNumero(cuenta.num_cuenta);
+    setMensaje("");
+    onChange(cuenta.num_cuenta);
+  }
+
+  return (
+    <div className="fx-field">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        autoComplete="off"
+        placeholder={placeholder ?? "Número de cuenta"}
+        value={numero}
+        onChange={(event) => {
+          setNumero(event.target.value);
+          onChange(event.target.value);
+        }}
+      />
+      {cuentas.length > 0 && (
+        <div className="selector-opciones">
+          {cuentas.map((cuenta) => (
+            <button
+              className="selector-opcion"
+              type="button"
+              key={cuenta.num_cuenta}
+              onClick={() => elegir(cuenta)}
+            >
+              <strong>{enmascararCuenta(cuenta.num_cuenta)}</strong>
+              <span>{cuenta.moneda}</span>
+              <span>{formatoMoneda(cuenta.saldo_disponible, cuenta.moneda)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {mensaje && <span className="fx-hint" role="status">{mensaje}</span>}
+    </div>
+  );
+}

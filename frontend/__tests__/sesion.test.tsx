@@ -11,6 +11,7 @@ vi.mock("@/lib/api", async (original) => ({
   api: { get: vi.fn(), post: vi.fn() },
 }));
 import { api, cabecerasDeOperacion, mensajeError } from "@/lib/api";
+import { mensajeDeError as mensajeBilletera } from "@/lib/billetera";
 import { obtenerMiPerfil, obtenerToken, obtenerUsuarioGuardado } from "@/lib/auth";
 import Home from "../app/page";
 import LoginPage from "../app/login/page";
@@ -102,21 +103,8 @@ describe("Inicio de sesión", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("LG-03 'Registrar usuario' crea un usuario del sistema con la sesión actual", async () => {
-    conSesion();
-    post.mockResolvedValue({ data: { ...USUARIO, username: "nuevo" } });
-    render(<LoginPage />);
-    await userEvent.click(screen.getByRole("button", { name: "Registrar usuario" }));
-    await userEvent.type(screen.getByLabelText("Nombre completo"), "Persona Nueva");
-    await userEvent.type(screen.getByLabelText("Usuario"), "nuevo");
-    await userEvent.selectOptions(screen.getByLabelText("Rol del usuario"), "OPERADOR");
-    await userEvent.type(screen.getByLabelText("Contraseña"), "otra-clave-larga");
-    await userEvent.click(screen.getByRole("button", { name: /Crear usuario/ }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Usuario nuevo creado correctamente");
-    expect(post).toHaveBeenCalledWith("/coredb/usuarios", {
-      username: "nuevo", nombre: "Persona Nueva", password: "otra-clave-larga", rol: "OPERADOR", id_empleado: null,
-    });
-  });
+  // LG-03 (alta en la pestaña «Registrar usuario» del login) se retiró: el alta está en la
+  // pantalla «Usuarios» (__tests__/usuarios.test.tsx, US-01 y US-08).
 });
 
 describe("Mensajes de error y cabeceras", () => {
@@ -128,6 +116,23 @@ describe("Mensajes de error y cabeceras", () => {
     expect(mensajeError(errorHttp(403, {}))).toMatch(/no tiene permisos/);
     expect(mensajeError(new AxiosError("Network Error", "ERR_NETWORK"))).toBe("No se pudo conectar con el servidor.");
     expect(mensajeError("otra cosa")).toBe("Error inesperado");
+  });
+
+  it("ER-03 Los avisos no muestran códigos, rutas ni correlaciones", () => {
+    const sinPermiso = mensajeError(errorHttp(403, {
+      error: { code: "PERMISO_DENEGADO", message: "Acceso denegado. Correlación c-123" },
+    }));
+    expect(sinPermiso).toMatch(/Tu rol no puede hacer esta operación/);
+    expect(sinPermiso).not.toMatch(/PERMISO_DENEGADO|correlaci[oó]n|\b403\b/i);
+    const crudo = mensajeError(errorHttp(500, {
+      error: { code: "ERR_API", message: "POST /api/coredb/x devolvió 500" },
+    }));
+    expect(crudo).not.toMatch(/\/api\/|\b500\b|POST \//);
+  });
+
+  it("ER-04 La billetera no añade el código entre paréntesis al aviso", () => {
+    expect(mensajeBilletera(errorHttp(409, { error: { code: "ERR-BIL", message: "No se pudo afiliar." } })))
+      .toBe("No se pudo afiliar.");
   });
 
   it("ER-02 Cada operación lleva la llave que recibe, el canal y la hora", () => {
