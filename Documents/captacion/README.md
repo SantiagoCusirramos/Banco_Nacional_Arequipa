@@ -26,7 +26,7 @@ Bus, resultado guardado en la base integrada y evidencia reproducible.
 | [`evidencias/evidencias-2026-11-22.json`](evidencias/evidencias-2026-11-22.json) | Los 19 casos: petición, HTTP, respuesta, X-Correlation-ID y resultado |
 | [`evidencias/persistencia-mysql-2026-11-22.txt`](evidencias/persistencia-mysql-2026-11-22.txt) | Consulta de solo lectura en MySQL del cliente creado |
 | [`evidencias/resumen-corrida-2026-11-22.txt`](evidencias/resumen-corrida-2026-11-22.txt) | Salida de la corrida (19 de 19) |
-| `actas/` | Actas de prueba PR-CAP-001 a 003 y ficha de cierre del módulo (plantillas del Comité) |
+| `actas/` | Versión formal para entregar (Word): contratos CR-INT-09, 01 y 10, actas de prueba PR-CAP-001 a 003 y ficha de cierre del módulo, con espacio para firmas. `Entrega_Captacion_Contratos_y_Actas.pdf` reúne los siete |
 
 Las evidencias usan datos ficticios creados en la corrida; documentos y contactos van enmascarados
 y no hay tokens, claves ni contenido de `.env`.
