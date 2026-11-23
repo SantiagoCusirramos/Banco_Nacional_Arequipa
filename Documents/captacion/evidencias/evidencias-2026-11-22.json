@@ -1,0 +1,3422 @@
+{
+  "titulo": "Evidencias de integración de Captación de Clientes (CR-INT-09, CR-INT-01, CR-INT-10)",
+  "inicio": "2026-11-23T03:20:12+00:00",
+  "fin": "2026-11-23T03:20:16+00:00",
+  "bus": "Bus de Servicios (todas las llamadas pasan por /bus/<módulo>)",
+  "versiones": {
+    "bus": {
+      "http": 200,
+      "respuesta": {
+        "modulo": "Bus de Servicios",
+        "estado": "operativo",
+        "modulos": [
+          "ATM",
+          "BILLETERA",
+          "CAPTACION",
+          "COBRANZA",
+          "COREDB",
+          "CUENTAS",
+          "DESEMBOLSO",
+          "EVALUACION",
+          "SEGURIDAD",
+          "SOL",
+          "TARJETAS"
+        ]
+      }
+    },
+    "captacion": {
+      "http": 200,
+      "respuesta": {
+        "status": "healthy",
+        "modulo": "captacion"
+      }
+    },
+    "sol": {
+      "http": 200,
+      "respuesta": {
+        "status": "ok",
+        "modulo": "SOL",
+        "integracion": "REAL"
+      }
+    },
+    "coredb": {
+      "http": 200,
+      "respuesta": {
+        "estado": "ok"
+      }
+    }
+  },
+  "datos": "Ficticios, creados en esta corrida; documentos y contactos enmascarados; sin tokens ni claves",
+  "resumen": {
+    "casos": 19,
+    "pasan": 19,
+    "fallan": 0
+  },
+  "casos": [
+    {
+      "codigo": "PR-CAP-09-01",
+      "cr_int": "CR-INT-09",
+      "tipo": "Funcional positiva",
+      "descripcion": "Un prospecto con todos los requisitos se habilita y COREDB le asigna el identificador maestro",
+      "esperado": "HTTP 200, estado HABILITADO, cliente_nuevo = true y cod_cliente generado por COREDB",
+      "obtenido": "HTTP 200, estado HABILITADO, cliente_nuevo sí, cod_cliente CLI000000023",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:13+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/solicitantes",
+          "peticion": {
+            "tipo_documento": "DNI",
+            "numero_documento": "******21",
+            "nombres": "Rosa",
+            "apellido_paterno": "Huamán",
+            "apellido_materno": "Ccori",
+            "celular": "*******74",
+            "correo": "e***@example.com"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Solicitante registrado",
+            "data": {
+              "solicitante": {
+                "id_solicitante": "06c21b79-cbd2-4df1-a8ab-14c2227466a8",
+                "tipo_documento": "DNI",
+                "numero_documento": "******21",
+                "nombres": "Rosa",
+                "apellido_paterno": "Huamán",
+                "apellido_materno": "Ccori",
+                "celular": "*******74",
+                "correo": "e***@example.com",
+                "cod_cliente": null,
+                "creado_en": "2026-11-23T03:20:13.522851+00:00"
+              },
+              "duplicado": false
+            },
+            "metadata": {
+              "uuid_transaccion": "4d626572-b57f-4203-a18f-421dbefa909a",
+              "timestamp": "2026-11-23T03:20:13.531Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 27.71
+            }
+          },
+          "x_correlation_id": "4d626572-b57f-4203-a18f-421dbefa909a"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos",
+          "peticion": {
+            "id_solicitante": "06c21b79-cbd2-4df1-a8ab-14c2227466a8",
+            "canal": "AGENCIA",
+            "id_agencia": "AQP01"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Caso abierto",
+            "data": {
+              "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+              "id_solicitante": "06c21b79-cbd2-4df1-a8ab-14c2227466a8",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "INICIADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": null,
+              "cliente_nuevo": null,
+              "id_verificacion_captacion": null,
+              "fecha_verificacion": null,
+              "vigente_hasta": null,
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:13.545578+00:00",
+              "cerrado_en": null
+            },
+            "metadata": {
+              "uuid_transaccion": "b70f381f-f142-4963-b00a-ea122be961c2",
+              "timestamp": "2026-11-23T03:20:13.552Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 16.35
+            }
+          },
+          "x_correlation_id": "b70f381f-f142-4963-b00a-ea122be961c2"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c/consentimientos",
+          "peticion": {
+            "consentimientos": [
+              {
+                "tipo": "TRATAMIENTO_DATOS",
+                "aceptado": true
+              },
+              {
+                "tipo": "CONSULTA_BUROS",
+                "aceptado": true
+              },
+              {
+                "tipo": "TERMINOS",
+                "aceptado": true
+              }
+            ]
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": [
+              {
+                "tipo": "TRATAMIENTO_DATOS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": null,
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:13.567736+00:00"
+              },
+              {
+                "tipo": "CONSULTA_BUROS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": null,
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:13.567736+00:00"
+              },
+              {
+                "tipo": "TERMINOS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": "v1",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:13.567736+00:00"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "84f350bf-e073-42ae-b334-f39a7d6b5806",
+              "timestamp": "2026-11-23T03:20:13.580Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 23.4
+            }
+          },
+          "x_correlation_id": "84f350bf-e073-42ae-b334-f39a7d6b5806"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c/otp",
+          "peticion": {
+            "canal": "SMS"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Código enviado",
+            "data": {
+              "canal": "SMS",
+              "destino_enmascarado": "******374",
+              "expira_en": "2026-11-23T03:25:13.610109Z",
+              "codigo_simulado": "[oculto]"
+            },
+            "metadata": {
+              "uuid_transaccion": "dd42642a-2838-42fb-8199-f88ee105769b",
+              "timestamp": "2026-11-23T03:20:13.618Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 33.34
+            }
+          },
+          "x_correlation_id": "dd42642a-2838-42fb-8199-f88ee105769b"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c/otp/verificar",
+          "peticion": {
+            "codigo": "[oculto]"
+          },
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Código verificado",
+            "data": {
+              "verificado": true,
+              "estado_codigo": "USADO",
+              "intentos_restantes": 3
+            },
+            "metadata": {
+              "uuid_transaccion": "3b2ee954-1f05-40cf-955c-6cc2c798f250",
+              "timestamp": "2026-11-23T03:20:13.653Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 31.35
+            }
+          },
+          "x_correlation_id": "3b2ee954-1f05-40cf-955c-6cc2c798f250"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c/validaciones",
+          "peticion": {
+            "tipos": [
+              "RENIEC",
+              "LISTAS_NEGRAS",
+              "PEP"
+            ]
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": [
+              {
+                "tipo": "RENIEC",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "Identidad confirmada en RENIEC",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:13.680638+00:00"
+              },
+              {
+                "tipo": "LISTAS_NEGRAS",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "Sin coincidencias en listas restrictivas",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:13.699620+00:00"
+              },
+              {
+                "tipo": "PEP",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "No es persona expuesta políticamente",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:13.718601+00:00"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "3a270203-a8ab-4eeb-8ce4-9803a85e86b4",
+              "timestamp": "2026-11-23T03:20:13.731Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 73.85
+            }
+          },
+          "x_correlation_id": "3a270203-a8ab-4eeb-8ce4-9803a85e86b4"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c/consultas-riesgo",
+          "peticion": {
+            "central": "SBS"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "central": "SBS",
+              "calificacion": "NORMAL",
+              "deuda_total": 6000.0,
+              "entidades": 1,
+              "dias_mora": 0,
+              "fuente": "SIMULADO",
+              "fecha": "2026-11-23T03:20:13.759023+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "badfdb3c-3991-451a-957e-1542918b4f2e",
+              "timestamp": "2026-11-23T03:20:13.772Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 36.42
+            }
+          },
+          "x_correlation_id": "badfdb3c-3991-451a-957e-1542918b4f2e"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c/perfil",
+          "peticion": null,
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "puntaje": 940,
+              "calificacion": "BAJO",
+              "observacion": "Peor calificación NORMAL",
+              "fecha": "2026-11-23T03:20:13.799749+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "0790bdc8-0611-41af-a894-a079f46ab1d4",
+              "timestamp": "2026-11-23T03:20:13.812Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 36.64
+            }
+          },
+          "x_correlation_id": "0790bdc8-0611-41af-a894-a079f46ab1d4"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c/habilitar",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Cliente habilitado",
+            "data": {
+              "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+              "id_solicitante": "06c21b79-cbd2-4df1-a8ab-14c2227466a8",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "HABILITADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": "CLI000000023",
+              "cliente_nuevo": true,
+              "id_verificacion_captacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+              "fecha_verificacion": "2026-11-22",
+              "vigente_hasta": "2026-12-22",
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:13.545578+00:00",
+              "cerrado_en": "2026-11-23T03:20:13.880401+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "ba5a9ff4-d2f9-4077-835c-f65b8b16029a",
+              "timestamp": "2026-11-23T03:20:13.890Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 73.25
+            }
+          },
+          "x_correlation_id": "ba5a9ff4-d2f9-4077-835c-f65b8b16029a"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-09-02",
+      "cr_int": "CR-INT-09",
+      "tipo": "Persistencia",
+      "descripcion": "Releer el cliente en COREDB y el caso: el identificador y la verificación quedaron guardados y coinciden",
+      "esperado": "Cliente ACTIVO/HABILITADO con el mismo documento; caso HABILITADO ligado al mismo cod_cliente; id_verificacion de la referencia = id_verificacion_captacion de COREDB",
+      "obtenido": "COREDB 200 ACTIVO/HABILITADO; caso 200 HABILITADO → CLI000000023; verificación coincide: sí",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:13+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/bus/coredb/coredb/clientes/CLI*******23",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "cod_cliente": "CLI000000023",
+            "tipo_documento": "DNI",
+            "numero_documento": "******21",
+            "nombres": "Rosa",
+            "apellido_paterno": "Huamán",
+            "apellido_materno": "Ccori",
+            "correo": "e***@example.com",
+            "celular": "*******74",
+            "estado_cliente": "ACTIVO",
+            "permite_operar": true,
+            "version_contrato": "v1",
+            "id_verificacion_captacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+            "estado_habilitante": "HABILITADO",
+            "fecha_verificacion": "2026-11-23T03:20:13.850844Z"
+          },
+          "x_correlation_id": "0584622d-5aa3-4407-ae28-101f95fee793"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+              "id_solicitante": "06c21b79-cbd2-4df1-a8ab-14c2227466a8",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "HABILITADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": "CLI000000023",
+              "cliente_nuevo": true,
+              "id_verificacion_captacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+              "fecha_verificacion": "2026-11-22",
+              "vigente_hasta": "2026-12-22",
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:13.545578+00:00",
+              "cerrado_en": "2026-11-23T03:20:13.880401+00:00",
+              "solicitante": {
+                "id_solicitante": "06c21b79-cbd2-4df1-a8ab-14c2227466a8",
+                "tipo_documento": "DNI",
+                "numero_documento": "******21",
+                "nombres": "Rosa",
+                "apellido_paterno": "Huamán",
+                "apellido_materno": "Ccori",
+                "celular": "*******74",
+                "correo": "e***@example.com",
+                "cod_cliente": "CLI000000023",
+                "creado_en": "2026-11-23T03:20:13.522851+00:00"
+              },
+              "consentimientos": [
+                {
+                  "tipo": "TRATAMIENTO_DATOS",
+                  "aceptado": true,
+                  "medio": "DIGITAL",
+                  "version": null,
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:13.567736+00:00"
+                },
+                {
+                  "tipo": "CONSULTA_BUROS",
+                  "aceptado": true,
+                  "medio": "DIGITAL",
+                  "version": null,
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:13.567736+00:00"
+                },
+                {
+                  "tipo": "TERMINOS",
+                  "aceptado": true,
+                  "medio": "DIGITAL",
+                  "version": "v1",
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:13.567736+00:00"
+                }
+              ],
+              "validaciones": [
+                {
+                  "tipo": "CELULAR",
+                  "resultado": "APROBADO",
+                  "proveedor": "OTP-SMS",
+                  "detalle": "Código verificado",
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:13.647078+00:00"
+                },
+                {
+                  "tipo": "RENIEC",
+                  "resultado": "APROBADO",
+                  "proveedor": "SIMULADO",
+                  "detalle": "Identidad confirmada en RENIEC",
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:13.680638+00:00"
+                },
+                {
+                  "tipo": "LISTAS_NEGRAS",
+                  "resultado": "APROBADO",
+                  "proveedor": "SIMULADO",
+                  "detalle": "Sin coincidencias en listas restrictivas",
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:13.699620+00:00"
+                },
+                {
+                  "tipo": "PEP",
+                  "resultado": "APROBADO",
+                  "proveedor": "SIMULADO",
+                  "detalle": "No es persona expuesta políticamente",
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:13.718601+00:00"
+                }
+              ],
+              "consultas": [
+                {
+                  "central": "SBS",
+                  "calificacion": "NORMAL",
+                  "deuda_total": 6000.0,
+                  "entidades": 1,
+                  "dias_mora": 0,
+                  "fuente": "SIMULADO",
+                  "fecha": "2026-11-23T03:20:13.759023+00:00"
+                }
+              ],
+              "perfil": {
+                "puntaje": 940,
+                "calificacion": "BAJO",
+                "observacion": "Peor calificación NORMAL",
+                "fecha": "2026-11-23T03:20:13.799749+00:00"
+              },
+              "faltantes": [],
+              "listo_para_habilitar": false
+            },
+            "metadata": {
+              "uuid_transaccion": "f7a662c5-ba28-469f-ba7b-9e447ae4e44a",
+              "timestamp": "2026-11-23T03:20:13.916Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 14.93
+            }
+          },
+          "x_correlation_id": "f7a662c5-ba28-469f-ba7b-9e447ae4e44a"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******23",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "id_cliente": "CLI000000023",
+            "cod_tipo_documento": "DNI",
+            "numero_documento": "******21",
+            "nombres": "Rosa",
+            "apellido_paterno": "Huamán",
+            "apellido_materno": "Ccori",
+            "estado_cliente": "ACTIVO",
+            "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+            "id_verificacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+            "fecha_verificacion": "2026-11-22",
+            "vigente_hasta": "2026-12-22",
+            "estado_habilitante": "HABILITADO",
+            "version_contrato": "CR-INT-01-PROPUESTA-v2",
+            "simulado": true
+          },
+          "x_correlation_id": "2df11ff8-ef3f-47cb-a623-9e858ce3d0e9"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-09-03",
+      "cr_int": "CR-INT-09",
+      "tipo": "Duplicados",
+      "descripcion": "Repetir la habilitación del mismo caso no crea otro cliente",
+      "esperado": "HTTP 200 con el mismo cod_cliente y un solo cliente con ese documento",
+      "obtenido": "HTTP 200, cod_cliente CLI000000023, clientes con el documento: 1",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:13+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c/habilitar",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Cliente habilitado",
+            "data": {
+              "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+              "id_solicitante": "06c21b79-cbd2-4df1-a8ab-14c2227466a8",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "HABILITADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": "CLI000000023",
+              "cliente_nuevo": true,
+              "id_verificacion_captacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+              "fecha_verificacion": "2026-11-22",
+              "vigente_hasta": "2026-12-22",
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:13.545578+00:00",
+              "cerrado_en": "2026-11-23T03:20:13.880401+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "11eb68f1-eb90-496e-bc51-c4e6c85109b7",
+              "timestamp": "2026-11-23T03:20:13.964Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 17.08
+            }
+          },
+          "x_correlation_id": "11eb68f1-eb90-496e-bc51-c4e6c85109b7",
+          "nota": "Segunda habilitación del mismo caso"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/cap/references/search",
+          "peticion": {
+            "search": "******21",
+            "limit": 50
+          },
+          "http": 200,
+          "respuesta": [
+            {
+              "id_cliente": "CLI000000023",
+              "cod_tipo_documento": "DNI",
+              "numero_documento": "******21",
+              "nombres": "Rosa",
+              "apellido_paterno": "Huamán",
+              "apellido_materno": "Ccori",
+              "estado_cliente": "ACTIVO",
+              "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+              "id_verificacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+              "fecha_verificacion": "2026-11-22",
+              "vigente_hasta": "2026-12-22",
+              "estado_habilitante": "HABILITADO",
+              "version_contrato": "CR-INT-01-PROPUESTA-v2",
+              "simulado": true
+            }
+          ],
+          "x_correlation_id": "1d199db7-d7f3-4013-93bb-86bc36d57ab6"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-09-04",
+      "cr_int": "CR-INT-09",
+      "tipo": "Duplicados",
+      "descripcion": "Registrar otra vez a la misma persona devuelve el solicitante existente",
+      "esperado": "HTTP 200 con duplicado = true y el mismo id_solicitante",
+      "obtenido": "HTTP 200, duplicado sí",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/solicitantes",
+          "peticion": {
+            "tipo_documento": "DNI",
+            "numero_documento": "******21",
+            "nombres": "Rosa",
+            "apellido_paterno": "Huamán",
+            "apellido_materno": "Ccori",
+            "celular": "*******14",
+            "correo": "e***@example.com"
+          },
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Solicitante ya registrado",
+            "data": {
+              "solicitante": {
+                "id_solicitante": "06c21b79-cbd2-4df1-a8ab-14c2227466a8",
+                "tipo_documento": "DNI",
+                "numero_documento": "******21",
+                "nombres": "Rosa",
+                "apellido_paterno": "Huamán",
+                "apellido_materno": "Ccori",
+                "celular": "*******74",
+                "correo": "e***@example.com",
+                "cod_cliente": "CLI000000023",
+                "creado_en": "2026-11-23T03:20:13.522851+00:00"
+              },
+              "duplicado": true
+            },
+            "metadata": {
+              "uuid_transaccion": "f827a8f3-2491-49d2-a244-34d5693f239b",
+              "timestamp": "2026-11-23T03:20:14.010Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 17.37
+            }
+          },
+          "x_correlation_id": "f827a8f3-2491-49d2-a244-34d5693f239b",
+          "nota": "Mismo documento que PR-CAP-09-01"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-09-05",
+      "cr_int": "CR-INT-09",
+      "tipo": "Error de negocio",
+      "descripcion": "Habilitar un caso sin requisitos se rechaza y no crea cliente",
+      "esperado": "HTTP 400 ERR-CAP-CASO-NO-LISTO con la lista de faltantes; ningún cliente con ese documento",
+      "obtenido": "HTTP 400 ERR-CAP-CASO-NO-LISTO; clientes con el documento: 0",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/solicitantes",
+          "peticion": {
+            "tipo_documento": "DNI",
+            "numero_documento": "******02",
+            "nombres": "Luis",
+            "apellido_paterno": "Quispe",
+            "apellido_materno": "Mamani",
+            "celular": "*******74",
+            "correo": "e***@example.com"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Solicitante registrado",
+            "data": {
+              "solicitante": {
+                "id_solicitante": "2fb4bd0d-afe3-4df6-bb19-e9d461f08a2e",
+                "tipo_documento": "DNI",
+                "numero_documento": "******02",
+                "nombres": "Luis",
+                "apellido_paterno": "Quispe",
+                "apellido_materno": "Mamani",
+                "celular": "*******74",
+                "correo": "e***@example.com",
+                "cod_cliente": null,
+                "creado_en": "2026-11-23T03:20:14.022671+00:00"
+              },
+              "duplicado": false
+            },
+            "metadata": {
+              "uuid_transaccion": "e2321488-3c7c-4eb0-b1eb-8a8669f73f02",
+              "timestamp": "2026-11-23T03:20:14.029Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 14.54
+            }
+          },
+          "x_correlation_id": "e2321488-3c7c-4eb0-b1eb-8a8669f73f02"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos",
+          "peticion": {
+            "id_solicitante": "2fb4bd0d-afe3-4df6-bb19-e9d461f08a2e",
+            "canal": "AGENCIA",
+            "id_agencia": "AQP01"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Caso abierto",
+            "data": {
+              "id_caso": "6531e129-8e42-4735-a4fb-742b72c7f0c2",
+              "id_solicitante": "2fb4bd0d-afe3-4df6-bb19-e9d461f08a2e",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "INICIADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": null,
+              "cliente_nuevo": null,
+              "id_verificacion_captacion": null,
+              "fecha_verificacion": null,
+              "vigente_hasta": null,
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:14.042887+00:00",
+              "cerrado_en": null
+            },
+            "metadata": {
+              "uuid_transaccion": "a4947882-5659-4cd9-95a2-1befb5ce3166",
+              "timestamp": "2026-11-23T03:20:14.051Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 18.17
+            }
+          },
+          "x_correlation_id": "a4947882-5659-4cd9-95a2-1befb5ce3166"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/6531e129-8e42-4735-a4fb-742b72c7f0c2/habilitar",
+          "peticion": null,
+          "http": 400,
+          "respuesta": {
+            "success": false,
+            "status_code": 400,
+            "error_code": "ERR-CAP-CASO-NO-LISTO",
+            "message": "El caso no cumple los requisitos para habilitarse.",
+            "details": {
+              "faltantes": [
+                "Consentimiento TRATAMIENTO_DATOS aceptado",
+                "Consentimiento CONSULTA_BUROS aceptado",
+                "Consentimiento TERMINOS aceptado",
+                "Verificación OTP del celular",
+                "Validación RENIEC aprobada",
+                "Validación LISTAS_NEGRAS aprobada",
+                "Perfil de riesgo calculado"
+              ]
+            },
+            "metadata": {
+              "uuid_transaccion": "58390cbd-68a6-426a-b30c-db49e2602fba",
+              "timestamp": "2026-11-23T03:20:14.075Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "58390cbd-68a6-426a-b30c-db49e2602fba",
+          "nota": "Sin consentimientos, OTP ni validaciones"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/cap/references/search",
+          "peticion": {
+            "search": "******02",
+            "limit": 50
+          },
+          "http": 200,
+          "respuesta": [],
+          "x_correlation_id": "1786d67c-d4f9-43de-a1a1-9e52884d4724"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-09-06",
+      "cr_int": "CR-INT-09",
+      "tipo": "Error de negocio",
+      "descripcion": "Un documento en lista restrictiva deja el caso RECHAZADO y no se puede habilitar",
+      "esperado": "Caso RECHAZADO y habilitar responde 4xx sin crear cliente",
+      "obtenido": "caso RECHAZADO; habilitar → HTTP 400 ERR-CAP-CASO-NO-LISTO",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/solicitantes",
+          "peticion": {
+            "tipo_documento": "DNI",
+            "numero_documento": "******99",
+            "nombres": "Prueba",
+            "apellido_paterno": "Lista",
+            "apellido_materno": "Restrictiva",
+            "celular": "*******28",
+            "correo": "e***@example.com"
+          },
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Solicitante ya registrado",
+            "data": {
+              "solicitante": {
+                "id_solicitante": "984ed39c-7fc9-45ef-9abd-3e858be76e41",
+                "tipo_documento": "DNI",
+                "numero_documento": "******99",
+                "nombres": "Prueba",
+                "apellido_paterno": "Lista",
+                "apellido_materno": "Restrictiva",
+                "celular": "*******71",
+                "correo": "e***@example.com",
+                "cod_cliente": null,
+                "creado_en": "2026-11-23T03:14:44.799974+00:00"
+              },
+              "duplicado": true
+            },
+            "metadata": {
+              "uuid_transaccion": "40359180-4a11-44b0-82ca-5dac53e4528a",
+              "timestamp": "2026-11-23T03:20:14.112Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 17.02
+            }
+          },
+          "x_correlation_id": "40359180-4a11-44b0-82ca-5dac53e4528a"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos",
+          "peticion": {
+            "id_solicitante": "984ed39c-7fc9-45ef-9abd-3e858be76e41",
+            "canal": "AGENCIA",
+            "id_agencia": "AQP01"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Caso abierto",
+            "data": {
+              "id_caso": "1622966b-9d50-4c6f-a2f5-2d4419962383",
+              "id_solicitante": "984ed39c-7fc9-45ef-9abd-3e858be76e41",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "INICIADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": null,
+              "cliente_nuevo": null,
+              "id_verificacion_captacion": null,
+              "fecha_verificacion": null,
+              "vigente_hasta": null,
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:14.126095+00:00",
+              "cerrado_en": null
+            },
+            "metadata": {
+              "uuid_transaccion": "e413349c-47d3-4abc-9e96-156a0c8f77f4",
+              "timestamp": "2026-11-23T03:20:14.133Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 17.12
+            }
+          },
+          "x_correlation_id": "e413349c-47d3-4abc-9e96-156a0c8f77f4"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/*****66b-9d50-4c6f-a2f5-2d********83/consentimientos",
+          "peticion": {
+            "consentimientos": [
+              {
+                "tipo": "TRATAMIENTO_DATOS",
+                "aceptado": true
+              },
+              {
+                "tipo": "CONSULTA_BUROS",
+                "aceptado": true
+              },
+              {
+                "tipo": "TERMINOS",
+                "aceptado": true
+              }
+            ]
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": [
+              {
+                "tipo": "TRATAMIENTO_DATOS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": null,
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:14.151125+00:00"
+              },
+              {
+                "tipo": "CONSULTA_BUROS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": null,
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:14.151125+00:00"
+              },
+              {
+                "tipo": "TERMINOS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": "v1",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:14.151125+00:00"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "32849cf6-bc04-4106-92b6-1cda8b5ee2d0",
+              "timestamp": "2026-11-23T03:20:14.169Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 31.5
+            }
+          },
+          "x_correlation_id": "32849cf6-bc04-4106-92b6-1cda8b5ee2d0"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/*****66b-9d50-4c6f-a2f5-2d********83/validaciones",
+          "peticion": {
+            "tipos": [
+              "RENIEC",
+              "LISTAS_NEGRAS",
+              "PEP"
+            ]
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": [
+              {
+                "tipo": "RENIEC",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "Identidad confirmada en RENIEC",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:14.210642+00:00"
+              },
+              {
+                "tipo": "LISTAS_NEGRAS",
+                "resultado": "RECHAZADO",
+                "proveedor": "SIMULADO",
+                "detalle": "Documento registrado en listas restrictivas",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:14.242803+00:00"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "b65cfdbd-76fb-4489-88b2-b86975a0947e",
+              "timestamp": "2026-11-23T03:20:14.262Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 87.96
+            }
+          },
+          "x_correlation_id": "b65cfdbd-76fb-4489-88b2-b86975a0947e"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/*****66b-9d50-4c6f-a2f5-2d********83",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "id_caso": "1622966b-9d50-4c6f-a2f5-2d4419962383",
+              "id_solicitante": "984ed39c-7fc9-45ef-9abd-3e858be76e41",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "RECHAZADO",
+              "observacion": null,
+              "motivo_cierre": "Validación rechazada: LISTAS_NEGRAS",
+              "cod_cliente": null,
+              "cliente_nuevo": null,
+              "id_verificacion_captacion": null,
+              "fecha_verificacion": null,
+              "vigente_hasta": null,
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:14.126095+00:00",
+              "cerrado_en": "2026-11-23T03:20:14.243495+00:00",
+              "solicitante": {
+                "id_solicitante": "984ed39c-7fc9-45ef-9abd-3e858be76e41",
+                "tipo_documento": "DNI",
+                "numero_documento": "******99",
+                "nombres": "Prueba",
+                "apellido_paterno": "Lista",
+                "apellido_materno": "Restrictiva",
+                "celular": "*******71",
+                "correo": "e***@example.com",
+                "cod_cliente": null,
+                "creado_en": "2026-11-23T03:14:44.799974+00:00"
+              },
+              "consentimientos": [
+                {
+                  "tipo": "TRATAMIENTO_DATOS",
+                  "aceptado": true,
+                  "medio": "DIGITAL",
+                  "version": null,
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:14.151125+00:00"
+                },
+                {
+                  "tipo": "CONSULTA_BUROS",
+                  "aceptado": true,
+                  "medio": "DIGITAL",
+                  "version": null,
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:14.151125+00:00"
+                },
+                {
+                  "tipo": "TERMINOS",
+                  "aceptado": true,
+                  "medio": "DIGITAL",
+                  "version": "v1",
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:14.151125+00:00"
+                }
+              ],
+              "validaciones": [
+                {
+                  "tipo": "RENIEC",
+                  "resultado": "APROBADO",
+                  "proveedor": "SIMULADO",
+                  "detalle": "Identidad confirmada en RENIEC",
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:14.210642+00:00"
+                },
+                {
+                  "tipo": "LISTAS_NEGRAS",
+                  "resultado": "RECHAZADO",
+                  "proveedor": "SIMULADO",
+                  "detalle": "Documento registrado en listas restrictivas",
+                  "registrado_por": "asb49a4cfadc",
+                  "fecha": "2026-11-23T03:20:14.242803+00:00"
+                }
+              ],
+              "consultas": [],
+              "perfil": null,
+              "faltantes": [],
+              "listo_para_habilitar": false
+            },
+            "metadata": {
+              "uuid_transaccion": "e362e9e5-728d-4e3c-a862-4db02524673c",
+              "timestamp": "2026-11-23T03:20:14.292Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 23.85
+            }
+          },
+          "x_correlation_id": "e362e9e5-728d-4e3c-a862-4db02524673c"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/*****66b-9d50-4c6f-a2f5-2d********83/habilitar",
+          "peticion": null,
+          "http": 400,
+          "respuesta": {
+            "success": false,
+            "status_code": 400,
+            "error_code": "ERR-CAP-CASO-NO-LISTO",
+            "message": "El caso no cumple los requisitos para habilitarse.",
+            "details": {
+              "faltantes": [
+                "Caso en estado RECHAZADO"
+              ]
+            },
+            "metadata": {
+              "uuid_transaccion": "882f2435-0237-416d-845e-ce3583c2ead8",
+              "timestamp": "2026-11-23T03:20:14.324Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "882f2435-0237-416d-845e-ce3583c2ead8"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-10-01",
+      "cr_int": "CR-INT-10",
+      "tipo": "Seguridad",
+      "descripcion": "Sin credencial o con una credencial inválida no se lee un expediente",
+      "esperado": "HTTP 401 en ambos casos",
+      "obtenido": "HTTP 401 y 401",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c",
+          "peticion": null,
+          "http": 401,
+          "respuesta": {
+            "success": false,
+            "status_code": 401,
+            "error_code": "ERR-CAP-TOKEN-REQUERIDO",
+            "message": "Falta el header Authorization: Bearer <token>.",
+            "details": {},
+            "metadata": {
+              "uuid_transaccion": "cab873e7-0bff-4214-befd-8f49635bfa7c",
+              "timestamp": "2026-11-23T03:20:14.331Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "cab873e7-0bff-4214-befd-8f49635bfa7c",
+          "nota": "Sin Authorization"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/704f036d-2801-49af-bac0-****32b23c6c",
+          "peticion": null,
+          "http": 401,
+          "respuesta": {
+            "success": false,
+            "status_code": 401,
+            "error_code": "ERR-CAP-TOKEN-INVALIDO",
+            "message": "La sesión no es válida o venció.",
+            "details": {},
+            "metadata": {
+              "uuid_transaccion": "8752349a-e1a2-4801-b2b1-e958d31a9fcf",
+              "timestamp": "2026-11-23T03:20:14.345Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "8752349a-e1a2-4801-b2b1-e958d31a9fcf",
+          "nota": "Token que no es de COREDB"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-10-02",
+      "cr_int": "CR-INT-10",
+      "tipo": "Seguridad",
+      "descripcion": "Un rol sin permiso CREAR_CLIENTE no registra prospectos ni habilita clientes",
+      "esperado": "HTTP 403 en ambos casos",
+      "obtenido": "HTTP 403 y 403",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/solicitantes",
+          "peticion": {
+            "tipo_documento": "DNI",
+            "numero_documento": "******33",
+            "nombres": "Ana",
+            "apellido_paterno": "Torres",
+            "apellido_materno": "Paz",
+            "celular": "*******09",
+            "correo": "e***@example.com"
+          },
+          "http": 403,
+          "respuesta": {
+            "success": false,
+            "status_code": 403,
+            "error_code": "ERR-CAP-PERMISO-DENEGADO",
+            "message": "El rol ANALISTA no tiene el permiso CREAR_CLIENTE.",
+            "details": {},
+            "metadata": {
+              "uuid_transaccion": "e7f9c64c-6784-4044-b05a-f07c8604bcd4",
+              "timestamp": "2026-11-23T03:20:14.365Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "e7f9c64c-6784-4044-b05a-f07c8604bcd4",
+          "nota": "Usuario con rol ANALISTA (sin CREAR_CLIENTE)"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/6531e129-8e42-4735-a4fb-742b72c7f0c2/habilitar",
+          "peticion": null,
+          "http": 403,
+          "respuesta": {
+            "success": false,
+            "status_code": 403,
+            "error_code": "ERR-CAP-PERMISO-DENEGADO",
+            "message": "El rol ANALISTA no tiene el permiso CREAR_CLIENTE.",
+            "details": {},
+            "metadata": {
+              "uuid_transaccion": "52b26f14-00e0-4af7-828e-aa6afbbd88fc",
+              "timestamp": "2026-11-23T03:20:14.371Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "52b26f14-00e0-4af7-828e-aa6afbbd88fc",
+          "nota": "ANALISTA intenta habilitar"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-10-03",
+      "cr_int": "CR-INT-10",
+      "tipo": "Seguridad",
+      "descripcion": "El Bus no deja pasar a CAPTACION a un consumidor sin credencial",
+      "esperado": "HTTP 401 en ambos casos",
+      "obtenido": "HTTP 401 y 401",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/health",
+          "peticion": null,
+          "http": 401,
+          "respuesta": {
+            "detail": "Credencial del Bus ausente o inválida.",
+            "codigo": "[oculto]"
+          },
+          "x_correlation_id": "6d8d102a-ce48-4b51-9c23-1b6796ca20c1",
+          "nota": "Sin X-Bus-Token"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/health",
+          "peticion": null,
+          "http": 401,
+          "respuesta": {
+            "detail": "Credencial del Bus ausente o inválida.",
+            "codigo": "[oculto]"
+          },
+          "x_correlation_id": "99e4ff40-56dd-49ae-a768-ae441751a8a3",
+          "nota": "X-Bus-Token desconocido"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-10-04",
+      "cr_int": "CR-INT-10",
+      "tipo": "Trazabilidad",
+      "descripcion": "Cada paso del expediente queda en la bitácora de COREDB a nombre de la asesora",
+      "esperado": "HTTP 200 con eventos del módulo CLIENTES a nombre de la asesora",
+      "obtenido": "HTTP 200: 21 eventos, módulos CLIENTES, CORE",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/bus/coredb/coredb/auditoria?actor=asb49a4cfadc&limite=200",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "eventos": 21,
+            "modulos": [
+              "CLIENTES",
+              "CORE"
+            ],
+            "acciones": [
+              "ABRIR_CASO",
+              "CALCULAR_PERFIL",
+              "CONSULTAR_CENTRAL",
+              "ENVIAR_OTP",
+              "HABILITAR",
+              "LOGIN",
+              "REGISTRAR_CONSENTIMIENTOS",
+              "REGISTRAR_SOLICITANTE",
+              "REGISTRAR_SOLICITANTE_DUPLICADO",
+              "REGISTRAR_VALIDACION",
+              "VERIFICAR_OTP"
+            ],
+            "con_correlation_id": 21
+          },
+          "x_correlation_id": "3942dbc2-f941-44e3-8d80-8623a4002c49",
+          "nota": "Resumen de la bitácora de COREDB para la asesora de esta corrida (sin datos personales)"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-01",
+      "cr_int": "CR-INT-01",
+      "tipo": "Contrato",
+      "descripcion": "La referencia de un cliente habilitado cumple el contrato que valida SOL",
+      "esperado": "HTTP 200; los 12 campos requeridos no vacíos; ACTIVO/HABILITADO; hoy dentro de la vigencia; sin celular ni correo",
+      "obtenido": "HTTP 200; campos vacíos: ninguno; vigencia 2026-11-22 → 2026-12-22; versión CR-INT-01-PROPUESTA-v2",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******23",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "id_cliente": "CLI000000023",
+            "cod_tipo_documento": "DNI",
+            "numero_documento": "******21",
+            "nombres": "Rosa",
+            "apellido_paterno": "Huamán",
+            "apellido_materno": "Ccori",
+            "estado_cliente": "ACTIVO",
+            "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+            "id_verificacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+            "fecha_verificacion": "2026-11-22",
+            "vigente_hasta": "2026-12-22",
+            "estado_habilitante": "HABILITADO",
+            "version_contrato": "CR-INT-01-PROPUESTA-v2",
+            "simulado": true
+          },
+          "x_correlation_id": "527e45c8-fc8b-4c66-8dc7-9bf349ab464c",
+          "nota": "Token de servicio de SOL (CAP_SOL_TOKEN)"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-02",
+      "cr_int": "CR-INT-01",
+      "tipo": "Funcional positiva (entre servicios)",
+      "descripcion": "La asesora busca en SOL por documento y SOL obtiene de CAPTACION al cliente habilitado",
+      "esperado": "HTTP 200 con exactamente el cod_cliente habilitado",
+      "obtenido": "HTTP 200; clientes: CLI000000023",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/sol/sol/clients/search",
+          "peticion": {
+            "search": "******21"
+          },
+          "http": 200,
+          "respuesta": [
+            {
+              "id_cliente": "CLI000000023",
+              "numero_documento": "******21",
+              "nombres": "Rosa",
+              "apellido_paterno": "Huamán",
+              "apellido_materno": "Ccori",
+              "estado_cliente": "ACTIVO",
+              "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+              "id_verificacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+              "fecha_verificacion": "2026-11-22",
+              "vigente_hasta": "2026-12-22",
+              "estado_habilitante": "HABILITADO",
+              "version_contrato": "CR-INT-01-PROPUESTA-v2",
+              "cod_tipo_documento": "DNI",
+              "simulado": true
+            }
+          ],
+          "x_correlation_id": "5030e8d2-a9d8-429c-8947-93731489757d",
+          "nota": "SOL consulta a CAPTACION por el Bus (POST /bus/captacion/cap/references/search)"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-03",
+      "cr_int": "CR-INT-01",
+      "tipo": "Funcional positiva + persistencia",
+      "descripcion": "SOL registra un borrador para el cliente habilitado y queda guardado en COREDB",
+      "esperado": "HTTP 201 REGISTRADA; al releer en SOL y en COREDB, codCliente = cod_cliente de CAPTACION",
+      "obtenido": "HTTP 201 → 1aa35643-8625-46dc-a89c-cac988eb3529; SOL 200 REGISTRADA; COREDB 200 codCliente CLI000000023",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:14+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/sol/sol/applications",
+          "peticion": {
+            "id_cliente": "CLI000000023",
+            "monto_solicitado": "1000.00",
+            "moneda": "PEN",
+            "plazo_meses": 6,
+            "destino_credito": "Capital de trabajo (evidencia)",
+            "fecha_base": "2026-11-23",
+            "pago_doble": false,
+            "garantias": [
+              {
+                "tipo_garantia": "PRENDARIA",
+                "descripcion": "Prenda de evidencia",
+                "valor_tasacion": "1500.00"
+              }
+            ],
+            "fiadores": []
+          },
+          "http": 201,
+          "respuesta": {
+            "id": "1aa35643-8625-46dc-a89c-cac988eb3529",
+            "codigo": "[oculto]",
+            "estado": "REGISTRADA",
+            "version": 1,
+            "revision": 1,
+            "cliente_nombre": "Rosa Huamán Ccori",
+            "documento": "******21",
+            "monto": "1000.00",
+            "moneda": "PEN",
+            "plazo": 6,
+            "actualizado": "2026-11-23T03:20:14Z",
+            "versiones": [
+              {
+                "numero": 1,
+                "congelada": false,
+                "expediente": {
+                  "cliente": {
+                    "id_cliente": "CLI000000023",
+                    "numero_documento": "******21",
+                    "nombres": "Rosa",
+                    "apellido_paterno": "Huamán",
+                    "apellido_materno": "Ccori",
+                    "estado_cliente": "ACTIVO",
+                    "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+                    "id_verificacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+                    "fecha_verificacion": "2026-11-22",
+                    "vigente_hasta": "2026-12-22",
+                    "estado_habilitante": "HABILITADO",
+                    "version_contrato": "CR-INT-01-PROPUESTA-v2",
+                    "cod_tipo_documento": "DNI",
+                    "simulado": true
+                  },
+                  "condiciones": {
+                    "id_cliente": "CLI000000023",
+                    "monto_solicitado": "1000.00",
+                    "moneda": "PEN",
+                    "plazo_meses": 6,
+                    "destino_credito": "Capital de trabajo (evidencia)",
+                    "fecha_base": "2026-11-23",
+                    "pago_doble": false,
+                    "garantias": [
+                      {
+                        "tipo_garantia": "PRENDARIA",
+                        "descripcion": "Prenda de evidencia",
+                        "valor_tasacion": "1500.00"
+                      }
+                    ],
+                    "id_producto_credito": "0198b000-0000-7005-8000-000000000001"
+                  },
+                  "fiadores": [],
+                  "politica": {
+                    "version": "SOL-DEMO-2026-01",
+                    "estado_aprobacion": "PROPUESTO_PENDIENTE_COMITE",
+                    "producto_id": "0198b000-0000-7005-8000-000000000001",
+                    "producto_nombre": "Crédito Personal",
+                    "monedas": [
+                      "PEN"
+                    ],
+                    "monto_minimo": "1000.00",
+                    "monto_maximo": "50000.00",
+                    "plazo_minimo_meses": 6,
+                    "plazo_maximo_meses": 60,
+                    "tea": "0.2200",
+                    "amortizacion": "FRANCES",
+                    "dias_por_periodo": 30,
+                    "redondeo": "ROUND_HALF_UP",
+                    "pago_doble_habilitado": false,
+                    "cargos_adicionales": "0.00",
+                    "origen_tasa_plazo": "10_seed_catalogos.sql: Crédito Personal. Pendiente de ratificación.",
+                    "origen_montos": "Propuesta académica de alcance para la demo; no es una política de riesgo aprobada.",
+                    "nota": "Calendario preliminar, sin comisiones ni seguros. Pago doble pendiente de definición."
+                  },
+                  "calendario": {
+                    "estado": "PRELIMINAR",
+                    "cuotas": [
+                      {
+                        "numero_cuota": 1,
+                        "fecha_vencimiento": "2026-12-23",
+                        "saldo_inicial": "1000.00",
+                        "amortizacion": "159.84",
+                        "interes": "16.71",
+                        "cuota_total": "176.55",
+                        "saldo_final": "840.16"
+                      },
+                      {
+                        "numero_cuota": 2,
+                        "fecha_vencimiento": "2027-01-22",
+                        "saldo_inicial": "840.16",
+                        "amortizacion": "162.51",
+                        "interes": "14.04",
+                        "cuota_total": "176.55",
+                        "saldo_final": "677.65"
+                      },
+                      {
+                        "numero_cuota": 3,
+                        "fecha_vencimiento": "2027-02-21",
+                        "saldo_inicial": "677.65",
+                        "amortizacion": "165.23",
+                        "interes": "11.32",
+                        "cuota_total": "176.55",
+                        "saldo_final": "512.42"
+                      },
+                      {
+                        "numero_cuota": 4,
+                        "fecha_vencimiento": "2027-03-23",
+                        "saldo_inicial": "512.42",
+                        "amortizacion": "167.99",
+                        "interes": "8.56",
+                        "cuota_total": "176.55",
+                        "saldo_final": "344.43"
+                      },
+                      {
+                        "numero_cuota": 5,
+                        "fecha_vencimiento": "2027-04-22",
+                        "saldo_inicial": "344.43",
+                        "amortizacion": "170.79",
+                        "interes": "5.76",
+                        "cuota_total": "176.55",
+                        "saldo_final": "173.64"
+                      },
+                      {
+                        "numero_cuota": 6,
+                        "fecha_vencimiento": "2027-05-22",
+                        "saldo_inicial": "173.64",
+                        "amortizacion": "173.64",
+                        "interes": "2.90",
+                        "cuota_total": "176.54",
+                        "saldo_final": "0.00"
+                      }
+                    ],
+                    "cuota_referencial": "176.55",
+                    "intereses_totales": "59.29",
+                    "total_pagar": "1059.29"
+                  }
+                }
+              }
+            ],
+            "eventos": [
+              {
+                "accion": "CREAR_BORRADOR",
+                "actor": "asb49a4cfadc",
+                "version": 1,
+                "estado_anterior": null,
+                "estado_nuevo": "REGISTRADA",
+                "fecha": "2026-11-23T03:20:14Z",
+                "correlacion": ""
+              }
+            ],
+            "resultados": [],
+            "envios": []
+          },
+          "x_correlation_id": "df44ef25-7579-4058-b495-90ed57a3c6bd",
+          "nota": "SOL vuelve a pedir la referencia a CAPTACION antes de guardar"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/sol/sol/applications/1aa35643-8625-46dc-a89c-cac988eb3529",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "id": "1aa35643-8625-46dc-a89c-cac988eb3529",
+            "codigo": "[oculto]",
+            "estado": "REGISTRADA",
+            "version": 1,
+            "revision": 1,
+            "cliente_nombre": "Rosa Huamán Ccori",
+            "documento": "******21",
+            "monto": "1000.00",
+            "moneda": "PEN",
+            "plazo": 6,
+            "actualizado": "2026-11-23T03:20:14Z",
+            "versiones": [
+              {
+                "numero": 1,
+                "congelada": false,
+                "expediente": {
+                  "cliente": {
+                    "id_cliente": "CLI000000023",
+                    "numero_documento": "******21",
+                    "nombres": "Rosa",
+                    "apellido_paterno": "Huamán",
+                    "apellido_materno": "Ccori",
+                    "estado_cliente": "ACTIVO",
+                    "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+                    "id_verificacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+                    "fecha_verificacion": "2026-11-22",
+                    "vigente_hasta": "2026-12-22",
+                    "estado_habilitante": "HABILITADO",
+                    "version_contrato": "CR-INT-01-PROPUESTA-v2",
+                    "cod_tipo_documento": "DNI",
+                    "simulado": true
+                  },
+                  "condiciones": {
+                    "id_cliente": "CLI000000023",
+                    "monto_solicitado": "1000.00",
+                    "moneda": "PEN",
+                    "plazo_meses": 6,
+                    "destino_credito": "Capital de trabajo (evidencia)",
+                    "fecha_base": "2026-11-23",
+                    "pago_doble": false,
+                    "garantias": [
+                      {
+                        "tipo_garantia": "PRENDARIA",
+                        "descripcion": "Prenda de evidencia",
+                        "valor_tasacion": "1500.00"
+                      }
+                    ],
+                    "id_producto_credito": "0198b000-0000-7005-8000-000000000001"
+                  },
+                  "fiadores": [],
+                  "politica": {
+                    "version": "SOL-DEMO-2026-01",
+                    "estado_aprobacion": "PROPUESTO_PENDIENTE_COMITE",
+                    "producto_id": "0198b000-0000-7005-8000-000000000001",
+                    "producto_nombre": "Crédito Personal",
+                    "monedas": [
+                      "PEN"
+                    ],
+                    "monto_minimo": "1000.00",
+                    "monto_maximo": "50000.00",
+                    "plazo_minimo_meses": 6,
+                    "plazo_maximo_meses": 60,
+                    "tea": "0.2200",
+                    "amortizacion": "FRANCES",
+                    "dias_por_periodo": 30,
+                    "redondeo": "ROUND_HALF_UP",
+                    "pago_doble_habilitado": false,
+                    "cargos_adicionales": "0.00",
+                    "origen_tasa_plazo": "10_seed_catalogos.sql: Crédito Personal. Pendiente de ratificación.",
+                    "origen_montos": "Propuesta académica de alcance para la demo; no es una política de riesgo aprobada.",
+                    "nota": "Calendario preliminar, sin comisiones ni seguros. Pago doble pendiente de definición."
+                  },
+                  "calendario": {
+                    "estado": "PRELIMINAR",
+                    "cuotas": [
+                      {
+                        "numero_cuota": 1,
+                        "fecha_vencimiento": "2026-12-23",
+                        "saldo_inicial": "1000.00",
+                        "amortizacion": "159.84",
+                        "interes": "16.71",
+                        "cuota_total": "176.55",
+                        "saldo_final": "840.16"
+                      },
+                      {
+                        "numero_cuota": 2,
+                        "fecha_vencimiento": "2027-01-22",
+                        "saldo_inicial": "840.16",
+                        "amortizacion": "162.51",
+                        "interes": "14.04",
+                        "cuota_total": "176.55",
+                        "saldo_final": "677.65"
+                      },
+                      {
+                        "numero_cuota": 3,
+                        "fecha_vencimiento": "2027-02-21",
+                        "saldo_inicial": "677.65",
+                        "amortizacion": "165.23",
+                        "interes": "11.32",
+                        "cuota_total": "176.55",
+                        "saldo_final": "512.42"
+                      },
+                      {
+                        "numero_cuota": 4,
+                        "fecha_vencimiento": "2027-03-23",
+                        "saldo_inicial": "512.42",
+                        "amortizacion": "167.99",
+                        "interes": "8.56",
+                        "cuota_total": "176.55",
+                        "saldo_final": "344.43"
+                      },
+                      {
+                        "numero_cuota": 5,
+                        "fecha_vencimiento": "2027-04-22",
+                        "saldo_inicial": "344.43",
+                        "amortizacion": "170.79",
+                        "interes": "5.76",
+                        "cuota_total": "176.55",
+                        "saldo_final": "173.64"
+                      },
+                      {
+                        "numero_cuota": 6,
+                        "fecha_vencimiento": "2027-05-22",
+                        "saldo_inicial": "173.64",
+                        "amortizacion": "173.64",
+                        "interes": "2.90",
+                        "cuota_total": "176.54",
+                        "saldo_final": "0.00"
+                      }
+                    ],
+                    "cuota_referencial": "176.55",
+                    "intereses_totales": "59.29",
+                    "total_pagar": "1059.29"
+                  }
+                }
+              }
+            ],
+            "eventos": [
+              {
+                "accion": "CREAR_BORRADOR",
+                "actor": "asb49a4cfadc",
+                "version": 1,
+                "estado_anterior": null,
+                "estado_nuevo": "REGISTRADA",
+                "fecha": "2026-11-23T03:20:14Z",
+                "correlacion": ""
+              }
+            ],
+            "resultados": [],
+            "envios": []
+          },
+          "x_correlation_id": "dba7432f-5d1e-4a2c-b158-f1bc9cb37389"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/coredb/coredb/creditos/solicitudes/1aa35643-8625-46dc-a89c-cac988eb3529",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "idSolicitud": "1aa35643-8625-46dc-a89c-cac988eb3529",
+            "versionSolicitud": 1,
+            "ronda": null,
+            "codCliente": "CLI000000023",
+            "montoSolicitado": "1000.00",
+            "moneda": "PEN",
+            "plazoMeses": 6,
+            "condicionPagoDoble": false,
+            "estado": "REGISTRADA",
+            "fechaCreacion": "2026-11-23T03:20:14.813182Z",
+            "numeroCuotas": 0,
+            "totalCuotas": null,
+            "primerVencimiento": null,
+            "codigo": "[oculto]",
+            "revision": 1,
+            "calendario": null,
+            "evaluaciones": [],
+            "historial": [
+              {
+                "estado": "REGISTRADA",
+                "fechaHora": "2026-11-23T03:20:14.815809Z",
+                "actor": "asb49a4cfadc",
+                "motivo": "Borrador creado"
+              }
+            ],
+            "expediente": {
+              "codigo": "[oculto]",
+              "revision": 1,
+              "destino": "Capital de trabajo (evidencia)",
+              "fechaBase": "2026-11-23",
+              "politica": {
+                "tea": "0.2200",
+                "nota": "Calendario preliminar, sin comisiones ni seguros. Pago doble pendiente de definición.",
+                "monedas": [
+                  "PEN"
+                ],
+                "version": "SOL-DEMO-2026-01",
+                "redondeo": "ROUND_HALF_UP",
+                "producto_id": "0198b000-0000-7005-8000-000000000001",
+                "amortizacion": "FRANCES",
+                "monto_maximo": "50000.00",
+                "monto_minimo": "1000.00",
+                "origen_montos": "Propuesta académica de alcance para la demo; no es una política de riesgo aprobada.",
+                "producto_nombre": "Crédito Personal",
+                "dias_por_periodo": 30,
+                "estado_aprobacion": "PROPUESTO_PENDIENTE_COMITE",
+                "origen_tasa_plazo": "10_seed_catalogos.sql: Crédito Personal. Pendiente de ratificación.",
+                "cargos_adicionales": "0.00",
+                "plazo_maximo_meses": 60,
+                "plazo_minimo_meses": 6,
+                "pago_doble_habilitado": false
+              },
+              "creadoPor": "asb49a4cfadc",
+              "actualizadoEn": "2026-11-23T03:20:14.813496Z"
+            },
+            "garantias": [
+              {
+                "tipo": "PRENDARIA",
+                "descripcion": "Prenda de evidencia",
+                "valor": "1500.00",
+                "moneda": "PEN",
+                "estado": "REGISTRADA"
+              }
+            ],
+            "fiadores": [],
+            "recepciones": []
+          },
+          "x_correlation_id": "68390776-3bd9-4a34-ac9d-8f2162c09128"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-04",
+      "cr_int": "CR-INT-01",
+      "tipo": "Duplicados / repetición",
+      "descripcion": "Consultar dos veces la referencia devuelve lo mismo y no cambia nada; el límite de búsqueda se respeta",
+      "esperado": "Dos HTTP 200 idénticos; límite 51 → HTTP 400 ERR-VALIDACION-ESQUEMA (convención ITIL-02 del proyecto)",
+      "obtenido": "HTTP 200/200 idénticas: sí; límite 51 → 400",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:15+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******23",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "id_cliente": "CLI000000023",
+            "cod_tipo_documento": "DNI",
+            "numero_documento": "******21",
+            "nombres": "Rosa",
+            "apellido_paterno": "Huamán",
+            "apellido_materno": "Ccori",
+            "estado_cliente": "ACTIVO",
+            "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+            "id_verificacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+            "fecha_verificacion": "2026-11-22",
+            "vigente_hasta": "2026-12-22",
+            "estado_habilitante": "HABILITADO",
+            "version_contrato": "CR-INT-01-PROPUESTA-v2",
+            "simulado": true
+          },
+          "x_correlation_id": "8b00d054-87b2-40f1-9ac4-6c8eb147eefb",
+          "nota": "Primera lectura"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******23",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "id_cliente": "CLI000000023",
+            "cod_tipo_documento": "DNI",
+            "numero_documento": "******21",
+            "nombres": "Rosa",
+            "apellido_paterno": "Huamán",
+            "apellido_materno": "Ccori",
+            "estado_cliente": "ACTIVO",
+            "id_caso": "704f036d-2801-49af-bac0-163532b23c6c",
+            "id_verificacion": "df6a5922-45c9-49b2-944a-4d2ba5eaa727",
+            "fecha_verificacion": "2026-11-22",
+            "vigente_hasta": "2026-12-22",
+            "estado_habilitante": "HABILITADO",
+            "version_contrato": "CR-INT-01-PROPUESTA-v2",
+            "simulado": true
+          },
+          "x_correlation_id": "4d1a9972-16a2-4980-a4eb-68bc1456632c",
+          "nota": "Repetición"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/cap/references/search",
+          "peticion": {
+            "search": "******21",
+            "limit": 51
+          },
+          "http": 400,
+          "respuesta": {
+            "success": false,
+            "status_code": 400,
+            "error_code": "ERR-VALIDACION-ESQUEMA",
+            "message": "Los datos de entrada no cumplen la especificación",
+            "details": [
+              {
+                "loc": [
+                  "body",
+                  "limit"
+                ],
+                "msg": "Input should be less than or equal to 50",
+                "type": "less_than_equal"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "ff50db74-f148-4f43-a9a8-6748c7e9035d",
+              "timestamp": "2026-11-23T03:20:15.029Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "ff50db74-f148-4f43-a9a8-6748c7e9035d",
+          "nota": "Límite mayor que 50"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-05",
+      "cr_int": "CR-INT-01",
+      "tipo": "Error de negocio (entre servicios)",
+      "descripcion": "Un cliente revocado en CAPTACION deja de servir en SOL: no se crea un borrador ni se envía el guardado",
+      "esperado": "Referencia no HABILITADA (o 404); nuevo borrador → 422; envío → 422; la solicitud sigue REGISTRADA y el total de solicitudes no cambia",
+      "obtenido": "referencia 200 REVOCADO; nuevo borrador 422; envío 422; estado REGISTRADA; total 12 → 12",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:15+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/solicitantes",
+          "peticion": {
+            "tipo_documento": "DNI",
+            "numero_documento": "******04",
+            "nombres": "Carmen",
+            "apellido_paterno": "Apaza",
+            "apellido_materno": "Ticona",
+            "celular": "*******78",
+            "correo": "e***@example.com"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Solicitante registrado",
+            "data": {
+              "solicitante": {
+                "id_solicitante": "9a176aab-9c01-4bb0-a3e9-909d00ec5a94",
+                "tipo_documento": "DNI",
+                "numero_documento": "******04",
+                "nombres": "Carmen",
+                "apellido_paterno": "Apaza",
+                "apellido_materno": "Ticona",
+                "celular": "*******78",
+                "correo": "e***@example.com",
+                "cod_cliente": null,
+                "creado_en": "2026-11-23T03:20:15.045539+00:00"
+              },
+              "duplicado": false
+            },
+            "metadata": {
+              "uuid_transaccion": "7d7b7868-e78e-4284-b6c3-b3fb47187a85",
+              "timestamp": "2026-11-23T03:20:15.054Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 20.8
+            }
+          },
+          "x_correlation_id": "7d7b7868-e78e-4284-b6c3-b3fb47187a85"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos",
+          "peticion": {
+            "id_solicitante": "9a176aab-9c01-4bb0-a3e9-909d00ec5a94",
+            "canal": "AGENCIA",
+            "id_agencia": "AQP01"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Caso abierto",
+            "data": {
+              "id_caso": "a91aa2fc-27db-4ffd-a2b8-273f8b51574c",
+              "id_solicitante": "9a176aab-9c01-4bb0-a3e9-909d00ec5a94",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "INICIADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": null,
+              "cliente_nuevo": null,
+              "id_verificacion_captacion": null,
+              "fecha_verificacion": null,
+              "vigente_hasta": null,
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:15.068997+00:00",
+              "cerrado_en": null
+            },
+            "metadata": {
+              "uuid_transaccion": "f28686e8-83e7-4e82-aa80-28bb0a271d69",
+              "timestamp": "2026-11-23T03:20:15.079Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 20.17
+            }
+          },
+          "x_correlation_id": "f28686e8-83e7-4e82-aa80-28bb0a271d69"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/a91aa2fc-27db-4ffd-a2b8-273f8b51574c/consentimientos",
+          "peticion": {
+            "consentimientos": [
+              {
+                "tipo": "TRATAMIENTO_DATOS",
+                "aceptado": true
+              },
+              {
+                "tipo": "CONSULTA_BUROS",
+                "aceptado": true
+              },
+              {
+                "tipo": "TERMINOS",
+                "aceptado": true
+              }
+            ]
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": [
+              {
+                "tipo": "TRATAMIENTO_DATOS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": null,
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:15.095131+00:00"
+              },
+              {
+                "tipo": "CONSULTA_BUROS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": null,
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:15.095131+00:00"
+              },
+              {
+                "tipo": "TERMINOS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": "v1",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:15.095131+00:00"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "1a648349-7b6c-449d-a3c6-0f4fdb36a22e",
+              "timestamp": "2026-11-23T03:20:15.116Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 32.43
+            }
+          },
+          "x_correlation_id": "1a648349-7b6c-449d-a3c6-0f4fdb36a22e"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/a91aa2fc-27db-4ffd-a2b8-273f8b51574c/otp",
+          "peticion": {
+            "canal": "SMS"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Código enviado",
+            "data": {
+              "canal": "SMS",
+              "destino_enmascarado": "******978",
+              "expira_en": "2026-11-23T03:25:15.151825Z",
+              "codigo_simulado": "[oculto]"
+            },
+            "metadata": {
+              "uuid_transaccion": "708ccebd-ab2e-44ea-aa31-739bccaf450c",
+              "timestamp": "2026-11-23T03:20:15.161Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 40.36
+            }
+          },
+          "x_correlation_id": "708ccebd-ab2e-44ea-aa31-739bccaf450c"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/a91aa2fc-27db-4ffd-a2b8-273f8b51574c/otp/verificar",
+          "peticion": {
+            "codigo": "[oculto]"
+          },
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Código verificado",
+            "data": {
+              "verificado": true,
+              "estado_codigo": "USADO",
+              "intentos_restantes": 3
+            },
+            "metadata": {
+              "uuid_transaccion": "0ed21a90-e02d-4c93-9485-1a29d5570f42",
+              "timestamp": "2026-11-23T03:20:15.203Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 37.58
+            }
+          },
+          "x_correlation_id": "0ed21a90-e02d-4c93-9485-1a29d5570f42"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/a91aa2fc-27db-4ffd-a2b8-273f8b51574c/validaciones",
+          "peticion": {
+            "tipos": [
+              "RENIEC",
+              "LISTAS_NEGRAS",
+              "PEP"
+            ]
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": [
+              {
+                "tipo": "RENIEC",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "Identidad confirmada en RENIEC",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:15.237307+00:00"
+              },
+              {
+                "tipo": "LISTAS_NEGRAS",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "Sin coincidencias en listas restrictivas",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:15.264121+00:00"
+              },
+              {
+                "tipo": "PEP",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "No es persona expuesta políticamente",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:15.288320+00:00"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "2d3f7cf3-0c23-41d4-8805-5abe7583a2e3",
+              "timestamp": "2026-11-23T03:20:15.304Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 96.86
+            }
+          },
+          "x_correlation_id": "2d3f7cf3-0c23-41d4-8805-5abe7583a2e3"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/a91aa2fc-27db-4ffd-a2b8-273f8b51574c/consultas-riesgo",
+          "peticion": {
+            "central": "SBS"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "central": "SBS",
+              "calificacion": "NORMAL",
+              "deuda_total": 4500.0,
+              "entidades": 0,
+              "dias_mora": 0,
+              "fuente": "SIMULADO",
+              "fecha": "2026-11-23T03:20:15.340529+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "b849dc26-ba73-4fca-a1fa-7412bba4b71d",
+              "timestamp": "2026-11-23T03:20:15.356Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 47.27
+            }
+          },
+          "x_correlation_id": "b849dc26-ba73-4fca-a1fa-7412bba4b71d"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/a91aa2fc-27db-4ffd-a2b8-273f8b51574c/perfil",
+          "peticion": null,
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "puntaje": 955,
+              "calificacion": "BAJO",
+              "observacion": "Peor calificación NORMAL",
+              "fecha": "2026-11-23T03:20:15.390584+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "4b464e64-223e-4c0f-a57e-a7372084b58c",
+              "timestamp": "2026-11-23T03:20:15.407Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 46.85
+            }
+          },
+          "x_correlation_id": "4b464e64-223e-4c0f-a57e-a7372084b58c"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/a91aa2fc-27db-4ffd-a2b8-273f8b51574c/habilitar",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Cliente habilitado",
+            "data": {
+              "id_caso": "a91aa2fc-27db-4ffd-a2b8-273f8b51574c",
+              "id_solicitante": "9a176aab-9c01-4bb0-a3e9-909d00ec5a94",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "HABILITADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": "CLI000000024",
+              "cliente_nuevo": true,
+              "id_verificacion_captacion": "030c07c0-9437-47a4-8e17-c9b86e32fd10",
+              "fecha_verificacion": "2026-11-22",
+              "vigente_hasta": "2026-12-22",
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:15.068997+00:00",
+              "cerrado_en": "2026-11-23T03:20:15.480238+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "1df6f4f7-d4e6-4650-8ba6-8f1690e8d9d8",
+              "timestamp": "2026-11-23T03:20:15.491Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 79.74
+            }
+          },
+          "x_correlation_id": "1df6f4f7-d4e6-4650-8ba6-8f1690e8d9d8"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/sol/sol/applications",
+          "peticion": {
+            "id_cliente": "CLI000000024",
+            "monto_solicitado": "1000.00",
+            "moneda": "PEN",
+            "plazo_meses": 6,
+            "destino_credito": "Capital de trabajo (evidencia)",
+            "fecha_base": "2026-11-23",
+            "pago_doble": false,
+            "garantias": [
+              {
+                "tipo_garantia": "PRENDARIA",
+                "descripcion": "Prenda de evidencia",
+                "valor_tasacion": "1500.00"
+              }
+            ],
+            "fiadores": []
+          },
+          "http": 201,
+          "respuesta": {
+            "id": "e9e40979-8f4d-43bb-be41-c53c08faf570",
+            "codigo": "[oculto]",
+            "estado": "REGISTRADA",
+            "version": 1,
+            "revision": 1,
+            "cliente_nombre": "Carmen Apaza Ticona",
+            "documento": "******04",
+            "monto": "1000.00",
+            "moneda": "PEN",
+            "plazo": 6,
+            "actualizado": "2026-11-23T03:20:15Z",
+            "versiones": [
+              {
+                "numero": 1,
+                "congelada": false,
+                "expediente": {
+                  "cliente": {
+                    "id_cliente": "CLI000000024",
+                    "numero_documento": "******04",
+                    "nombres": "Carmen",
+                    "apellido_paterno": "Apaza",
+                    "apellido_materno": "Ticona",
+                    "estado_cliente": "ACTIVO",
+                    "id_caso": "a91aa2fc-27db-4ffd-a2b8-273f8b51574c",
+                    "id_verificacion": "030c07c0-9437-47a4-8e17-c9b86e32fd10",
+                    "fecha_verificacion": "2026-11-22",
+                    "vigente_hasta": "2026-12-22",
+                    "estado_habilitante": "HABILITADO",
+                    "version_contrato": "CR-INT-01-PROPUESTA-v2",
+                    "cod_tipo_documento": "DNI",
+                    "simulado": true
+                  },
+                  "condiciones": {
+                    "id_cliente": "CLI000000024",
+                    "monto_solicitado": "1000.00",
+                    "moneda": "PEN",
+                    "plazo_meses": 6,
+                    "destino_credito": "Capital de trabajo (evidencia)",
+                    "fecha_base": "2026-11-23",
+                    "pago_doble": false,
+                    "garantias": [
+                      {
+                        "tipo_garantia": "PRENDARIA",
+                        "descripcion": "Prenda de evidencia",
+                        "valor_tasacion": "1500.00"
+                      }
+                    ],
+                    "id_producto_credito": "0198b000-0000-7005-8000-000000000001"
+                  },
+                  "fiadores": [],
+                  "politica": {
+                    "version": "SOL-DEMO-2026-01",
+                    "estado_aprobacion": "PROPUESTO_PENDIENTE_COMITE",
+                    "producto_id": "0198b000-0000-7005-8000-000000000001",
+                    "producto_nombre": "Crédito Personal",
+                    "monedas": [
+                      "PEN"
+                    ],
+                    "monto_minimo": "1000.00",
+                    "monto_maximo": "50000.00",
+                    "plazo_minimo_meses": 6,
+                    "plazo_maximo_meses": 60,
+                    "tea": "0.2200",
+                    "amortizacion": "FRANCES",
+                    "dias_por_periodo": 30,
+                    "redondeo": "ROUND_HALF_UP",
+                    "pago_doble_habilitado": false,
+                    "cargos_adicionales": "0.00",
+                    "origen_tasa_plazo": "10_seed_catalogos.sql: Crédito Personal. Pendiente de ratificación.",
+                    "origen_montos": "Propuesta académica de alcance para la demo; no es una política de riesgo aprobada.",
+                    "nota": "Calendario preliminar, sin comisiones ni seguros. Pago doble pendiente de definición."
+                  },
+                  "calendario": {
+                    "estado": "PRELIMINAR",
+                    "cuotas": [
+                      {
+                        "numero_cuota": 1,
+                        "fecha_vencimiento": "2026-12-23",
+                        "saldo_inicial": "1000.00",
+                        "amortizacion": "159.84",
+                        "interes": "16.71",
+                        "cuota_total": "176.55",
+                        "saldo_final": "840.16"
+                      },
+                      {
+                        "numero_cuota": 2,
+                        "fecha_vencimiento": "2027-01-22",
+                        "saldo_inicial": "840.16",
+                        "amortizacion": "162.51",
+                        "interes": "14.04",
+                        "cuota_total": "176.55",
+                        "saldo_final": "677.65"
+                      },
+                      {
+                        "numero_cuota": 3,
+                        "fecha_vencimiento": "2027-02-21",
+                        "saldo_inicial": "677.65",
+                        "amortizacion": "165.23",
+                        "interes": "11.32",
+                        "cuota_total": "176.55",
+                        "saldo_final": "512.42"
+                      },
+                      {
+                        "numero_cuota": 4,
+                        "fecha_vencimiento": "2027-03-23",
+                        "saldo_inicial": "512.42",
+                        "amortizacion": "167.99",
+                        "interes": "8.56",
+                        "cuota_total": "176.55",
+                        "saldo_final": "344.43"
+                      },
+                      {
+                        "numero_cuota": 5,
+                        "fecha_vencimiento": "2027-04-22",
+                        "saldo_inicial": "344.43",
+                        "amortizacion": "170.79",
+                        "interes": "5.76",
+                        "cuota_total": "176.55",
+                        "saldo_final": "173.64"
+                      },
+                      {
+                        "numero_cuota": 6,
+                        "fecha_vencimiento": "2027-05-22",
+                        "saldo_inicial": "173.64",
+                        "amortizacion": "173.64",
+                        "interes": "2.90",
+                        "cuota_total": "176.54",
+                        "saldo_final": "0.00"
+                      }
+                    ],
+                    "cuota_referencial": "176.55",
+                    "intereses_totales": "59.29",
+                    "total_pagar": "1059.29"
+                  }
+                }
+              }
+            ],
+            "eventos": [
+              {
+                "accion": "CREAR_BORRADOR",
+                "actor": "asb49a4cfadc",
+                "version": 1,
+                "estado_anterior": null,
+                "estado_nuevo": "REGISTRADA",
+                "fecha": "2026-11-23T03:20:15Z",
+                "correlacion": ""
+              }
+            ],
+            "resultados": [],
+            "envios": []
+          },
+          "x_correlation_id": "2c79808a-864f-4b1f-a074-b2c661b4ab25"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/a91aa2fc-27db-4ffd-a2b8-273f8b51574c/estado",
+          "peticion": {
+            "accion": "REVOCAR",
+            "motivo": "Prueba de revocación CR-INT-01"
+          },
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "id_caso": "a91aa2fc-27db-4ffd-a2b8-273f8b51574c",
+              "id_solicitante": "9a176aab-9c01-4bb0-a3e9-909d00ec5a94",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "REVOCADO",
+              "observacion": null,
+              "motivo_cierre": "Prueba de revocación CR-INT-01",
+              "cod_cliente": "CLI000000024",
+              "cliente_nuevo": true,
+              "id_verificacion_captacion": "030c07c0-9437-47a4-8e17-c9b86e32fd10",
+              "fecha_verificacion": "2026-11-22",
+              "vigente_hasta": "2026-12-22",
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:15.068997+00:00",
+              "cerrado_en": "2026-11-23T03:20:15.480238+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "e56ebabd-3c4e-4c91-8d86-28a524953b29",
+              "timestamp": "2026-11-23T03:20:15.625Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 28.25
+            }
+          },
+          "x_correlation_id": "e56ebabd-3c4e-4c91-8d86-28a524953b29",
+          "nota": "El asesor revoca la habilitación en CAPTACION"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******24",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "id_cliente": "CLI000000024",
+            "cod_tipo_documento": "DNI",
+            "numero_documento": "******04",
+            "nombres": "Carmen",
+            "apellido_paterno": "Apaza",
+            "apellido_materno": "Ticona",
+            "estado_cliente": "ACTIVO",
+            "id_caso": "a91aa2fc-27db-4ffd-a2b8-273f8b51574c",
+            "id_verificacion": "030c07c0-9437-47a4-8e17-c9b86e32fd10",
+            "fecha_verificacion": "2026-11-22",
+            "vigente_hasta": "2026-12-22",
+            "estado_habilitante": "REVOCADO",
+            "version_contrato": "CR-INT-01-PROPUESTA-v2",
+            "simulado": true
+          },
+          "x_correlation_id": "48baa822-0b7b-4aa8-bffd-71854a5dd980"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/sol/sol/applications",
+          "peticion": {
+            "id_cliente": "CLI000000024",
+            "monto_solicitado": "1000.00",
+            "moneda": "PEN",
+            "plazo_meses": 6,
+            "destino_credito": "Capital de trabajo (evidencia)",
+            "fecha_base": "2026-11-23",
+            "pago_doble": false,
+            "garantias": [
+              {
+                "tipo_garantia": "PRENDARIA",
+                "descripcion": "Prenda de evidencia",
+                "valor_tasacion": "1500.00"
+              }
+            ],
+            "fiadores": []
+          },
+          "http": 422,
+          "respuesta": {
+            "detail": "Captación no habilita esta solicitud o su verificación ha vencido."
+          },
+          "x_correlation_id": "0bb8b597-9c36-42e5-bd49-78aa4d21eb0f",
+          "nota": "Nuevo borrador con el cliente revocado"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/sol/sol/applications/e9e40979-8f4d-43bb-be41-c53c08faf570/send",
+          "peticion": {
+            "revision": 1
+          },
+          "http": 422,
+          "respuesta": {
+            "detail": "Captación no habilita esta solicitud o su verificación ha vencido."
+          },
+          "x_correlation_id": "22d6dba0-eede-4935-8c81-ddc3aedeba38",
+          "nota": "Envío a Evaluación del borrador guardado antes de la revocación"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/sol/sol/applications/e9e40979-8f4d-43bb-be41-c53c08faf570",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "id": "e9e40979-8f4d-43bb-be41-c53c08faf570",
+            "codigo": "[oculto]",
+            "estado": "REGISTRADA",
+            "version": 1,
+            "revision": 1,
+            "cliente_nombre": "Carmen Apaza Ticona",
+            "documento": "******04",
+            "monto": "1000.00",
+            "moneda": "PEN",
+            "plazo": 6,
+            "actualizado": "2026-11-23T03:20:15Z",
+            "versiones": [
+              {
+                "numero": 1,
+                "congelada": false,
+                "expediente": {
+                  "cliente": {
+                    "id_cliente": "CLI000000024",
+                    "numero_documento": "******04",
+                    "nombres": "Carmen",
+                    "apellido_paterno": "Apaza",
+                    "apellido_materno": "Ticona",
+                    "estado_cliente": "ACTIVO",
+                    "id_caso": "a91aa2fc-27db-4ffd-a2b8-273f8b51574c",
+                    "id_verificacion": "030c07c0-9437-47a4-8e17-c9b86e32fd10",
+                    "fecha_verificacion": "2026-11-22",
+                    "vigente_hasta": "2026-12-22",
+                    "estado_habilitante": "REVOCADO",
+                    "version_contrato": "CR-INT-01-PROPUESTA-v2",
+                    "cod_tipo_documento": "DNI",
+                    "simulado": true
+                  },
+                  "condiciones": {
+                    "id_cliente": "CLI000000024",
+                    "monto_solicitado": "1000.00",
+                    "moneda": "PEN",
+                    "plazo_meses": 6,
+                    "destino_credito": "Capital de trabajo (evidencia)",
+                    "fecha_base": "2026-11-23",
+                    "pago_doble": false,
+                    "garantias": [
+                      {
+                        "tipo_garantia": "PRENDARIA",
+                        "descripcion": "Prenda de evidencia",
+                        "valor_tasacion": "1500.00"
+                      }
+                    ],
+                    "id_producto_credito": "0198b000-0000-7005-8000-000000000001"
+                  },
+                  "fiadores": [],
+                  "politica": {
+                    "version": "SOL-DEMO-2026-01",
+                    "estado_aprobacion": "PROPUESTO_PENDIENTE_COMITE",
+                    "producto_id": "0198b000-0000-7005-8000-000000000001",
+                    "producto_nombre": "Crédito Personal",
+                    "monedas": [
+                      "PEN"
+                    ],
+                    "monto_minimo": "1000.00",
+                    "monto_maximo": "50000.00",
+                    "plazo_minimo_meses": 6,
+                    "plazo_maximo_meses": 60,
+                    "tea": "0.2200",
+                    "amortizacion": "FRANCES",
+                    "dias_por_periodo": 30,
+                    "redondeo": "ROUND_HALF_UP",
+                    "pago_doble_habilitado": false,
+                    "cargos_adicionales": "0.00",
+                    "origen_tasa_plazo": "10_seed_catalogos.sql: Crédito Personal. Pendiente de ratificación.",
+                    "origen_montos": "Propuesta académica de alcance para la demo; no es una política de riesgo aprobada.",
+                    "nota": "Calendario preliminar, sin comisiones ni seguros. Pago doble pendiente de definición."
+                  },
+                  "calendario": {
+                    "estado": "PRELIMINAR",
+                    "cuotas": [
+                      {
+                        "numero_cuota": 1,
+                        "fecha_vencimiento": "2026-12-23",
+                        "saldo_inicial": "1000.00",
+                        "amortizacion": "159.84",
+                        "interes": "16.71",
+                        "cuota_total": "176.55",
+                        "saldo_final": "840.16"
+                      },
+                      {
+                        "numero_cuota": 2,
+                        "fecha_vencimiento": "2027-01-22",
+                        "saldo_inicial": "840.16",
+                        "amortizacion": "162.51",
+                        "interes": "14.04",
+                        "cuota_total": "176.55",
+                        "saldo_final": "677.65"
+                      },
+                      {
+                        "numero_cuota": 3,
+                        "fecha_vencimiento": "2027-02-21",
+                        "saldo_inicial": "677.65",
+                        "amortizacion": "165.23",
+                        "interes": "11.32",
+                        "cuota_total": "176.55",
+                        "saldo_final": "512.42"
+                      },
+                      {
+                        "numero_cuota": 4,
+                        "fecha_vencimiento": "2027-03-23",
+                        "saldo_inicial": "512.42",
+                        "amortizacion": "167.99",
+                        "interes": "8.56",
+                        "cuota_total": "176.55",
+                        "saldo_final": "344.43"
+                      },
+                      {
+                        "numero_cuota": 5,
+                        "fecha_vencimiento": "2027-04-22",
+                        "saldo_inicial": "344.43",
+                        "amortizacion": "170.79",
+                        "interes": "5.76",
+                        "cuota_total": "176.55",
+                        "saldo_final": "173.64"
+                      },
+                      {
+                        "numero_cuota": 6,
+                        "fecha_vencimiento": "2027-05-22",
+                        "saldo_inicial": "173.64",
+                        "amortizacion": "173.64",
+                        "interes": "2.90",
+                        "cuota_total": "176.54",
+                        "saldo_final": "0.00"
+                      }
+                    ],
+                    "cuota_referencial": "176.55",
+                    "intereses_totales": "59.29",
+                    "total_pagar": "1059.29"
+                  }
+                }
+              }
+            ],
+            "eventos": [
+              {
+                "accion": "CREAR_BORRADOR",
+                "actor": "asb49a4cfadc",
+                "version": 1,
+                "estado_anterior": null,
+                "estado_nuevo": "REGISTRADA",
+                "fecha": "2026-11-23T03:20:15Z",
+                "correlacion": ""
+              }
+            ],
+            "resultados": [],
+            "envios": []
+          },
+          "x_correlation_id": "699e52f1-7f59-4fb0-b286-2d7658367f1f"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-06",
+      "cr_int": "CR-INT-01",
+      "tipo": "Error de negocio",
+      "descripcion": "Un cliente que no existe no tiene referencia y SOL no lo acepta",
+      "esperado": "CAPTACION 404; SOL 422",
+      "obtenido": "CAPTACION 404; SOL 422",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:15+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******99",
+          "peticion": null,
+          "http": 404,
+          "respuesta": {
+            "success": false,
+            "status_code": 404,
+            "error_code": "ERR-HTTP-404",
+            "message": "Referencia no encontrada.",
+            "details": {},
+            "metadata": {
+              "uuid_transaccion": "ac6d94df-c1b1-4cde-a340-cd393f944284",
+              "timestamp": "2026-11-23T03:20:15.908Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "ac6d94df-c1b1-4cde-a340-cd393f944284"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/sol/sol/applications",
+          "peticion": {
+            "id_cliente": "CLI999999999",
+            "monto_solicitado": "1000.00",
+            "moneda": "PEN",
+            "plazo_meses": 6,
+            "destino_credito": "Capital de trabajo (evidencia)",
+            "fecha_base": "2026-11-23",
+            "pago_doble": false,
+            "garantias": [
+              {
+                "tipo_garantia": "PRENDARIA",
+                "descripcion": "Prenda de evidencia",
+                "valor_tasacion": "1500.00"
+              }
+            ],
+            "fiadores": []
+          },
+          "http": 422,
+          "respuesta": {
+            "detail": "Referencia de Captación no encontrada."
+          },
+          "x_correlation_id": "9222cec5-35c2-485f-928a-4db86d93e64c"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-07",
+      "cr_int": "CR-INT-01",
+      "tipo": "Seguridad",
+      "descripcion": "Solo el token de servicio de SOL lee las referencias; una persona o un anónimo no",
+      "esperado": "HTTP 401 en los tres casos",
+      "obtenido": "HTTP 401, 401 y 401",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:15+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******23",
+          "peticion": null,
+          "http": 401,
+          "respuesta": {
+            "success": false,
+            "status_code": 401,
+            "error_code": "ERR-HTTP-401",
+            "message": "Servicio no autorizado.",
+            "details": {},
+            "metadata": {
+              "uuid_transaccion": "30f45f29-e423-4753-bb08-13500ab70da0",
+              "timestamp": "2026-11-23T03:20:15.938Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "30f45f29-e423-4753-bb08-13500ab70da0",
+          "nota": "Sin Authorization"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******23",
+          "peticion": null,
+          "http": 401,
+          "respuesta": {
+            "success": false,
+            "status_code": 401,
+            "error_code": "ERR-HTTP-401",
+            "message": "Servicio no autorizado.",
+            "details": {},
+            "metadata": {
+              "uuid_transaccion": "581042a1-7b73-40f1-bbb8-07b37beda70c",
+              "timestamp": "2026-11-23T03:20:15.942Z",
+              "modulo_emisor": "CAPTACION"
+            }
+          },
+          "x_correlation_id": "581042a1-7b73-40f1-bbb8-07b37beda70c",
+          "nota": "Token de una persona (asesora)"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/sol/sol/clients/search",
+          "peticion": {
+            "search": "******21"
+          },
+          "http": 401,
+          "respuesta": {
+            "detail": "Inicia sesión para continuar."
+          },
+          "x_correlation_id": "a2d4b6e3-2b05-49c6-88c7-c36a8171bc61",
+          "nota": "SOL sin sesión"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-08",
+      "cr_int": "CR-INT-01",
+      "tipo": "Contrato (caso límite)",
+      "descripcion": "Un cliente sin segundo apellido se habilita y SOL lo acepta",
+      "esperado": "Referencia HTTP 200 con apellido_materno vacío; SOL crea el borrador (HTTP 201)",
+      "obtenido": "referencia 200, apellido_materno ''; borrador SOL 201",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:16+00:00",
+      "intercambios": [
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/solicitantes",
+          "peticion": {
+            "tipo_documento": "DNI",
+            "numero_documento": "******05",
+            "nombres": "Jorge",
+            "apellido_paterno": "Mendoza",
+            "apellido_materno": null,
+            "celular": "*******56",
+            "correo": "e***@example.com"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Solicitante registrado",
+            "data": {
+              "solicitante": {
+                "id_solicitante": "6a65fe17-114a-4915-87c0-351eac13cd02",
+                "tipo_documento": "DNI",
+                "numero_documento": "******05",
+                "nombres": "Jorge",
+                "apellido_paterno": "Mendoza",
+                "apellido_materno": null,
+                "celular": "*******56",
+                "correo": "e***@example.com",
+                "cod_cliente": null,
+                "creado_en": "2026-11-23T03:20:15.960692+00:00"
+              },
+              "duplicado": false
+            },
+            "metadata": {
+              "uuid_transaccion": "24d4dbb0-4efc-4623-ad79-819609ae2404",
+              "timestamp": "2026-11-23T03:20:15.968Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 17.54
+            }
+          },
+          "x_correlation_id": "24d4dbb0-4efc-4623-ad79-819609ae2404"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos",
+          "peticion": {
+            "id_solicitante": "6a65fe17-114a-4915-87c0-351eac13cd02",
+            "canal": "AGENCIA",
+            "id_agencia": "AQP01"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Caso abierto",
+            "data": {
+              "id_caso": "83d88500-1c80-4e60-9ea9-3657bd7fec95",
+              "id_solicitante": "6a65fe17-114a-4915-87c0-351eac13cd02",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "INICIADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": null,
+              "cliente_nuevo": null,
+              "id_verificacion_captacion": null,
+              "fecha_verificacion": null,
+              "vigente_hasta": null,
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:15.983662+00:00",
+              "cerrado_en": null
+            },
+            "metadata": {
+              "uuid_transaccion": "b812a833-5796-41bc-9645-daddd1a39257",
+              "timestamp": "2026-11-23T03:20:15.991Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 18.78
+            }
+          },
+          "x_correlation_id": "b812a833-5796-41bc-9645-daddd1a39257"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/83d88500-1c80-4e60-9ea9-3657bd7fec95/consentimientos",
+          "peticion": {
+            "consentimientos": [
+              {
+                "tipo": "TRATAMIENTO_DATOS",
+                "aceptado": true
+              },
+              {
+                "tipo": "CONSULTA_BUROS",
+                "aceptado": true
+              },
+              {
+                "tipo": "TERMINOS",
+                "aceptado": true
+              }
+            ]
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": [
+              {
+                "tipo": "TRATAMIENTO_DATOS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": null,
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:16.006238+00:00"
+              },
+              {
+                "tipo": "CONSULTA_BUROS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": null,
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:16.006238+00:00"
+              },
+              {
+                "tipo": "TERMINOS",
+                "aceptado": true,
+                "medio": "DIGITAL",
+                "version": "v1",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:16.006238+00:00"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "4544d085-d8d5-4566-b232-163a89dbfbc2",
+              "timestamp": "2026-11-23T03:20:16.020Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 24.82
+            }
+          },
+          "x_correlation_id": "4544d085-d8d5-4566-b232-163a89dbfbc2"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/83d88500-1c80-4e60-9ea9-3657bd7fec95/otp",
+          "peticion": {
+            "canal": "SMS"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Código enviado",
+            "data": {
+              "canal": "SMS",
+              "destino_enmascarado": "******756",
+              "expira_en": "2026-11-23T03:25:16.048754Z",
+              "codigo_simulado": "[oculto]"
+            },
+            "metadata": {
+              "uuid_transaccion": "448c7ae7-4543-44a7-a6e3-b3c25f010832",
+              "timestamp": "2026-11-23T03:20:16.055Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 29.97
+            }
+          },
+          "x_correlation_id": "448c7ae7-4543-44a7-a6e3-b3c25f010832"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/83d88500-1c80-4e60-9ea9-3657bd7fec95/otp/verificar",
+          "peticion": {
+            "codigo": "[oculto]"
+          },
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Código verificado",
+            "data": {
+              "verificado": true,
+              "estado_codigo": "USADO",
+              "intentos_restantes": 3
+            },
+            "metadata": {
+              "uuid_transaccion": "af9a2306-1a5d-440b-981b-302652f681f5",
+              "timestamp": "2026-11-23T03:20:16.087Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 28.28
+            }
+          },
+          "x_correlation_id": "af9a2306-1a5d-440b-981b-302652f681f5"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/83d88500-1c80-4e60-9ea9-3657bd7fec95/validaciones",
+          "peticion": {
+            "tipos": [
+              "RENIEC",
+              "LISTAS_NEGRAS",
+              "PEP"
+            ]
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": [
+              {
+                "tipo": "RENIEC",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "Identidad confirmada en RENIEC",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:16.113564+00:00"
+              },
+              {
+                "tipo": "LISTAS_NEGRAS",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "Sin coincidencias en listas restrictivas",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:16.132025+00:00"
+              },
+              {
+                "tipo": "PEP",
+                "resultado": "APROBADO",
+                "proveedor": "SIMULADO",
+                "detalle": "No es persona expuesta políticamente",
+                "registrado_por": "asb49a4cfadc",
+                "fecha": "2026-11-23T03:20:16.149462+00:00"
+              }
+            ],
+            "metadata": {
+              "uuid_transaccion": "9a49f3c7-ee01-4ab5-99f6-f42a67274ef8",
+              "timestamp": "2026-11-23T03:20:16.161Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 70.15
+            }
+          },
+          "x_correlation_id": "9a49f3c7-ee01-4ab5-99f6-f42a67274ef8"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/83d88500-1c80-4e60-9ea9-3657bd7fec95/consultas-riesgo",
+          "peticion": {
+            "central": "SBS"
+          },
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "central": "SBS",
+              "calificacion": "NORMAL",
+              "deuda_total": 7500.0,
+              "entidades": 1,
+              "dias_mora": 0,
+              "fuente": "SIMULADO",
+              "fecha": "2026-11-23T03:20:16.189167+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "e261da03-b320-4450-9a84-2981c0f8c79c",
+              "timestamp": "2026-11-23T03:20:16.199Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 34.46
+            }
+          },
+          "x_correlation_id": "e261da03-b320-4450-9a84-2981c0f8c79c"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/83d88500-1c80-4e60-9ea9-3657bd7fec95/perfil",
+          "peticion": null,
+          "http": 201,
+          "respuesta": {
+            "success": true,
+            "status_code": 201,
+            "message": "Operacion ejecutada satisfactoriamente",
+            "data": {
+              "puntaje": 925,
+              "calificacion": "BAJO",
+              "observacion": "Peor calificación NORMAL",
+              "fecha": "2026-11-23T03:20:16.226571+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "631e6be8-b41e-4982-81cf-b82868bfc06d",
+              "timestamp": "2026-11-23T03:20:16.239Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 36.05
+            }
+          },
+          "x_correlation_id": "631e6be8-b41e-4982-81cf-b82868bfc06d"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/captacion/api/v1/captacion/casos/83d88500-1c80-4e60-9ea9-3657bd7fec95/habilitar",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "success": true,
+            "status_code": 200,
+            "message": "Cliente habilitado",
+            "data": {
+              "id_caso": "83d88500-1c80-4e60-9ea9-3657bd7fec95",
+              "id_solicitante": "6a65fe17-114a-4915-87c0-351eac13cd02",
+              "canal": "AGENCIA",
+              "id_agencia": "AQP01",
+              "producto_interes": null,
+              "estado": "HABILITADO",
+              "observacion": null,
+              "motivo_cierre": null,
+              "cod_cliente": "CLI000000025",
+              "cliente_nuevo": true,
+              "id_verificacion_captacion": "f0e07de0-b574-4150-90f1-342a2c86aa51",
+              "fecha_verificacion": "2026-11-22",
+              "vigente_hasta": "2026-12-22",
+              "creado_por": "asb49a4cfadc",
+              "creado_en": "2026-11-23T03:20:15.983662+00:00",
+              "cerrado_en": "2026-11-23T03:20:16.318876+00:00"
+            },
+            "metadata": {
+              "uuid_transaccion": "34e54949-4758-4035-bb4b-11214487d1a2",
+              "timestamp": "2026-11-23T03:20:16.329Z",
+              "modulo_emisor": "CAPTACION",
+              "tiempo_ejecucion_ms": 85.15
+            }
+          },
+          "x_correlation_id": "34e54949-4758-4035-bb4b-11214487d1a2"
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/bus/captacion/cap/references/CLI*******25",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "id_cliente": "CLI000000025",
+            "cod_tipo_documento": "DNI",
+            "numero_documento": "******05",
+            "nombres": "Jorge",
+            "apellido_paterno": "Mendoza",
+            "apellido_materno": "",
+            "estado_cliente": "ACTIVO",
+            "id_caso": "83d88500-1c80-4e60-9ea9-3657bd7fec95",
+            "id_verificacion": "f0e07de0-b574-4150-90f1-342a2c86aa51",
+            "fecha_verificacion": "2026-11-22",
+            "vigente_hasta": "2026-12-22",
+            "estado_habilitante": "HABILITADO",
+            "version_contrato": "CR-INT-01-PROPUESTA-v2",
+            "simulado": true
+          },
+          "x_correlation_id": "39ec77b5-2824-49ee-8b7a-671fbcd598b6"
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/bus/sol/sol/applications",
+          "peticion": {
+            "id_cliente": "CLI000000025",
+            "monto_solicitado": "1000.00",
+            "moneda": "PEN",
+            "plazo_meses": 6,
+            "destino_credito": "Capital de trabajo (evidencia)",
+            "fecha_base": "2026-11-23",
+            "pago_doble": false,
+            "garantias": [
+              {
+                "tipo_garantia": "PRENDARIA",
+                "descripcion": "Prenda de evidencia",
+                "valor_tasacion": "1500.00"
+              }
+            ],
+            "fiadores": []
+          },
+          "http": 201,
+          "respuesta": {
+            "id": "ed8afd02-554e-4736-a250-9e3071d51cea",
+            "codigo": "[oculto]",
+            "estado": "REGISTRADA",
+            "version": 1,
+            "revision": 1,
+            "cliente_nombre": "Jorge Mendoza",
+            "documento": "******05",
+            "monto": "1000.00",
+            "moneda": "PEN",
+            "plazo": 6,
+            "actualizado": "2026-11-23T03:20:16Z",
+            "versiones": [
+              {
+                "numero": 1,
+                "congelada": false,
+                "expediente": {
+                  "cliente": {
+                    "id_cliente": "CLI000000025",
+                    "numero_documento": "******05",
+                    "nombres": "Jorge",
+                    "apellido_paterno": "Mendoza",
+                    "apellido_materno": "",
+                    "estado_cliente": "ACTIVO",
+                    "id_caso": "83d88500-1c80-4e60-9ea9-3657bd7fec95",
+                    "id_verificacion": "f0e07de0-b574-4150-90f1-342a2c86aa51",
+                    "fecha_verificacion": "2026-11-22",
+                    "vigente_hasta": "2026-12-22",
+                    "estado_habilitante": "HABILITADO",
+                    "version_contrato": "CR-INT-01-PROPUESTA-v2",
+                    "cod_tipo_documento": "DNI",
+                    "simulado": true
+                  },
+                  "condiciones": {
+                    "id_cliente": "CLI000000025",
+                    "monto_solicitado": "1000.00",
+                    "moneda": "PEN",
+                    "plazo_meses": 6,
+                    "destino_credito": "Capital de trabajo (evidencia)",
+                    "fecha_base": "2026-11-23",
+                    "pago_doble": false,
+                    "garantias": [
+                      {
+                        "tipo_garantia": "PRENDARIA",
+                        "descripcion": "Prenda de evidencia",
+                        "valor_tasacion": "1500.00"
+                      }
+                    ],
+                    "id_producto_credito": "0198b000-0000-7005-8000-000000000001"
+                  },
+                  "fiadores": [],
+                  "politica": {
+                    "version": "SOL-DEMO-2026-01",
+                    "estado_aprobacion": "PROPUESTO_PENDIENTE_COMITE",
+                    "producto_id": "0198b000-0000-7005-8000-000000000001",
+                    "producto_nombre": "Crédito Personal",
+                    "monedas": [
+                      "PEN"
+                    ],
+                    "monto_minimo": "1000.00",
+                    "monto_maximo": "50000.00",
+                    "plazo_minimo_meses": 6,
+                    "plazo_maximo_meses": 60,
+                    "tea": "0.2200",
+                    "amortizacion": "FRANCES",
+                    "dias_por_periodo": 30,
+                    "redondeo": "ROUND_HALF_UP",
+                    "pago_doble_habilitado": false,
+                    "cargos_adicionales": "0.00",
+                    "origen_tasa_plazo": "10_seed_catalogos.sql: Crédito Personal. Pendiente de ratificación.",
+                    "origen_montos": "Propuesta académica de alcance para la demo; no es una política de riesgo aprobada.",
+                    "nota": "Calendario preliminar, sin comisiones ni seguros. Pago doble pendiente de definición."
+                  },
+                  "calendario": {
+                    "estado": "PRELIMINAR",
+                    "cuotas": [
+                      {
+                        "numero_cuota": 1,
+                        "fecha_vencimiento": "2026-12-23",
+                        "saldo_inicial": "1000.00",
+                        "amortizacion": "159.84",
+                        "interes": "16.71",
+                        "cuota_total": "176.55",
+                        "saldo_final": "840.16"
+                      },
+                      {
+                        "numero_cuota": 2,
+                        "fecha_vencimiento": "2027-01-22",
+                        "saldo_inicial": "840.16",
+                        "amortizacion": "162.51",
+                        "interes": "14.04",
+                        "cuota_total": "176.55",
+                        "saldo_final": "677.65"
+                      },
+                      {
+                        "numero_cuota": 3,
+                        "fecha_vencimiento": "2027-02-21",
+                        "saldo_inicial": "677.65",
+                        "amortizacion": "165.23",
+                        "interes": "11.32",
+                        "cuota_total": "176.55",
+                        "saldo_final": "512.42"
+                      },
+                      {
+                        "numero_cuota": 4,
+                        "fecha_vencimiento": "2027-03-23",
+                        "saldo_inicial": "512.42",
+                        "amortizacion": "167.99",
+                        "interes": "8.56",
+                        "cuota_total": "176.55",
+                        "saldo_final": "344.43"
+                      },
+                      {
+                        "numero_cuota": 5,
+                        "fecha_vencimiento": "2027-04-22",
+                        "saldo_inicial": "344.43",
+                        "amortizacion": "170.79",
+                        "interes": "5.76",
+                        "cuota_total": "176.55",
+                        "saldo_final": "173.64"
+                      },
+                      {
+                        "numero_cuota": 6,
+                        "fecha_vencimiento": "2027-05-22",
+                        "saldo_inicial": "173.64",
+                        "amortizacion": "173.64",
+                        "interes": "2.90",
+                        "cuota_total": "176.54",
+                        "saldo_final": "0.00"
+                      }
+                    ],
+                    "cuota_referencial": "176.55",
+                    "intereses_totales": "59.29",
+                    "total_pagar": "1059.29"
+                  }
+                }
+              }
+            ],
+            "eventos": [
+              {
+                "accion": "CREAR_BORRADOR",
+                "actor": "asb49a4cfadc",
+                "version": 1,
+                "estado_anterior": null,
+                "estado_nuevo": "REGISTRADA",
+                "fecha": "2026-11-23T03:20:16Z",
+                "correlacion": ""
+              }
+            ],
+            "resultados": [],
+            "envios": []
+          },
+          "x_correlation_id": "a6446d4a-a948-4430-a75b-1ef81cfbd677",
+          "nota": "Borrador para un cliente sin apellido materno"
+        }
+      ]
+    },
+    {
+      "codigo": "PR-CAP-01-09",
+      "cr_int": "CR-INT-01",
+      "tipo": "Trazabilidad",
+      "descripcion": "Las llamadas de SOL a CAPTACION y de CAPTACION a COREDB pasaron por el Bus y quedaron contadas",
+      "esperado": "HTTP 200 con reenvíos SOL → CAPTACION y CAPTACION → COREDB mayores que cero",
+      "obtenido": "HTTP 200; SOL → CAPTACION 66; CAPTACION → COREDB 932",
+      "resultado": "PASA",
+      "fecha": "2026-11-23T03:20:16+00:00",
+      "intercambios": [
+        {
+          "metodo": "GET",
+          "ruta": "/metricas",
+          "peticion": null,
+          "http": 200,
+          "respuesta": {
+            "reenvios": {
+              "EVALUACION": {
+                "COREDB": 55
+              },
+              "CAPTACION": {
+                "COREDB": 932
+              },
+              "SOL": {
+                "COREDB": 72,
+                "CAPTACION": 66
+              },
+              "PRUEBAS": {
+                "COREDB": 69,
+                "CAPTACION": 284,
+                "SOL": 74
+              }
+            }
+          },
+          "x_correlation_id": "fb88925f-b85a-477f-a423-9c2a2fde494b",
+          "nota": "Contadores del Bus (consumidor → módulo) desde que arrancó"
+        }
+      ]
+    }
+  ]
+}
