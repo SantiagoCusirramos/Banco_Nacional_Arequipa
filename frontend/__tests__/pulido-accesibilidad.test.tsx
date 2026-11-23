@@ -61,7 +61,7 @@ describe("Accesibilidad y pantalla pequeña", () => {
   it("AC-06 «Cerrar sesión» de Desembolso queda visible y las pestañas se pueden tocar", () => {
     const marco = leer("app/desembolso/_componentes/Marco.tsx");
     expect(marco).toContain("Cerrar sesión");
-    expect(marco).toMatch(/Cerrar sesión[\s\S]{0,160}shrink-0|shrink-0[\s\S]{0,160}Cerrar sesión/);
+    // Que no se encoja ni se salga de la pantalla lo comprueba DC-02 (desembolso-celular.test.tsx) en el DOM.
     expect(leer("app/solicitud-credito/sol.css")).toMatch(/\.sol-sidebar nav button\s*\{[^}]*min-height:\s*48px/);
   });
 
