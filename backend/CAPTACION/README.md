@@ -28,7 +28,7 @@ flowchart LR
   cap -->|"usuario de servicio: alta del cliente, vínculo, referencias"| bus
   bus --> coredb["COREDB :8012"]
   coredb --> db[("base integrada: clientes.*_captacion")]
-  sol["SOL :8011"] -.->|"CR-INT-01: POST /cap/references/search (cuando SOL pase a modo REAL)"| cap
+  sol["SOL :8011"] -->|"CR-INT-01 por el Bus: POST /cap/references/search y GET /cap/references/{id}"| bus1
 ```
 
 | Con | Cómo | Qué |
@@ -131,6 +131,17 @@ de SOL, `test_contrato_sol.py`: el adaptador real de SOL acepta las referencias.
 los contenedores y sus volúmenes. Sin COREDB (`CAPTACION_TEST_COREDB`) solo corren las pruebas de
 lógica (`test_logica.py`).
 
+Evidencias para el Comité de Créditos (CR-INT-09, CR-INT-01 y CR-INT-10), con el producto
+levantado por `./bna up`:
+
+```bash
+backend/CAPTACION/scripts/evidencias_cr_int.sh
+```
+
+Ejecuta 19 casos (positivos, persistencia, errores de negocio, duplicados, seguridad y
+trazabilidad) solo a través del Bus, con SOL real, y deja el JSON en `Documents/captacion/evidencias/`
+sin tokens ni datos personales. Contratos, actas y bloqueos: [`Documents/captacion/`](../../Documents/captacion/README.md).
+
 `./bna test` corre lo mismo y además:
 - El flujo de `./bna smoke`, que capta y habilita a un cliente en el producto levantado y comprueba
   el cliente en COREDB, la referencia CR-INT-01 y el puente del frontend.
@@ -140,5 +151,5 @@ lógica (`test_logica.py`).
 | Qué | De quién depende |
 |---|---|
 | Proveedores reales (RENIEC, centrales, SMS) en lugar del simulador | Contratos con terceros; se reemplaza `proveedores.py` |
-| `apellido_materno`: COREDB lo admite vacío, SOL lo exige | Homologar CR-INT-01 con SOL |
+| Nombre final de `version_contrato` (hoy `CR-INT-01-PROPUESTA-v2`) | Comité de Créditos y SOL |
 | Corregir celular o correo de un solicitante antes de habilitarlo | CAPTACION (siguiente versión) |

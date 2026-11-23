@@ -1,0 +1,24 @@
+CR-INT-09  CAPTACION ↔ Clientes (COREDB)
+  PASA  PR-CAP-09-01 Un prospecto con todos los requisitos se habilita y COREDB le asigna el identificador maestro
+  PASA  PR-CAP-09-02 Releer el cliente en COREDB y el caso: el identificador y la verificación quedaron guardados y coinciden
+  PASA  PR-CAP-09-03 Repetir la habilitación del mismo caso no crea otro cliente
+  PASA  PR-CAP-09-04 Registrar otra vez a la misma persona devuelve el solicitante existente
+  PASA  PR-CAP-09-05 Habilitar un caso sin requisitos se rechaza y no crea cliente
+  PASA  PR-CAP-09-06 Un documento en lista restrictiva deja el caso RECHAZADO y no se puede habilitar
+CR-INT-10  Seguridad (parte de Captación)
+  PASA  PR-CAP-10-01 Sin credencial o con una credencial inválida no se lee un expediente
+  PASA  PR-CAP-10-02 Un rol sin permiso CREAR_CLIENTE no registra prospectos ni habilita clientes
+  PASA  PR-CAP-10-03 El Bus no deja pasar a CAPTACION a un consumidor sin credencial
+  PASA  PR-CAP-10-04 Cada paso del expediente queda en la bitácora de COREDB a nombre de la asesora
+CR-INT-01  CAPTACION → SOL
+  PASA  PR-CAP-01-01 La referencia de un cliente habilitado cumple el contrato que valida SOL
+  PASA  PR-CAP-01-02 La asesora busca en SOL por documento y SOL obtiene de CAPTACION al cliente habilitado
+  PASA  PR-CAP-01-03 SOL registra un borrador para el cliente habilitado y queda guardado en COREDB
+  PASA  PR-CAP-01-04 Consultar dos veces la referencia devuelve lo mismo y no cambia nada; el límite de búsqueda se respeta
+  PASA  PR-CAP-01-05 Un cliente revocado en CAPTACION deja de servir en SOL: no se crea un borrador ni se envía el guardado
+  PASA  PR-CAP-01-06 Un cliente que no existe no tiene referencia y SOL no lo acepta
+  PASA  PR-CAP-01-07 Solo el token de servicio de SOL lee las referencias; una persona o un anónimo no
+  PASA  PR-CAP-01-08 Un cliente sin segundo apellido se habilita y SOL lo acepta
+  PASA  PR-CAP-01-09 Las llamadas de SOL a CAPTACION y de CAPTACION a COREDB pasaron por el Bus y quedaron contadas
+
+19 de 19 casos pasan
